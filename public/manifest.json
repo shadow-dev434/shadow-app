@@ -1,0 +1,82 @@
+{
+  "name": "Shadow — External Executive Function",
+  "short_name": "Shadow",
+  "description": "AI-powered task management per adulti ADHD. Cattura, classifica, decomponi, esegui.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#09090b",
+  "theme_color": "#18181b",
+  "categories": ["productivity", "utilities", "health"],
+  "lang": "it",
+  "dir": "ltr",
+  "scope": "/",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Aggiungi task veloce",
+      "short_name": "Nuovo",
+      "url": "/?action=inbox",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }],
+      "description": "Aggiungi rapidamente un task all'inbox"
+    },
+    {
+      "name": "Piano di oggi",
+      "short_name": "Today",
+      "url": "/?action=today",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }],
+      "description": "Visualizza il piano giornaliero"
+    },
+    {
+      "name": "Input vocale",
+      "short_name": "Voice",
+      "url": "/?action=voice",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }],
+      "description": "Cattura task con la voce"
+    },
+    {
+      "name": "Focus mode",
+      "short_name": "Focus",
+      "url": "/?action=focus",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }],
+      "description": "Inizia una sessione di focus"
+    }
+  ],
+  "share_target": {
+    "action": "/?action=share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}

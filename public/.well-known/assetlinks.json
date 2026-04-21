@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.shadow.adhd.executor",
+      "sha256_cert_fingerprints": [
+        "CC:A8:51:99:89:70:B9:9F:A1:3F:62:09:0C:5D:C2:0E:FD:38:BC:92:BD:A1:45:AD:75:57:18:23:63:8C:FA:06"
+      ]
+    }
+  }
+]

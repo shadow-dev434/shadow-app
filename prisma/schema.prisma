@@ -1,0 +1,496 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── NextAuth Models ──────────────────────────────────────────────────────────
+
+model User {
+  id                 String               @id @default(cuid())
+  name               String?
+  email              String               @unique
+  emailVerified      DateTime?
+  image              String?
+  password           String?              // hashed for credentials provider
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  accounts           Account[]
+  sessions           Session[]
+  tasks              Task[]
+  contacts           Contact[]
+  notifications      Notification[]
+  streaks            Streak[]
+  settings           Settings[]
+  patterns           UserPattern[]
+  calendarTokens     CalendarToken[]
+  pushSubscription   PushSubscription?
+  profile            UserProfile?
+  strictModeSessions StrictModeSession[]
+  adaptiveProfile    AdaptiveProfile?
+  learningSignals    LearningSignal[]
+  microFeedbacks     MicroFeedback[]
+  memories           UserMemory[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Core App Models ──────────────────────────────────────────────────────────
+
+model Task {
+  id                   String    @id @default(cuid())
+  title                String
+  description          String    @default("")
+  importance           Int       @default(3)
+  urgency              Int       @default(3)
+  deadline             DateTime?
+  resistance           Int       @default(3)
+  size                 Int       @default(3)
+  delegable            Boolean   @default(false)
+  category             String    @default("general")
+  context              String    @default("any")
+  avoidanceCount       Int       @default(0)
+  lastAvoidedAt        DateTime?
+  quadrant             String    @default("unclassified")
+  priorityScore        Float     @default(0)
+  decision             String    @default("unclassified")
+  decisionReason       String    @default("")
+  status               String    @default("inbox")
+  microSteps           String    @default("[]") @db.Text
+  microStepsRaw        String    @default("") @db.Text
+  currentStepIdx       Int       @default(0)
+  executionMode        String    @default("none")
+  sessionFormat        String    @default("standard")
+  sessionDuration      Int       @default(25)
+  completedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  // Multi-user
+  userId               String?
+  user                 User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  // Delegation
+  delegatedToId        String?
+  delegatedTo          Contact?  @relation(fields: [delegatedToId], references: [id], onDelete: SetNull)
+  delegationNote       String    @default("")
+  delegationStatus     String    @default("") // pending, accepted, declined, completed
+
+  // Notification
+  reminderAt           DateTime?
+  reminderSent         Boolean   @default(false)
+
+  // Calendar
+  calendarEventId      String    @default("")
+
+  // AI classification
+  aiClassified         Boolean   @default(false)   // whether AI classified this task
+  aiClassificationData String    @default("{}") @db.Text  // JSON: full AI classification result for human-in-the-loop review
+
+  // Relations
+  dailyPlans           DailyPlanTask[]
+  reviews              ReviewTask[]
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  email     String   @default("")
+  phone     String   @default("")
+  role      String   @default("") // colleague, manager, assistant, friend, family
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks Task[]
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  taskId    String?
+  type      String   // reminder, delegation, streak, system
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  actionUrl String   @default("")
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Streak {
+  id              String   @id @default(cuid())
+  userId          String
+  date            String   // YYYY-MM-DD
+  tasksCompleted  Int      @default(0)
+  tasksPlanned    Int      @default(0)
+  completionRate  Float    @default(0)
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+}
+
+model CalendarToken {
+  id           String   @id @default(cuid())
+  userId       String
+  provider     String   @default("google")
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  scope        String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DailyPlan {
+  id             String   @id @default(cuid())
+  date           String   @unique
+  top3Ids        String   @default("[]")
+  doNowIds       String   @default("[]")
+  scheduleIds    String   @default("[]")
+  delegateIds    String   @default("[]")
+  postponeIds    String   @default("[]")
+  energyLevel    Int      @default(3)
+  timeAvailable  Int      @default(480)
+  currentContext String   @default("any")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tasks DailyPlanTask[]
+}
+
+model DailyPlanTask {
+  id          String @id @default(cuid())
+  dailyPlanId String
+  taskId      String
+  slot        String
+
+  dailyPlan DailyPlan @relation(fields: [dailyPlanId], references: [id], onDelete: Cascade)
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  date        String   @unique
+  whatDone    String   @default("")
+  whatAvoided String   @default("")
+  whatBlocked String   @default("")
+  restartFrom String   @default("")
+  mood        Int      @default(3)
+  energyEnd   Int      @default(3)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tasks ReviewTask[]
+}
+
+model ReviewTask {
+  id       String @id @default(cuid())
+  reviewId String
+  taskId   String
+  status   String
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model UserPattern {
+  id                    String   @id @default(cuid())
+  userId                String?
+  avoidedCategories     String   @default("[]") @db.Text
+  difficultTimeSlots    String   @default("[]") @db.Text
+  problematicCategories String   @default("[]") @db.Text
+  effectiveFormats      String   @default("[]") @db.Text
+  averageResistance     Float    @default(3)
+  averageCompletion     Float    @default(0.5)
+  totalTasksCompleted   Int      @default(0)
+  totalTasksAvoided     Int      @default(0)
+  streakDays            Int      @default(0)
+  lastActiveDate        String   @default("")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model Settings {
+  id                   String   @id @default(cuid())
+  userId               String?
+  defaultEnergy        Int      @default(3)
+  defaultContext       String   @default("any")
+  defaultDuration      Int      @default(25)
+  defaultFormat        String   @default("standard")
+  wakeTime             String   @default("07:00")
+  sleepTime            String   @default("23:00")
+  productiveSlots      String   @default("[\"morning\"]") @db.Text
+  theme                String   @default("system")
+  notificationsEnabled Boolean  @default(true)
+  reminderMinutes      Int      @default(15)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId])
+}
+
+model UserProfile {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Onboarding state
+  onboardingComplete     Boolean  @default(false)
+  onboardingStep         Int      @default(0)
+
+  // Tour state
+  tourCompleted          Boolean  @default(false)
+  tourStep               Int      @default(0)
+
+  // Basic info
+  role                   String   @default("")      // student, worker, both, freelancer, parent, other
+  occupation             String   @default("")      // specific job/field
+  age                    Int      @default(0)
+
+  // Life situation
+  livingSituation        String   @default("")      // alone, family, partner, roommates, parents
+  hasChildren            Boolean  @default(false)
+  householdManager       Boolean  @default(false)   // manages household independently?
+
+  // Responsibilities & difficulties
+  mainResponsibilities   String   @default("[]") @db.Text   // JSON array of strings
+  difficultAreas         String   @default("[]") @db.Text   // JSON array: study, bureaucracy, creative_work, house, admin, social, health, finance
+  dailyRoutine           String   @default("")      // optional text description
+
+  // AI-generated executive profile (synthesized by AI)
+  cognitiveLoad          Int      @default(3)       // 1-5 estimated cognitive load
+  responsibilityLoad     Int      @default(3)       // 1-5 how many responsibilities
+  timeConstraints        String   @default("")      // AI-generated description of time constraints
+  lifeContext            String   @default("")      // AI-generated context summary
+  executionStyle         String   @default("")      // AI-generated: e.g. "needs very small steps, prone to interruption, better in morning"
+  preferredSessionLength Int      @default(25)      // minutes
+
+  // Focus mode
+  focusModeDefault       String   @default("soft")  // soft, strict
+  blockedApps            String   @default("[]") @db.Text    // JSON array of app names
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+model StrictModeSession {
+  id                         String   @id @default(cuid())
+  userId                     String
+
+  // State machine: inactive, active_soft, active_strict, pending_exit, exited
+  status                     String   @default("inactive")
+
+  // What triggered activation
+  triggerType                String   @default("manual")  // manual, auto_launch, auto_hold, auto_session
+
+  // Session details
+  taskId                     String?  // linked task if any
+  startedAt                  DateTime @default(now())
+  endsAt                     DateTime? // planned end time
+  exitedAt                   DateTime? // actual exit time
+
+  // Exit friction tracking
+  exitAttempts               Int      @default(0)
+  exitReason                 String   @default("")        // user-provided reason for exit
+  exitConfirmationText       String   @default("")        // text user had to type to confirm exit
+
+  // Blocked items
+  blockedApps                String   @default("[]") @db.Text      // JSON array
+  blockedSites               String   @default("[]") @db.Text      // JSON array
+
+  // Duration
+  plannedDurationMinutes     Int      @default(25)
+  actualDurationMinutes      Int      @default(0)
+
+  // Effectiveness
+  taskCompletedDuringSession Boolean  @default(false)
+  distractionsBlocked        Int      @default(0)
+
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Adaptive User Model ──────────────────────────────────────────────────
+
+model AdaptiveProfile {
+  id                                String   @id @default(cuid())
+  userId                            String   @unique
+  user                              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Level 1: Profile Initialization (from onboarding)
+  executiveLoad                     Float    @default(3)       // 1-5
+  familyResponsibilityLoad          Float    @default(3)       // 1-5
+  domesticBurden                    Float    @default(3)       // 1-5
+  workStudyCentrality               Float    @default(3)       // 1-5
+  rewardSensitivity                 Float    @default(3)       // 1-5
+  noveltySeeking                    Float    @default(3)       // 1-5
+  avoidanceProfile                  Float    @default(3)       // 1-5 (higher = more avoidance)
+  activationDifficulty              Float    @default(3)       // 1-5
+  frictionSensitivity               Float    @default(3)       // 1-5
+  shameFrustrationSensitivity       Float    @default(3)       // 1-5
+  preferredTaskStyle                String   @default("guided") // guided, autonomous, mixed
+  preferredPromptStyle              String   @default("direct") // direct, gentle, challenge
+  optimalSessionLength              Int      @default(25)      // minutes
+  bestTimeWindows                   String   @default("[]") @db.Text   // JSON: ["morning", "afternoon"]
+  worstTimeWindows                  String   @default("[]") @db.Text   // JSON
+  interruptionVulnerability         Float    @default(3)       // 1-5
+
+  // Motivation profile
+  motivationProfile                 String   @default("{}") @db.Text   // JSON: { reward: 0.7, relief: 0.5, identity: 0.8, urgency: 0.6, accountability: 0.4, curiosity: 0.3 }
+
+  // Task preference map
+  taskPreferenceMap                 String   @default("{}") @db.Text   // JSON: { creative_work: 0.8, bureaucracy: 0.2, ... }
+
+  // Energy rhythm
+  energyRhythm                      String   @default("{}") @db.Text   // JSON: { morning: 4, afternoon: 3, evening: 2, night: 1 }
+
+  // Level 2: Behavioral Adaptation (learned from usage)
+  averageStartRate                  Float    @default(0.5)    // 0-1: how often user starts suggested tasks
+  averageCompletionRate             Float    @default(0.5)    // 0-1: how often user completes started tasks
+  averageAvoidanceRate              Float    @default(0.3)    // 0-1
+  strictModeEffectiveness           Float    @default(0.5)    // 0-1
+  recoverySuccessRate               Float    @default(0.5)    // 0-1
+  preferredDecompositionGranularity Float    @default(3)      // 1-5 (1=very detailed, 5=very brief)
+
+  // Level 3: Predictive Adaptation (inferred over time)
+  predictedBlockLikelihood          Float    @default(0.3)    // general baseline
+  predictedSuccessProbability       Float    @default(0.5)    // general baseline
+  commonFailureReasons              String   @default("[]") @db.Text   // JSON array
+  commonSuccessConditions           String   @default("[]") @db.Text   // JSON array
+
+  // Category-specific learned data
+  categorySuccessRates              String   @default("{}") @db.Text   // JSON: { work: 0.7, study: 0.3, ... }
+  categoryBlockRates                String   @default("{}") @db.Text   // JSON
+  categoryAvgResistance             String   @default("{}") @db.Text   // JSON
+  contextPerformanceRates           String   @default("{}") @db.Text   // JSON: { home: 0.6, office: 0.8, ... }
+  timeSlotPerformance               String   @default("{}") @db.Text   // JSON: { morning_work: 0.8, evening_study: 0.2, ... }
+
+  // Nudge effectiveness
+  nudgeTypeEffectiveness            String   @default("{}") @db.Text   // JSON: { gentle: 0.6, urgent: 0.3, challenge: 0.7, ... }
+
+  // Decomposition effectiveness
+  decompositionStyleEffectiveness   String   @default("{}") @db.Text   // JSON: { detailed: 0.8, brief: 0.5, ... }
+
+  // Learning metadata
+  totalSignals                      Int      @default(0)       // total learning signals received
+  lastUpdatedFrom                   String   @default("initialization") // initialization, behavioral, predictive
+  confidenceLevel                   Float    @default(0.3)     // 0-1: how confident the model is
+
+  createdAt                         DateTime @default(now())
+  updatedAt                         DateTime @updatedAt
+}
+
+model LearningSignal {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  signalType  String   // task_started, task_completed, task_avoided, task_too_hard, recovery_success, recovery_fail, strict_activated, strict_exited, nudge_accepted, nudge_ignored, micro_feedback, session_duration
+  taskId      String?
+  category    String?  // task category if relevant
+  context     String?  // execution context
+  timeSlot    String?  // morning, afternoon, evening, night
+  value       Float    @default(1)    // signal strength 0-1
+  metadata    String   @default("{}") @db.Text // JSON: additional context
+
+  processed   Boolean  @default(false) // whether the signal has been incorporated into the profile
+  processedAt DateTime?
+
+  createdAt   DateTime @default(now())
+}
+
+model MicroFeedback {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  taskId       String?
+  feedbackType String  // block_report, difficulty_rating, drain_vs_activate, decomposition_preference, session_experience
+  response     String  // the user's response (text or JSON depending on type)
+  category     String?
+
+  createdAt    DateTime @default(now())
+}
+
+model UserMemory {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  memoryType String   // pattern, preference, avoidance, success, failure, timing, context
+  category   String   // what this memory is about (task category, time, context, etc.)
+  key        String   // specific key within the category
+  value      String   @db.Text   // the memory value (text or JSON)
+  strength   Float    @default(0.5)  // 0-1: how strong/important this memory is
+  evidence   Int      @default(1)    // how many times this has been observed
+  lastSeen   DateTime @default(now())
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, memoryType, category, key])
+}
