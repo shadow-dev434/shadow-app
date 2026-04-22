@@ -1,10 +1,13 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Send, Loader2, CheckCircle2, Sparkles } from 'lucide-react';
+import { List, Send, Loader2, CheckCircle2 } from 'lucide-react';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+interface QuickReply {
+  label: string;
+  value: string;
+}
 
 interface ToolExecution {
   name: string;
@@ -17,6 +20,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   toolsExecuted?: ToolExecution[];
+  quickReplies?: QuickReply[];
   createdAt: string;
 }
 
@@ -24,35 +28,93 @@ interface TurnResponse {
   threadId: string;
   assistantMessage: string;
   toolsExecuted: ToolExecution[];
+  quickReplies?: QuickReply[];
   costUsd: number;
   latencyMs: number;
 }
 
-// ── Component ──────────────────────────────────────────────────────────────
+interface BootstrapResponse {
+  triggered: boolean;
+  threadId?: string;
+  assistantMessage?: string;
+  toolsExecuted?: ToolExecution[];
+  quickReplies?: QuickReply[];
+  mode?: string;
+}
+
+const SUGGESTED_PROMPTS = [
+  { label: 'Pianifichiamo oggi', prompt: 'Aiutami a pianificare la giornata. Cosa devo priorizzare?' },
+  { label: 'Ho un task nuovo', prompt: 'Devo aggiungere qualcosa alla lista: ' },
+  { label: 'Cosa ho in lista?', prompt: 'Cosa ho in lista oggi?' },
+  { label: 'Sono bloccato', prompt: 'Sono bloccato su qualcosa e non riesco a partire.' },
+];
 
 export function ChatView() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [mode, setMode] = useState<string>('general');
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bootstrapping, setBootstrapping] = useState(true);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const bootstrapCalled = useRef(false);
 
-  // Auto-scroll to bottom when new messages arrive
+  // Bootstrap on mount
+  useEffect(() => {
+    if (bootstrapCalled.current) return;
+    bootstrapCalled.current = true;
+
+    (async () => {
+      try {
+        const res = await fetch('/api/chat/bootstrap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (!res.ok) {
+          console.warn('[ChatView] bootstrap failed:', res.status);
+          return;
+        }
+
+        const data = (await res.json()) as BootstrapResponse;
+        console.log('[ChatView] bootstrap response:', data);
+
+        if (data.triggered && data.threadId && data.assistantMessage) {
+          setThreadId(data.threadId);
+          setMode(data.mode ?? 'morning_checkin');
+
+          const greetingMsg: Message = {
+            id: 'assist-bootstrap-' + Date.now(),
+            role: 'assistant',
+            content: data.assistantMessage,
+            toolsExecuted: data.toolsExecuted,
+            quickReplies: data.quickReplies,
+            createdAt: new Date().toISOString(),
+          };
+          setMessages([greetingMsg]);
+        }
+      } catch (err) {
+        console.error('[ChatView] bootstrap error:', err);
+      } finally {
+        setBootstrapping(false);
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, sending]);
 
-  // Auto-resize textarea
   useEffect(() => {
     if (inputRef.current) {
       inputRef.current.style.height = 'auto';
-      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 120)}px`;
+      inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 120) + 'px';
     }
   }, [input]);
 
@@ -63,9 +125,8 @@ export function ChatView() {
     setError(null);
     setSending(true);
 
-    // Optimistic: show user message immediately
     const userMsg: Message = {
-      id: `temp-${Date.now()}`,
+      id: 'temp-' + Date.now(),
       role: 'user',
       content: trimmed,
       createdAt: new Date().toISOString(),
@@ -79,38 +140,36 @@ export function ChatView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           threadId,
-          mode: 'general',
+          mode,
           userMessage: trimmed,
         }),
       });
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({ error: 'Errore sconosciuto' }));
-        throw new Error(errData.error || `HTTP ${res.status}`);
+        throw new Error(errData.error || 'HTTP ' + res.status);
       }
 
       const data = (await res.json()) as TurnResponse;
-
       setThreadId(data.threadId);
 
       const assistantMsg: Message = {
-        id: `assist-${Date.now()}`,
+        id: 'assist-' + Date.now(),
         role: 'assistant',
         content: data.assistantMessage || '(nessuna risposta)',
         toolsExecuted: data.toolsExecuted,
+        quickReplies: data.quickReplies,
         createdAt: new Date().toISOString(),
       };
       setMessages(prev => [...prev, assistantMsg]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Errore';
       setError(msg);
-      // Remove the optimistic user message on error? No, keep it so the user sees what they sent
     } finally {
       setSending(false);
-      // Refocus input
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [threadId, sending]);
+  }, [threadId, mode, sending]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,40 +177,65 @@ export function ChatView() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Enter to send, Shift+Enter for newline
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage(input);
     }
   };
 
+  const handleSuggestion = (prompt: string) => {
+    if (prompt.endsWith(': ')) {
+      setInput(prompt);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    } else {
+      sendMessage(prompt);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100">
-      {/* Header */}
       <header className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur flex-shrink-0">
-        <button
-          onClick={() => router.push('/')}
-          className="p-2 -ml-2 rounded-full hover:bg-zinc-800 active:bg-zinc-700 transition-colors"
-          aria-label="Torna indietro"
-        >
-          <ArrowLeft size={20} />
-        </button>
         <div className="flex-1">
           <h1 className="text-base font-semibold">Shadow</h1>
           <p className="text-xs text-zinc-500">Sempre qui</p>
         </div>
+        <button
+          onClick={() => router.push('/tasks')}
+          className="p-2 -mr-2 rounded-full hover:bg-zinc-800 active:bg-zinc-700 transition-colors text-zinc-400 hover:text-zinc-200"
+          aria-label="Apri lista"
+          title="Apri lista task"
+        >
+          <List size={20} />
+        </button>
       </header>
 
-      {/* Messages area */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto px-4 py-6 space-y-4"
-      >
-        {messages.length === 0 && !sending && <EmptyState />}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+        {messages.length === 0 && !sending && !bootstrapping && (
+          <EmptyState onSuggestion={handleSuggestion} />
+        )}
 
-        {messages.map(msg => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
+        {bootstrapping && messages.length === 0 && (
+          <div className="flex items-center justify-center py-20 text-zinc-500 text-sm">
+            <Loader2 size={16} className="animate-spin mr-2" /> Apertura...
+          </div>
+        )}
+
+        {messages.map((msg, idx) => {
+          const isLastAssistant =
+            msg.role === 'assistant' && idx === messages.length - 1;
+          return (
+            <div key={msg.id}>
+              <MessageBubble message={msg} />
+              {isLastAssistant && msg.quickReplies && msg.quickReplies.length > 0 && (
+                <QuickReplyButtons
+                  replies={msg.quickReplies}
+                  onSelect={(value) => sendMessage(value)}
+                  disabled={sending}
+                />
+              )}
+            </div>
+          );
+        })}
 
         {sending && <ThinkingIndicator />}
 
@@ -162,7 +246,6 @@ export function ChatView() {
         )}
       </div>
 
-      {/* Input */}
       <form
         onSubmit={handleSubmit}
         className="flex items-end gap-2 px-3 py-3 border-t border-zinc-800 bg-zinc-900/50 flex-shrink-0"
@@ -192,16 +275,28 @@ export function ChatView() {
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────
-
-function EmptyState() {
+function EmptyState({ onSuggestion }: { onSuggestion: (prompt: string) => void }) {
   return (
-    <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
-      <Sparkles size={28} className="text-amber-500 mb-3" />
+    <div className="flex flex-col items-center justify-center py-12 px-2 text-center">
+      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center mb-4">
+        <span className="text-xl font-semibold text-white">S</span>
+      </div>
       <h2 className="text-lg font-semibold mb-2">Ciao, sono Shadow</h2>
-      <p className="text-sm text-zinc-400 max-w-xs">
-        Dimmi cosa ti passa per la testa — cose da fare, dubbi, cosa ti blocca. Aiuto a tenere tutto in ordine.
+      <p className="text-sm text-zinc-400 max-w-xs mb-6">
+        Sono qui per aiutarti a tenere tutto in ordine. Scrivimi liberamente: task, dubbi, blocchi.
       </p>
+      <div className="w-full max-w-sm space-y-2">
+        <div className="text-xs text-zinc-500 mb-2">Oppure inizia da qui:</div>
+        {SUGGESTED_PROMPTS.map((s, i) => (
+          <button
+            key={i}
+            onClick={() => onSuggestion(s.prompt)}
+            className="block w-full text-left px-4 py-2.5 bg-zinc-800/50 hover:bg-zinc-800 active:bg-zinc-700 border border-zinc-700/50 rounded-lg text-sm text-zinc-200 transition-colors"
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -222,18 +317,18 @@ function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
 
   return (
-    <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} gap-1.5`}>
+    <div className={'flex flex-col gap-1.5 ' + (isUser ? 'items-end' : 'items-start')}>
       <div
-        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ${
-          isUser
+        className={
+          'max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ' +
+          (isUser
             ? 'bg-amber-600 text-white rounded-br-md'
-            : 'bg-zinc-800 text-zinc-100 rounded-bl-md'
-        }`}
+            : 'bg-zinc-800 text-zinc-100 rounded-bl-md')
+        }
       >
         {message.content}
       </div>
 
-      {/* Tool execution cards (only for assistant) */}
       {message.toolsExecuted && message.toolsExecuted.length > 0 && (
         <div className="max-w-[85%] space-y-1.5 mt-1">
           {message.toolsExecuted.map((tool, idx) => (
@@ -245,8 +340,32 @@ function MessageBubble({ message }: { message: Message }) {
   );
 }
 
+function QuickReplyButtons({
+  replies,
+  onSelect,
+  disabled,
+}: {
+  replies: QuickReply[];
+  onSelect: (value: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2 mt-2 max-w-[85%]">
+      {replies.map((reply, i) => (
+        <button
+          key={i}
+          onClick={() => onSelect(reply.value)}
+          disabled={disabled}
+          className="px-3 py-1.5 bg-amber-950/40 hover:bg-amber-900/40 active:bg-amber-900/60 border border-amber-800/50 rounded-full text-sm text-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {reply.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ToolExecutionCard({ tool }: { tool: ToolExecution }) {
-  // Friendly labels per tool type
   if (tool.name === 'create_task') {
     const result = tool.result as { title?: string; urgency?: number; category?: string } | null;
     if (!result?.title) return null;
@@ -259,7 +378,7 @@ function ToolExecutionCard({ tool }: { tool: ToolExecution }) {
           {(result.category || result.urgency) && (
             <div className="text-xs text-zinc-500 mt-0.5">
               {result.category && <span>{result.category}</span>}
-              {result.category && result.urgency && <span> · </span>}
+              {result.category && result.urgency && <span> - </span>}
               {result.urgency && <span>urgenza {result.urgency}</span>}
             </div>
           )}
@@ -291,10 +410,5 @@ function ToolExecutionCard({ tool }: { tool: ToolExecution }) {
     );
   }
 
-  // Generic fallback
-  return (
-    <div className="text-xs text-zinc-500 pl-1">
-      ✓ {tool.name}
-    </div>
-  );
+  return <div className="text-xs text-zinc-500 pl-1">ok {tool.name}</div>;
 }

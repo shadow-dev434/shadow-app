@@ -1,13 +1,5 @@
 /**
  * Shadow Chat — Orchestrator
- *
- * Per ogni turno utente:
- * 1. Carica o crea il thread
- * 2. Carica la storia dei messaggi
- * 3. Costruisce contesto utente (profile + memories)
- * 4. Chiama LLM con system prompt + tools
- * 5. Se LLM ritorna tool calls, li esegue e ri-chiama LLM con i risultati
- * 6. Salva user message + assistant response nel DB
  */
 
 import { db } from '@/lib/db';
@@ -25,10 +17,10 @@ export type ChatMode =
 
 export interface OrchestratorInput {
   userId: string;
-  threadId: string | null;       // null = crea nuovo thread
-  mode: ChatMode;                // modalità della conversazione
-  userMessage: string;            // testo dell'utente in questo turno
-  relatedTaskId?: string | null; // task relativo, se ce n'è uno
+  threadId: string | null;
+  mode: ChatMode;
+  userMessage: string;
+  relatedTaskId?: string | null;
 }
 
 export interface OrchestratorOutput {
@@ -39,6 +31,7 @@ export interface OrchestratorOutput {
     input: Record<string, unknown>;
     result: unknown;
   }>;
+  quickReplies: Array<{ label: string; value: string }>;
   costUsd: number;
   tokensIn: number;
   tokensOut: number;
@@ -46,7 +39,11 @@ export interface OrchestratorOutput {
   latencyMs: number;
 }
 
-const MAX_HISTORY_MESSAGES = 20; // last N messages to include in context
+const MAX_HISTORY_MESSAGES = 20;
+
+// Regex to match [[QR: opt1 | opt2 | opt3]] at end of message (or anywhere, but
+// typically trailing). Captures the inner content.
+const QR_REGEX = /\[\[QR:\s*([^\]]+?)\s*\]\]/;
 
 export async function orchestrate(
   input: OrchestratorInput,
@@ -69,17 +66,17 @@ export async function orchestrate(
     });
   }
 
-  // ── 2. Load recent message history ───────────────────────────────────
+  // ── 2. Load history ──────────────────────────────────────────────────
   const previousMessages = await db.chatMessage.findMany({
     where: { threadId: thread.id },
     orderBy: { createdAt: 'asc' },
     take: MAX_HISTORY_MESSAGES,
   });
 
-  // ── 3. Build user context ────────────────────────────────────────────
+  // ── 3. User context ──────────────────────────────────────────────────
   const userContext = await buildUserContext(input.userId);
 
-  // ── 4. Build messages array for LLM ──────────────────────────────────
+  // ── 4. Build messages for LLM ────────────────────────────────────────
   const llmMessages: LLMMessage[] = previousMessages
     .filter(m => m.role === 'user' || m.role === 'assistant')
     .map(m => ({
@@ -87,10 +84,8 @@ export async function orchestrate(
       content: m.content,
     }));
 
-  // Add the new user message
   llmMessages.push({ role: 'user', content: input.userMessage });
 
-  // Save the user message to DB
   await db.chatMessage.create({
     data: {
       threadId: thread.id,
@@ -99,7 +94,10 @@ export async function orchestrate(
     },
   });
 
-  // ── 5. First LLM call ────────────────────────────────────────────────
+  // ── 5. Determine model tier ──────────────────────────────────────────
+  const isStructuredMode = input.mode !== 'general';
+  const modelTier = isStructuredMode ? 'smart' : 'fast';
+
   const systemPrompt = buildSystemPrompt(input.mode, userContext);
 
   let totalCost = 0;
@@ -108,8 +106,9 @@ export async function orchestrate(
   let totalLatencyMs = 0;
   let lastModel = '';
 
+  // ── 6. First LLM call ────────────────────────────────────────────────
   const firstResponse = await callLLM({
-    tier: 'fast',
+    tier: modelTier,
     systemPrompt,
     messages: llmMessages,
     tools: CHAT_TOOLS,
@@ -126,9 +125,8 @@ export async function orchestrate(
   const toolsExecuted: OrchestratorOutput['toolsExecuted'] = [];
   let finalAssistantMessage = firstResponse.text;
 
-  // ── 6. Handle tool calls if any ──────────────────────────────────────
+  // ── 7. Handle tool calls ─────────────────────────────────────────────
   if (firstResponse.toolCalls.length > 0) {
-    // Execute all tool calls in parallel
     const toolResults = await Promise.all(
       firstResponse.toolCalls.map(async (tc) => {
         const result = await executeTool(tc.name, tc.input, input.userId);
@@ -137,7 +135,6 @@ export async function orchestrate(
       }),
     );
 
-    // Add assistant turn (with tool_use blocks) to history for the second call
     llmMessages.push({
       role: 'assistant',
       content: [
@@ -151,7 +148,6 @@ export async function orchestrate(
       ],
     });
 
-    // Add tool results as user-role turn (Anthropic convention)
     llmMessages.push({
       role: 'user',
       content: toolResults.map(({ toolCall, result }) => ({
@@ -161,9 +157,8 @@ export async function orchestrate(
       })),
     });
 
-    // Second LLM call — now with tool results, get final natural-language response
     const secondResponse = await callLLM({
-      tier: 'fast',
+      tier: modelTier,
       systemPrompt,
       messages: llmMessages,
       tools: CHAT_TOOLS,
@@ -180,13 +175,34 @@ export async function orchestrate(
     finalAssistantMessage = secondResponse.text;
   }
 
-  // ── 7. Save assistant message to DB ──────────────────────────────────
+  // ── 8. Parse [[QR:...]] tag from text ───────────────────────────────
+  const quickReplies: Array<{ label: string; value: string }> = [];
+  const qrMatch = finalAssistantMessage.match(QR_REGEX);
+  if (qrMatch) {
+    const rawOptions = qrMatch[1];
+    const options = rawOptions
+      .split('|')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .slice(0, 5);
+    for (const opt of options) {
+      quickReplies.push({ label: opt, value: opt });
+    }
+    // Remove the tag from the visible message
+    finalAssistantMessage = finalAssistantMessage.replace(QR_REGEX, '').trim();
+  }
+
+  // ── 9. Save assistant message ────────────────────────────────────────
   await db.chatMessage.create({
     data: {
       threadId: thread.id,
       role: 'assistant',
       content: finalAssistantMessage,
-      payloadJson: toolsExecuted.length > 0 ? JSON.stringify({ toolsExecuted }) : null,
+      payloadJson: quickReplies.length > 0
+        ? JSON.stringify({ quickReplies, toolsExecuted })
+        : toolsExecuted.length > 0
+          ? JSON.stringify({ toolsExecuted })
+          : null,
       modelUsed: lastModel,
       tokensIn: totalTokensIn,
       tokensOut: totalTokensOut,
@@ -194,7 +210,6 @@ export async function orchestrate(
     },
   });
 
-  // ── 8. Update thread lastTurnAt ──────────────────────────────────────
   await db.chatThread.update({
     where: { id: thread.id },
     data: { lastTurnAt: new Date() },
@@ -204,6 +219,7 @@ export async function orchestrate(
     threadId: thread.id,
     assistantMessage: finalAssistantMessage,
     toolsExecuted,
+    quickReplies,
     costUsd: totalCost,
     tokensIn: totalTokensIn,
     tokensOut: totalTokensOut,

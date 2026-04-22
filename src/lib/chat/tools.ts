@@ -1,18 +1,12 @@
 /**
  * Shadow Chat — Tool Definitions & Executors
  *
- * Tools are functions the LLM can call to affect the real world.
- * Each tool has:
- * - A schema (for the LLM to know what to send)
- * - An executor (what happens when the LLM calls it)
- *
- * We start with 2 essential tools. More follow in subsequent blocks.
+ * Note: quick_replies are NOT a tool. They are inline markers in the text
+ * response, parsed by the orchestrator. See prompts.ts for the format.
  */
 
 import { db } from '@/lib/db';
 import type { LLMTool } from '@/lib/llm/client';
-
-// ── Tool Schemas (what the LLM sees) ──────────────────────────────────────
 
 export const CHAT_TOOLS: LLMTool[] = [
   {
@@ -22,31 +16,16 @@ export const CHAT_TOOLS: LLMTool[] = [
     input_schema: {
       type: 'object',
       properties: {
-        title: {
-          type: 'string',
-          description: 'Titolo conciso del task (max 80 caratteri)',
-        },
-        description: {
-          type: 'string',
-          description: 'Dettagli extra se utili, altrimenti stringa vuota',
-        },
-        urgency: {
-          type: 'number',
-          description: 'Urgenza 1-5: 5=oggi, 4=questa settimana, 3=questo mese, 2=nel trimestre, 1=quando capita',
-        },
-        importance: {
-          type: 'number',
-          description: 'Importanza 1-5: quanto pesa nella vita dell\'utente',
-        },
+        title: { type: 'string', description: 'Titolo conciso del task (max 80 caratteri)' },
+        description: { type: 'string', description: 'Dettagli extra se utili, altrimenti stringa vuota' },
+        urgency: { type: 'number', description: 'Urgenza 1-5: 5=oggi, 4=questa settimana, 3=questo mese, 2=nel trimestre, 1=quando capita' },
+        importance: { type: 'number', description: 'Importanza 1-5: quanto pesa nella vita dell\'utente' },
         category: {
           type: 'string',
           enum: ['work', 'personal', 'health', 'admin', 'creative', 'study', 'household', 'general'],
           description: 'Categoria del task',
         },
-        deadline: {
-          type: 'string',
-          description: 'Scadenza in formato ISO YYYY-MM-DD se specificata, altrimenti stringa vuota',
-        },
+        deadline: { type: 'string', description: 'Scadenza in formato ISO YYYY-MM-DD se specificata, altrimenti stringa vuota' },
       },
       required: ['title', 'urgency', 'importance', 'category'],
     },
@@ -60,9 +39,21 @@ export const CHAT_TOOLS: LLMTool[] = [
       properties: {},
     },
   },
+  {
+    name: 'set_user_energy',
+    description:
+      'Registra il livello di energia dichiarato dall\'utente per oggi (1-5). Usa durante il morning checkin quando l\'utente dichiara la sua energia.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        level: { type: 'number', description: 'Livello energia 1-5 (1=a terra, 5=sul pezzo)' },
+      },
+      required: ['level'],
+    },
+  },
 ];
 
-// ── Tool Executors (what happens when the LLM calls a tool) ───────────────
+// ── Tool Executors ─────────────────────────────────────────────────────────
 
 export interface ToolExecutionResult {
   success: boolean;
@@ -81,6 +72,8 @@ export async function executeTool(
         return await executeCreateTask(input, userId);
       case 'get_today_tasks':
         return await executeGetTodayTasks(userId);
+      case 'set_user_energy':
+        return await executeSetUserEnergy(input, userId);
       default:
         return { success: false, error: `Unknown tool: ${toolName}` };
     }
@@ -158,6 +151,23 @@ async function executeGetTodayTasks(userId: string): Promise<ToolExecutionResult
       deadline: t.deadline?.toISOString().split('T')[0] ?? null,
     })),
   };
+}
+
+async function executeSetUserEnergy(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const level = clampInt(input.level, 1, 5, 3);
+
+  await db.learningSignal.create({
+    data: {
+      userId,
+      signalType: 'energy_declared',
+      metadata: JSON.stringify({ level, timestamp: new Date().toISOString() }),
+    },
+  });
+
+  return { success: true, data: { level } };
 }
 
 function clampInt(v: unknown, min: number, max: number, fallback: number): number {
