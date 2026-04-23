@@ -36,12 +36,61 @@ async function getAdaptiveProfile(userId: string): Promise<AdaptiveProfileData |
   }
 }
 
-// Rimuove `userId` da un Partial<AdaptiveProfileData> prima di passarlo a
-// Prisma: Prisma vieta di aggiornare la FK via `data`, e il tipo del client
-// richiede `userId: undefined` o l'assenza del campo.
-function stripUserId<T extends { userId?: unknown }>(data: T): Omit<T, 'userId'> {
-  const { userId: _ignored, ...rest } = data;
-  return rest;
+// Normalizza un delta Partial<AdaptiveProfileData> prima di passarlo a
+// Prisma.adaptiveProfile.update/.upsert: rimuove `userId` (FK non
+// aggiornabile via `data`) e serializza in JSON i campi che nello schema
+// sono String @db.Text ma che i consumer del tipo ritornano come
+// oggetti/array JS grezzi.
+//
+// Contesto: i 3 consumer di Partial<AdaptiveProfileData> in questo route
+// (recordNudgeOutcome, generateProactiveResponse.profileUpdate,
+// processMicroFeedbackAI.profileUpdates) popolano campi mappa/array come
+// nudgeTypeEffectiveness come oggetti JS. Prisma 6 valida rigorosamente:
+// object dove aspetta String → PrismaClientValidationError a runtime, che
+// il try/catch muto dei caller silenzia. Effetto: prima di questo fix
+// l'apprendimento nudge/proactive/micro-feedback non si persisteva mai,
+// il profilo adattivo restava bloccato all'inizializzazione
+// dell'onboarding. Nessuna data corruption (Prisma rifiuta a monte), solo
+// silent failure scoperto durante Task 2.
+//
+// Guard: se un valore è già stringa non ri-stringifica, evitando
+// double-encoding se in futuro un consumer ritorna già JSON serializzato.
+//
+// TODO(Task 10): questo è un fix tattico scoped al singolo route. Il fix
+// sistematico richiede un helper centralizzato (toDbAdaptive) tipizzato
+// contro Prisma.AdaptiveProfileUpdateInput e usato da tutti i consumer
+// di Partial<AdaptiveProfileData>. Vedi ROADMAP Task 10 punto 4. Quando
+// il rewrite sarà fatto, rimuovere questo helper locale e
+// ignoreBuildErrors: true in next.config.ts.
+const ADAPTIVE_JSON_FIELDS: ReadonlyArray<keyof AdaptiveProfileData> = [
+  'nudgeTypeEffectiveness',
+  'motivationProfile',
+  'taskPreferenceMap',
+  'energyRhythm',
+  'bestTimeWindows',
+  'worstTimeWindows',
+  'categorySuccessRates',
+  'categoryBlockRates',
+  'categoryAvgResistance',
+  'contextPerformanceRates',
+  'timeSlotPerformance',
+  'decompositionStyleEffectiveness',
+  'commonFailureReasons',
+  'commonSuccessConditions',
+];
+
+function toDbAdaptiveDelta(
+  data: Partial<AdaptiveProfileData> | Record<string, unknown>,
+): Record<string, unknown> {
+  const { userId: _ignored, ...rest } = data as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...rest };
+  for (const key of ADAPTIVE_JSON_FIELDS) {
+    const v = out[key];
+    if (v !== undefined && v !== null && typeof v !== 'string') {
+      out[key] = JSON.stringify(v);
+    }
+  }
+  return out;
 }
 
 // ── Helper: Get time slot ────────────────────────────────────────────────────
@@ -94,7 +143,7 @@ export async function POST(request: NextRequest) {
           try {
             await db.adaptiveProfile.update({
               where: { userId },
-              data: stripUserId(response.profileUpdate),
+              data: toDbAdaptiveDelta(response.profileUpdate),
             });
           } catch {
             // Non-critical
@@ -241,7 +290,7 @@ export async function POST(request: NextRequest) {
           try {
             await db.adaptiveProfile.update({
               where: { userId },
-              data: stripUserId(result.profileUpdates),
+              data: toDbAdaptiveDelta(result.profileUpdates),
             });
           } catch {
             // Non-critical
@@ -324,7 +373,7 @@ export async function POST(request: NextRequest) {
         try {
           await db.adaptiveProfile.update({
             where: { userId },
-            data: stripUserId(updates),
+            data: toDbAdaptiveDelta(updates),
           });
         } catch {
           // Non-critical

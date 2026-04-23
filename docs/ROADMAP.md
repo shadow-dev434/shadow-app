@@ -151,7 +151,12 @@ Include tutti i follow-up registrati durante Task 1:
 1. Strict mode `mode` bug client-side (chiamata fallisce 400, preesistente)
 2. 19 errori lint in shadcn/hook
 3. Errore TS #2 in `src/app/tasks/page.tsx:3272`
-4. Rimuovere `ignoreBuildErrors: true` dopo fix #2 e #3
+4. Rimuovere `ignoreBuildErrors: true` dopo fix #2 e #3. **Nota**: durante
+   Task 2 (2026-04-24) è stato applicato un fix tattico in
+   `src/app/api/ai-assistant/route.ts` (helper locale `toDbAdaptiveDelta`)
+   per sbloccare il learning su nudge/proactive/micro-feedback. Quando
+   verrà fatto il rewrite sistematico qui, rimuovere quell'helper locale
+   e centralizzare in `src/lib/engines/`.
 5. `cp -r` nel build script non cross-platform
 6. Middleware deprecato Next 16.2.4 → migrare a `proxy.ts`
 7. `prisma migrate` baseline invece di `db push`
