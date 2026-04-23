@@ -36,6 +36,8 @@ model User {
   learningSignals    LearningSignal[]
   microFeedbacks     MicroFeedback[]
   memories           UserMemory[]
+  dailyPlans         DailyPlan[]
+  reviews            Review[]
 }
 
 model Account {
@@ -106,8 +108,8 @@ model Task {
   updatedAt       DateTime  @updatedAt
 
   // Multi-user
-  userId String?
-  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Delegation
   delegatedToId    String?
@@ -190,7 +192,9 @@ model CalendarToken {
 
 model DailyPlan {
   id             String   @id @default(cuid())
-  date           String   @unique
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           String
   top3Ids        String   @default("[]")
   doNowIds       String   @default("[]")
   scheduleIds    String   @default("[]")
@@ -203,6 +207,8 @@ model DailyPlan {
   updatedAt      DateTime @updatedAt
 
   tasks DailyPlanTask[]
+
+  @@unique([userId, date])
 }
 
 model DailyPlanTask {
@@ -217,7 +223,9 @@ model DailyPlanTask {
 
 model Review {
   id          String   @id @default(cuid())
-  date        String   @unique
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        String
   whatDone    String   @default("")
   whatAvoided String   @default("")
   whatBlocked String   @default("")
@@ -228,6 +236,8 @@ model Review {
   updatedAt   DateTime @updatedAt
 
   tasks ReviewTask[]
+
+  @@unique([userId, date])
 }
 
 model ReviewTask {
@@ -242,7 +252,7 @@ model ReviewTask {
 
 model UserPattern {
   id                    String   @id @default(cuid())
-  userId                String?
+  userId                String
   avoidedCategories     String   @default("[]") @db.Text
   difficultTimeSlots    String   @default("[]") @db.Text
   problematicCategories String   @default("[]") @db.Text
@@ -256,12 +266,12 @@ model UserPattern {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Settings {
   id                   String   @id @default(cuid())
-  userId               String?
+  userId               String
   defaultEnergy        Int      @default(3)
   defaultContext       String   @default("any")
   defaultDuration      Int      @default(25)
@@ -275,7 +285,7 @@ model Settings {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model PushSubscription {

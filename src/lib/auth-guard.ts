@@ -22,8 +22,6 @@ export async function requireSession(req?: NextRequest): Promise<AuthGuardResult
       })
     : null;
 
-  console.log('[auth-guard] token:', JSON.stringify(token));
-
   const userId =
     token && typeof token.id === 'string'
       ? token.id
@@ -31,7 +29,6 @@ export async function requireSession(req?: NextRequest): Promise<AuthGuardResult
         ? token.sub
         : null;
 
-  console.log('[auth-guard] extracted userId:', userId);
   if (!userId) {
     return {
       error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
