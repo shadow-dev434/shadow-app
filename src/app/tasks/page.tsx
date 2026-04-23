@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useShadowStore, type ViewMode, type ShadowTask, type MicroStep, type UserProfileData, type AIClassifyResult } from '@/store/shadow-store';
-import { APP_TOUR_STEPS, STRICT_EXIT_STEPS, type ExitFrictionStep, type AdaptiveProfileData, type LearningSignalData, type AIInsight, type ProactiveTrigger, type NudgeMessage, type TaskRecommendation, type ConversationalOnboardingResponse, type ProactiveChatbotResponse } from '@/lib/types/shadow';
+import { STRICT_EXIT_STEPS, type ExitFrictionStep, type AdaptiveProfileData, type LearningSignalData, type AIInsight, type ProactiveTrigger, type NudgeMessage, type TaskRecommendation, type ProactiveChatbotResponse } from '@/lib/types/shadow';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -83,34 +85,6 @@ const MODE_CONFIG = {
   none: { label: '', color: '', bg: '', desc: '' },
 };
 
-const ROLES = [
-  { value: 'student', label: 'Studente', icon: <GraduationCap className="w-5 h-5" /> },
-  { value: 'worker', label: 'Lavoratore', icon: <Briefcase className="w-5 h-5" /> },
-  { value: 'freelancer', label: 'Freelancer', icon: <FileText className="w-5 h-5" /> },
-  { value: 'both', label: 'Studente + Lavoratore', icon: <BookOpen className="w-5 h-5" /> },
-  { value: 'parent', label: 'Genitore', icon: <Baby className="w-5 h-5" /> },
-  { value: 'other', label: 'Altro', icon: <User className="w-5 h-5" /> },
-];
-
-const LIVING_SITUATIONS = [
-  { value: 'alone', label: 'Da solo/a' },
-  { value: 'family', label: 'Con la famiglia' },
-  { value: 'partner', label: 'Con il partner' },
-  { value: 'roommates', label: 'Con coinquilini' },
-  { value: 'parents', label: 'Con i genitori' },
-];
-
-const DIFFICULT_AREAS = [
-  { value: 'bureaucracy', label: 'Burocrazia', icon: <FileText className="w-4 h-4" /> },
-  { value: 'study', label: 'Studio', icon: <BookOpen className="w-4 h-4" /> },
-  { value: 'creative_work', label: 'Lavoro creativo', icon: <Palette className="w-4 h-4" /> },
-  { value: 'house', label: 'Gestione casa', icon: <Home className="w-4 h-4" /> },
-  { value: 'admin', label: 'Amministrazione', icon: <Wrench className="w-4 h-4" /> },
-  { value: 'social', label: 'Relazioni sociali', icon: <Users className="w-4 h-4" /> },
-  { value: 'health', label: 'Salute', icon: <Heart className="w-4 h-4" /> },
-  { value: 'finance', label: 'Finanze', icon: <BarChart3 className="w-4 h-4" /> },
-];
-
 // ─── Helper Functions ───────────────────────────────────────────────────────
 
 function parseMicroSteps(json: string): MicroStep[] {
@@ -129,19 +103,6 @@ function getEnergyEmoji(level: number): string {
 
 function getEnergyLabel(level: number): string {
   return ['', 'Esaurito', 'Basso', 'Medio', 'Buono', 'Alto'][level] || '';
-}
-
-// Map icon name string to lucide React component
-function getTourIcon(iconName: string): React.ReactNode {
-  const iconMap: Record<string, React.ReactNode> = {
-    Inbox: <Inbox className="w-12 h-12" />,
-    Sparkles: <Sparkles className="w-12 h-12" />,
-    Brain: <Brain className="w-12 h-12" />,
-    Target: <Target className="w-12 h-12" />,
-    Shield: <Shield className="w-12 h-12" />,
-    ClipboardCheck: <ClipboardCheck className="w-12 h-12" />,
-  };
-  return iconMap[iconName] || <Zap className="w-12 h-12" />;
 }
 
 // ─── API Helpers ────────────────────────────────────────────────────────────
@@ -216,15 +177,6 @@ async function loadProfile(): Promise<UserProfileData | null> {
   } catch {
     return null;
   }
-}
-
-async function saveProfile(data: Record<string, unknown>): Promise<{ profile: UserProfileData; executiveProfile: Record<string, unknown> }> {
-  const res = await fetch('/api/profile', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  return res.json();
 }
 
 async function startStrictModeSession(mode: 'soft' | 'strict', taskId: string | null, durationMinutes: number, blockedApps: string[]) {
@@ -348,11 +300,14 @@ export default function ShadowApp() {
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [initializing, setInitializing] = useState(true);
 
-  // On mount: check auth, tour, onboarding status
+  // On mount: inizializza auth state e carica dati. Il gating
+  // tour/onboarding ora vive nel middleware (src/middleware.ts) e legge
+  // i flag dal JWT, quindi questa useEffect non decide più la view.
   useEffect(() => {
     const init = async () => {
       try {
-        // Check for saved session in localStorage
+        // Restore sessione locale (legacy localStorage; il source-of-truth
+        // per il middleware è il cookie NextAuth).
         const saved = localStorage.getItem('shadow-user');
         if (saved) {
           try {
@@ -364,44 +319,21 @@ export default function ShadowApp() {
         }
 
         if (store.isAuthenticated && store.authUser) {
-          // Authenticated — check tour and onboarding
+          // Carica profile e imposta vista di default per /tasks. Se i flag
+          // onboarding fossero incompleti, il middleware avrebbe già
+          // redirectato prima di montare questo componente.
           try {
             const profileRes = await fetch('/api/profile');
             const profileData = await profileRes.json();
-            const profile = profileData.profile;
+            if (profileData.profile) store.setUserProfile(profileData.profile);
+          } catch {}
 
-            if (profile) {
-              store.setUserProfile(profile);
+          store.setCurrentView('inbox');
 
-              // Check if tour completed
-              const tourCompleted = localStorage.getItem('shadow-tour-completed') === 'true';
-              if (!tourCompleted) {
-                store.setCurrentView('tour');
-              } else if (!profile.onboardingComplete) {
-                store.setCurrentView('onboarding');
-              } else {
-                localStorage.setItem('shadow-profile-complete', 'true');
-                store.setCurrentView('inbox');
-              }
-            } else {
-              // No profile yet — need tour then onboarding
-              const tourCompleted = localStorage.getItem('shadow-tour-completed') === 'true';
-              if (!tourCompleted) {
-                store.setCurrentView('tour');
-              } else {
-                store.setCurrentView('onboarding');
-              }
-            }
-          } catch {
-            store.setCurrentView('tour');
-          }
-
-          // Load tasks
           store.setIsLoading(true);
           const tasks = await fetchTasks();
           store.setTasks(tasks);
 
-          // Load adaptive profile
           try {
             const adaptiveRes = await fetch('/api/adaptive-profile');
             const adaptiveData = await adaptiveRes.json();
@@ -409,10 +341,9 @@ export default function ShadowApp() {
               store.setAdaptiveProfile(adaptiveData.profile);
             }
           } catch {
-            // Non-critical — adaptive profile will be created during onboarding if needed
+            // Non-critical
           }
         } else {
-          // Not authenticated — show auth gate
           store.setCurrentView('auth');
         }
       } catch (err) {
@@ -575,7 +506,7 @@ export default function ShadowApp() {
     );
   }
 
-  const hideHeaderNav = store.currentView === 'auth' || store.currentView === 'tour' || store.currentView === 'onboarding';
+  const hideHeaderNav = store.currentView === 'auth';
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -597,8 +528,6 @@ export default function ShadowApp() {
         )}
 
         {store.currentView === 'auth' && <AuthGateView />}
-        {store.currentView === 'tour' && <TourView />}
-        {store.currentView === 'onboarding' && <OnboardingView />}
         {store.currentView === 'inbox' && <InboxView />}
         {store.currentView === 'today' && <TodayView />}
         {store.currentView === 'focus' && <FocusView />}
@@ -634,6 +563,7 @@ interface BeforeInstallPromptEvent extends Event {
 
 function AuthGateView() {
   const store = useShadowStore();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -643,6 +573,9 @@ function AuthGateView() {
 
   const authView = store.authView;
 
+  // Post-auth: andiamo a / e lasciamo decidere al middleware in base ai
+  // flag nel JWT (tourCompleted, onboardingComplete). Niente più
+  // setCurrentView per 'tour'/'onboarding': il gating è server-side.
   const handleLogin = useCallback(async () => {
     if (!email.trim() || !password.trim()) {
       setError('Inserisci email e password');
@@ -663,49 +596,7 @@ function AuthGateView() {
         store.setIsAuthenticated(true);
         store.setUserId(user.id);
         localStorage.setItem('shadow-user', JSON.stringify(user));
-
-        // Determine next view based on profile/tour status
-        if (data.isFirstAccess) {
-          // First access — show tour
-          store.setCurrentView('tour');
-        } else if (data.profile) {
-          // Returning user — use profile data from login response
-          const tourCompleted = localStorage.getItem('shadow-tour-completed') === 'true' || data.profile.tourCompleted;
-          if (!tourCompleted) {
-            store.setCurrentView('tour');
-          } else if (!data.profile.onboardingComplete) {
-            store.setCurrentView('onboarding');
-          } else {
-            // Fully onboarded — load profile and go to inbox
-            const profile = await loadProfile(user.id);
-            if (profile) store.setUserProfile(profile);
-            localStorage.setItem('shadow-profile-complete', 'true');
-            store.setCurrentView('inbox');
-          }
-        } else {
-          // No profile data — check localStorage fallback
-          const tourCompleted = localStorage.getItem('shadow-tour-completed') === 'true';
-          if (!tourCompleted) {
-            store.setCurrentView('tour');
-          } else {
-            const profile = await loadProfile(user.id);
-            if (profile) {
-              store.setUserProfile(profile);
-              if (profile.onboardingComplete) {
-                localStorage.setItem('shadow-profile-complete', 'true');
-                store.setCurrentView('inbox');
-              } else {
-                store.setCurrentView('onboarding');
-              }
-            } else {
-              store.setCurrentView('onboarding');
-            }
-          }
-        }
-
-        // Load tasks
-        const tasks = await fetchTasks(user.id);
-        store.setTasks(tasks);
+        router.replace('/');
       } else {
         setError(data.error || 'Credenziali non valide. Riprova.');
       }
@@ -714,7 +605,7 @@ function AuthGateView() {
     } finally {
       setIsLoading(false);
     }
-  }, [email, password, store]);
+  }, [email, password, store, router]);
 
   const handleRegister = useCallback(async () => {
     if (!name.trim() || !email.trim() || !password.trim()) {
@@ -740,13 +631,7 @@ function AuthGateView() {
         store.setIsAuthenticated(true);
         store.setUserId(user.id);
         localStorage.setItem('shadow-user', JSON.stringify(user));
-
-        // New user → tour first
-        store.setCurrentView('tour');
-
-        // Load tasks
-        const tasks = await fetchTasks(user.id);
-        store.setTasks(tasks);
+        router.replace('/');
       } else {
         setError(data.error || 'Errore nella registrazione');
       }
@@ -755,7 +640,7 @@ function AuthGateView() {
     } finally {
       setIsLoading(false);
     }
-  }, [name, email, password, store]);
+  }, [name, email, password, store, router]);
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
@@ -943,127 +828,6 @@ function AuthGateView() {
   );
 }
 
-// ─── Tour View ──────────────────────────────────────────────────────────────
-
-function TourView() {
-  const store = useShadowStore();
-  const [currentStep, setCurrentStep] = useState(0);
-  const totalSteps = APP_TOUR_STEPS.length;
-  const step = APP_TOUR_STEPS[currentStep];
-
-  const handleFinish = useCallback(async () => {
-    store.setTourCompleted(true);
-    localStorage.setItem('shadow-tour-completed', 'true');
-
-    // Save tour completion to profile API
-    try {
-      await fetch('/api/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tourCompleted: true, tourStep: totalSteps }),
-      });
-    } catch {}
-
-    // Check if onboarding is needed
-    const profileComplete = localStorage.getItem('shadow-profile-complete') === 'true';
-    if (profileComplete && store.userProfile?.onboardingComplete) {
-      store.setCurrentView('inbox');
-    } else {
-      store.setCurrentView('onboarding');
-    }
-  }, [store, totalSteps]);
-
-  const handleNext = useCallback(() => {
-    if (currentStep < totalSteps - 1) {
-      setCurrentStep(currentStep + 1);
-      store.setTourStep(currentStep + 1);
-    } else {
-      handleFinish();
-    }
-  }, [currentStep, totalSteps, store, handleFinish]);
-
-  const handleBack = useCallback(() => {
-    if (currentStep > 0) {
-      setCurrentStep(currentStep - 1);
-      store.setTourStep(currentStep - 1);
-    }
-  }, [currentStep, store]);
-
-  const handleSkip = useCallback(() => {
-    handleFinish();
-  }, [handleFinish]);
-
-  return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
-        {/* Progress dots */}
-        <div className="flex items-center justify-center gap-2">
-          {APP_TOUR_STEPS.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => { setCurrentStep(idx); store.setTourStep(idx); }}
-              className={`w-2.5 h-2.5 rounded-full transition-all ${
-                idx === currentStep ? 'bg-amber-500 w-6' : idx < currentStep ? 'bg-amber-700' : 'bg-zinc-700'
-              }`}
-              aria-label={`Step ${idx + 1}`}
-            />
-          ))}
-        </div>
-
-        {/* Step content */}
-        <div className="text-center space-y-4 animate-in fade-in duration-300" key={currentStep}>
-          {/* Icon */}
-          <div className="w-20 h-20 rounded-2xl bg-amber-600/20 flex items-center justify-center mx-auto text-amber-500">
-            {getTourIcon(step.icon)}
-          </div>
-
-          {/* Title & Description */}
-          <div>
-            <h2 className="text-xl font-bold text-white">{step.title}</h2>
-            <p className="text-zinc-400 text-sm mt-2 leading-relaxed">{step.description}</p>
-          </div>
-
-          {/* Example card */}
-          <Card className="bg-zinc-900 border-zinc-800">
-            <CardContent className="p-4">
-              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1">
-                <MessageCircle className="w-3 h-3" /> Esempio pratico
-              </p>
-              <p className="text-sm text-zinc-300 italic">{step.example}</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Navigation */}
-        <div className="flex items-center justify-between pt-4">
-          <div>
-            {currentStep > 0 ? (
-              <Button variant="ghost" onClick={handleBack} className="text-zinc-400 hover:text-white">
-                <ChevronLeft className="w-4 h-4 mr-1" /> Indietro
-              </Button>
-            ) : (
-              <Button variant="ghost" onClick={handleSkip} className="text-zinc-500 hover:text-zinc-300 text-sm">
-                Salta
-              </Button>
-            )}
-          </div>
-          <span className="text-xs text-zinc-600">{currentStep + 1}/{totalSteps}</span>
-          <div>
-            {currentStep < totalSteps - 1 ? (
-              <Button onClick={handleNext} className="bg-amber-600 hover:bg-amber-700 text-white">
-                Avanti <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            ) : (
-              <Button onClick={handleFinish} className="bg-amber-600 hover:bg-amber-700 text-white">
-                Inizia <Zap className="w-4 h-4 ml-1" />
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Strict Mode Exit Dialog ────────────────────────────────────────────────
 
@@ -1292,668 +1056,6 @@ function StrictModeExitDialog() {
   );
 }
 
-// ─── Onboarding View (AI-Guided Conversational) ─────────────────────────────
-
-const ONBOARDING_LOAD_SOURCES = [
-  { value: 'work', label: 'Lavoro', icon: <Briefcase className="w-4 h-4" /> },
-  { value: 'study', label: 'Studio', icon: <GraduationCap className="w-4 h-4" /> },
-  { value: 'family', label: 'Famiglia', icon: <Users className="w-4 h-4" /> },
-  { value: 'house', label: 'Casa', icon: <Home className="w-4 h-4" /> },
-  { value: 'bureaucracy', label: 'Burocrazia', icon: <FileText className="w-4 h-4" /> },
-  { value: 'health', label: 'Salute', icon: <Heart className="w-4 h-4" /> },
-  { value: 'finance', label: 'Finanze', icon: <BarChart3 className="w-4 h-4" /> },
-  { value: 'relationships', label: 'Relazioni', icon: <MessageCircle className="w-4 h-4" /> },
-];
-
-const ONBOARDING_MOTIVATIONS = [
-  { value: 'urgency', label: 'Paura della scadenza', emoji: '⏰' },
-  { value: 'reward', label: 'Ricompensa', emoji: '🎁' },
-  { value: 'identity', label: 'Senso di dovere', emoji: '💪' },
-  { value: 'curiosity', label: 'Interesse', emoji: '🔍' },
-  { value: 'accountability', label: 'Pressione esterna', emoji: '👥' },
-  { value: 'relief', label: 'Sollievo', emoji: '😮‍💨' },
-  { value: 'approval', label: 'Approvazione', emoji: '⭐' },
-];
-
-function OnboardingView() {
-  const store = useShadowStore();
-  const [qIndex, setQIndex] = useState(0); // current question index
-  const [isConfiguring, setIsConfiguring] = useState(false);
-  const [isComplete, setIsComplete] = useState(false);
-
-  // Answers collected during onboarding
-  const [age, setAge] = useState(25);
-  const [role, setRole] = useState('');
-  const [roleDetail, setRoleDetail] = useState('');
-  const [livingSituation, setLivingSituation] = useState('');
-  const [householdManager, setHouseholdManager] = useState(false);
-  const [loadSources, setLoadSources] = useState<string[]>([]);
-  const [difficultAreas, setDifficultAreas] = useState<string[]>([]);
-  const [motivations, setMotivations] = useState<Record<string, number>>({}); // value → weight (1=medium, 2=high)
-  const [productiveTime, setProductiveTime] = useState('');
-  const [sessionPreference, setSessionPreference] = useState('');
-  const [activationDifficulty, setActivationDifficulty] = useState(3);
-  const [promptStyle, setPromptStyle] = useState('');
-
-  const authUser = store.authUser;
-  const totalQuestions = 12;
-
-  // Adaptive question flow — returns the next question index based on current answers
-  const getQuestionFlow = useCallback((): number[] => {
-    // Q0: Age, Q1: Role, Q2: Role detail (adaptive), Q3: Living, Q4: Household manager,
-    // Q5: Load sources, Q6: Difficult areas, Q7: Motivations, Q8: Productive time,
-    // Q9: Session preference, Q10: Activation difficulty, Q11: Prompt style
-    return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-  }, []);
-
-  const questionFlow = getQuestionFlow();
-  const currentQ = questionFlow[qIndex];
-  const progress = ((qIndex + 1) / totalQuestions) * 100;
-
-  const toggleMultiSelect = useCallback((item: string, list: string[], setter: (v: string[]) => void) => {
-    setter(list.includes(item) ? list.filter(x => x !== item) : [...list, item]);
-  }, []);
-
-  const toggleMotivation = useCallback((value: string) => {
-    setMotivations(prev => {
-      const current = prev[value] || 0;
-      if (current === 0) return { ...prev, [value]: 1 }; // medium
-      if (current === 1) return { ...prev, [value]: 2 }; // high
-      return { ...prev, [value]: 0 }; // deselect
-    });
-  }, []);
-
-  const handleConfigure = useCallback(async () => {
-    setIsConfiguring(true);
-
-    // Determine focus mode from prompt style
-    const focusMode = promptStyle === 'direct' ? 'strict' : 'soft';
-
-    // Determine session length from preference
-    let sessionLength = 25;
-    if (sessionPreference === 'short') sessionLength = 10;
-    else if (sessionPreference === 'medium') sessionLength = 25;
-    else if (sessionPreference === 'long') sessionLength = 45;
-
-    // Build onboarding data for the profile
-    const hasChildren = role === 'parent';
-    const responsibilities = loadSources.map(s => s);
-
-    try {
-      // 1. Save the user profile via the profile API
-      const result = await saveProfile({
-        role,
-        occupation: roleDetail,
-        age,
-        livingSituation,
-        hasChildren,
-        householdManager,
-        mainResponsibilities: responsibilities,
-        difficultAreas,
-        dailyRoutine: '',
-        focusModeDefault: focusMode,
-        onboardingComplete: true,
-      });
-      if (result.profile) store.setUserProfile(result.profile);
-
-      // 2. Create the adaptive profile via the adaptive-profile API
-      // Build motivation profile from the weighted answers
-      const motivationProfile: Record<string, number> = {};
-      for (const [key, weight] of Object.entries(motivations)) {
-        if (weight > 0) {
-          motivationProfile[key] = weight === 2 ? 0.8 : 0.5;
-        }
-      }
-      // Ensure defaults for unset motivation dimensions
-      if (!motivationProfile.urgency) motivationProfile.urgency = 0.5;
-      if (!motivationProfile.relief) motivationProfile.relief = 0.5;
-      if (!motivationProfile.identity) motivationProfile.identity = 0.5;
-      if (!motivationProfile.reward) motivationProfile.reward = 0.5;
-      if (!motivationProfile.accountability) motivationProfile.accountability = 0.5;
-      if (!motivationProfile.curiosity) motivationProfile.curiosity = 0.5;
-
-      // Determine best/worst time windows from productive time answer
-      const bestTimeWindows = productiveTime === 'morning' ? ['morning'] :
-        productiveTime === 'afternoon' ? ['afternoon'] :
-        productiveTime === 'evening' ? ['evening'] :
-        ['morning', 'afternoon']; // "depends"
-      const worstTimeWindows = productiveTime === 'morning' ? ['night', 'evening'] :
-        productiveTime === 'evening' ? ['morning'] :
-        ['night'];
-
-      // Build category maps from difficult areas
-      const allCategories = ['work', 'personal', 'health', 'admin', 'creative', 'study', 'household', 'general'];
-      const categoryBlockRates: Record<string, number> = {};
-      const categoryAvgResistance: Record<string, number> = {};
-      const taskPreferenceMap: Record<string, number> = {};
-      for (const cat of allCategories) {
-        const isDifficult = difficultAreas.some(a => a.toLowerCase().includes(cat.toLowerCase()));
-        categoryBlockRates[cat] = isDifficult ? 0.6 : 0.2;
-        categoryAvgResistance[cat] = isDifficult ? 4 : 2;
-        taskPreferenceMap[cat] = isDifficult ? 0.2 : 0.7;
-      }
-
-      const avoidanceProfile = Math.min(5, 2 + difficultAreas.length * 0.5);
-
-      try {
-        const adaptiveRes = await fetch('/api/adaptive-profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-                executiveLoad: Math.min(5, 2 + responsibilities.length * 0.5 + (hasChildren ? 1 : 0)),
-            familyResponsibilityLoad: hasChildren ? 4 : householdManager ? 3 : 2,
-            domesticBurden: householdManager ? 4 : hasChildren ? 3 : 2,
-            workStudyCentrality: role === 'worker' || role === 'both' ? 4 : role === 'student' ? 3 : 2,
-            rewardSensitivity: 3,
-            noveltySeeking: 3,
-            avoidanceProfile,
-            activationDifficulty,
-            frictionSensitivity: 3,
-            shameFrustrationSensitivity: 3,
-            preferredTaskStyle: 'guided',
-            preferredPromptStyle: promptStyle || 'gentle',
-            optimalSessionLength: sessionLength,
-            bestTimeWindows,
-            worstTimeWindows,
-            interruptionVulnerability: hasChildren ? 4 : 3,
-            motivationProfile,
-            taskPreferenceMap,
-            energyRhythm: {
-              morning: hasChildren ? 3 : 4,
-              afternoon: 3,
-              evening: hasChildren ? 2 : 3,
-              night: 1,
-            },
-            averageStartRate: 0.5,
-            averageCompletionRate: 0.5,
-            averageAvoidanceRate: 0.3,
-            strictModeEffectiveness: 0.5,
-            recoverySuccessRate: 0.5,
-            preferredDecompositionGranularity: avoidanceProfile > 3 ? 2 : 3,
-            predictedBlockLikelihood: avoidanceProfile / 5 * 0.5,
-            predictedSuccessProbability: 0.5,
-            categorySuccessRates: Object.fromEntries(
-              allCategories.map(cat => [cat, difficultAreas.some(a => a.toLowerCase().includes(cat.toLowerCase())) ? 0.3 : 0.6])
-            ),
-            categoryBlockRates,
-            categoryAvgResistance,
-            contextPerformanceRates: {},
-            timeSlotPerformance: {},
-            nudgeTypeEffectiveness: {},
-            decompositionStyleEffectiveness: {},
-            totalSignals: 0,
-            lastUpdatedFrom: 'initialization',
-            confidenceLevel: 0.3,
-          }),
-        });
-        const adaptiveData = await adaptiveRes.json();
-        if (adaptiveData.profile) {
-          store.setAdaptiveProfile(adaptiveData.profile);
-        }
-      } catch {
-        // Adaptive profile creation failed — non-critical
-      }
-
-      // 3. Mark onboarding complete on profile API
-      try {
-        await fetch('/api/profile', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-                onboardingComplete: true,
-          }),
-        });
-      } catch {}
-
-    } catch {
-      // Fallback profile
-      store.setUserProfile({
-        id: 'temp',
-        onboardingComplete: true,
-        onboardingStep: 5,
-        role, occupation: roleDetail, age, livingSituation, hasChildren, householdManager,
-        mainResponsibilities: responsibilities,
-        difficultAreas,
-        dailyRoutine: '',
-        cognitiveLoad: hasChildren ? 4 : 3,
-        responsibilityLoad: responsibilities.length > 3 ? 4 : 3,
-        timeConstraints: hasChildren ? 'Finestre brevi per interruzioni' : 'Disponibilità standard',
-        lifeContext: `${roleDetail || role}, ${livingSituation}`,
-        executionStyle: difficultAreas.length > 3 ? 'micro-passi, alta granularità' : 'sessioni standard con pause',
-        preferredSessionLength: sessionLength,
-        focusModeDefault: focusMode as 'soft' | 'strict',
-        blockedApps: [],
-      });
-    }
-
-    // Simulate brief configuration delay for UX
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsConfiguring(false);
-    setIsComplete(true);
-  }, [role, roleDetail, age, livingSituation, householdManager, loadSources, difficultAreas, motivations, productiveTime, sessionPreference, activationDifficulty, promptStyle, authUser, store]);
-
-  const goNext = useCallback(() => {
-    if (qIndex < questionFlow.length - 1) {
-      setQIndex(qIndex + 1);
-    } else {
-      // All questions answered — start configuring
-      handleConfigure();
-    }
-  }, [qIndex, questionFlow.length, handleConfigure]);
-
-  const goBack = useCallback(() => {
-    if (qIndex > 0) setQIndex(qIndex - 1);
-  }, [qIndex]);
-
-  const handleFinish = useCallback(() => {
-    localStorage.setItem('shadow-profile-complete', 'true');
-    store.setOnboardingStep(5);
-    store.setCurrentView('inbox');
-    toast({ title: 'Benvenuto in Shadow!', description: 'Il tuo profilo adattivo è pronto. Inizia aggiungendo un task.' });
-  }, [store]);
-
-  // ─── Configuration Loading Screen ─────────────────────────────────────────
-  if (isConfiguring) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md text-center space-y-6 animate-in fade-in duration-500">
-          <div className="w-20 h-20 rounded-2xl bg-amber-600/20 flex items-center justify-center mx-auto">
-            <Sparkles className="w-10 h-10 text-amber-500 animate-pulse" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-white">Shadow ti sta configurando...</h2>
-            <p className="text-zinc-400 text-sm mt-2">Analizzo le tue risposte per creare il tuo profilo adattivo</p>
-          </div>
-          <div className="space-y-2">
-            <Progress value={66} className="h-2" />
-            <p className="text-xs text-zinc-500">Calibrazione del modello adattivo...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ─── Completion Screen ────────────────────────────────────────────────────
-  if (isComplete) {
-    const focusMode = promptStyle === 'direct' ? 'strict' : 'soft';
-    return (
-      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-6 animate-in fade-in duration-500">
-          <div className="text-center space-y-3">
-            <CheckCircle2 className="w-16 h-16 text-emerald-500 mx-auto" />
-            <h2 className="text-2xl font-bold text-white">Sei pronto!</h2>
-            <p className="text-zinc-400 text-sm">Shadow ha imparato qualcosa su di te. Ecco cosa ha capito:</p>
-          </div>
-          <Card className="bg-zinc-900 border-zinc-700">
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-center gap-2"><Brain className="w-4 h-4 text-amber-500" /><span className="text-sm text-zinc-300">Difficoltà di attivazione: <strong className="text-amber-400">{activationDifficulty}/5</strong></span></div>
-              <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-teal-500" /><span className="text-sm text-zinc-300">Quando sei attivo: <strong className="text-teal-400">{productiveTime === 'morning' ? 'Mattina' : productiveTime === 'afternoon' ? 'Pomeriggio' : productiveTime === 'evening' ? 'Sera' : 'Dipende dal giorno'}</strong></span></div>
-              <div className="flex items-center gap-2"><Target className="w-4 h-4 text-rose-500" /><span className="text-sm text-zinc-300">Sessione ideale: <strong className="text-rose-400">{sessionPreference === 'short' ? '5-15 min' : sessionPreference === 'medium' ? '25 min' : '45+ min'}</strong></span></div>
-              <Separator className="bg-zinc-700" />
-              <div className="flex items-center gap-2"><MessageCircle className="w-4 h-4 text-violet-500" /><span className="text-sm text-zinc-300">Stile di Shadow: <strong className="text-violet-400">{promptStyle === 'direct' ? 'Diretto e conciso' : promptStyle === 'challenging' ? 'Con sfide e provocazioni' : 'Gentile e incoraggiante'}</strong></span></div>
-              <div className="flex items-center gap-2"><Shield className="w-4 h-4 text-zinc-400" /><span className="text-sm text-zinc-300">Focus mode: <strong className="text-zinc-200">{focusMode === 'strict' ? 'Strict (uscita difficile)' : 'Soft (facile)'}</strong></span></div>
-              {Object.entries(motivations).filter(([, w]) => w > 0).length > 0 && (
-                <div className="flex items-start gap-2">
-                  <Flame className="w-4 h-4 text-amber-500 mt-0.5" />
-                  <div className="text-sm text-zinc-300">
-                    <strong className="text-amber-400">Motivazioni principali:</strong>{' '}
-                    {Object.entries(motivations)
-                      .filter(([, w]) => w > 0)
-                      .sort(([, a], [, b]) => b - a)
-                      .map(([key]) => ONBOARDING_MOTIVATIONS.find(m => m.value === key)?.label || key)
-                      .join(', ')}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          <Button onClick={handleFinish} className="w-full h-12 bg-amber-600 hover:bg-amber-700 text-white text-base font-semibold">
-            Inizia a usare Shadow <Zap className="w-5 h-5 ml-1" />
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  // ─── Question Screens ─────────────────────────────────────────────────────
-
-  return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
-        {/* Progress bar */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-zinc-500">{qIndex + 1} di {totalQuestions}</span>
-            <span className="text-xs text-zinc-500">{Math.round(progress)}%</span>
-          </div>
-          <Progress value={progress} className="h-1.5" />
-        </div>
-
-        {/* Q0: Age */}
-        {currentQ === 0 && (
-          <div className="space-y-6 animate-in slide-in-from-right duration-300">
-            <div className="text-center space-y-2">
-              <div className="w-14 h-14 rounded-2xl bg-amber-600/20 flex items-center justify-center mx-auto">
-                <User className="w-7 h-7 text-amber-500" />
-              </div>
-              <h2 className="text-xl font-bold text-white">Quanti anni hai?</h2>
-              <p className="text-zinc-400 text-sm">Aiuta Shadow a calibrare il supporto</p>
-            </div>
-            <div className="text-center py-4">
-              <p className="text-5xl font-bold text-amber-400">{age}</p>
-              <Slider value={[age]} onValueChange={([v]) => setAge(v)} min={18} max={65} step={1} className="mt-6 mx-auto max-w-xs" />
-              <div className="flex justify-between max-w-xs mx-auto mt-1">
-                <span className="text-xs text-zinc-600">18</span>
-                <span className="text-xs text-zinc-600">65</span>
-              </div>
-            </div>
-            <Button onClick={goNext} className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white">
-              Avanti <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        )}
-
-        {/* Q1: Role */}
-        {currentQ === 1 && (
-          <div className="space-y-5 animate-in slide-in-from-right duration-300">
-            <button onClick={goBack} className="text-zinc-400 text-sm flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Indietro</button>
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-bold text-white">Come descriveresti la tua situazione?</h2>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {ROLES.map((r) => (
-                <button key={r.value} onClick={() => { setRole(r.value); }} className={`p-3 rounded-xl border text-left transition-all ${role === r.value ? 'border-amber-500 bg-amber-950/50 text-amber-400' : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-zinc-500'}`}>
-                  <div className="mb-1">{r.icon}</div>
-                  <p className="text-sm font-medium">{r.label}</p>
-                </button>
-              ))}
-            </div>
-            <Button onClick={goNext} disabled={!role} className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white">
-              Avanti <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        )}
-
-        {/* Q2: Role detail (adaptive based on role) */}
-        {currentQ === 2 && (
-          <div className="space-y-5 animate-in slide-in-from-right duration-300">
-            <button onClick={goBack} className="text-zinc-400 text-sm flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Indietro</button>
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-bold text-white">
-                {role === 'student' ? 'Cosa studi?' :
-                  role === 'worker' ? 'Che tipo di lavoro fai?' :
-                  role === 'freelancer' ? 'In che campo lavori?' :
-                  role === 'parent' ? 'Quanti figli hai e che età?' :
-                  role === 'both' ? 'Come si divide la tua giornata?' :
-                  'Raccontami di più...'}
-              </h2>
-            </div>
-            <Input
-              value={roleDetail}
-              onChange={(e) => setRoleDetail(e.target.value)}
-              placeholder={
-                role === 'student' ? 'es. Ingegneria, Giurisprudenza...' :
-                  role === 'worker' ? 'es. Sviluppatore, Impiegato...' :
-                  role === 'freelancer' ? 'es. Web design, Consulenza...' :
-                  role === 'parent' ? 'es. 2 figli, 3 e 7 anni' :
-                  role === 'both' ? 'es. Studio al mattino, lavoro nel pomeriggio' :
-                  'Descrivi brevemente...'
-              }
-              className="h-12 text-base bg-zinc-900 border-zinc-700 text-white"
-              onKeyDown={(e) => e.key === 'Enter' && goNext()}
-            />
-            <Button onClick={goNext} className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white">
-              Avanti <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        )}
-
-        {/* Q3: Living situation */}
-        {currentQ === 3 && (
-          <div className="space-y-5 animate-in slide-in-from-right duration-300">
-            <button onClick={goBack} className="text-zinc-400 text-sm flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Indietro</button>
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-bold text-white">Dove vivi?</h2>
-            </div>
-            <div className="space-y-2">
-              {LIVING_SITUATIONS.map((l) => (
-                <button key={l.value} onClick={() => setLivingSituation(l.value)} className={`w-full p-3.5 rounded-xl border text-left transition-all ${livingSituation === l.value ? 'border-amber-500 bg-amber-950/50 text-amber-400' : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-zinc-500'}`}>
-                  <span className="text-sm font-medium">{l.label}</span>
-                </button>
-              ))}
-            </div>
-            <Button onClick={goNext} disabled={!livingSituation} className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white">
-              Avanti <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        )}
-
-        {/* Q4: Household manager */}
-        {currentQ === 4 && (
-          <div className="space-y-5 animate-in slide-in-from-right duration-300">
-            <button onClick={goBack} className="text-zinc-400 text-sm flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Indietro</button>
-            <div className="text-center space-y-2">
-              <div className="w-14 h-14 rounded-2xl bg-amber-600/20 flex items-center justify-center mx-auto">
-                <Home className="w-7 h-7 text-amber-500" />
-              </div>
-              <h2 className="text-xl font-bold text-white">Gestisci la casa autonomamente?</h2>
-              <p className="text-zinc-400 text-sm">Pulire, cucinare, commissioni, burocrazia domestica...</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setHouseholdManager(true)}
-                className={`p-5 rounded-xl border text-center transition-all ${householdManager === true ? 'border-amber-500 bg-amber-950/50' : 'border-zinc-700 bg-zinc-900'}`}
-              >
-                <Check className={`w-6 h-6 mx-auto mb-2 ${householdManager === true ? 'text-amber-400' : 'text-zinc-500'}`} />
-                <p className={`text-sm font-medium ${householdManager === true ? 'text-amber-400' : 'text-zinc-300'}`}>Sì</p>
-              </button>
-              <button
-                onClick={() => setHouseholdManager(false)}
-                className={`p-5 rounded-xl border text-center transition-all ${householdManager === false ? 'border-amber-500 bg-amber-950/50' : 'border-zinc-700 bg-zinc-900'}`}
-              >
-                <X className={`w-6 h-6 mx-auto mb-2 ${householdManager === false ? 'text-amber-400' : 'text-zinc-500'}`} />
-                <p className={`text-sm font-medium ${householdManager === false ? 'text-amber-400' : 'text-zinc-300'}`}>No</p>
-              </button>
-            </div>
-            <Button onClick={goNext} className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white">
-              Avanti <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        )}
-
-        {/* Q5: Load sources */}
-        {currentQ === 5 && (
-          <div className="space-y-5 animate-in slide-in-from-right duration-300">
-            <button onClick={goBack} className="text-zinc-400 text-sm flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Indietro</button>
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-bold text-white">Quali sono le fonti principali di carico quotidiano?</h2>
-              <p className="text-zinc-400 text-sm">Seleziona tutte quelle che ti pesano</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {ONBOARDING_LOAD_SOURCES.map((s) => (
-                <button key={s.value} onClick={() => toggleMultiSelect(s.value, loadSources, setLoadSources)} className={`p-3 rounded-xl border text-left transition-all ${loadSources.includes(s.value) ? 'border-amber-500 bg-amber-950/50 text-amber-400' : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-zinc-500'}`}>
-                  <div className="flex items-center gap-2"><span className="text-zinc-400">{s.icon}</span><span className="text-sm">{s.label}</span></div>
-                </button>
-              ))}
-            </div>
-            <Button onClick={goNext} disabled={loadSources.length === 0} className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white">
-              Avanti <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        )}
-
-        {/* Q6: Difficult areas */}
-        {currentQ === 6 && (
-          <div className="space-y-5 animate-in slide-in-from-right duration-300">
-            <button onClick={goBack} className="text-zinc-400 text-sm flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Indietro</button>
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-bold text-white">In quali aree ti blocchi di più?</h2>
-              <p className="text-zinc-400 text-sm">Dove fai più fatica a iniziare o completare le cose?</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {DIFFICULT_AREAS.map((a) => (
-                <button key={a.value} onClick={() => toggleMultiSelect(a.value, difficultAreas, setDifficultAreas)} className={`p-3 rounded-xl border text-left transition-all ${difficultAreas.includes(a.value) ? 'border-amber-500 bg-amber-950/50 text-amber-400' : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-zinc-500'}`}>
-                  <div className="flex items-center gap-2"><span className="text-zinc-400">{a.icon}</span><span className="text-sm">{a.label}</span></div>
-                </button>
-              ))}
-            </div>
-            <Button onClick={goNext} disabled={difficultAreas.length === 0} className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white">
-              Avanti <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        )}
-
-        {/* Q7: Motivations (with weighted tap) */}
-        {currentQ === 7 && (
-          <div className="space-y-5 animate-in slide-in-from-right duration-300">
-            <button onClick={goBack} className="text-zinc-400 text-sm flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Indietro</button>
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-bold text-white">Cosa ti MOTIVA davvero a fare qualcosa?</h2>
-              <p className="text-zinc-400 text-sm">Tappa una volta = medio, due volte = tanto</p>
-            </div>
-            <div className="space-y-2">
-              {ONBOARDING_MOTIVATIONS.map((m) => {
-                const weight = motivations[m.value] || 0;
-                return (
-                  <button
-                    key={m.value}
-                    onClick={() => toggleMotivation(m.value)}
-                    className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-center justify-between ${
-                      weight === 2 ? 'border-amber-500 bg-amber-950/50' :
-                        weight === 1 ? 'border-amber-800 bg-amber-950/30' :
-                        'border-zinc-700 bg-zinc-900 hover:border-zinc-500'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">{m.emoji}</span>
-                      <span className={`text-sm font-medium ${weight > 0 ? 'text-amber-400' : 'text-zinc-300'}`}>{m.label}</span>
-                    </div>
-                    {weight > 0 && (
-                      <div className="flex gap-0.5">
-                        <div className={`w-2 h-2 rounded-full ${weight >= 1 ? 'bg-amber-500' : 'bg-zinc-700'}`} />
-                        <div className={`w-2 h-2 rounded-full ${weight >= 2 ? 'bg-amber-500' : 'bg-zinc-700'}`} />
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            <Button onClick={goNext} disabled={Object.values(motivations).filter(v => v > 0).length === 0} className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white">
-              Avanti <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        )}
-
-        {/* Q8: Productive time */}
-        {currentQ === 8 && (
-          <div className="space-y-5 animate-in slide-in-from-right duration-300">
-            <button onClick={goBack} className="text-zinc-400 text-sm flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Indietro</button>
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-bold text-white">Quando sei più produttivo?</h2>
-            </div>
-            <div className="space-y-2">
-              {[
-                { value: 'morning', label: 'Mattina', icon: <Sun className="w-5 h-5" /> },
-                { value: 'afternoon', label: 'Pomeriggio', icon: <Clock className="w-5 h-5" /> },
-                { value: 'evening', label: 'Sera', icon: <Flame className="w-5 h-5" /> },
-                { value: 'depends', label: 'Dipende dal giorno', icon: <Activity className="w-5 h-5" /> },
-              ].map((opt) => (
-                <button key={opt.value} onClick={() => setProductiveTime(opt.value)} className={`w-full p-4 rounded-xl border text-left transition-all flex items-center gap-3 ${productiveTime === opt.value ? 'border-amber-500 bg-amber-950/50 text-amber-400' : 'border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-zinc-500'}`}>
-                  <span className="text-zinc-400">{opt.icon}</span>
-                  <span className="text-sm font-medium">{opt.label}</span>
-                </button>
-              ))}
-            </div>
-            <Button onClick={goNext} disabled={!productiveTime} className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white">
-              Avanti <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        )}
-
-        {/* Q9: Session preference */}
-        {currentQ === 9 && (
-          <div className="space-y-5 animate-in slide-in-from-right duration-300">
-            <button onClick={goBack} className="text-zinc-400 text-sm flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Indietro</button>
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-bold text-white">Preferisci sessioni di lavoro:</h2>
-            </div>
-            <div className="space-y-2">
-              {[
-                { value: 'short', label: 'Brevi', desc: '5-15 min — micro-passi', icon: <Zap className="w-5 h-5" /> },
-                { value: 'medium', label: 'Medie', desc: '25 min — pomodoro classico', icon: <Timer className="w-5 h-5" /> },
-                { value: 'long', label: 'Lunghe', desc: '45+ min — immersione totale', icon: <Brain className="w-5 h-5" /> },
-              ].map((opt) => (
-                <button key={opt.value} onClick={() => setSessionPreference(opt.value)} className={`w-full p-4 rounded-xl border text-left transition-all ${sessionPreference === opt.value ? 'border-amber-500 bg-amber-950/50' : 'border-zinc-700 bg-zinc-900 hover:border-zinc-500'}`}>
-                  <div className="flex items-center gap-3">
-                    <span className={sessionPreference === opt.value ? 'text-amber-400' : 'text-zinc-400'}>{opt.icon}</span>
-                    <div>
-                      <p className={`text-sm font-medium ${sessionPreference === opt.value ? 'text-amber-400' : 'text-zinc-300'}`}>{opt.label}</p>
-                      <p className="text-xs text-zinc-500">{opt.desc}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            <Button onClick={goNext} disabled={!sessionPreference} className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white">
-              Avanti <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        )}
-
-        {/* Q10: Activation difficulty */}
-        {currentQ === 10 && (
-          <div className="space-y-6 animate-in slide-in-from-right duration-300">
-            <button onClick={goBack} className="text-zinc-400 text-sm flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Indietro</button>
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-bold text-white">Quanto è difficile per te INIZIARE un compito?</h2>
-            </div>
-            <div className="text-center py-4 space-y-4">
-              <p className="text-5xl font-bold text-amber-400">{activationDifficulty}</p>
-              <Slider value={[activationDifficulty]} onValueChange={([v]) => setActivationDifficulty(v)} min={1} max={5} step={1} className="mx-auto max-w-xs" />
-              <div className="flex justify-between max-w-xs mx-auto">
-                <span className="text-xs text-zinc-600">1 - Facile</span>
-                <span className="text-xs text-zinc-600">5 - Bloccante</span>
-              </div>
-            </div>
-            <Button onClick={goNext} className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white">
-              Avanti <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        )}
-
-        {/* Q11: Prompt style */}
-        {currentQ === 11 && (
-          <div className="space-y-5 animate-in slide-in-from-right duration-300">
-            <button onClick={goBack} className="text-zinc-400 text-sm flex items-center gap-1"><ChevronLeft className="w-4 h-4" /> Indietro</button>
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-bold text-white">Come vorresti che Shadow ti parlasse?</h2>
-            </div>
-            <div className="space-y-2">
-              {[
-                { value: 'direct', label: 'Diretto e conciso', desc: 'Niente giri di parole, solo fatti', icon: <Zap className="w-5 h-5" /> },
-                { value: 'gentle', label: 'Gentile e incoraggiante', desc: 'Supportivo, celebra i piccoli passi', icon: <Heart className="w-5 h-5" /> },
-                { value: 'challenging', label: 'Con sfide e provocazioni', desc: 'Ti spinge a superarti', icon: <Flame className="w-5 h-5" /> },
-              ].map((opt) => (
-                <button key={opt.value} onClick={() => setPromptStyle(opt.value)} className={`w-full p-4 rounded-xl border text-left transition-all ${promptStyle === opt.value ? 'border-amber-500 bg-amber-950/50' : 'border-zinc-700 bg-zinc-900 hover:border-zinc-500'}`}>
-                  <div className="flex items-center gap-3">
-                    <span className={promptStyle === opt.value ? 'text-amber-400' : 'text-zinc-400'}>{opt.icon}</span>
-                    <div>
-                      <p className={`text-sm font-medium ${promptStyle === opt.value ? 'text-amber-400' : 'text-zinc-300'}`}>{opt.label}</p>
-                      <p className="text-xs text-zinc-500">{opt.desc}</p>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            <Button onClick={handleConfigure} disabled={!promptStyle} className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white">
-              Crea il mio profilo <Sparkles className="w-4 h-4 ml-1" />
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ─── Priority Confirmation Dialog ───────────────────────────────────────────
 
@@ -3837,15 +2939,26 @@ function EisenhowerView() {
 
 function SettingsView({ onLogout }: { onLogout: () => void }) {
   const store = useShadowStore();
+  const router = useRouter();
+  const { update } = useSession();
   const profile = store.userProfile;
   const authUser = store.authUser;
 
-  const handleResetOnboarding = useCallback(() => {
+  const handleResetOnboarding = useCallback(async () => {
+    try {
+      await fetch('/api/onboarding/reset', { method: 'POST' });
+    } catch {}
+    // Cleanup state locale legacy (il source-of-truth è il JWT + DB).
     localStorage.removeItem('shadow-profile-complete');
     store.setUserProfile(null);
-    store.setOnboardingStep(0);
-    store.setCurrentView('onboarding');
-  }, [store]);
+    // Refresh del JWT con onboardingComplete=false, così il middleware
+    // redirige a /onboarding al prossimo hop invece di lasciare passare
+    // un token stale che dice "already complete".
+    try {
+      await update();
+    } catch {}
+    router.replace('/');
+  }, [store, router, update]);
 
   const handleLogout = useCallback(() => {
     onLogout();
