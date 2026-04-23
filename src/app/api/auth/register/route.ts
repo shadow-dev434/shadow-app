@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
     });
 
     // ── Create NextAuth-compatible JWT and set cookie (auto-login) ──
+    // Flag sempre false al register: il middleware redirige subito a /tour.
     const secret = process.env.NEXTAUTH_SECRET || 'shadow-secret-change-in-production';
     const token = await encode({
       token: {
@@ -51,6 +52,8 @@ export async function POST(req: NextRequest) {
         sub: user.id,
         email: user.email,
         name: user.name,
+        tourCompleted: false,
+        onboardingComplete: false,
       },
       secret,
       maxAge: SESSION_MAX_AGE_SEC,

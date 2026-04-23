@@ -35,6 +35,10 @@ export async function POST(req: NextRequest) {
     const isFirstAccess = !profile || (!profile.tourCompleted && !profile.onboardingComplete);
 
     // ── Create NextAuth-compatible JWT and set it as cookie ──
+    // NB: questo endpoint custom bypassa la callback jwt di NextAuth, quindi
+    // i flag onboarding devono essere iniettati qui nei claim, altrimenti
+    // il middleware li leggerebbe come undefined → utente redirect a /tour
+    // anche se ha già completato tutto.
     const secret = process.env.NEXTAUTH_SECRET || 'shadow-secret-change-in-production';
     const token = await encode({
       token: {
@@ -42,6 +46,8 @@ export async function POST(req: NextRequest) {
         sub: user.id,
         email: user.email,
         name: user.name,
+        tourCompleted: profile?.tourCompleted ?? false,
+        onboardingComplete: profile?.onboardingComplete ?? false,
       },
       secret,
       maxAge: SESSION_MAX_AGE_SEC,
