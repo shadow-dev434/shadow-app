@@ -2,105 +2,94 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
-// GET /api/onboarding — check if onboarding is complete
+// GET /api/onboarding
+// Ritorna stato corrente per permettere al frontend di riprendere da
+// dove l'utente si era fermato (Task 2, decisione D3 resume).
 export async function GET(req: NextRequest) {
   const { error, userId } = await requireSession(req);
   if (error) return error;
 
   try {
-    const profile = await db.userProfile.findUnique({ where: { userId } });
+    const profile = await db.userProfile.findUnique({
+      where: { userId },
+      select: {
+        onboardingStep: true,
+        onboardingComplete: true,
+        onboardingAnswers: true,
+        onboardingAnswersVersion: true,
+      },
+    });
+
+    let answers: Record<string, unknown> = {};
+    try {
+      answers = profile?.onboardingAnswers
+        ? (JSON.parse(profile.onboardingAnswers) as Record<string, unknown>)
+        : {};
+    } catch {
+      answers = {};
+    }
 
     return NextResponse.json({
+      step: profile?.onboardingStep ?? 0,
+      answers,
+      version: profile?.onboardingAnswersVersion ?? 1,
       onboardingComplete: profile?.onboardingComplete ?? false,
-      onboardingStep: profile?.onboardingStep ?? 0,
-      hasProfile: !!profile,
     });
-  } catch (error) {
-    console.error('GET /api/onboarding error:', error);
-    return NextResponse.json({ error: 'Failed to check onboarding' }, { status: 500 });
+  } catch (err) {
+    console.error('GET /api/onboarding error:', err);
+    return NextResponse.json({ error: 'Failed to read onboarding state' }, { status: 500 });
   }
 }
 
-// POST /api/onboarding — save step and advance
-export async function POST(req: NextRequest) {
+// PATCH /api/onboarding
+// Salva step + answers correnti. Upsert su UserProfile.
+// Body atteso: { step?: number, answers?: Record<string, unknown> }
+export async function PATCH(req: NextRequest) {
   const { error, userId } = await requireSession(req);
   if (error) return error;
 
+  let body: { step?: number; answers?: Record<string, unknown> };
   try {
-    const body = await req.json();
-    const { step, data } = body;
+    body = (await req.json()) as { step?: number; answers?: Record<string, unknown> };
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
 
+  const step = typeof body.step === 'number' ? body.step : undefined;
+  const answers =
+    body.answers && typeof body.answers === 'object' && !Array.isArray(body.answers)
+      ? body.answers
+      : undefined;
+
+  if (step === undefined && !answers) {
+    return NextResponse.json({ error: 'step or answers required' }, { status: 400 });
+  }
+
+  try {
     const existing = await db.userProfile.findUnique({ where: { userId } });
 
+    const patchData: {
+      onboardingStep?: number;
+      onboardingAnswers?: string;
+    } = {};
+    if (step !== undefined) patchData.onboardingStep = step;
+    if (answers) patchData.onboardingAnswers = JSON.stringify(answers);
+
     if (existing) {
-      const updateData: Record<string, unknown> = {
-        onboardingStep: step,
-      };
-
-      if (data) {
-        if (data.role !== undefined) updateData.role = data.role;
-        if (data.occupation !== undefined) updateData.occupation = data.occupation;
-        if (data.age !== undefined) updateData.age = data.age;
-        if (data.livingSituation !== undefined) updateData.livingSituation = data.livingSituation;
-        if (data.hasChildren !== undefined) updateData.hasChildren = data.hasChildren;
-        if (data.householdManager !== undefined) updateData.householdManager = data.householdManager;
-        if (data.mainResponsibilities !== undefined) updateData.mainResponsibilities = JSON.stringify(data.mainResponsibilities);
-        if (data.difficultAreas !== undefined) updateData.difficultAreas = JSON.stringify(data.difficultAreas);
-        if (data.dailyRoutine !== undefined) updateData.dailyRoutine = data.dailyRoutine;
-        if (data.focusModeDefault !== undefined) updateData.focusModeDefault = data.focusModeDefault;
-      }
-
-      if (step >= 5) {
-        updateData.onboardingComplete = true;
-      }
-
-      const profile = await db.userProfile.update({
-        where: { userId },
-        data: updateData,
-      });
-
-      return NextResponse.json({
-        profile: {
-          ...profile,
-          mainResponsibilities: JSON.parse(profile.mainResponsibilities),
-          difficultAreas: JSON.parse(profile.difficultAreas),
-          blockedApps: JSON.parse(profile.blockedApps),
-        },
-        nextStep: step,
-        complete: step >= 5,
-      });
+      await db.userProfile.update({ where: { userId }, data: patchData });
     } else {
-      const profile = await db.userProfile.create({
+      await db.userProfile.create({
         data: {
           userId,
-          onboardingStep: step,
-          onboardingComplete: step >= 5,
-          role: data?.role || '',
-          occupation: data?.occupation || '',
-          age: data?.age || 0,
-          livingSituation: data?.livingSituation || '',
-          hasChildren: data?.hasChildren || false,
-          householdManager: data?.householdManager || false,
-          mainResponsibilities: JSON.stringify(data?.mainResponsibilities || []),
-          difficultAreas: JSON.stringify(data?.difficultAreas || []),
-          dailyRoutine: data?.dailyRoutine || '',
-          focusModeDefault: data?.focusModeDefault || 'soft',
+          onboardingStep: step ?? 0,
+          onboardingAnswers: JSON.stringify(answers ?? {}),
         },
       });
-
-      return NextResponse.json({
-        profile: {
-          ...profile,
-          mainResponsibilities: JSON.parse(profile.mainResponsibilities),
-          difficultAreas: JSON.parse(profile.difficultAreas),
-          blockedApps: JSON.parse(profile.blockedApps),
-        },
-        nextStep: step,
-        complete: step >= 5,
-      }, { status: 201 });
     }
-  } catch (error) {
-    console.error('POST /api/onboarding error:', error);
-    return NextResponse.json({ error: 'Onboarding failed' }, { status: 500 });
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('PATCH /api/onboarding error:', err);
+    return NextResponse.json({ error: 'Failed to save onboarding state' }, { status: 500 });
   }
 }

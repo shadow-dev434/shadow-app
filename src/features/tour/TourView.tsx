@@ -2,6 +2,8 @@
 
 import type { ReactNode } from 'react';
 import { useState, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { useShadowStore } from '@/store/shadow-store';
 import { APP_TOUR_STEPS } from '@/lib/types/shadow';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,15 +13,12 @@ import {
   MessageCircle, ChevronLeft, ChevronRight, Zap,
 } from 'lucide-react';
 
-// TourView estratto da src/app/tasks/page.tsx (Task 2). In questo commit
-// il monolite non viene toccato: il nuovo modulo è dormiente. Il
-// ricollegamento e la rimozione delle definizioni duplicate avvengono
-// nel commit #8 del Task 2 (chore cleanup).
-//
-// handleFinish contiene ancora la logica legacy di setCurrentView
-// ('inbox' | 'onboarding'): in questo commit la behavior resta
-// identica. La nuova transizione via router.push('/onboarding') +
-// NextAuth session update() sarà introdotta più avanti nel Task 2.
+// TourView — dopo il commit #7 del Task 2 usa router.replace('/') +
+// session update() invece del legacy setCurrentView. handleBack/
+// handleNext continuano a sincronizzare tourStep nello store Zustand
+// per UX identica all'originale, ma la transizione di uscita lascia
+// al middleware la decisione della destinazione: va a / e il
+// middleware redirige in base ai flag (onboardingComplete, ecc).
 
 // Map icon name string (from APP_TOUR_STEPS) to lucide React component.
 function getTourIcon(iconName: string): ReactNode {
@@ -36,15 +35,14 @@ function getTourIcon(iconName: string): ReactNode {
 
 export function TourView() {
   const store = useShadowStore();
+  const router = useRouter();
+  const { update } = useSession();
   const [currentStep, setCurrentStep] = useState(0);
   const totalSteps = APP_TOUR_STEPS.length;
   const step = APP_TOUR_STEPS[currentStep];
 
   const handleFinish = useCallback(async () => {
-    store.setTourCompleted(true);
-    localStorage.setItem('shadow-tour-completed', 'true');
-
-    // Save tour completion to profile API
+    // Save tour completion in DB.
     try {
       await fetch('/api/profile', {
         method: 'PATCH',
@@ -52,15 +50,16 @@ export function TourView() {
         body: JSON.stringify({ tourCompleted: true, tourStep: totalSteps }),
       });
     } catch {}
-
-    // Check if onboarding is needed
-    const profileComplete = localStorage.getItem('shadow-profile-complete') === 'true';
-    if (profileComplete && store.userProfile?.onboardingComplete) {
-      store.setCurrentView('inbox');
-    } else {
-      store.setCurrentView('onboarding');
-    }
-  }, [store, totalSteps]);
+    // Refresh del JWT: senza questo il middleware alla prossima
+    // navigation leggerebbe ancora tourCompleted=false e rimanderebbe
+    // l'utente a /tour (loop).
+    try {
+      await update();
+    } catch {}
+    // Va a / e lascia che il middleware rediriga dove serve
+    // (/onboarding se onboardingComplete=false, chat altrimenti).
+    router.replace('/');
+  }, [router, totalSteps, update]);
 
   const handleNext = useCallback(() => {
     if (currentStep < totalSteps - 1) {

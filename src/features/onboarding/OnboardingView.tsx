@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useShadowStore } from '@/store/shadow-store';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,20 +19,47 @@ import {
   ROLES, LIVING_SITUATIONS, DIFFICULT_AREAS,
   ONBOARDING_LOAD_SOURCES, ONBOARDING_MOTIVATIONS,
 } from './constants';
-import { saveProfile } from './api';
 
-// OnboardingView estratto da src/app/tasks/page.tsx (Task 2). In questo
-// commit il comportamento è invariato: usa ancora /api/profile e
-// /api/adaptive-profile direttamente. Il refactor a /api/onboarding
-// canonica con resume per-step è nel commit successivo del Task 2.
+// OnboardingView — dumb client component. Legge lo stato corrente dal
+// server via GET /api/onboarding al mount, salva incrementalmente via
+// PATCH a ogni avanzamento (resume capability), finalizza con
+// POST /api/onboarding/complete + NextAuth update() + router.replace('/').
+//
+// Strategia JWT refresh dopo completion (Task 2, rischio 1 del piano):
+// proviamo come prima scelta `await update(); router.replace('/')`. Se
+// in runtime il middleware continuasse a leggere un token stale (race
+// condition cookie-set / navigation), il fallback documentato è
+// aggiungere router.refresh() dopo update(). L'approccio usato è quello
+// base: basta update() + replace(). La decisione finale resterà
+// documentata nel messaggio di commit.
+
+type Answers = {
+  age?: number;
+  role?: string;
+  roleDetail?: string;
+  livingSituation?: string;
+  householdManager?: boolean;
+  loadSources?: string[];
+  difficultAreas?: string[];
+  motivations?: Record<string, number>;
+  productiveTime?: string;
+  sessionPreference?: string;
+  activationDifficulty?: number;
+  promptStyle?: string;
+};
 
 export function OnboardingView() {
-  const store = useShadowStore();
-  const [qIndex, setQIndex] = useState(0); // current question index
+  const router = useRouter();
+  const { update } = useSession();
+
+  const [qIndex, setQIndex] = useState(0);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [isConfiguring, setIsConfiguring] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Answers collected during onboarding
+  // Risposte — useState granulari per UX reattiva, si compongono in un
+  // unico oggetto Answers quando si invia al server.
   const [age, setAge] = useState(25);
   const [role, setRole] = useState('');
   const [roleDetail, setRoleDetail] = useState('');
@@ -39,26 +67,101 @@ export function OnboardingView() {
   const [householdManager, setHouseholdManager] = useState(false);
   const [loadSources, setLoadSources] = useState<string[]>([]);
   const [difficultAreas, setDifficultAreas] = useState<string[]>([]);
-  const [motivations, setMotivations] = useState<Record<string, number>>({}); // value → weight (1=medium, 2=high)
+  const [motivations, setMotivations] = useState<Record<string, number>>({});
   const [productiveTime, setProductiveTime] = useState('');
   const [sessionPreference, setSessionPreference] = useState('');
   const [activationDifficulty, setActivationDifficulty] = useState(3);
   const [promptStyle, setPromptStyle] = useState('');
 
-  const authUser = store.authUser;
   const totalQuestions = 12;
+  const progress = ((qIndex + 1) / totalQuestions) * 100;
 
-  // Adaptive question flow — returns the next question index based on current answers
-  const getQuestionFlow = useCallback((): number[] => {
-    // Q0: Age, Q1: Role, Q2: Role detail (adaptive), Q3: Living, Q4: Household manager,
-    // Q5: Load sources, Q6: Difficult areas, Q7: Motivations, Q8: Productive time,
-    // Q9: Session preference, Q10: Activation difficulty, Q11: Prompt style
-    return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+  const bootstrapped = useRef(false);
+
+  // Mount: carica step + answers dal server per il resume.
+  useEffect(() => {
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
+
+    (async () => {
+      try {
+        const res = await fetch('/api/onboarding');
+        if (!res.ok) {
+          setIsHydrated(true);
+          return;
+        }
+        const data = (await res.json()) as {
+          step: number;
+          answers: Answers;
+          onboardingComplete: boolean;
+        };
+
+        if (data.onboardingComplete) {
+          // Edge case: utente onboardingComplete che è atterrato qui
+          // (es. link diretto, reset in corso). Non blocchiamo, gli
+          // lasciamo fare il flow — al complete i campi si sovrascrivono.
+        }
+
+        const a = data.answers || {};
+        if (typeof a.age === 'number') setAge(a.age);
+        if (typeof a.role === 'string') setRole(a.role);
+        if (typeof a.roleDetail === 'string') setRoleDetail(a.roleDetail);
+        if (typeof a.livingSituation === 'string') setLivingSituation(a.livingSituation);
+        if (typeof a.householdManager === 'boolean') setHouseholdManager(a.householdManager);
+        if (Array.isArray(a.loadSources)) setLoadSources(a.loadSources);
+        if (Array.isArray(a.difficultAreas)) setDifficultAreas(a.difficultAreas);
+        if (a.motivations && typeof a.motivations === 'object') setMotivations(a.motivations);
+        if (typeof a.productiveTime === 'string') setProductiveTime(a.productiveTime);
+        if (typeof a.sessionPreference === 'string') setSessionPreference(a.sessionPreference);
+        if (typeof a.activationDifficulty === 'number') setActivationDifficulty(a.activationDifficulty);
+        if (typeof a.promptStyle === 'string') setPromptStyle(a.promptStyle);
+
+        // step può essere 12 se l'utente aveva completato e poi resettato;
+        // in tal caso riparte da 0.
+        const resumeAt = Math.max(0, Math.min(totalQuestions - 1, data.step || 0));
+        setQIndex(resumeAt);
+      } catch {
+        // Failure non critico: parte da 0 con valori di default.
+      } finally {
+        setIsHydrated(true);
+      }
+    })();
   }, []);
 
-  const questionFlow = getQuestionFlow();
-  const currentQ = questionFlow[qIndex];
-  const progress = ((qIndex + 1) / totalQuestions) * 100;
+  // Costruisce l'oggetto Answers da tutti gli useState correnti.
+  const buildAnswers = useCallback((): Answers => ({
+    age,
+    role,
+    roleDetail,
+    livingSituation,
+    householdManager,
+    loadSources,
+    difficultAreas,
+    motivations,
+    productiveTime,
+    sessionPreference,
+    activationDifficulty,
+    promptStyle,
+  }), [
+    age, role, roleDetail, livingSituation, householdManager, loadSources,
+    difficultAreas, motivations, productiveTime, sessionPreference,
+    activationDifficulty, promptStyle,
+  ]);
+
+  // PATCH al server con lo stato corrente (step + answers). Best-effort:
+  // se fallisce, l'utente può proseguire comunque — riprende solo dallo
+  // step precedente al prossimo mount. Non blocchiamo la UX.
+  const persistProgress = useCallback(async (nextStep: number) => {
+    try {
+      await fetch('/api/onboarding', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step: nextStep, answers: buildAnswers() }),
+      });
+    } catch {
+      // silent — resume avverrà comunque dal prossimo step persistito
+    }
+  }, [buildAnswers]);
 
   const toggleMultiSelect = useCallback((item: string, list: string[], setter: (v: string[]) => void) => {
     setter(list.includes(item) ? list.filter(x => x !== item) : [...list, item]);
@@ -67,202 +170,81 @@ export function OnboardingView() {
   const toggleMotivation = useCallback((value: string) => {
     setMotivations(prev => {
       const current = prev[value] || 0;
-      if (current === 0) return { ...prev, [value]: 1 }; // medium
-      if (current === 1) return { ...prev, [value]: 2 }; // high
-      return { ...prev, [value]: 0 }; // deselect
+      if (current === 0) return { ...prev, [value]: 1 };
+      if (current === 1) return { ...prev, [value]: 2 };
+      return { ...prev, [value]: 0 };
     });
   }, []);
 
   const handleConfigure = useCallback(async () => {
     setIsConfiguring(true);
-
-    // Determine focus mode from prompt style
-    const focusMode = promptStyle === 'direct' ? 'strict' : 'soft';
-
-    // Determine session length from preference
-    let sessionLength = 25;
-    if (sessionPreference === 'short') sessionLength = 10;
-    else if (sessionPreference === 'medium') sessionLength = 25;
-    else if (sessionPreference === 'long') sessionLength = 45;
-
-    // Build onboarding data for the profile
-    const hasChildren = role === 'parent';
-    const responsibilities = loadSources.map(s => s);
+    setErrorMsg(null);
 
     try {
-      // 1. Save the user profile via the profile API
-      const result = await saveProfile({
-        role,
-        occupation: roleDetail,
-        age,
-        livingSituation,
-        hasChildren,
-        householdManager,
-        mainResponsibilities: responsibilities,
-        difficultAreas,
-        dailyRoutine: '',
-        focusModeDefault: focusMode,
-        onboardingComplete: true,
+      // 1. Salva l'ultimo stato delle risposte (incluso promptStyle appena
+      // scelto) prima del complete, così il server ha dati aggiornati.
+      await fetch('/api/onboarding', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step: totalQuestions, answers: buildAnswers() }),
       });
-      if (result.profile) store.setUserProfile(result.profile);
 
-      // 2. Create the adaptive profile via the adaptive-profile API
-      // Build motivation profile from the weighted answers
-      const motivationProfile: Record<string, number> = {};
-      for (const [key, weight] of Object.entries(motivations)) {
-        if (weight > 0) {
-          motivationProfile[key] = weight === 2 ? 0.8 : 0.5;
-        }
-      }
-      // Ensure defaults for unset motivation dimensions
-      if (!motivationProfile.urgency) motivationProfile.urgency = 0.5;
-      if (!motivationProfile.relief) motivationProfile.relief = 0.5;
-      if (!motivationProfile.identity) motivationProfile.identity = 0.5;
-      if (!motivationProfile.reward) motivationProfile.reward = 0.5;
-      if (!motivationProfile.accountability) motivationProfile.accountability = 0.5;
-      if (!motivationProfile.curiosity) motivationProfile.curiosity = 0.5;
-
-      // Determine best/worst time windows from productive time answer
-      const bestTimeWindows = productiveTime === 'morning' ? ['morning'] :
-        productiveTime === 'afternoon' ? ['afternoon'] :
-        productiveTime === 'evening' ? ['evening'] :
-        ['morning', 'afternoon']; // "depends"
-      const worstTimeWindows = productiveTime === 'morning' ? ['night', 'evening'] :
-        productiveTime === 'evening' ? ['morning'] :
-        ['night'];
-
-      // Build category maps from difficult areas
-      const allCategories = ['work', 'personal', 'health', 'admin', 'creative', 'study', 'household', 'general'];
-      const categoryBlockRates: Record<string, number> = {};
-      const categoryAvgResistance: Record<string, number> = {};
-      const taskPreferenceMap: Record<string, number> = {};
-      for (const cat of allCategories) {
-        const isDifficult = difficultAreas.some(a => a.toLowerCase().includes(cat.toLowerCase()));
-        categoryBlockRates[cat] = isDifficult ? 0.6 : 0.2;
-        categoryAvgResistance[cat] = isDifficult ? 4 : 2;
-        taskPreferenceMap[cat] = isDifficult ? 0.2 : 0.7;
+      // 2. Finalize server-side: traduce risposte → UserProfile +
+      // AdaptiveProfile, setta onboardingComplete=true.
+      const res = await fetch('/api/onboarding/complete', { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'Errore sconosciuto' }));
+        throw new Error(data.error || `HTTP ${res.status}`);
       }
 
-      const avoidanceProfile = Math.min(5, 2 + difficultAreas.length * 0.5);
-
-      try {
-        const adaptiveRes = await fetch('/api/adaptive-profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-                executiveLoad: Math.min(5, 2 + responsibilities.length * 0.5 + (hasChildren ? 1 : 0)),
-            familyResponsibilityLoad: hasChildren ? 4 : householdManager ? 3 : 2,
-            domesticBurden: householdManager ? 4 : hasChildren ? 3 : 2,
-            workStudyCentrality: role === 'worker' || role === 'both' ? 4 : role === 'student' ? 3 : 2,
-            rewardSensitivity: 3,
-            noveltySeeking: 3,
-            avoidanceProfile,
-            activationDifficulty,
-            frictionSensitivity: 3,
-            shameFrustrationSensitivity: 3,
-            preferredTaskStyle: 'guided',
-            preferredPromptStyle: promptStyle || 'gentle',
-            optimalSessionLength: sessionLength,
-            bestTimeWindows,
-            worstTimeWindows,
-            interruptionVulnerability: hasChildren ? 4 : 3,
-            motivationProfile,
-            taskPreferenceMap,
-            energyRhythm: {
-              morning: hasChildren ? 3 : 4,
-              afternoon: 3,
-              evening: hasChildren ? 2 : 3,
-              night: 1,
-            },
-            averageStartRate: 0.5,
-            averageCompletionRate: 0.5,
-            averageAvoidanceRate: 0.3,
-            strictModeEffectiveness: 0.5,
-            recoverySuccessRate: 0.5,
-            preferredDecompositionGranularity: avoidanceProfile > 3 ? 2 : 3,
-            predictedBlockLikelihood: avoidanceProfile / 5 * 0.5,
-            predictedSuccessProbability: 0.5,
-            categorySuccessRates: Object.fromEntries(
-              allCategories.map(cat => [cat, difficultAreas.some(a => a.toLowerCase().includes(cat.toLowerCase())) ? 0.3 : 0.6])
-            ),
-            categoryBlockRates,
-            categoryAvgResistance,
-            contextPerformanceRates: {},
-            timeSlotPerformance: {},
-            nudgeTypeEffectiveness: {},
-            decompositionStyleEffectiveness: {},
-            totalSignals: 0,
-            lastUpdatedFrom: 'initialization',
-            confidenceLevel: 0.3,
-          }),
-        });
-        const adaptiveData = await adaptiveRes.json();
-        if (adaptiveData.profile) {
-          store.setAdaptiveProfile(adaptiveData.profile);
-        }
-      } catch {
-        // Adaptive profile creation failed — non-critical
-      }
-
-      // 3. Mark onboarding complete on profile API
-      try {
-        await fetch('/api/profile', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-                onboardingComplete: true,
-          }),
-        });
-      } catch {}
-
-    } catch {
-      // Fallback profile
-      store.setUserProfile({
-        id: 'temp',
-        onboardingComplete: true,
-        onboardingStep: 5,
-        role, occupation: roleDetail, age, livingSituation, hasChildren, householdManager,
-        mainResponsibilities: responsibilities,
-        difficultAreas,
-        dailyRoutine: '',
-        cognitiveLoad: hasChildren ? 4 : 3,
-        responsibilityLoad: responsibilities.length > 3 ? 4 : 3,
-        timeConstraints: hasChildren ? 'Finestre brevi per interruzioni' : 'Disponibilità standard',
-        lifeContext: `${roleDetail || role}, ${livingSituation}`,
-        executionStyle: difficultAreas.length > 3 ? 'micro-passi, alta granularità' : 'sessioni standard con pause',
-        preferredSessionLength: sessionLength,
-        focusModeDefault: focusMode as 'soft' | 'strict',
-        blockedApps: [],
-      });
+      setIsConfiguring(false);
+      setIsComplete(true);
+    } catch (err) {
+      setIsConfiguring(false);
+      setErrorMsg(err instanceof Error ? err.message : 'Errore durante la configurazione');
     }
-
-    // Simulate brief configuration delay for UX
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsConfiguring(false);
-    setIsComplete(true);
-  }, [role, roleDetail, age, livingSituation, householdManager, loadSources, difficultAreas, motivations, productiveTime, sessionPreference, activationDifficulty, promptStyle, authUser, store]);
+  }, [buildAnswers, totalQuestions]);
 
   const goNext = useCallback(() => {
-    if (qIndex < questionFlow.length - 1) {
-      setQIndex(qIndex + 1);
+    if (qIndex < totalQuestions - 1) {
+      const nextStep = qIndex + 1;
+      setQIndex(nextStep);
+      void persistProgress(nextStep);
     } else {
-      // All questions answered — start configuring
-      handleConfigure();
+      void handleConfigure();
     }
-  }, [qIndex, questionFlow.length, handleConfigure]);
+  }, [qIndex, totalQuestions, persistProgress, handleConfigure]);
 
   const goBack = useCallback(() => {
     if (qIndex > 0) setQIndex(qIndex - 1);
   }, [qIndex]);
 
-  const handleFinish = useCallback(() => {
-    localStorage.setItem('shadow-profile-complete', 'true');
-    store.setOnboardingStep(5);
-    store.setCurrentView('inbox');
-    toast({ title: 'Benvenuto in Shadow!', description: 'Il tuo profilo adattivo è pronto. Inizia aggiungendo un task.' });
-  }, [store]);
+  const handleFinish = useCallback(async () => {
+    try {
+      // Refresh del JWT con i flag aggiornati (onboardingComplete=true).
+      // Il middleware leggerà il nuovo token alla prossima navigation.
+      await update();
+    } catch {
+      // update() fallito non blocca: router.replace proverà comunque
+      // e il middleware al massimo redirigerà di nuovo qui.
+    }
+    toast({
+      title: 'Benvenuto in Shadow!',
+      description: 'Il tuo profilo adattivo è pronto. Inizia aggiungendo un task.',
+    });
+    router.replace('/');
+  }, [router, update]);
 
-  // ─── Configuration Loading Screen ─────────────────────────────────────────
+  // ── Hydration placeholder ────────────────────────────────────────
+  if (!isHydrated) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-zinc-500 text-sm">Caricamento...</div>
+      </div>
+    );
+  }
+
+  // ── Configuration Loading Screen ─────────────────────────────────
   if (isConfiguring) {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
@@ -283,7 +265,7 @@ export function OnboardingView() {
     );
   }
 
-  // ─── Completion Screen ────────────────────────────────────────────────────
+  // ── Completion Screen ────────────────────────────────────────────
   if (isComplete) {
     const focusMode = promptStyle === 'direct' ? 'strict' : 'soft';
     return (
@@ -325,11 +307,17 @@ export function OnboardingView() {
     );
   }
 
-  // ─── Question Screens ─────────────────────────────────────────────────────
+  const currentQ = qIndex;
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
+        {errorMsg && (
+          <div className="bg-red-950/50 border border-red-800 text-red-300 text-sm rounded-lg px-3 py-2">
+            {errorMsg}
+          </div>
+        )}
+
         {/* Progress bar */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
