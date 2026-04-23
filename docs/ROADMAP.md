@@ -12,7 +12,7 @@ ogni task assume che i precedenti siano completi e in produzione.
 
 ---
 
-## 🔴 Task 1 — Data Isolation (CRITICO, IN CORSO)
+## ✅ Task 1 — Data Isolation (COMPLETATO 2026-04-23)
 
 **Spec completa**: `docs/tasks/01-data-isolation.md`
 
