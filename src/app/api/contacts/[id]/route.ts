@@ -1,30 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 // DELETE /api/contacts/[id] — Delete a contact
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const { id } = await params;
 
-    // Check if any tasks are delegated to this contact
-    const delegatedTasks = await db.task.count({
-      where: { delegatedToId: id },
-    });
+    const existing = await db.contact.findFirst({ where: { id, userId } });
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    if (delegatedTasks > 0) {
-      // Un-delegate tasks first
-      await db.task.updateMany({
-        where: { delegatedToId: id },
-        data: {
-          delegatedToId: null,
-          delegationStatus: '',
-          delegationNote: '',
-        },
-      });
-    }
+    // Un-delegate tasks (filtra per userId anche qui per coerenza — evita di
+    // toccare delegation di altri utenti se un id fosse condiviso)
+    await db.task.updateMany({
+      where: { delegatedToId: id, userId },
+      data: {
+        delegatedToId: null,
+        delegationStatus: '',
+        delegationNote: '',
+      },
+    });
 
     await db.contact.delete({ where: { id } });
 
@@ -40,9 +41,15 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const { id } = await params;
     const data = await req.json();
+
+    const existing = await db.contact.findFirst({ where: { id, userId } });
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const contact = await db.contact.update({
       where: { id },

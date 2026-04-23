@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import {
   prioritizeTask,
@@ -6,7 +7,6 @@ import {
 import { buildDailyPlan, getCurrentTimeSlot } from '@/lib/engines/execution-engine';
 import type { ExecutionContext, TaskRecord } from '@/lib/types/shadow';
 
-// Convert a Prisma Task (with Date fields) to a TaskRecord (with string fields)
 function toTaskRecord(t: Awaited<ReturnType<typeof db.task.findMany>>[0]): TaskRecord {
   return {
     id: t.id,
@@ -43,6 +43,9 @@ function toTaskRecord(t: Awaited<ReturnType<typeof db.task.findMany>>[0]): TaskR
 
 // POST /api/daily-plan — generate today's plan
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const body = await req.json();
     const energy = body.energy ?? 3;
@@ -56,25 +59,20 @@ export async function POST(req: NextRequest) {
       currentTimeSlot: getCurrentTimeSlot(),
     };
 
-    // Get all active tasks
     const tasks = await db.task.findMany({
-      where: { status: { notIn: ['completed', 'abandoned'] } },
+      where: { userId, status: { notIn: ['completed', 'abandoned'] } },
     });
 
-    // Convert Prisma tasks to TaskRecords and prioritize each
     const taskRecords = tasks.map(toTaskRecord);
     const prioritized = taskRecords.map((task) => {
       const result = prioritizeTask(task, ctx, taskRecords);
       return { ...task, ...result };
     });
 
-    // Sort by final score
     prioritized.sort((a, b) => b.finalScore - a.finalScore);
 
-    // Build daily plan
     const plan = buildDailyPlan(prioritized, ctx);
 
-    // Update tasks in DB with new priority data
     for (const task of prioritized) {
       await db.task.update({
         where: { id: task.id },
@@ -87,16 +85,17 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Save daily plan
     const today = new Date().toISOString().split('T')[0];
-    const existingPlan = await db.dailyPlan.findUnique({ where: { date: today } });
+    const existingPlan = await db.dailyPlan.findUnique({
+      where: { userId_date: { userId, date: today } },
+    });
 
     if (existingPlan) {
       await db.dailyPlanTask.deleteMany({ where: { dailyPlanId: existingPlan.id } });
     }
 
     const dailyPlan = await db.dailyPlan.upsert({
-      where: { date: today },
+      where: { userId_date: { userId, date: today } },
       update: {
         energyLevel: energy,
         timeAvailable,
@@ -108,6 +107,7 @@ export async function POST(req: NextRequest) {
         postponeIds: JSON.stringify(plan.postpone.map((t) => t.id)),
       },
       create: {
+        userId,
         date: today,
         energyLevel: energy,
         timeAvailable,
@@ -120,7 +120,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Create plan-task relations
     const allSlots = [
       { tasks: plan.top3, slot: 'top3' },
       { tasks: plan.doNow, slot: 'doNow' },
@@ -141,7 +140,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Helper to serialize a task record for the response
     const serializeTask = (t: TaskRecord & { finalScore?: number; executionFit?: number; reason?: string }) => ({
       id: t.id,
       title: t.title,
@@ -190,11 +188,14 @@ export async function POST(req: NextRequest) {
 }
 
 // GET /api/daily-plan — get today's plan
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const today = new Date().toISOString().split('T')[0];
     const plan = await db.dailyPlan.findUnique({
-      where: { date: today },
+      where: { userId_date: { userId, date: today } },
       include: {
         tasks: {
           include: { task: true },
@@ -206,16 +207,15 @@ export async function GET() {
       return NextResponse.json({ plan: null });
     }
 
-    // Parse the JSON arrays and build full task lists
     const top3Ids: string[] = JSON.parse(plan.top3Ids);
     const doNowIds: string[] = JSON.parse(plan.doNowIds);
     const scheduleIds: string[] = JSON.parse(plan.scheduleIds);
     const delegateIds: string[] = JSON.parse(plan.delegateIds);
     const postponeIds: string[] = JSON.parse(plan.postponeIds);
 
-    // Get all referenced task IDs
     const allIds = [...new Set([...top3Ids, ...doNowIds, ...scheduleIds, ...delegateIds, ...postponeIds])];
-    const tasks = await db.task.findMany({ where: { id: { in: allIds } } });
+    // Filtriamo per userId anche se gli id vengono dal piano dell'utente — difesa in profondità.
+    const tasks = await db.task.findMany({ where: { id: { in: allIds }, userId } });
     const taskMap = new Map(tasks.map(t => [t.id, t]));
 
     const serializeTask = (t: Awaited<ReturnType<typeof db.task.findMany>>[0]) => ({

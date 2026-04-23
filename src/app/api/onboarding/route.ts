@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 // GET /api/onboarding — check if onboarding is complete
 export async function GET(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
-    const userId = req.nextUrl.searchParams.get('userId') || 'default';
     const profile = await db.userProfile.findUnique({ where: { userId } });
-    
+
     return NextResponse.json({
       onboardingComplete: profile?.onboardingComplete ?? false,
       onboardingStep: profile?.onboardingStep ?? 0,
@@ -20,20 +23,20 @@ export async function GET(req: NextRequest) {
 
 // POST /api/onboarding — save step and advance
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const body = await req.json();
-    const { userId, step, data } = body;
-    const uid = userId || 'default';
-    
-    // Get or create profile
-    const existing = await db.userProfile.findUnique({ where: { userId: uid } });
-    
+    const { step, data } = body;
+
+    const existing = await db.userProfile.findUnique({ where: { userId } });
+
     if (existing) {
-      // Update with step data
       const updateData: Record<string, unknown> = {
         onboardingStep: step,
       };
-      
+
       if (data) {
         if (data.role !== undefined) updateData.role = data.role;
         if (data.occupation !== undefined) updateData.occupation = data.occupation;
@@ -46,17 +49,16 @@ export async function POST(req: NextRequest) {
         if (data.dailyRoutine !== undefined) updateData.dailyRoutine = data.dailyRoutine;
         if (data.focusModeDefault !== undefined) updateData.focusModeDefault = data.focusModeDefault;
       }
-      
-      // If final step, mark complete and generate executive profile
+
       if (step >= 5) {
         updateData.onboardingComplete = true;
       }
-      
+
       const profile = await db.userProfile.update({
-        where: { userId: uid },
+        where: { userId },
         data: updateData,
       });
-      
+
       return NextResponse.json({
         profile: {
           ...profile,
@@ -68,10 +70,9 @@ export async function POST(req: NextRequest) {
         complete: step >= 5,
       });
     } else {
-      // Create initial profile
       const profile = await db.userProfile.create({
         data: {
-          userId: uid,
+          userId,
           onboardingStep: step,
           onboardingComplete: step >= 5,
           role: data?.role || '',
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
           focusModeDefault: data?.focusModeDefault || 'soft',
         },
       });
-      
+
       return NextResponse.json({
         profile: {
           ...profile,

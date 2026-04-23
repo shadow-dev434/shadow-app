@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { generateExecutiveProfile } from '@/lib/engines/profiling-engine';
 import type { RawProfileInput } from '@/lib/engines/profiling-engine';
@@ -11,14 +12,16 @@ function loadToNumber(load: string): number {
 
 // GET /api/profile
 export async function GET(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
-    const userId = req.nextUrl.searchParams.get('userId') || 'default';
     const profile = await db.userProfile.findUnique({ where: { userId } });
-    
+
     if (!profile) {
       return NextResponse.json({ profile: null });
     }
-    
+
     return NextResponse.json({
       profile: {
         ...profile,
@@ -35,13 +38,12 @@ export async function GET(req: NextRequest) {
 
 // POST /api/profile — create profile with AI synthesis
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
-    const body = await req.json();
-    const { userId, ...rawData } = body;
-    
-    const uid = userId || 'default';
-    
-    // Generate executive profile with AI
+    const rawData = await req.json();
+
     const rawInput: RawProfileInput = {
       role: rawData.role || '',
       occupation: rawData.occupation || '',
@@ -53,12 +55,11 @@ export async function POST(req: NextRequest) {
       difficultAreas: rawData.difficultAreas || [],
       dailyRoutine: rawData.dailyRoutine || '',
     };
-    
+
     const executiveProfile = await generateExecutiveProfile(rawInput);
-    
-    // Upsert profile
+
     const profile = await db.userProfile.upsert({
-      where: { userId: uid },
+      where: { userId },
       update: {
         role: rawInput.role,
         occupation: rawInput.occupation,
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
         onboardingComplete: rawData.onboardingComplete ?? true,
       },
       create: {
-        userId: uid,
+        userId,
         role: rawInput.role,
         occupation: rawInput.occupation,
         age: rawInput.age,
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
         onboardingComplete: rawData.onboardingComplete ?? true,
       },
     });
-    
+
     return NextResponse.json({
       profile: {
         ...profile,
@@ -115,18 +116,18 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/profile — partial update
 export async function PATCH(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
-    const userId = req.nextUrl.searchParams.get('userId') || 'default';
     const body = await req.json();
-    
-    // If raw profile fields are being updated, regenerate executive profile
+
     const rawFields = ['role', 'occupation', 'age', 'livingSituation', 'hasChildren', 'householdManager', 'mainResponsibilities', 'difficultAreas', 'dailyRoutine'];
     const hasRawFields = rawFields.some(f => f in body);
-    
+
     let updateData: Record<string, unknown> = {};
-    
+
     if (hasRawFields) {
-      // Get existing profile first
       const existing = await db.userProfile.findUnique({ where: { userId } });
       if (existing) {
         const rawInput: RawProfileInput = {
@@ -140,9 +141,9 @@ export async function PATCH(req: NextRequest) {
           difficultAreas: body.difficultAreas ?? JSON.parse(existing.difficultAreas),
           dailyRoutine: body.dailyRoutine ?? existing.dailyRoutine,
         };
-        
+
         const executiveProfile = await generateExecutiveProfile(rawInput);
-        
+
         updateData = {
           role: rawInput.role,
           occupation: rawInput.occupation,
@@ -162,20 +163,19 @@ export async function PATCH(req: NextRequest) {
         };
       }
     }
-    
-    // Also update any direct fields passed
+
     if (body.onboardingComplete !== undefined) updateData.onboardingComplete = body.onboardingComplete;
     if (body.onboardingStep !== undefined) updateData.onboardingStep = body.onboardingStep;
     if (body.focusModeDefault !== undefined) updateData.focusModeDefault = body.focusModeDefault;
     if (body.blockedApps !== undefined) updateData.blockedApps = JSON.stringify(body.blockedApps);
     if (body.tourCompleted !== undefined) updateData.tourCompleted = body.tourCompleted;
     if (body.tourStep !== undefined) updateData.tourStep = body.tourStep;
-    
+
     const profile = await db.userProfile.update({
       where: { userId },
       data: updateData,
     });
-    
+
     return NextResponse.json({
       profile: {
         ...profile,

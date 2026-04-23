@@ -1,7 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 
 // GET /api/calendar/oauth — Redirect to Google OAuth consent screen
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const { error } = await requireSession(req);
+  if (error) {
+    // Navigazione top-level: rimanda al login invece di restituire JSON 401
+    return NextResponse.redirect(new URL('/?auth=login', req.url));
+  }
+
   const clientId = process.env.GOOGLE_CLIENT_ID || '';
   const redirectUri = process.env.NEXTAUTH_URL
     ? `${process.env.NEXTAUTH_URL}/api/calendar/oauth/callback`

@@ -4,22 +4,20 @@
 // PATCH: Update specific fields of the adaptive profile
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { dbRecordToProfileData } from '@/lib/engines/learning-engine';
 
-// GET /api/adaptive-profile?userId=XXX
+// GET /api/adaptive-profile
 export async function GET(req: NextRequest) {
-  const userId = req.nextUrl.searchParams.get('userId');
-  if (!userId) {
-    return NextResponse.json({ error: 'userId required' }, { status: 400 });
-  }
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
 
   const profile = await db.adaptiveProfile.findUnique({ where: { userId } });
   if (!profile) {
     return NextResponse.json({ profile: null });
   }
 
-  // Parse JSON string fields to their proper types
   const parsed = dbRecordToProfileData(profile as unknown as Record<string, unknown>);
 
   return NextResponse.json({ profile: parsed });
@@ -27,24 +25,19 @@ export async function GET(req: NextRequest) {
 
 // POST /api/adaptive-profile — create profile
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const body = await req.json();
-    const { userId, ...fields } = body;
 
-    if (!userId) {
-      return NextResponse.json({ error: 'userId required' }, { status: 400 });
-    }
-
-    // Check if profile already exists
     const existing = await db.adaptiveProfile.findUnique({ where: { userId } });
     if (existing) {
       return NextResponse.json({ error: 'Profile already exists. Use PATCH to update.' }, { status: 409 });
     }
 
-    // Convert array/object fields to JSON strings for storage
     const createData: Record<string, unknown> = { userId };
 
-    // Stringify JSON fields if provided as objects/arrays
     const jsonFields = [
       'bestTimeWindows', 'worstTimeWindows', 'motivationProfile',
       'taskPreferenceMap', 'energyRhythm', 'commonFailureReasons',
@@ -54,14 +47,13 @@ export async function POST(req: NextRequest) {
     ];
 
     for (const field of jsonFields) {
-      if (fields[field] !== undefined) {
-        createData[field] = typeof fields[field] === 'string'
-          ? fields[field]
-          : JSON.stringify(fields[field]);
+      if (body[field] !== undefined) {
+        createData[field] = typeof body[field] === 'string'
+          ? body[field]
+          : JSON.stringify(body[field]);
       }
     }
 
-    // Copy numeric/string fields directly
     const directFields = [
       'executiveLoad', 'familyResponsibilityLoad', 'domesticBurden',
       'workStudyCentrality', 'rewardSensitivity', 'noveltySeeking',
@@ -75,8 +67,8 @@ export async function POST(req: NextRequest) {
     ];
 
     for (const field of directFields) {
-      if (fields[field] !== undefined) {
-        createData[field] = fields[field];
+      if (body[field] !== undefined) {
+        createData[field] = body[field];
       }
     }
 
@@ -95,24 +87,19 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/adaptive-profile — update profile fields
 export async function PATCH(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const body = await req.json();
-    const { userId, ...fields } = body;
 
-    if (!userId) {
-      return NextResponse.json({ error: 'userId required' }, { status: 400 });
-    }
-
-    // Verify profile exists
     const existing = await db.adaptiveProfile.findUnique({ where: { userId } });
     if (!existing) {
       return NextResponse.json({ error: 'Profile not found. Use POST to create.' }, { status: 404 });
     }
 
-    // Build update data
     const updateData: Record<string, unknown> = {};
 
-    // Stringify JSON fields if provided as objects/arrays
     const jsonFields = [
       'bestTimeWindows', 'worstTimeWindows', 'motivationProfile',
       'taskPreferenceMap', 'energyRhythm', 'commonFailureReasons',
@@ -122,14 +109,13 @@ export async function PATCH(req: NextRequest) {
     ];
 
     for (const field of jsonFields) {
-      if (fields[field] !== undefined) {
-        updateData[field] = typeof fields[field] === 'string'
-          ? fields[field]
-          : JSON.stringify(fields[field]);
+      if (body[field] !== undefined) {
+        updateData[field] = typeof body[field] === 'string'
+          ? body[field]
+          : JSON.stringify(body[field]);
       }
     }
 
-    // Copy numeric/string fields directly
     const directFields = [
       'executiveLoad', 'familyResponsibilityLoad', 'domesticBurden',
       'workStudyCentrality', 'rewardSensitivity', 'noveltySeeking',
@@ -143,8 +129,8 @@ export async function PATCH(req: NextRequest) {
     ];
 
     for (const field of directFields) {
-      if (fields[field] !== undefined) {
-        updateData[field] = fields[field];
+      if (body[field] !== undefined) {
+        updateData[field] = body[field];
       }
     }
 

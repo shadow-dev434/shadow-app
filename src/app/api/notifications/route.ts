@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 // GET /api/notifications — List notifications
 export async function GET(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const url = new URL(req.url);
-    const userId = url.searchParams.get('userId') || undefined;
     const unreadOnly = url.searchParams.get('unread') === 'true';
 
     const notifications = await db.notification.findMany({
       where: {
-        ...(userId ? { userId } : {}),
+        userId,
         ...(unreadOnly ? { read: false } : {}),
       },
       orderBy: { createdAt: 'desc' },
@@ -18,7 +21,7 @@ export async function GET(req: NextRequest) {
     });
 
     const unreadCount = await db.notification.count({
-      where: { ...(userId ? { userId } : {}), read: false },
+      where: { userId, read: false },
     });
 
     return NextResponse.json({ notifications, unreadCount });
@@ -30,16 +33,25 @@ export async function GET(req: NextRequest) {
 
 // POST /api/notifications — Create notification / schedule reminder
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
-    const { userId, taskId, type, title, body, actionUrl, reminderAt } = await req.json();
+    const { taskId, type, title, body, actionUrl, reminderAt } = await req.json();
 
     if (!title || !body) {
       return NextResponse.json({ error: 'Titolo e corpo obbligatori' }, { status: 400 });
     }
 
+    // Se viene fornito un taskId, verifica che appartenga allo user
+    if (taskId) {
+      const task = await db.task.findFirst({ where: { id: taskId, userId } });
+      if (!task) return NextResponse.json({ error: 'Task non trovato' }, { status: 404 });
+    }
+
     const notification = await db.notification.create({
       data: {
-        userId: userId || 'system',
+        userId,
         taskId: taskId || null,
         type: type || 'system',
         title,
@@ -65,10 +77,13 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/notifications — Mark as read
 export async function PATCH(req: NextRequest) {
-  try {
-    const { notificationId, markAllRead, userId } = await req.json();
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
 
-    if (markAllRead && userId) {
+  try {
+    const { notificationId, markAllRead } = await req.json();
+
+    if (markAllRead) {
       await db.notification.updateMany({
         where: { userId, read: false },
         data: { read: true },
@@ -77,10 +92,13 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (notificationId) {
-      await db.notification.update({
-        where: { id: notificationId },
+      const result = await db.notification.updateMany({
+        where: { id: notificationId, userId },
         data: { read: true },
       });
+      if (result.count === 0) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
       return NextResponse.json({ success: true });
     }
 

@@ -3,15 +3,14 @@
 // POST: Store or update a memory entry
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { buildMemoryEntry } from '@/lib/engines/memory-engine';
 
-// GET /api/memory?userId=XXX&type=XXX&category=XXX&limit=50
+// GET /api/memory?type=XXX&category=XXX&limit=50
 export async function GET(req: NextRequest) {
-  const userId = req.nextUrl.searchParams.get('userId');
-  if (!userId) {
-    return NextResponse.json({ error: 'userId required' }, { status: 400 });
-  }
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
 
   const type = req.nextUrl.searchParams.get('type') ?? undefined;
   const category = req.nextUrl.searchParams.get('category') ?? undefined;
@@ -35,18 +34,20 @@ export async function GET(req: NextRequest) {
 
 // POST /api/memory — store/update a memory entry
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const body = await req.json();
-    const { userId, memoryType, category, key, value, strength, evidence } = body;
+    const { memoryType, category, key, value, strength, evidence } = body;
 
-    if (!userId || !memoryType || !category || !key || value === undefined) {
+    if (!memoryType || !category || !key || value === undefined) {
       return NextResponse.json(
-        { error: 'userId, memoryType, category, key, and value are required' },
+        { error: 'memoryType, category, key, and value are required' },
         { status: 400 }
       );
     }
 
-    // Check if memory already exists (unique constraint on userId+memoryType+category+key)
     const existing = await db.userMemory.findUnique({
       where: {
         userId_memoryType_category_key: {
@@ -59,7 +60,6 @@ export async function POST(req: NextRequest) {
     });
 
     if (existing) {
-      // Use buildMemoryEntry to compute the updated values
       const entry = buildMemoryEntry(
         userId,
         memoryType,
@@ -83,7 +83,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ memory: updated, created: false });
     }
 
-    // Create new memory entry
     const entry = buildMemoryEntry(
       userId,
       memoryType,

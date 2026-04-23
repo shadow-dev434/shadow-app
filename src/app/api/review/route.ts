@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 // POST /api/review — save a daily review
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const body = await req.json();
     const { whatDone, whatAvoided, whatBlocked, restartFrom, mood, energyEnd, taskReviews } = body;
@@ -10,7 +14,7 @@ export async function POST(req: NextRequest) {
     const today = new Date().toISOString().split('T')[0];
 
     const review = await db.review.upsert({
-      where: { date: today },
+      where: { userId_date: { userId, date: today } },
       update: {
         whatDone: whatDone || '',
         whatAvoided: whatAvoided || '',
@@ -20,6 +24,7 @@ export async function POST(req: NextRequest) {
         energyEnd: energyEnd ?? 3,
       },
       create: {
+        userId,
         date: today,
         whatDone: whatDone || '',
         whatAvoided: whatAvoided || '',
@@ -30,23 +35,26 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Save task-level reviews
+    // Save task-level reviews — solo per task dell'utente
     if (taskReviews && Array.isArray(taskReviews)) {
       await db.reviewTask.deleteMany({ where: { reviewId: review.id } });
 
       for (const tr of taskReviews) {
+        // Verifica ownership del task prima di creare il reviewTask
+        const task = await db.task.findFirst({ where: { id: tr.taskId, userId } });
+        if (!task) continue;
+
         await db.reviewTask.create({
           data: {
             reviewId: review.id,
             taskId: tr.taskId,
-            status: tr.status, // completed, avoided, blocked, partial
+            status: tr.status,
           },
         });
       }
     }
 
-    // Update user patterns based on review
-    await updatePatternsFromReview(review, taskReviews);
+    await updatePatternsFromReview(userId, review, taskReviews);
 
     return NextResponse.json({ review });
   } catch (error) {
@@ -57,20 +65,23 @@ export async function POST(req: NextRequest) {
 
 // GET /api/review — get reviews
 export async function GET(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const url = req.nextUrl;
     const date = url.searchParams.get('date');
 
     if (date) {
       const review = await db.review.findUnique({
-        where: { date },
+        where: { userId_date: { userId, date } },
         include: { tasks: { include: { task: true } } },
       });
       return NextResponse.json({ review });
     }
 
-    // Get last 7 reviews
     const reviews = await db.review.findMany({
+      where: { userId },
       orderBy: { date: 'desc' },
       take: 7,
       include: { tasks: { include: { task: true } } },
@@ -84,24 +95,23 @@ export async function GET(req: NextRequest) {
 }
 
 async function updatePatternsFromReview(
+  userId: string,
   review: { whatAvoided: string; whatBlocked: string; mood: number; energyEnd: number },
   taskReviews?: Array<{ taskId: string; status: string }>
 ) {
   try {
-    // Get or create patterns record
-    let patterns = await db.userPattern.findFirst();
+    let patterns = await db.userPattern.findFirst({ where: { userId } });
     if (!patterns) {
-      patterns = await db.userPattern.create({ data: {} });
+      patterns = await db.userPattern.create({ data: { userId } });
     }
 
     const avoidedCategories = JSON.parse(patterns.avoidedCategories) as string[];
     const problematicCategories = JSON.parse(patterns.problematicCategories) as string[];
 
-    // Update task avoidance counts based on review
     if (taskReviews) {
       for (const tr of taskReviews) {
         if (tr.status === 'avoided') {
-          const task = await db.task.findUnique({ where: { id: tr.taskId } });
+          const task = await db.task.findFirst({ where: { id: tr.taskId, userId } });
           if (task) {
             await db.task.update({
               where: { id: tr.taskId },
@@ -111,23 +121,17 @@ async function updatePatternsFromReview(
               },
             });
 
-            // Track category in patterns
             if (!avoidedCategories.includes(task.category)) {
               avoidedCategories.push(task.category);
             }
           }
         }
-        if (tr.status === 'blocked' && tr.taskId) {
-          // Will be handled below
-        }
       }
     }
 
-    // Update total counts
     const completedCount = taskReviews?.filter((tr) => tr.status === 'completed').length ?? 0;
     const avoidedCount = taskReviews?.filter((tr) => tr.status === 'avoided').length ?? 0;
 
-    // Update streak
     const today = new Date().toISOString().split('T')[0];
     const lastActive = patterns.lastActiveDate;
     const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];

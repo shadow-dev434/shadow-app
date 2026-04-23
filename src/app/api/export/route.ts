@@ -1,29 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 // GET /api/export?format=csv|json
 export async function GET(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const url = new URL(req.url);
     const format = url.searchParams.get('format') || 'json';
-    const userId = url.searchParams.get('userId') || undefined;
-
-    const where = userId ? { userId } : {};
 
     const tasks = await db.task.findMany({
-      where,
+      where: { userId },
       orderBy: { createdAt: 'desc' },
     });
 
     const reviews = await db.review.findMany({
+      where: { userId },
       orderBy: { date: 'desc' },
       take: 90,
     });
 
-    const patterns = await db.userPattern.findFirst({ where });
+    const patterns = await db.userPattern.findFirst({ where: { userId } });
 
     if (format === 'csv') {
-      // Generate CSV
       const headers = [
         'id', 'title', 'description', 'importance', 'urgency', 'resistance', 'size',
         'category', 'context', 'quadrant', 'decision', 'status', 'priorityScore',

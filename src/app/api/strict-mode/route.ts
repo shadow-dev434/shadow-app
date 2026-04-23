@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 // GET /api/strict-mode — Get active strict mode session
 export async function GET(req: NextRequest) {
-  try {
-    const userId = req.nextUrl.searchParams.get('userId');
-    if (!userId) {
-      return NextResponse.json({ session: null });
-    }
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
 
+  try {
     const session = await db.strictModeSession.findFirst({
       where: { userId, status: { in: ['active_soft', 'active_strict', 'pending_exit'] } },
       orderBy: { startedAt: 'desc' },
@@ -33,11 +32,20 @@ export async function GET(req: NextRequest) {
 
 // POST /api/strict-mode — Activate strict mode session
 export async function POST(req: NextRequest) {
-  try {
-    const { userId, mode, triggerType, taskId, blockedApps, blockedSites, durationMinutes } = await req.json();
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
 
-    if (!userId || !mode) {
-      return NextResponse.json({ error: 'userId e mode sono obbligatori' }, { status: 400 });
+  try {
+    const { mode, triggerType, taskId, blockedApps, blockedSites, durationMinutes } = await req.json();
+
+    if (!mode) {
+      return NextResponse.json({ error: 'mode è obbligatorio' }, { status: 400 });
+    }
+
+    // Se viene fornito un taskId, verifica che appartenga all'utente
+    if (taskId) {
+      const task = await db.task.findFirst({ where: { id: taskId, userId } });
+      if (!task) return NextResponse.json({ error: 'Task non trovato' }, { status: 404 });
     }
 
     // End any existing active sessions first
@@ -78,6 +86,9 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/strict-mode — Update session (exit process, state changes)
 export async function PATCH(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const { sessionId, status, exitReason, exitConfirmationText, taskCompleted } = await req.json();
 
@@ -85,7 +96,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'sessionId è obbligatorio' }, { status: 400 });
     }
 
-    const existing = await db.strictModeSession.findUnique({ where: { id: sessionId } });
+    const existing = await db.strictModeSession.findFirst({ where: { id: sessionId, userId } });
     if (!existing) {
       return NextResponse.json({ error: 'Sessione non trovata' }, { status: 404 });
     }

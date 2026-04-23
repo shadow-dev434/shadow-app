@@ -146,9 +146,8 @@ function getTourIcon(iconName: string): React.ReactNode {
 
 // ─── API Helpers ────────────────────────────────────────────────────────────
 
-async function fetchTasks(userId?: string): Promise<ShadowTask[]> {
-  const params = userId ? `?userId=${userId}` : '';
-  const res = await fetch(`/api/tasks${params}`);
+async function fetchTasks(): Promise<ShadowTask[]> {
+  const res = await fetch('/api/tasks');
   const data = await res.json();
   return data.tasks || [];
 }
@@ -177,30 +176,30 @@ async function deleteTaskAPI(id: string): Promise<void> {
   await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
 }
 
-async function generateDailyPlan(energy: number, timeAvailable: number, currentContext: string, userId?: string) {
+async function generateDailyPlan(energy: number, timeAvailable: number, currentContext: string) {
   const res = await fetch('/api/daily-plan', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ energy, timeAvailable, currentContext, userId }),
+    body: JSON.stringify({ energy, timeAvailable, currentContext }),
   });
   return res.json();
 }
 
-async function decomposeTask(taskId: string, taskTitle: string, taskDescription: string, energy: number, timeAvailable: number, currentContext: string, userId?: string) {
+async function decomposeTask(taskId: string, taskTitle: string, taskDescription: string, energy: number, timeAvailable: number, currentContext: string) {
   const res = await fetch('/api/decompose', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ taskId, taskTitle, taskDescription, energy, timeAvailable, currentContext, userId }),
+    body: JSON.stringify({ taskId, taskTitle, taskDescription, energy, timeAvailable, currentContext }),
   });
   return res.json();
 }
 
-async function classifyTaskAI(title: string, description: string, userId?: string, energy?: number, timeAvailable?: number, currentContext?: string): Promise<AIClassifyResult | null> {
+async function classifyTaskAI(title: string, description: string, energy?: number, timeAvailable?: number, currentContext?: string): Promise<AIClassifyResult | null> {
   try {
     const res = await fetch('/api/ai-classify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskTitle: title, taskDescription: description, userId, energy: energy ?? 3, timeAvailable: timeAvailable ?? 480, currentContext: currentContext ?? 'any' }),
+      body: JSON.stringify({ taskTitle: title, taskDescription: description, energy: energy ?? 3, timeAvailable: timeAvailable ?? 480, currentContext: currentContext ?? 'any' }),
     });
     const data = await res.json();
     return data.classification || null;
@@ -209,9 +208,9 @@ async function classifyTaskAI(title: string, description: string, userId?: strin
   }
 }
 
-async function loadProfile(userId?: string): Promise<UserProfileData | null> {
+async function loadProfile(): Promise<UserProfileData | null> {
   try {
-    const res = await fetch(`/api/profile?userId=${userId || 'default'}`);
+    const res = await fetch('/api/profile');
     const data = await res.json();
     return data.profile || null;
   } catch {
@@ -228,11 +227,11 @@ async function saveProfile(data: Record<string, unknown>): Promise<{ profile: Us
   return res.json();
 }
 
-async function startStrictModeSession(userId: string, mode: 'soft' | 'strict', taskId: string | null, durationMinutes: number, blockedApps: string[]) {
+async function startStrictModeSession(mode: 'soft' | 'strict', taskId: string | null, durationMinutes: number, blockedApps: string[]) {
   const res = await fetch('/api/strict-mode', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, triggerType: mode, taskId, plannedDurationMinutes: durationMinutes, blockedApps }),
+    body: JSON.stringify({ triggerType: mode, taskId, plannedDurationMinutes: durationMinutes, blockedApps }),
   });
   return res.json();
 }
@@ -263,7 +262,6 @@ async function recordSignal(
 ): Promise<AdaptiveProfileData | null> {
   try {
     const store = useShadowStore.getState();
-    const userId = store.userId || store.authUser?.id || 'default';
     const timeSlot = getTimeSlot();
     const currentTask = taskId ? store.tasks.find(t => t.id === taskId) : null;
 
@@ -271,7 +269,6 @@ async function recordSignal(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        userId,
         signalType,
         taskId: taskId ?? undefined,
         category: currentTask?.category ?? undefined,
@@ -369,7 +366,7 @@ export default function ShadowApp() {
         if (store.isAuthenticated && store.authUser) {
           // Authenticated — check tour and onboarding
           try {
-            const profileRes = await fetch(`/api/profile?userId=${store.authUser.id}`);
+            const profileRes = await fetch('/api/profile');
             const profileData = await profileRes.json();
             const profile = profileData.profile;
 
@@ -401,12 +398,12 @@ export default function ShadowApp() {
 
           // Load tasks
           store.setIsLoading(true);
-          const tasks = await fetchTasks(store.authUser.id);
+          const tasks = await fetchTasks();
           store.setTasks(tasks);
 
           // Load adaptive profile
           try {
-            const adaptiveRes = await fetch(`/api/adaptive-profile?userId=${store.authUser.id}`);
+            const adaptiveRes = await fetch('/api/adaptive-profile');
             const adaptiveData = await adaptiveRes.json();
             if (adaptiveData.profile) {
               store.setAdaptiveProfile(adaptiveData.profile);
@@ -453,7 +450,7 @@ export default function ShadowApp() {
     
     const checkTriggers = async () => {
       try {
-        const res = await fetch(`/api/ai-assistant?userId=${store.userId || store.authUser?.id || 'default'}`);
+        const res = await fetch('/api/ai-assistant');
         const data = await res.json();
         if (data.triggers && data.triggers.length > 0) {
           store.setProactiveTriggers(data.triggers);
@@ -470,8 +467,7 @@ export default function ShadowApp() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 action: 'proactive',
-                userId: store.userId || store.authUser?.id || 'default',
-                trigger: topTrigger,
+                      trigger: topTrigger,
                 taskContext: topTask ? { title: topTask.title, category: topTask.category, resistance: topTask.resistance } : null,
               }),
             });
@@ -516,8 +512,7 @@ export default function ShadowApp() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'nudge',
-            userId: store.userId || store.authUser?.id || 'default',
-            nudgeContext: {
+              nudgeContext: {
               taskTitle: top3Task.title,
               taskCategory: top3Task.category,
               taskResistance: top3Task.resistance,
@@ -965,7 +960,7 @@ function TourView() {
       await fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: store.authUser?.id || 'default', tourCompleted: true, tourStep: totalSteps }),
+        body: JSON.stringify({ tourCompleted: true, tourStep: totalSteps }),
       });
     } catch {}
 
@@ -1387,7 +1382,6 @@ function OnboardingView() {
     try {
       // 1. Save the user profile via the profile API
       const result = await saveProfile({
-        userId: authUser?.id || 'default',
         role,
         occupation: roleDetail,
         age,
@@ -1446,8 +1440,7 @@ function OnboardingView() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            userId: authUser?.id || 'default',
-            executiveLoad: Math.min(5, 2 + responsibilities.length * 0.5 + (hasChildren ? 1 : 0)),
+                executiveLoad: Math.min(5, 2 + responsibilities.length * 0.5 + (hasChildren ? 1 : 0)),
             familyResponsibilityLoad: hasChildren ? 4 : householdManager ? 3 : 2,
             domesticBurden: householdManager ? 4 : hasChildren ? 3 : 2,
             workStudyCentrality: role === 'worker' || role === 'both' ? 4 : role === 'student' ? 3 : 2,
@@ -1507,8 +1500,7 @@ function OnboardingView() {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            userId: authUser?.id || 'default',
-            onboardingComplete: true,
+                onboardingComplete: true,
           }),
         });
       } catch {}
@@ -1517,7 +1509,6 @@ function OnboardingView() {
       // Fallback profile
       store.setUserProfile({
         id: 'temp',
-        userId: authUser?.id || 'default',
         onboardingComplete: true,
         onboardingStep: 5,
         role, occupation: roleDetail, age, livingSituation, hasChildren, householdManager,
@@ -2130,7 +2121,6 @@ function NudgeDisplay() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'nudge_outcome',
-          userId: store.userId || store.authUser?.id || 'default',
           strategy: nudge.strategy,
           accepted: true,
         }),
@@ -2150,7 +2140,6 @@ function NudgeDisplay() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'nudge_outcome',
-          userId: store.userId || store.authUser?.id || 'default',
           strategy: nudge.strategy,
           accepted: false,
         }),
@@ -2205,7 +2194,7 @@ function AIInsightsPanel() {
   const loadInsights = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/ai-assistant?userId=${store.userId || store.authUser?.id || 'default'}`);
+      const res = await fetch('/api/ai-assistant');
       const data = await res.json();
       if (data.insights) {
         setInsights(data.insights);
@@ -2305,8 +2294,7 @@ function ProactiveChatbotPopup() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'nudge_outcome',
-            userId: store.userId || store.authUser?.id || 'default',
-            strategy: store.activeNudge.strategy,
+              strategy: store.activeNudge.strategy,
             accepted: true,
           }),
         });
@@ -2348,8 +2336,7 @@ function ProactiveChatbotPopup() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'nudge_outcome',
-            userId: store.userId || store.authUser?.id || 'default',
-            strategy: store.activeNudge.strategy,
+              strategy: store.activeNudge.strategy,
             accepted: false,
           }),
         });
@@ -2495,7 +2482,6 @@ function MicroFeedbackDialog() {
   }, [store]);
 
   const handleSubmit = useCallback(async () => {
-    const userId = store.userId || store.authUser?.id || 'default';
     let response: string | number | string[];
     if (config?.type === 'slider') {
       response = sliderValue;
@@ -2512,7 +2498,6 @@ function MicroFeedbackDialog() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId,
           taskId: store.microFeedbackTaskId,
           feedbackType,
           response,
@@ -2538,8 +2523,7 @@ function MicroFeedbackDialog() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'micro_feedback',
-            userId: store.userId || store.authUser?.id || 'default',
-            feedbackType: store.microFeedbackType,
+              feedbackType: store.microFeedbackType,
             response: response,
             taskContext: currentTask ? { category: currentTask.category, resistance: currentTask.resistance } : null,
           }),
@@ -2815,7 +2799,7 @@ function InboxView() {
       inputRef.current?.focus();
 
       store.setIsClassifying(true);
-      const classification = await classifyTaskAI(taskTitle, '', store.userId || undefined, store.energy, store.timeAvailable, store.currentContext);
+      const classification = await classifyTaskAI(taskTitle, '', store.energy, store.timeAvailable, store.currentContext);
       store.setIsClassifying(false);
 
       if (classification) {
@@ -2929,9 +2913,9 @@ function TodayView() {
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true);
     try {
-      const result = await generateDailyPlan(store.energy, store.timeAvailable, store.currentContext, store.userId || undefined);
+      const result = await generateDailyPlan(store.energy, store.timeAvailable, store.currentContext);
       if (result.breakdown) {
-        const updatedTasks = await fetchTasks(store.userId || undefined);
+        const updatedTasks = await fetchTasks();
         store.setTasks(updatedTasks);
         const planTasks = {
           top3: result.breakdown.top3.map((t: { id: string }) => updatedTasks.find((task: ShadowTask) => task.id === t.id)).filter(Boolean) as ShadowTask[],
@@ -3138,7 +3122,7 @@ function FocusView() {
     if (!selectedTask) return;
     store.setIsDecomposing(true);
     try {
-      const result = await decomposeTask(selectedTask.id, selectedTask.title, selectedTask.description, store.energy, store.timeAvailable, store.currentContext, store.userId || undefined);
+      const result = await decomposeTask(selectedTask.id, selectedTask.title, selectedTask.description, store.energy, store.timeAvailable, store.currentContext);
       if (result.steps) {
         store.updateTask(selectedTask.id, { microSteps: JSON.stringify(result.steps), microStepsRaw: result.raw });
         toast({ title: 'Decomposto', description: `${result.steps.length} micro-step` });
@@ -3198,7 +3182,6 @@ function FocusView() {
       // Start strict mode session via API
       try {
         const result = await startStrictModeSession(
-          store.authUser?.id || 'default',
           'strict',
           selectedTask?.id || null,
           selectedTask?.sessionDuration || store.userProfile?.preferredSessionLength || 25,
@@ -3223,7 +3206,6 @@ function FocusView() {
       // Soft mode — activate locally
       try {
         const result = await startStrictModeSession(
-          store.authUser?.id || 'default',
           'soft',
           selectedTask?.id || null,
           selectedTask?.sessionDuration || store.userProfile?.preferredSessionLength || 25,

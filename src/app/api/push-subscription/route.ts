@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 // POST /api/push-subscription — Save push subscription
 export async function POST(req: NextRequest) {
-  try {
-    const { userId, endpoint, keys } = await req.json();
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
 
-    if (!userId || !endpoint || !keys?.p256dh || !keys?.auth) {
+  try {
+    const { endpoint, keys } = await req.json();
+
+    if (!endpoint || !keys?.p256dh || !keys?.auth) {
       return NextResponse.json({ error: 'Parametri mancanti' }, { status: 400 });
     }
 
-    // Upsert subscription (one per user)
     const existing = await db.pushSubscription.findUnique({ where: { userId } });
 
     if (existing) {
@@ -38,14 +41,10 @@ export async function POST(req: NextRequest) {
 
 // GET /api/push-subscription — Check if user has subscription
 export async function GET(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
-    const url = new URL(req.url);
-    const userId = url.searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json({ subscribed: false });
-    }
-
     const sub = await db.pushSubscription.findUnique({ where: { userId } });
     return NextResponse.json({ subscribed: !!sub });
   } catch (error) {
@@ -56,13 +55,10 @@ export async function GET(req: NextRequest) {
 
 // DELETE /api/push-subscription — Remove push subscription
 export async function DELETE(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
-    const { userId } = await req.json();
-
-    if (!userId) {
-      return NextResponse.json({ error: 'userId obbligatorio' }, { status: 400 });
-    }
-
     await db.pushSubscription.deleteMany({ where: { userId } });
     return NextResponse.json({ success: true });
   } catch (error) {

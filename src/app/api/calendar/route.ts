@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 // GET /api/calendar — Get calendar events (from tasks with deadlines or calendarEventId)
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const tasksWithDeadlines = await db.task.findMany({
       where: {
+        userId,
         OR: [
           { deadline: { not: null } },
           { calendarEventId: { not: '' } },
@@ -41,14 +46,16 @@ export async function GET() {
 
 // POST /api/calendar — Sync with Google Calendar (save token)
 export async function POST(req: NextRequest) {
-  try {
-    const { userId, accessToken, refreshToken, expiresAt, scope } = await req.json();
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
 
-    if (!userId || !accessToken) {
-      return NextResponse.json({ error: 'Parametri mancanti' }, { status: 400 });
+  try {
+    const { accessToken, refreshToken, expiresAt, scope } = await req.json();
+
+    if (!accessToken) {
+      return NextResponse.json({ error: 'accessToken obbligatorio' }, { status: 400 });
     }
 
-    // Upsert calendar token
     const existing = await db.calendarToken.findFirst({ where: { userId } });
 
     if (existing) {
@@ -83,27 +90,30 @@ export async function POST(req: NextRequest) {
 
 // PUT /api/calendar — Import events from Google Calendar as tasks
 export async function PUT(req: NextRequest) {
-  try {
-    const { userId, events } = await req.json();
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
 
-    if (!userId || !Array.isArray(events)) {
-      return NextResponse.json({ error: 'Parametri mancanti' }, { status: 400 });
+  try {
+    const { events } = await req.json();
+
+    if (!Array.isArray(events)) {
+      return NextResponse.json({ error: 'events array obbligatorio' }, { status: 400 });
     }
 
     let imported = 0;
     for (const event of events) {
-      // Check if already imported
+      // Check if already imported for this user
       const existing = await db.task.findFirst({
-        where: { calendarEventId: event.id },
+        where: { calendarEventId: event.id, userId },
       });
       if (existing) continue;
 
       await db.task.create({
         data: {
+          userId,
           title: event.summary || 'Evento senza titolo',
           description: event.description || '',
           deadline: event.start?.dateTime ? new Date(event.start.dateTime) : null,
-          userId,
           status: 'inbox',
           category: 'general',
           calendarEventId: event.id,

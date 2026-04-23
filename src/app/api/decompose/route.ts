@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { decomposeWithAI, fallbackDecomposition } from '@/lib/engines/decomposition-engine';
+import { requireSession } from '@/lib/auth-guard';
+import { decomposeWithAI } from '@/lib/engines/decomposition-engine';
 import type { ExecutionContext } from '@/lib/types/shadow';
 
 // POST /api/decompose — decompose a task into micro-steps
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const body = await req.json();
     const { taskId, taskTitle, taskDescription, energy, timeAvailable, currentContext } = body;
@@ -21,9 +25,13 @@ export async function POST(req: NextRequest) {
 
     const result = await decomposeWithAI(taskTitle, taskDescription || '', ctx);
 
-    // If we have a taskId, save the steps to the task
+    // If we have a taskId, save the steps to the task — only if it belongs to the user
     if (taskId) {
       const { db } = await import('@/lib/db');
+      const task = await db.task.findFirst({ where: { id: taskId, userId } });
+      if (!task) {
+        return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+      }
       await db.task.update({
         where: { id: taskId },
         data: {

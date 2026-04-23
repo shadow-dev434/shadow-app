@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 // GET /api/calendar/oauth/callback — Exchange OAuth code for tokens
 export async function GET(req: NextRequest) {
+  // La session NextAuth deve già esistere (l'utente ha cliccato "Connetti
+  // Calendar" essendo loggato). Se non c'è, NON creiamo un utente nuovo:
+  // redirect a login e segnalazione.
+  const { error, userId } = await requireSession(req);
+  if (error) {
+    return NextResponse.redirect(new URL('/?auth=login&calendar=error&msg=no_session', req.url));
+  }
+
   try {
     const url = new URL(req.url);
     const code = url.searchParams.get('code');
-    const error = url.searchParams.get('error');
+    const oauthError = url.searchParams.get('error');
 
-    if (error) {
-      return NextResponse.redirect(new URL(`/?action=settings&calendar=error&msg=${encodeURIComponent(error)}`, req.url));
+    if (oauthError) {
+      return NextResponse.redirect(new URL(`/?action=settings&calendar=error&msg=${encodeURIComponent(oauthError)}`, req.url));
     }
 
     if (!code) {
@@ -43,10 +52,7 @@ export async function GET(req: NextRequest) {
 
     const tokenData = await tokenRes.json();
 
-    // For now, save with a default userId. In production, extract from session.
-    const userId = 'default';
-
-    // Upsert calendar token
+    // Upsert calendar token associato all'utente reale (non più 'default')
     const existing = await db.calendarToken.findFirst({ where: { userId } });
 
     if (existing) {

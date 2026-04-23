@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 // GET /api/settings
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
-    let settings = await db.settings.findFirst();
+    let settings = await db.settings.findFirst({ where: { userId } });
     if (!settings) {
-      settings = await db.settings.create({ data: {} });
+      settings = await db.settings.create({ data: { userId } });
     }
     return NextResponse.json({ settings });
   } catch (error) {
@@ -17,12 +21,15 @@ export async function GET() {
 
 // PATCH /api/settings
 export async function PATCH(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const body = await req.json();
 
-    let settings = await db.settings.findFirst();
+    let settings = await db.settings.findFirst({ where: { userId } });
     if (!settings) {
-      settings = await db.settings.create({ data: {} });
+      settings = await db.settings.create({ data: { userId } });
     }
 
     const updateData: Record<string, unknown> = {};

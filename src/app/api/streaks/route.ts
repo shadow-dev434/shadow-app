@@ -1,22 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 // GET /api/streaks — Get streak data for visualization
 export async function GET(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const url = new URL(req.url);
-    const userId = url.searchParams.get('userId') || undefined;
     const days = parseInt(url.searchParams.get('days') || '30');
 
     const streaks = await db.streak.findMany({
-      where: userId ? { userId } : {},
+      where: { userId },
       orderBy: { date: 'desc' },
       take: days,
     });
 
     // Calculate current streak
     let currentStreak = 0;
-    const today = new Date().toISOString().split('T')[0];
     const sortedStreaks = [...streaks].sort((a, b) => b.date.localeCompare(a.date));
 
     for (const s of sortedStreaks) {
@@ -50,9 +52,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Get patterns for overall streak
-    const patterns = await db.userPattern.findFirst({
-      where: userId ? { userId } : {},
-    });
+    const patterns = await db.userPattern.findFirst({ where: { userId } });
 
     return NextResponse.json({
       currentStreak,
@@ -69,8 +69,11 @@ export async function GET(req: NextRequest) {
 
 // POST /api/streaks — Record daily streak data (called by review save)
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
-    const { userId, date, tasksCompleted, tasksPlanned } = await req.json();
+    const { date, tasksCompleted, tasksPlanned } = await req.json();
 
     if (!date) {
       return NextResponse.json({ error: 'Data obbligatoria' }, { status: 400 });
@@ -80,7 +83,7 @@ export async function POST(req: NextRequest) {
 
     const streak = await db.streak.upsert({
       where: {
-        userId_date: { userId: userId || 'default', date },
+        userId_date: { userId, date },
       },
       update: {
         tasksCompleted,
@@ -88,7 +91,7 @@ export async function POST(req: NextRequest) {
         completionRate,
       },
       create: {
-        userId: userId || 'default',
+        userId,
         date,
         tasksCompleted,
         tasksPlanned,
@@ -97,18 +100,15 @@ export async function POST(req: NextRequest) {
     });
 
     // Update user pattern streak
-    // Check if yesterday had activity to continue streak
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
     const yesterdayStreak = await db.streak.findUnique({
-      where: { userId_date: { userId: userId || 'default', date: yesterdayStr } },
+      where: { userId_date: { userId, date: yesterdayStr } },
     });
 
-    const patterns = await db.userPattern.findFirst({
-      where: userId ? { userId } : {},
-    });
+    const patterns = await db.userPattern.findFirst({ where: { userId } });
 
     if (patterns) {
       const newStreak = tasksCompleted > 0

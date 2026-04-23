@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 // GET /api/tasks — list all tasks, with optional filters
 export async function GET(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const url = req.nextUrl;
     const status = url.searchParams.get('status');
     const category = url.searchParams.get('category');
     const decision = url.searchParams.get('decision');
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { userId };
     if (status) where.status = status;
     if (category) where.category = category;
     if (decision) where.decision = decision;
@@ -19,7 +23,6 @@ export async function GET(req: NextRequest) {
       orderBy: { priorityScore: 'desc' },
     });
 
-    // Serialize dates to ISO strings
     const serialized = tasks.map(t => ({
       ...t,
       deadline: t.deadline ? new Date(t.deadline).toISOString() : null,
@@ -38,11 +41,15 @@ export async function GET(req: NextRequest) {
 
 // POST /api/tasks — create a new task (quick capture from inbox)
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const body = await req.json();
 
     const task = await db.task.create({
       data: {
+        userId,
         title: body.title,
         description: body.description || '',
         importance: body.importance ?? 3,

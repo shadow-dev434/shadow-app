@@ -2,6 +2,7 @@
 // Handles conversational AI interactions, proactive interventions, and insights
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import {
   generateOnboardingQuestion,
@@ -35,6 +36,14 @@ async function getAdaptiveProfile(userId: string): Promise<AdaptiveProfileData |
   }
 }
 
+// Rimuove `userId` da un Partial<AdaptiveProfileData> prima di passarlo a
+// Prisma: Prisma vieta di aggiornare la FK via `data`, e il tipo del client
+// richiede `userId: undefined` o l'assenza del campo.
+function stripUserId<T extends { userId?: unknown }>(data: T): Omit<T, 'userId'> {
+  const { userId: _ignored, ...rest } = data;
+  return rest;
+}
+
 // ── Helper: Get time slot ────────────────────────────────────────────────────
 
 function getTimeSlot(): string {
@@ -48,13 +57,12 @@ function getTimeSlot(): string {
 // ── POST: AI Assistant Interaction ───────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  const { error, userId } = await requireSession(request);
+  if (error) return error;
+
   try {
     const body = await request.json();
-    const { action, userId } = body;
-
-    if (!userId) {
-      return NextResponse.json({ error: 'userId required' }, { status: 400 });
-    }
+    const { action } = body;
 
     switch (action) {
       // ── Onboarding: generate next conversational question ──
@@ -82,12 +90,11 @@ export async function POST(request: NextRequest) {
 
         const response = await generateProactiveResponse(trigger, profile, taskContext || null);
 
-        // If there are profile updates from the AI, apply them
         if (response.profileUpdate && Object.keys(response.profileUpdate).length > 0 && profile) {
           try {
             await db.adaptiveProfile.update({
               where: { userId },
-              data: response.profileUpdate,
+              data: stripUserId(response.profileUpdate),
             });
           } catch {
             // Non-critical
@@ -104,7 +111,6 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ insights: [] });
         }
 
-        // Get current tasks
         const tasks = await db.task.findMany({
           where: { userId, status: { notIn: ['completed', 'abandoned'] } },
           take: 20,
@@ -128,7 +134,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ insights });
       }
 
-      // ── Task Recommendation: generate AI recommendation for a specific task ──
+      // ── Task Recommendation ──
       case 'task_recommendation': {
         const { taskId } = body as { taskId: string };
         const profile = await getAdaptiveProfile(userId);
@@ -136,7 +142,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ recommendation: null });
         }
 
-        const task = await db.task.findUnique({ where: { id: taskId } });
+        const task = await db.task.findFirst({ where: { id: taskId, userId } });
         if (!task) {
           return NextResponse.json({ error: 'Task not found' }, { status: 404 });
         }
@@ -176,7 +182,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ recommendation });
       }
 
-      // ── Detect Triggers: check if proactive intervention is needed ──
+      // ── Detect Triggers ──
       case 'detect_triggers': {
         const profile = await getAdaptiveProfile(userId);
         if (!profile) {
@@ -188,7 +194,6 @@ export async function POST(request: NextRequest) {
           take: 20,
         });
 
-        // Get recent learning signals
         const recentSignals = await db.learningSignal.findMany({
           where: { userId },
           orderBy: { createdAt: 'desc' },
@@ -218,7 +223,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ triggers });
       }
 
-      // ── Micro-Feedback: process a micro-feedback with AI ──
+      // ── Micro-Feedback: process with AI ──
       case 'micro_feedback': {
         const { feedbackType, response: feedbackResponse, taskContext } = body as {
           feedbackType: string;
@@ -232,22 +237,19 @@ export async function POST(request: NextRequest) {
 
         const result = processMicroFeedbackAI(feedbackType, feedbackResponse, profile, taskContext || null);
 
-        // Apply profile updates
         if (Object.keys(result.profileUpdates).length > 0) {
           try {
             await db.adaptiveProfile.update({
               where: { userId },
-              data: result.profileUpdates,
+              data: stripUserId(result.profileUpdates),
             });
           } catch {
             // Non-critical
           }
         }
 
-        // Store memory entries
         for (const mem of result.memoryEntries) {
           try {
-            // Check if memory exists
             const existing = await db.userMemory.findFirst({
               where: { userId, memoryType: mem.type, category: mem.category, key: mem.key },
             });
@@ -309,7 +311,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ nudge });
       }
 
-      // ── Nudge Outcome: record whether nudge was accepted ──
+      // ── Nudge Outcome ──
       case 'nudge_outcome': {
         const { strategy, accepted } = body as { strategy: string; accepted: boolean };
         const profile = await getAdaptiveProfile(userId);
@@ -322,13 +324,12 @@ export async function POST(request: NextRequest) {
         try {
           await db.adaptiveProfile.update({
             where: { userId },
-            data: updates,
+            data: stripUserId(updates),
           });
         } catch {
           // Non-critical
         }
 
-        // Also record as learning signal
         try {
           await db.learningSignal.create({
             data: {
@@ -354,14 +355,10 @@ export async function POST(request: NextRequest) {
 // ── GET: Get current AI insights ─────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
+  const { error, userId } = await requireSession(request);
+  if (error) return error;
+
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
-      return NextResponse.json({ error: 'userId required' }, { status: 400 });
-    }
-
     const profile = await getAdaptiveProfile(userId);
     if (!profile) {
       return NextResponse.json({ insights: [], triggers: [] });
@@ -387,7 +384,6 @@ export async function GET(request: NextRequest) {
 
     const insights = generateAIInsights(profile, taskSummaries, currentTimeSlot);
 
-    // Also detect triggers
     const recentSignals = await db.learningSignal.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },

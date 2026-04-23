@@ -3,14 +3,13 @@
 // GET: Retrieve recent micro-feedback for a user
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
-// GET /api/micro-feedback?userId=XXX&limit=50
+// GET /api/micro-feedback?limit=50
 export async function GET(req: NextRequest) {
-  const userId = req.nextUrl.searchParams.get('userId');
-  if (!userId) {
-    return NextResponse.json({ error: 'userId required' }, { status: 400 });
-  }
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
 
   const limit = Math.min(100, Math.max(1, Number(req.nextUrl.searchParams.get('limit') ?? 50)));
 
@@ -25,18 +24,25 @@ export async function GET(req: NextRequest) {
 
 // POST /api/micro-feedback — record feedback and process it as a learning signal
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const body = await req.json();
-    const { userId, taskId, feedbackType, response, category } = body;
+    const { taskId, feedbackType, response, category } = body;
 
-    if (!userId || !feedbackType || response === undefined) {
+    if (!feedbackType || response === undefined) {
       return NextResponse.json(
-        { error: 'userId, feedbackType, and response are required' },
+        { error: 'feedbackType and response are required' },
         { status: 400 }
       );
     }
 
-    // 1. Save the MicroFeedback to DB
+    if (taskId) {
+      const task = await db.task.findFirst({ where: { id: taskId, userId } });
+      if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    }
+
     const feedback = await db.microFeedback.create({
       data: {
         userId,
@@ -47,8 +53,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 2. Process it as a learning signal
-    // Determine the current time slot
     const hour = new Date().getHours();
     let timeSlot = 'morning';
     if (hour >= 6 && hour < 12) timeSlot = 'morning';
@@ -56,7 +60,6 @@ export async function POST(req: NextRequest) {
     else if (hour >= 17 && hour < 21) timeSlot = 'evening';
     else timeSlot = 'night';
 
-    // Build the learning signal from the micro-feedback
     const signalType = 'micro_feedback';
     const metadata: Record<string, unknown> = {
       feedbackType,
@@ -64,7 +67,6 @@ export async function POST(req: NextRequest) {
       microFeedbackId: feedback.id,
     };
 
-    // Add specific metadata based on feedback type
     if (feedbackType === 'difficulty_rating' && typeof response === 'number') {
       metadata.difficulty = response;
     } else if (feedbackType === 'drain_vs_activate' && typeof response === 'number') {
@@ -78,8 +80,6 @@ export async function POST(req: NextRequest) {
       metadata.sessionExp = response;
     }
 
-    // Record the learning signal via the learning-signal API internally
-    // We directly create the signal and process it here to avoid HTTP overhead
     const signal = await db.learningSignal.create({
       data: {
         userId,
@@ -93,7 +93,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Process the signal against the adaptive profile
     const profileRecord = await db.adaptiveProfile.findUnique({ where: { userId } });
 
     if (!profileRecord) {
@@ -105,7 +104,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Import and use the learning engine
     const { dbRecordToProfileData, processSignal } = await import('@/lib/engines/learning-engine');
     const profile = dbRecordToProfileData(profileRecord as unknown as Record<string, unknown>);
 
@@ -119,7 +117,6 @@ export async function POST(req: NextRequest) {
       metadata,
     });
 
-    // Update the adaptive profile
     const updateData: Record<string, unknown> = {};
     const jsonFields = new Set([
       'bestTimeWindows', 'worstTimeWindows', 'motivationProfile',

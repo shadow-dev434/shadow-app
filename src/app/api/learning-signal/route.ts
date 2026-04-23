@@ -3,19 +3,18 @@
 // GET: Retrieve recent learning signals for a user
 
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import {
   dbRecordToProfileData,
   processSignal,
 } from '@/lib/engines/learning-engine';
-import type { LearningSignalData, AdaptiveProfileData } from '@/lib/types/shadow';
+import type { LearningSignalData } from '@/lib/types/shadow';
 
-// GET /api/learning-signal?userId=XXX&limit=50
+// GET /api/learning-signal?limit=50
 export async function GET(req: NextRequest) {
-  const userId = req.nextUrl.searchParams.get('userId');
-  if (!userId) {
-    return NextResponse.json({ error: 'userId required' }, { status: 400 });
-  }
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
 
   const limit = Math.min(100, Math.max(1, Number(req.nextUrl.searchParams.get('limit') ?? 50)));
 
@@ -30,18 +29,26 @@ export async function GET(req: NextRequest) {
 
 // POST /api/learning-signal — record a signal and process it
 export async function POST(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const body = await req.json();
-    const { userId, signalType, taskId, category, context, timeSlot, value, metadata } = body;
+    const { signalType, taskId, category, context, timeSlot, value, metadata } = body;
 
-    if (!userId || !signalType) {
+    if (!signalType) {
       return NextResponse.json(
-        { error: 'userId and signalType are required' },
+        { error: 'signalType is required' },
         { status: 400 }
       );
     }
 
-    // 1. Save the LearningSignal to DB
+    // Se viene fornito un taskId, verifica ownership
+    if (taskId) {
+      const task = await db.task.findFirst({ where: { id: taskId, userId } });
+      if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    }
+
     const signal = await db.learningSignal.create({
       data: {
         userId,
@@ -55,11 +62,9 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 2. Load the user's AdaptiveProfile
     const profileRecord = await db.adaptiveProfile.findUnique({ where: { userId } });
 
     if (!profileRecord) {
-      // No profile yet — signal is saved but not processed
       return NextResponse.json({
         signal,
         profile: null,
@@ -69,7 +74,6 @@ export async function POST(req: NextRequest) {
 
     const profile = dbRecordToProfileData(profileRecord as unknown as Record<string, unknown>);
 
-    // 3. Run processSignal from the learning engine
     const signalData: LearningSignalData = {
       signalType,
       taskId: taskId ?? undefined,
@@ -82,10 +86,7 @@ export async function POST(req: NextRequest) {
 
     const updates = processSignal(profile, signalData);
 
-    // 4. Update the AdaptiveProfile with the returned fields
     const updateData: Record<string, unknown> = {};
-
-    // Convert object/array fields back to JSON strings for DB storage
     const jsonFields = new Set([
       'bestTimeWindows', 'worstTimeWindows', 'motivationProfile',
       'taskPreferenceMap', 'energyRhythm', 'commonFailureReasons',
@@ -104,7 +105,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Determine update level
     if (updates.totalSignals !== undefined) {
       const totalSignals = updates.totalSignals as number;
       updateData.lastUpdatedFrom = totalSignals > 50 ? 'predictive' : 'behavioral';
@@ -116,7 +116,6 @@ export async function POST(req: NextRequest) {
         data: updateData as Parameters<typeof db.adaptiveProfile.update>[0]['data'],
       });
 
-      // Mark signal as processed
       await db.learningSignal.update({
         where: { id: signal.id },
         data: { processed: true, processedAt: new Date() },

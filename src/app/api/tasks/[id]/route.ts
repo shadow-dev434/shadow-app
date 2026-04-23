@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 // GET /api/tasks/[id]
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const { id } = await params;
-    const task = await db.task.findUnique({ where: { id } });
+    const task = await db.task.findFirst({ where: { id, userId } });
     if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const serialized = {
@@ -32,9 +36,15 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const { id } = await params;
     const body = await req.json();
+
+    const existing = await db.task.findFirst({ where: { id, userId } });
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const updateData: Record<string, unknown> = {};
     const allowedFields = [
@@ -72,11 +82,18 @@ export async function PATCH(
 
 // DELETE /api/tasks/[id]
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
   try {
     const { id } = await params;
+
+    const existing = await db.task.findFirst({ where: { id, userId } });
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
     await db.dailyPlanTask.deleteMany({ where: { taskId: id } });
     await db.reviewTask.deleteMany({ where: { taskId: id } });
     await db.task.delete({ where: { id } });
