@@ -308,8 +308,10 @@ model UserProfile {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Onboarding state
-  onboardingComplete Boolean @default(false)
-  onboardingStep     Int     @default(0)
+  onboardingComplete       Boolean @default(false)
+  onboardingStep           Int     @default(0)
+  onboardingAnswers        String  @default("{}") @db.Text // JSON: risposte grezze raccolte durante il flow
+  onboardingAnswersVersion Int     @default(1) // versione dello schema domande, per migration lazy
 
   // Tour state
   tourCompleted Boolean @default(false)
