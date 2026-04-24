@@ -341,11 +341,19 @@ Esito di ciascuno documentato nel messaggio di commit o in questo file
 
 ## Rischi principali e mitigazioni
 
-- **JWT refresh race al completion**: provare prima `await update() +
-  router.replace('/')`. Se middleware legge token stale e redirige di
-  nuovo a `/onboarding`, aggiungere `router.refresh()` dopo update().
-  Workaround query-param solo come ultima ratio. L'approccio usato sarà
-  documentato nel commit #7.
+- **JWT refresh race al completion** — ⚠️ **materializzato in produzione**.
+  Scelta iniziale (commit #7): `await update() + router.replace('/')`.
+  Su Vercel + Neon free tier con cold start (PATCH tourCompleted
+  misurato ~1.08s), `update()` ritornava prima che il browser avesse
+  persistito il Set-Cookie aggiornato; la client navigation di
+  `router.replace('/')` faceva arrivare al middleware una request con
+  JWT ancora stale → redirect 307 a `/tour` (o `/onboarding`) → loop
+  utente bloccato. Fix applicato post-deploy: `window.location.href = '/'`
+  in entrambi gli handleFinish (TourView, OnboardingView). Full page
+  reload forza il browser a rileggere tutti i cookie prima della nuova
+  request, eliminando la finestra di staleness. Preferito a
+  `router.refresh()` (fallback originariamente documentato) perché più
+  robusto contro futuri cold start su qualsiasi piano serverless.
 - **Matcher middleware mal configurato**: smoke test matrix sopra.
 - **Smontaggio TasksApp al register/login**: sparisce perché il nuovo
   flow è via `router.push` server-side, non via setCurrentView.

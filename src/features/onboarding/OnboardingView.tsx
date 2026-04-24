@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,15 +22,19 @@ import {
 // OnboardingView — dumb client component. Legge lo stato corrente dal
 // server via GET /api/onboarding al mount, salva incrementalmente via
 // PATCH a ogni avanzamento (resume capability), finalizza con
-// POST /api/onboarding/complete + NextAuth update() + router.replace('/').
+// POST /api/onboarding/complete + NextAuth update() + full page reload.
 //
-// Strategia JWT refresh dopo completion (Task 2, rischio 1 del piano):
-// proviamo come prima scelta `await update(); router.replace('/')`. Se
-// in runtime il middleware continuasse a leggere un token stale (race
-// condition cookie-set / navigation), il fallback documentato è
-// aggiungere router.refresh() dopo update(). L'approccio usato è quello
-// base: basta update() + replace(). La decisione finale resterà
-// documentata nel messaggio di commit.
+// Navigation: window.location.href anziché router.replace per aggirare
+// una race condition osservata in produzione (Vercel + Neon cold start):
+// await update() di NextAuth ritornava prima che il cookie aggiornato
+// arrivasse al client, la client navigation di router.replace('/')
+// portava il middleware a leggere il JWT vecchio → redirect 307 di
+// nuovo a /onboarding → loop. Full page reload forza il browser a
+// rileggere il Set-Cookie prima della nuova request, eliminando la
+// finestra di staleness. Scelto questo invece di router.refresh()
+// (fallback inizialmente documentato nel piano Step 2 rischio #1)
+// perché più robusto contro futuri cold start su piani serverless/DB
+// gratuiti.
 
 type Answers = {
   age?: number;
@@ -49,7 +52,6 @@ type Answers = {
 };
 
 export function OnboardingView() {
-  const router = useRouter();
   const { update } = useSession();
 
   const [qIndex, setQIndex] = useState(0);
@@ -222,18 +224,19 @@ export function OnboardingView() {
   const handleFinish = useCallback(async () => {
     try {
       // Refresh del JWT con i flag aggiornati (onboardingComplete=true).
-      // Il middleware leggerà il nuovo token alla prossima navigation.
       await update();
     } catch {
-      // update() fallito non blocca: router.replace proverà comunque
-      // e il middleware al massimo redirigerà di nuovo qui.
+      // update() fallito non blocca il reload: il middleware al massimo
+      // redirigerà di nuovo qui alla prossima request.
     }
     toast({
       title: 'Benvenuto in Shadow!',
       description: 'Il tuo profilo adattivo è pronto. Inizia aggiungendo un task.',
     });
-    router.replace('/');
-  }, [router, update]);
+    // Full reload invece di router.replace: necessario per evitare la
+    // race condition JWT sotto cold start (vedi commento header).
+    window.location.href = '/';
+  }, [update]);
 
   // ── Hydration placeholder ────────────────────────────────────────
   if (!isHydrated) {

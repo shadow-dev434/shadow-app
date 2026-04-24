@@ -3,7 +3,6 @@
 import type { ReactNode } from 'react';
 import { useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
 import { useShadowStore } from '@/store/shadow-store';
 import { APP_TOUR_STEPS } from '@/lib/types/shadow';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,12 +12,19 @@ import {
   MessageCircle, ChevronLeft, ChevronRight, Zap,
 } from 'lucide-react';
 
-// TourView — dopo il commit #7 del Task 2 usa router.replace('/') +
-// session update() invece del legacy setCurrentView. handleBack/
-// handleNext continuano a sincronizzare tourStep nello store Zustand
-// per UX identica all'originale, ma la transizione di uscita lascia
-// al middleware la decisione della destinazione: va a / e il
-// middleware redirige in base ai flag (onboardingComplete, ecc).
+// TourView — la transizione di uscita lascia al middleware la decisione
+// della destinazione (/ → redirect a /onboarding se necessario, chat
+// altrimenti). handleBack/handleNext continuano a sincronizzare tourStep
+// nello store Zustand per UX identica all'originale.
+//
+// Navigation: window.location.href anziché router.replace per aggirare
+// una race condition osservata in produzione (Vercel + Neon cold start):
+// await update() di NextAuth ritornava prima che il cookie aggiornato
+// arrivasse al client, router.replace('/') client-side navigation
+// portava il middleware a leggere il JWT vecchio → redirect 307 di
+// nuovo a /tour → loop. Full page reload forza il browser a rileggere
+// il Set-Cookie prima della nuova request, eliminando la finestra di
+// staleness.
 
 // Map icon name string (from APP_TOUR_STEPS) to lucide React component.
 function getTourIcon(iconName: string): ReactNode {
@@ -35,7 +41,6 @@ function getTourIcon(iconName: string): ReactNode {
 
 export function TourView() {
   const store = useShadowStore();
-  const router = useRouter();
   const { update } = useSession();
   const [currentStep, setCurrentStep] = useState(0);
   const totalSteps = APP_TOUR_STEPS.length;
@@ -50,16 +55,14 @@ export function TourView() {
         body: JSON.stringify({ tourCompleted: true, tourStep: totalSteps }),
       });
     } catch {}
-    // Refresh del JWT: senza questo il middleware alla prossima
-    // navigation leggerebbe ancora tourCompleted=false e rimanderebbe
-    // l'utente a /tour (loop).
+    // Refresh del JWT con tourCompleted=true.
     try {
       await update();
     } catch {}
-    // Va a / e lascia che il middleware rediriga dove serve
-    // (/onboarding se onboardingComplete=false, chat altrimenti).
-    router.replace('/');
-  }, [router, totalSteps, update]);
+    // Full reload invece di router.replace: necessario per evitare la
+    // race condition JWT sotto cold start (vedi commento header).
+    window.location.href = '/';
+  }, [totalSteps, update]);
 
   const handleNext = useCallback(() => {
     if (currentStep < totalSteps - 1) {
