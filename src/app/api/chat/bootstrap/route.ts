@@ -16,6 +16,35 @@ export async function POST(req: NextRequest) {
   if (error) return error;
 
   try {
+    // Guard C2: se esiste gia' un ChatThread con state='active' per
+    // l'utente (tipicamente un thread di planning lasciato aperto
+    // ieri sera), non avviare un nuovo morning check-in: il client
+    // riapre quel thread via GET /api/chat/active-thread al mount.
+    // Senza questo guard avremmo due thread active simultanei per
+    // lo stesso utente (race tra bootstrap e active-thread rehydration).
+    //
+    // NOTA: la transizione active->completed/archived non e' ancora
+    // automatica (prevista in Task 5 - review serale). Finche' non e'
+    // implementata, il primo thread dell'utente resta 'active'
+    // indefinitamente: il morning check-in si triggera solo al primo
+    // accesso di sempre, poi viene skippato dal guard. Trade-off
+    // accettato consapevolmente per la beta.
+    const activeThread = await db.chatThread.findFirst({
+      where: { userId, state: 'active' },
+      select: { id: true },
+    });
+
+    if (activeThread) {
+      console.log('[bootstrap] skip: active thread exists', {
+        userId,
+        threadId: activeThread.id,
+      });
+      return NextResponse.json({
+        triggered: false,
+        reason: 'active_thread_exists',
+      });
+    }
+
     const shouldTrigger = await shouldTriggerMorningCheckin(userId);
 
     if (!shouldTrigger) {
