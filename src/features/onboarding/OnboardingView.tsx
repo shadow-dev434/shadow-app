@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,19 +22,13 @@ import {
 // OnboardingView — dumb client component. Legge lo stato corrente dal
 // server via GET /api/onboarding al mount, salva incrementalmente via
 // PATCH a ogni avanzamento (resume capability), finalizza con
-// POST /api/onboarding/complete + NextAuth update() + full page reload.
+// POST /api/onboarding/complete + router.replace('/').
 //
-// Navigation: window.location.href anziché router.replace per aggirare
-// una race condition osservata in produzione (Vercel + Neon cold start):
-// await update() di NextAuth ritornava prima che il cookie aggiornato
-// arrivasse al client, la client navigation di router.replace('/')
-// portava il middleware a leggere il JWT vecchio → redirect 307 di
-// nuovo a /onboarding → loop. Full page reload forza il browser a
-// rileggere il Set-Cookie prima della nuova request, eliminando la
-// finestra di staleness. Scelto questo invece di router.refresh()
-// (fallback inizialmente documentato nel piano Step 2 rischio #1)
-// perché più robusto contro futuri cold start su piani serverless/DB
-// gratuiti.
+// Navigation: router.replace('/') client-side. L'hotfix #8.2 sposta la
+// lettura dei flag tour/onboarding dal JWT al DB nel middleware, quindi
+// non serve più forzare un cookie refresh (update()) né un full page
+// reload (window.location.href): al prossimo hop il middleware rileggerà
+// il flag aggiornato direttamente dal DB.
 
 type Answers = {
   age?: number;
@@ -52,7 +46,7 @@ type Answers = {
 };
 
 export function OnboardingView() {
-  const { update } = useSession();
+  const router = useRouter();
 
   const [qIndex, setQIndex] = useState(0);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -222,21 +216,12 @@ export function OnboardingView() {
   }, [qIndex]);
 
   const handleFinish = useCallback(async () => {
-    try {
-      // Refresh del JWT con i flag aggiornati (onboardingComplete=true).
-      await update();
-    } catch {
-      // update() fallito non blocca il reload: il middleware al massimo
-      // redirigerà di nuovo qui alla prossima request.
-    }
     toast({
       title: 'Benvenuto in Shadow!',
       description: 'Il tuo profilo adattivo è pronto. Inizia aggiungendo un task.',
     });
-    // Full reload invece di router.replace: necessario per evitare la
-    // race condition JWT sotto cold start (vedi commento header).
-    window.location.href = '/';
-  }, [update]);
+    router.replace('/');
+  }, [router]);
 
   // ── Hydration placeholder ────────────────────────────────────────
   if (!isHydrated) {

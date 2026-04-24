@@ -341,19 +341,32 @@ Esito di ciascuno documentato nel messaggio di commit o in questo file
 
 ## Rischi principali e mitigazioni
 
-- **JWT refresh race al completion** — ⚠️ **materializzato in produzione**.
+- **JWT refresh race al completion** — ⚠️ **materializzato in produzione,
+  soluzione cambiata**.
   Scelta iniziale (commit #7): `await update() + router.replace('/')`.
-  Su Vercel + Neon free tier con cold start (PATCH tourCompleted
-  misurato ~1.08s), `update()` ritornava prima che il browser avesse
-  persistito il Set-Cookie aggiornato; la client navigation di
-  `router.replace('/')` faceva arrivare al middleware una request con
-  JWT ancora stale → redirect 307 a `/tour` (o `/onboarding`) → loop
-  utente bloccato. Fix applicato post-deploy: `window.location.href = '/'`
-  in entrambi gli handleFinish (TourView, OnboardingView). Full page
-  reload forza il browser a rileggere tutti i cookie prima della nuova
-  request, eliminando la finestra di staleness. Preferito a
-  `router.refresh()` (fallback originariamente documentato) perché più
-  robusto contro futuri cold start su qualsiasi piano serverless.
+  Scelta post-deploy (commit 432f15b): `window.location.href` (full
+  reload). **Entrambe fallite** perché la root cause non era race
+  timing ma `update()` di NextAuth che non aggiorna il cookie in
+  presenza di service worker (`/sw.js`, che probabilmente intercetta
+  `/api/auth/session`). Verifica binary-diff del cookie JWT pre/post
+  `update()` mostra 0 byte di differenza anche a Vercel caldo: il
+  cookie non viene mai riemesso, quindi nessuna quantità di
+  wait/reload lo aggiornerebbe.
+
+  **Soluzione finale (hotfix #8.2)**: il middleware ignora i flag del
+  JWT per le page routes autenticate e li rilegge da
+  `UserProfile.tourCompleted`/`onboardingComplete` nel DB ad ogni
+  request. Costo: 1 query Neon extra per page request autenticata
+  (~100-300ms su Hobby), accettabile per la beta 20-100 utenti.
+  `await update()` rimosso da tutti gli handleFinish (TourView,
+  OnboardingView, SettingsView.handleResetOnboarding) perché ora
+  inutile e costoso. Tornati a `router.replace('/')` client-side
+  (semplice e non vincolato al cookie refresh).
+
+  **Task 10** sostituirà questa soluzione con una più efficiente:
+  cache in-memory del flag con TTL breve, oppure signed flag cookie
+  separato gestito da noi invece che da NextAuth (così il service
+  worker non lo intercetta).
 - **Matcher middleware mal configurato**: smoke test matrix sopra.
 - **Smontaggio TasksApp al register/login**: sparisce perché il nuovo
   flow è via `router.push` server-side, non via setCurrentView.

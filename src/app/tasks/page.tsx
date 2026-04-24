@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
 import { useShadowStore, type ViewMode, type ShadowTask, type MicroStep, type UserProfileData, type AIClassifyResult } from '@/store/shadow-store';
 import { STRICT_EXIT_STEPS, type ExitFrictionStep, type AdaptiveProfileData, type LearningSignalData, type AIInsight, type ProactiveTrigger, type NudgeMessage, type TaskRecommendation, type ProactiveChatbotResponse } from '@/lib/types/shadow';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -2940,7 +2939,6 @@ function EisenhowerView() {
 function SettingsView({ onLogout }: { onLogout: () => void }) {
   const store = useShadowStore();
   const router = useRouter();
-  const { update } = useSession();
   const profile = store.userProfile;
   const authUser = store.authUser;
 
@@ -2948,17 +2946,12 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
     try {
       await fetch('/api/onboarding/reset', { method: 'POST' });
     } catch {}
-    // Cleanup state locale legacy (il source-of-truth è il JWT + DB).
+    // Cleanup state locale legacy (il source-of-truth è il DB, che il
+    // middleware rilegge ad ogni page request — hotfix #8.2).
     localStorage.removeItem('shadow-profile-complete');
     store.setUserProfile(null);
-    // Refresh del JWT con onboardingComplete=false, così il middleware
-    // redirige a /onboarding al prossimo hop invece di lasciare passare
-    // un token stale che dice "already complete".
-    try {
-      await update();
-    } catch {}
     router.replace('/');
-  }, [store, router, update]);
+  }, [store, router]);
 
   const handleLogout = useCallback(() => {
     onLogout();

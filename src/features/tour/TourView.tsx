@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useState, useCallback } from 'react';
-import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { useShadowStore } from '@/store/shadow-store';
 import { APP_TOUR_STEPS } from '@/lib/types/shadow';
 import { Card, CardContent } from '@/components/ui/card';
@@ -17,14 +17,12 @@ import {
 // altrimenti). handleBack/handleNext continuano a sincronizzare tourStep
 // nello store Zustand per UX identica all'originale.
 //
-// Navigation: window.location.href anziché router.replace per aggirare
-// una race condition osservata in produzione (Vercel + Neon cold start):
-// await update() di NextAuth ritornava prima che il cookie aggiornato
-// arrivasse al client, router.replace('/') client-side navigation
-// portava il middleware a leggere il JWT vecchio → redirect 307 di
-// nuovo a /tour → loop. Full page reload forza il browser a rileggere
-// il Set-Cookie prima della nuova request, eliminando la finestra di
-// staleness.
+// Navigation: router.replace('/'). L'hotfix #8.2 ha spostato la lettura
+// dei flag tourCompleted/onboardingComplete dal JWT al DB nel middleware,
+// quindi non serve più forzare un refresh del cookie (update()) né un
+// full page reload (window.location.href): basta una client-side
+// navigation, il middleware rileggerà il flag aggiornato dal DB al
+// prossimo hop.
 
 // Map icon name string (from APP_TOUR_STEPS) to lucide React component.
 function getTourIcon(iconName: string): ReactNode {
@@ -41,7 +39,7 @@ function getTourIcon(iconName: string): ReactNode {
 
 export function TourView() {
   const store = useShadowStore();
-  const { update } = useSession();
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(0);
   const totalSteps = APP_TOUR_STEPS.length;
   const step = APP_TOUR_STEPS[currentStep];
@@ -55,14 +53,11 @@ export function TourView() {
         body: JSON.stringify({ tourCompleted: true, tourStep: totalSteps }),
       });
     } catch {}
-    // Refresh del JWT con tourCompleted=true.
-    try {
-      await update();
-    } catch {}
-    // Full reload invece di router.replace: necessario per evitare la
-    // race condition JWT sotto cold start (vedi commento header).
-    window.location.href = '/';
-  }, [totalSteps, update]);
+    // Va a / e lascia che il middleware rediriga dove serve. Il
+    // middleware rilegge i flag dal DB (hotfix #8.2), quindi la PATCH
+    // appena fatta è visibile senza cookie refresh.
+    router.replace('/');
+  }, [router, totalSteps]);
 
   const handleNext = useCallback(() => {
     if (currentStep < totalSteps - 1) {

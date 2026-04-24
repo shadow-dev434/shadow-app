@@ -38,8 +38,8 @@ export async function middleware(req: NextRequest) {
   }
 
   const userId = typeof token?.id === 'string' ? token.id : undefined;
-  const tourCompleted = Boolean(token?.tourCompleted);
-  const onboardingComplete = Boolean(token?.onboardingComplete);
+  let tourCompleted = Boolean(token?.tourCompleted);
+  let onboardingComplete = Boolean(token?.onboardingComplete);
 
   // Distinguiamo "nessun cookie" (visitatore fresco) da "cookie presente
   // ma non decodabile" (sessione scaduta). Il primo caso deve vedere la
@@ -50,6 +50,37 @@ export async function middleware(req: NextRequest) {
     req.cookies.get('__Secure-next-auth.session-token')
   );
   const hasStaleSession = hasSessionCookie && !userId;
+
+  // ─── DB re-read dei flag onboarding per page routes autenticate ──────
+  // Hotfix #8.2: in produzione update() di NextAuth non aggiorna sempre
+  // il cookie JWT quando un service worker (/sw.js) è attivo —
+  // probabilmente intercetta la request a /api/auth/session. Verifica
+  // binary-diff del cookie pre/post update() mostra 0 bytes di
+  // differenza. Risultato: il JWT resta stale anche dopo PATCH riuscito
+  // al DB, il middleware redirige in loop al flow step già completato.
+  //
+  // Fix: ignoriamo i flag del token per le page routes e li rileggiamo
+  // dal DB, che è la fonte di verità. Costo: 1 query Neon extra per
+  // page request autenticata (~100-300ms su Hobby plan, accettabile per
+  // beta 20-100 utenti). Task 10 sostituirà con cache in-memory o
+  // signed flag cookie gestito da noi invece che da NextAuth.
+  //
+  // NON applicato alle API routes: la policy lì è "401 se serve
+  // sessione", non redirect basato su flag.
+  if (userId && !pathname.startsWith('/api/')) {
+    try {
+      const { db } = await import('@/lib/db');
+      const profile = await db.userProfile.findUnique({
+        where: { userId },
+        select: { tourCompleted: true, onboardingComplete: true },
+      });
+      tourCompleted = profile?.tourCompleted ?? false;
+      onboardingComplete = profile?.onboardingComplete ?? false;
+    } catch {
+      // DB unreachable: fallback sui valori del token, meglio che
+      // bloccare l'utente fuori dall'app per un glitch transiente.
+    }
+  }
 
   // ─── API routes ──────────────────────────────────────────────────────
   // Comportamento preservato: forward di x-user-id se autenticato,
