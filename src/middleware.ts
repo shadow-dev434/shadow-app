@@ -52,33 +52,42 @@ export async function middleware(req: NextRequest) {
   const hasStaleSession = hasSessionCookie && !userId;
 
   // ─── DB re-read dei flag onboarding per page routes autenticate ──────
-  // Hotfix #8.2: in produzione update() di NextAuth non aggiorna sempre
-  // il cookie JWT quando un service worker (/sw.js) è attivo —
-  // probabilmente intercetta la request a /api/auth/session. Verifica
-  // binary-diff del cookie pre/post update() mostra 0 bytes di
-  // differenza. Risultato: il JWT resta stale anche dopo PATCH riuscito
-  // al DB, il middleware redirige in loop al flow step già completato.
+  // Hotfix #8.4: il JWT può essere stale perché update() di NextAuth
+  // non aggiorna sempre il cookie in presenza di service worker. Il DB
+  // è la fonte di verità.
   //
-  // Fix: ignoriamo i flag del token per le page routes e li rileggiamo
-  // dal DB, che è la fonte di verità. Costo: 1 query Neon extra per
-  // page request autenticata (~100-300ms su Hobby plan, accettabile per
-  // beta 20-100 utenti). Task 10 sostituirà con cache in-memory o
-  // signed flag cookie gestito da noi invece che da NextAuth.
+  // Storia dei tentativi falliti (vedi docs/tasks/02-onboarding-flow-map.md):
+  // 1. #7:    await update() + router.replace('/').        Fallito.
+  // 2. #8.1:  window.location.href full reload.            Fallito.
+  // 3. #8.2:  DB re-read con `@/lib/db` (Prisma standard). Fallito:
+  //           middleware Vercel gira Edge runtime, Prisma standard
+  //           crasha silenziosamente catturato dal try/catch.
+  // 4. #8.4:  DB re-read con `@/lib/db-edge` (Neon Serverless Driver
+  //           via adapter-neon). Prisma client Edge-compatible: fa le
+  //           query via HTTP senza query-engine nativo. ✓ Funzionante.
+  //
+  // Costo: 1 query HTTP a Neon per page request autenticata
+  // (~50-150ms su Hobby tier, serverless senza pool persistente).
+  // Task 10 può ottimizzare con Vercel KV cache o signed flag cookie
+  // custom non intercettato dal service worker di NextAuth.
   //
   // NON applicato alle API routes: la policy lì è "401 se serve
   // sessione", non redirect basato su flag.
   if (userId && !pathname.startsWith('/api/')) {
     try {
-      const { db } = await import('@/lib/db');
-      const profile = await db.userProfile.findUnique({
+      const { dbEdge } = await import('@/lib/db-edge');
+      const profile = await dbEdge.userProfile.findUnique({
         where: { userId },
         select: { tourCompleted: true, onboardingComplete: true },
       });
       tourCompleted = profile?.tourCompleted ?? false;
       onboardingComplete = profile?.onboardingComplete ?? false;
-    } catch {
-      // DB unreachable: fallback sui valori del token, meglio che
-      // bloccare l'utente fuori dall'app per un glitch transiente.
+    } catch (err) {
+      // DB unreachable o crash imprevisto dell'adapter: log esplicito
+      // per visibilità nei Vercel logs (nel #8.2 l'errore veniva
+      // silenziato, mascherando la root cause per ore). Fallback sui
+      // valori del token: meglio che bloccare l'utente fuori dall'app.
+      console.error('[middleware] DB re-read failed, falling back to JWT:', err);
     }
   }
 

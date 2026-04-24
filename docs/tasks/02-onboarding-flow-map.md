@@ -342,31 +342,62 @@ Esito di ciascuno documentato nel messaggio di commit o in questo file
 ## Rischi principali e mitigazioni
 
 - **JWT refresh race al completion** — ⚠️ **materializzato in produzione,
-  soluzione cambiata**.
-  Scelta iniziale (commit #7): `await update() + router.replace('/')`.
-  Scelta post-deploy (commit 432f15b): `window.location.href` (full
-  reload). **Entrambe fallite** perché la root cause non era race
-  timing ma `update()` di NextAuth che non aggiorna il cookie in
-  presenza di service worker (`/sw.js`, che probabilmente intercetta
-  `/api/auth/session`). Verifica binary-diff del cookie JWT pre/post
-  `update()` mostra 0 byte di differenza anche a Vercel caldo: il
-  cookie non viene mai riemesso, quindi nessuna quantità di
-  wait/reload lo aggiornerebbe.
+  soluzione finale dopo 4 iterazioni**.
+  - Scelta 1 (commit #7, `678ed66`): `await update() + router.replace('/')`.
+    **Fallita**: race timing su Vercel + Neon cold start.
+  - Scelta 2 (commit `432f15b`): `window.location.href` full reload.
+    **Fallita**: la root cause non era race timing ma `update()` di
+    NextAuth che non rigenera il cookie in presenza di service worker
+    (`/sw.js` intercetta `/api/auth/session`). Verifica binary-diff
+    del cookie JWT pre/post `update()`: 0 byte di differenza, il
+    cookie non viene mai riemesso.
+  - Scelta 3 (commit `d7e6c8d`): DB re-read nel middleware con
+    `@/lib/db` (Prisma standard). **Fallita in produzione**: il
+    middleware su Vercel gira in **Edge runtime** (nonostante il
+    build locale mostrasse `ƒ Proxy` serverless). Prisma Client
+    standard non è Edge-compatible, crashava con `prisma:error In
+    order to run Prisma Client on edge runtime, either: - Use Prisma
+    Accelerate - Use a driver adapter`. L'errore era silenziato dal
+    `try/catch` nel middleware → fallback sul JWT stale → loop.
+  - Scelta 4 (hotfix #8.4, **commit finale**): DB re-read con
+    `@/lib/db-edge`, Prisma client configurato via
+    `@prisma/adapter-neon` + `@neondatabase/serverless`. L'adapter
+    fa le query via HTTP senza query-engine nativo, compatibile con
+    Edge runtime. ✓ Funzionante.
 
-  **Soluzione finale (hotfix #8.2)**: il middleware ignora i flag del
-  JWT per le page routes autenticate e li rilegge da
-  `UserProfile.tourCompleted`/`onboardingComplete` nel DB ad ogni
-  request. Costo: 1 query Neon extra per page request autenticata
-  (~100-300ms su Hobby), accettabile per la beta 20-100 utenti.
-  `await update()` rimosso da tutti gli handleFinish (TourView,
-  OnboardingView, SettingsView.handleResetOnboarding) perché ora
-  inutile e costoso. Tornati a `router.replace('/')` client-side
-  (semplice e non vincolato al cookie refresh).
+  **Root cause confermata**: `update()` di NextAuth non rigenera il
+  cookie quando il service worker è attivo. Qualsiasi strategia
+  basata sul refresh del JWT lato client è fragile per costruzione.
 
-  **Task 10** sostituirà questa soluzione con una più efficiente:
-  cache in-memory del flag con TTL breve, oppure signed flag cookie
-  separato gestito da noi invece che da NextAuth (così il service
-  worker non lo intercetta).
+  **Trade-off della soluzione #8.4**: 1 query HTTP a Neon per page
+  request autenticata (~50-150ms su Hobby tier, serverless senza
+  pool persistente). Accettabile per beta 20-100 utenti. Task 10
+  può ottimizzare con Vercel KV cache o signed flag cookie custom
+  (cookie name diverso da NextAuth, non intercettato dal service
+  worker).
+
+  **File toccati nel fix #8.4**:
+  - `prisma/schema.prisma`: invariato — `driverAdapters` è stable
+    in Prisma 6.19.3 (warn esplicito del generator: "can be used
+    without specifying it as a preview feature"). Nessun flag.
+  - `src/lib/db-edge.ts` **(NUOVO)**: Prisma client con Neon adapter.
+  - `src/middleware.ts`: usa `dbEdge` via `await import('@/lib/db-edge')`
+    al posto di `@/lib/db`.
+  - `package.json`: `+@prisma/adapter-neon@6.19.3`,
+    `+@neondatabase/serverless@1.1.0`. Adapter allineato al major di
+    `@prisma/client` (6.19.3), verifica empirica con
+    `npm info @prisma/adapter-neon@6.19.3` prima dell'installazione.
+  - Server Component `/tour/page.tsx` e `/onboarding/page.tsx`:
+    **non modificati**, restano thin wrapper (commit #6). Il middleware
+    con `dbEdge` è ora affidabile come unico gate, nessun double-check
+    nei Server Component.
+
+  **Lezione metodologica**: `bunx next build` locale non dice quale
+  runtime Vercel sceglierà per il middleware in produzione. Se un
+  fix aggiunge dipendenze Node-only (Prisma standard, `fs`, ecc.)
+  al middleware, dedurre il runtime dall'output locale è errato.
+  Verificare sempre sui Vercel logs post-deploy, o usare da subito
+  un driver Edge-compatible come `@prisma/adapter-neon`.
 - **Matcher middleware mal configurato**: smoke test matrix sopra.
 - **Smontaggio TasksApp al register/login**: sparisce perché il nuovo
   flow è via `router.push` server-side, non via setCurrentView.
