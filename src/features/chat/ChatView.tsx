@@ -42,6 +42,22 @@ interface BootstrapResponse {
   mode?: string;
 }
 
+interface ActiveThreadMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+}
+
+interface ActiveThreadResponse {
+  activeThread: {
+    threadId: string;
+    mode: string;
+    messages: ActiveThreadMessage[];
+    hasMore: boolean;
+  } | null;
+}
+
 const SUGGESTED_PROMPTS = [
   { label: 'Pianifichiamo oggi', prompt: 'Aiutami a pianificare la giornata. Cosa devo priorizzare?' },
   { label: 'Ho un task nuovo', prompt: 'Devo aggiungere qualcosa alla lista: ' },
@@ -61,14 +77,57 @@ export function ChatView() {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const bootstrapCalled = useRef(false);
+  const mountInitCalled = useRef(false);
 
-  // Bootstrap on mount
+  // Mount init: prima prova a rehydratare un thread attivo esistente
+  // via GET /api/chat/active-thread. Se non ce n'e' nessuno (o il
+  // fetch fallisce), fallback al bootstrap che puo' triggerare un
+  // morning check-in. Un singolo ref guarda l'intera fase init per
+  // evitare double-invocation in React 18 strict mode.
   useEffect(() => {
-    if (bootstrapCalled.current) return;
-    bootstrapCalled.current = true;
+    if (mountInitCalled.current) return;
+    mountInitCalled.current = true;
 
     (async () => {
+      // Tentativo 1: rehydrate thread attivo esistente.
+      let rehydrated = false;
+      try {
+        const res = await fetch('/api/chat/active-thread');
+        if (res.ok) {
+          const data = (await res.json()) as ActiveThreadResponse;
+          if (data.activeThread) {
+            // TODO(task-futuro): usare data.activeThread.hasMore per
+            // mostrare un affordance "carica messaggi precedenti".
+            const { threadId: tid, mode: tmode, messages: tmsgs } = data.activeThread;
+            // I messaggi rehydrated non includono toolsExecuted ne
+            // quickReplies (payloadJson escluso dall'endpoint per
+            // scelta di design): le card "task creato" ecc non
+            // ricompaiono al remount. Trade-off accettato.
+            const msgs: Message[] = tmsgs.map(m => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              createdAt: m.createdAt,
+            }));
+            setThreadId(tid);
+            setMode(tmode);
+            setMessages(msgs);
+            console.log('[ChatView] rehydrated thread:', { threadId: tid, messageCount: msgs.length });
+            rehydrated = true;
+          }
+        } else {
+          console.warn('[ChatView] active-thread fetch failed:', res.status);
+        }
+      } catch (err) {
+        console.error('[ChatView] active-thread error:', err);
+      }
+
+      if (rehydrated) {
+        setBootstrapping(false);
+        return;
+      }
+
+      // Tentativo 2 (fallback): bootstrap -- logica invariata.
       try {
         const res = await fetch('/api/chat/bootstrap', {
           method: 'POST',
