@@ -220,6 +220,9 @@ export function OnboardingView() {
       title: 'Benvenuto in Shadow!',
       description: 'Il tuo profilo adattivo è pronto. Inizia aggiungendo un task.',
     });
+    console.log('[OnboardingView] handleFinish clicked', {
+      at: new Date().toISOString(),
+    });
     router.replace('/');
   }, [router]);
 

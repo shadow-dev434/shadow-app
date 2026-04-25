@@ -78,7 +78,14 @@ export async function middleware(req: NextRequest) {
       const { dbEdge } = await import('@/lib/db-edge');
       const profile = await dbEdge.userProfile.findUnique({
         where: { userId },
-        select: { tourCompleted: true, onboardingComplete: true },
+        select: { userId: true, tourCompleted: true, onboardingComplete: true },
+      });
+      console.log('[middleware]', {
+        path: pathname,
+        tokenUserId: userId,
+        dbUserId: profile?.userId ?? null,
+        onboardingComplete: profile?.onboardingComplete ?? null,
+        readAt: new Date().toISOString(),
       });
       tourCompleted = profile?.tourCompleted ?? false;
       onboardingComplete = profile?.onboardingComplete ?? false;

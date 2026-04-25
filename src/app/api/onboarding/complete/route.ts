@@ -183,6 +183,12 @@ export async function POST(req: NextRequest) {
       create: { userId, ...adaptivePayload },
     });
 
+    console.log('[onboarding/complete]', {
+      userId,
+      onboardingComplete: true,
+      writtenAt: new Date().toISOString(),
+    });
+
     return NextResponse.json({ ok: true, onboardingComplete: true });
   } catch (err) {
     console.error('POST /api/onboarding/complete error:', err);
