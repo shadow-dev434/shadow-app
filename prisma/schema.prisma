@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ─── NextAuth Models ──────────────────────────────────────────────────────────
@@ -128,6 +129,10 @@ model Task {
   aiClassified         Boolean @default(false) // whether AI classified this task
   aiClassificationData String  @default("{}") @db.Text // JSON: full AI classification result for human-in-the-loop review
 
+  // Review serale
+  postponedCount Int    @default(0)
+  source         String @default("manual") // manual | gmail | review_carryover
+
   // Relations
   dailyPlans DailyPlanTask[]
   reviews    ReviewTask[]
@@ -206,6 +211,12 @@ model DailyPlan {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // Review serale
+  threadId         String?
+  thread           ChatThread? @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  pinnedIds        String      @default("[]")
+  originalPlanJson String?     @db.Text
+
   tasks DailyPlanTask[]
 
   @@unique([userId, date])
@@ -234,6 +245,10 @@ model Review {
   energyEnd   Int      @default(3)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  // Review serale
+  threadId String?
+  thread   ChatThread? @relation(fields: [threadId], references: [id], onDelete: SetNull)
 
   tasks ReviewTask[]
 
@@ -282,6 +297,11 @@ model Settings {
   theme                String   @default("system")
   notificationsEnabled Boolean  @default(true)
   reminderMinutes      Int      @default(15)
+
+  // Evening review window (used by review serale trigger)
+  eveningWindowStart String @default("20:00")
+  eveningWindowEnd   String @default("23:00")
+
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -532,7 +552,9 @@ model ChatThread {
   lastTurnAt DateTime  @default(now())
   endedAt    DateTime?
 
-  messages ChatMessage[]
+  messages   ChatMessage[]
+  reviews    Review[]
+  dailyPlans DailyPlan[]
 
   @@index([userId, state])
   @@index([userId, mode, startedAt])
