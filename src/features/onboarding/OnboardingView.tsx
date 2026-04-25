@@ -221,27 +221,14 @@ export function OnboardingView() {
       description: 'Il tuo profilo adattivo è pronto. Inizia aggiungendo un task.',
     });
 
-    console.log('[OnboardingView] handleFinish: BEFORE replace', {
-      pathname: window.location.pathname,
-      href: window.location.href,
-      at: new Date().toISOString(),
-    });
-
     try {
       router.replace('/');
-      console.log('[OnboardingView] handleFinish: replace called, no throw');
-    } catch (err) {
-      console.error('[OnboardingView] handleFinish: replace threw', err);
+    } catch {
+      // router.replace failed; fallback below will kick in
     }
 
     setTimeout(() => {
-      console.log('[OnboardingView] handleFinish: 1s LATER', {
-        pathname: window.location.pathname,
-        href: window.location.href,
-      });
-
       if (window.location.pathname.startsWith('/onboarding')) {
-        console.warn('[OnboardingView] handleFinish: router.replace failed, falling back to window.location');
         window.location.href = '/';
       }
     }, 1000);
