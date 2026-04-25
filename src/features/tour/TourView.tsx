@@ -16,13 +16,6 @@ import {
 // della destinazione (/ → redirect a /onboarding se necessario, chat
 // altrimenti). handleBack/handleNext continuano a sincronizzare tourStep
 // nello store Zustand per UX identica all'originale.
-//
-// Navigation: router.replace('/'). L'hotfix #8.2 ha spostato la lettura
-// dei flag tourCompleted/onboardingComplete dal JWT al DB nel middleware,
-// quindi non serve più forzare un refresh del cookie (update()) né un
-// full page reload (window.location.href): basta una client-side
-// navigation, il middleware rileggerà il flag aggiornato dal DB al
-// prossimo hop.
 
 // Map icon name string (from APP_TOUR_STEPS) to lucide React component.
 function getTourIcon(iconName: string): ReactNode {
@@ -56,7 +49,17 @@ export function TourView() {
     // Va a / e lascia che il middleware rediriga dove serve. Il
     // middleware rilegge i flag dal DB (hotfix #8.2), quindi la PATCH
     // appena fatta è visibile senza cookie refresh.
-    router.replace('/');
+    try {
+      router.replace('/');
+    } catch {
+      // router.replace failed; fallback below will kick in
+    }
+
+    setTimeout(() => {
+      if (window.location.pathname.startsWith('/tour')) {
+        window.location.href = '/';
+      }
+    }, 1000);
   }, [router, totalSteps]);
 
   const handleNext = useCallback(() => {

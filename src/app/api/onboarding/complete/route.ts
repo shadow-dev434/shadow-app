@@ -8,11 +8,6 @@ import { db } from '@/lib/db';
 // setta onboardingComplete=true. La logica di traduzione era prima
 // client-side in OnboardingView.handleConfigure; spostata qui nel
 // Task 2 per rendere il frontend dumb.
-//
-// Dopo questa chiamata il frontend deve invocare NextAuth update()
-// per forzare il refresh del JWT (vedi auth.ts callback jwt, branch
-// trigger === 'update'), altrimenti il middleware continuerebbe a
-// leggere onboardingComplete=false dal token stale.
 
 interface OnboardingAnswers {
   age?: number;
