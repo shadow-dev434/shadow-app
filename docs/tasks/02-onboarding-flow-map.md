@@ -342,7 +342,7 @@ Esito di ciascuno documentato nel messaggio di commit o in questo file
 ## Rischi principali e mitigazioni
 
 - **JWT refresh race al completion** — ⚠️ **materializzato in produzione,
-  soluzione finale dopo 4 iterazioni**.
+  soluzione finale dopo 5 iterazioni**.
   - Scelta 1 (commit #7, `678ed66`): `await update() + router.replace('/')`.
     **Fallita**: race timing su Vercel + Neon cold start.
   - Scelta 2 (commit `432f15b`): `window.location.href` full reload.
@@ -359,15 +359,29 @@ Esito di ciascuno documentato nel messaggio di commit o in questo file
     order to run Prisma Client on edge runtime, either: - Use Prisma
     Accelerate - Use a driver adapter`. L'errore era silenziato dal
     `try/catch` nel middleware → fallback sul JWT stale → loop.
-  - Scelta 4 (hotfix #8.4, **commit finale**): DB re-read con
+  - Scelta 4 (hotfix #8.4, commit `df63cab`): DB re-read con
     `@/lib/db-edge`, Prisma client configurato via
     `@prisma/adapter-neon` + `@neondatabase/serverless`. L'adapter
     fa le query via HTTP senza query-engine nativo, compatibile con
     Edge runtime. ✓ Funzionante.
+  - Scelta 5 (hotfix #8.5, **commit finale**, `73157d9`): bypass del
+    service worker per le HTML navigation (`request.mode === 'navigate'`
+    + accept `text/html`). Anche con #8.4 funzionante l'utente restava
+    bloccato su `/onboarding`. Diagnostic logs (`22d3ad6`) hanno provato
+    che il middleware non girava sulla navigation post-completion: il
+    SW serviva una response di redirect cached via
+    `staleWhileRevalidate` prima che la request lasciasse il client.
+    ✓ Funzionante. Vedi Step 3 per la cronologia completa.
 
   **Root cause confermata**: `update()` di NextAuth non rigenera il
   cookie quando il service worker è attivo. Qualsiasi strategia
   basata sul refresh del JWT lato client è fragile per costruzione.
+
+  **Aggiornamento 2026-04-25**: questa analisi era parziale. Il SW ha
+  un secondo path di intercettazione (HTML navigation via
+  `staleWhileRevalidate`) che bloccava la navigation post-completion
+  anche con #8.4 funzionante — vedi Step 3 (Task 3.5) per il root
+  cause completo e il fix #8.5.
 
   **Trade-off della soluzione #8.4**: 1 query HTTP a Neon per page
   request autenticata (~50-150ms su Hobby tier, serverless senza
@@ -414,3 +428,129 @@ Esito di ciascuno documentato nel messaggio di commit o in questo file
 
 9-11 ore di lavoro focalizzato, una sessione piena. Complessità media-alta
 (middleware + JWT refresh sono i punti nuovi in questo repo).
+
+---
+
+# Step 3 — Hotfix Task 3.5 (2026-04-25)
+
+> Chiusura del filo che lega tutti gli step precedenti. Anche con #8.4
+> in produzione e funzionante (middleware capace di leggere flag freschi
+> dal DB via `@/lib/db-edge`), l'utente restava bloccato su `/onboarding`
+> dopo il click su "Inizia a usare Shadow". Diagnosi e fix completati
+> il 2026-04-25.
+
+## I due path di intercettazione del SW
+
+L'analisi al termine di Step 2 ha identificato **un** path di
+intercettazione di `public/sw.js` (su `/api/auth/session`) e attribuito
+a quel path la causa del problema. Era corretta solo a metà: il SW ha
+**due** path distinti, entrambi rilevanti per il flow onboarding, e le
+prime quattro iterazioni non hanno mai toccato il secondo.
+
+| Path | Risorsa | Strategia | Conseguenza | Status |
+|---|---|---|---|---|
+| A | `/api/auth/session` | `networkFirstWithCache` | `update()` di NextAuth non rigenera il cookie quando SW attivo | Bloccava Scelta 1, 2. **Non ancora bypassato** (vedi Task 3.7) |
+| B | HTML navigation (qualsiasi `accept: text/html`) | `staleWhileRevalidate` | `router.replace('/')` serviva una response di redirect a `/onboarding` cached: middleware mai invocato | Bloccava Scelta 3, 4 (anche dopo che #8.4 ha reso il middleware capace di leggere DB fresco). **Bypassato in #8.5** |
+
+Solo Scelta 5 (#8.5, commit `73157d9`) chiude il Path B. Il Path A
+resta come superficie di fragilità da chiudere in Task 3.7.
+
+## Diagnosi
+
+Logs temporanei in tre punti (commit `22d3ad6`):
+
+- `POST /api/onboarding/complete` (post-write `db.userProfile.update`).
+- `middleware.ts` (post-`dbEdge.userProfile.findUnique`): `tokenUserId`,
+  `dbUserId`, `onboardingComplete` letto dal DB.
+- `OnboardingView.handleFinish` (al click di "Inizia a usare Shadow").
+
+In produzione: il primo log scattava (write OK), il terzo log scattava
+(click registrato), il **secondo non scattava mai** sulla navigation
+post-completion. Ciò ha provato che il middleware non girava — escluse
+le ipotesi (a) replica lag Neon e (b) userId mismatch JWT/DB, isolata
+l'ipotesi (c) cache client-side.
+
+DevTools Network tab confermava `(failed) net::ERR_CACHE_*` con SW
+come origin sulle request HTML.
+
+## Fix (commit `73157d9`)
+
+Early return per request di navigation prima del routing tree esistente
+in `public/sw.js`:
+
+```js
+if (request.mode === 'navigate' ||
+    (request.method === 'GET' &&
+     request.headers.get('accept')?.includes('text/html'))) {
+  return;
+}
+```
+
+`STATIC_CACHE` e `DYNAMIC_CACHE` bumpati `v2 → v3` per forzare
+l'`activate` handler a wipare le cache vecchie con HTML stale.
+Branche restanti (API network-first, static cache-first, dynamic
+fallback) intatti.
+
+## Safety net difensiva
+
+`OnboardingView.handleFinish` e `TourView.handleFinish` ora wrappano
+`router.replace('/')` in try/catch e schedulano un `setTimeout` 1s
+che, se l'URL è ancora su `/onboarding` (o `/tour`), forza
+`window.location.href = '/'`. Sotto condizioni normali il fallback non
+scatta. Esiste come last-resort contro regressioni del Path B o
+intercettazioni equivalenti future.
+
+Pattern (commits `204ece7`, `9e1f4ed`, `a400f9b`):
+
+```ts
+try {
+  router.replace('/');
+} catch {
+  // router.replace failed; fallback below will kick in
+}
+
+setTimeout(() => {
+  if (window.location.pathname.startsWith('/onboarding')) {
+    window.location.href = '/';
+  }
+}, 1000);
+```
+
+## Cleanup commenti obsoleti (commit `a400f9b`)
+
+Due header-comment block documentavano la strategia
+`update() + cookie refresh` abbandonata in #8.4:
+
+- `src/features/tour/TourView.tsx` (header, righe 19-25 pre-cleanup).
+- `src/app/api/onboarding/complete/route.ts` (header, righe 11-15
+  pre-cleanup).
+
+Entrambi rimossi senza sostituzione. Il middleware è la sola autorità
+di routing post-#8.4, già documentato altrove (Step 2, decisione D8).
+
+## Cleanup script thread orfani
+
+Eseguito `bun run scripts/cleanup-orphan-threads.ts` in dry-run sul DB
+di produzione (commit `b7ae798` aggiungeva lo script ma non lo lanciava).
+Risultato: 0 thread orfani identificati. Nessun cleanup necessario.
+
+## Follow-up aperti
+
+- **Path A SW intercept**: bypassato solo Path B. `/api/auth/session`
+  resta intercettato. Tracciato come Task 3.7 in ROADMAP (decisione
+  PWA: rimuovere SW o sostituire con libreria manutenuta come
+  `next-pwa` / `@serwist/next`).
+- **Vercel project sprawl**: 4 progetti Vercel paralleli connessi al
+  repo. Tracciato come Task 3.6 in ROADMAP.
+
+## Lezione metodologica
+
+Step 2 dichiarava "root cause confermata" dopo aver identificato un
+solo path di intercettazione. Era prematura: il debug si era fermato
+al primo path trovato senza enumerare le altre superfici intercettate
+dello stesso SW. Quando la stessa famiglia di sintomi ricompare dopo
+un fix, l'ipotesi di partenza dovrebbe essere "il blast radius della
+causa è più largo di quello chiuso", non "abbiamo trovato un secondo
+problema indipendente". Per un service worker monolitico hand-rolled
+l'euristica è quasi una regola: enumerare *tutti* i path di
+intercettazione prima di concludere.

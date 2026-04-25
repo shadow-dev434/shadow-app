@@ -79,7 +79,7 @@ prisma/
                                     UserMemory, StrictModeSession, DailyPlan, …
 ```
 
-## Stato attuale (23 aprile 2026)
+## Stato attuale (25 aprile 2026)
 
 - ✅ App deployata su Vercel, URL produzione: `https://shadow-app2.vercel.app/`
 - ✅ DB Postgres Neon attivo, schema migrato
@@ -90,6 +90,17 @@ prisma/
   - setTimeout feedback a 30s invece di 3s
   - Pulsante "Completa tutto" sempre visibile
   - Trigger strict mode indipendente dal task
+- ✅ Task 3 — Persistenza thread chat (2026-04-24): rehydration del thread
+  attivo on mount, skip della morning check-in se c'è già un thread attivo,
+  nuovo endpoint `GET /api/chat/active-thread`, script di cleanup degli
+  orfani. Commits `e459893`, `4cbe8fe`, `a6bb316`, `b7ae798`.
+- ✅ Task 3.5 — Onboarding finish redirect (2026-04-25): root cause è
+  `public/sw.js` che intercettava le HTML navigation con
+  stale-while-revalidate, servendo redirect cached senza far girare il
+  middleware. Fix in `73157d9`: bypass SW per `request.mode === 'navigate'`
+  + bump cache v2→v3. Safety net in `OnboardingView` e `TourView`:
+  try/catch attorno a `router.replace('/')` + fallback a 1s su
+  `window.location.href` (`204ece7`, `9e1f4ed`, `a400f9b`).
 - ⚠️ Problemi strutturali NON risolti (vedi `docs/ROADMAP.md`)
 
 ## Regole non negoziabili per Claude Code

@@ -35,6 +35,20 @@ community ADHD.
   `requireSession`, schema userId obbligatorio con Cascade, tipi NextAuth puliti,
   hotfix `prisma generate` nel build. Vedi `docs/tasks/01-data-isolation.md` e
   `docs/schema-changes/2026-04-23-require-userid.md`.
+- **2026-04-24** — **Task 3: Persistenza thread chat**. Rehydration del thread
+  attivo on mount, skip della morning check-in se esiste già un thread attivo,
+  nuovo endpoint `GET /api/chat/active-thread`, script di cleanup degli orfani
+  (eseguito in dry-run, 0 trovati). Chiude sia 3a (task duplicati, fix
+  pre-esistente sul context/tool handling) che 3b (persistenza). Commits
+  `e459893`, `4cbe8fe`, `a6bb316`, `b7ae798`.
+- **2026-04-25** — **Task 3.5: Onboarding finish redirect**. Root cause
+  identificata in `public/sw.js`: il service worker intercettava le HTML
+  navigation con stale-while-revalidate, servendo redirect cached senza far
+  girare il middleware. I due fix precedenti (`432f15b`, `d7e6c8d`) toccavano
+  layer sbagliati. Fix reale: bypass SW per `request.mode === 'navigate'` +
+  bump cache v2→v3 (`73157d9`). Safety net: try/catch + 1s fallback a
+  `window.location.href` in `OnboardingView` e `TourView` (`204ece7`,
+  `9e1f4ed`, `a400f9b`). Vedi `docs/tasks/02-onboarding-flow-map.md` Step 3.
 
 ---
 
@@ -54,28 +68,6 @@ l'utente veda la chat.
 
 **Perché prima di tutto**: la chat (Task 3) e la review serale (Task 5) leggono
 dal profilo adattivo. Senza onboarding quei dati sono vuoti.
-
----
-
-### 🔴 Task 3 — Fix bug chat (task duplicati + persistenza thread)
-
-**Spec**: `docs/tasks/03-fix-chat-bugs.md` *(da creare dopo Task 2 done)*
-
-Due bug distinti:
-
-*3a — Task duplicati*: quando l'utente chiede un secondo task, il modello
-ricrea anche il primo. Gestione del context LLM: tool_use già eseguiti non
-devono generare nuove tool calls. Probabile fix: filtraggio context passato
-al LLM o tracciatura server-side dei tool_call_id eseguiti.
-
-*3b — Chat persa al ritorno*: navigare da chat a `/tasks` e tornare fa
-perdere il thread. Persistenza lato client del `currentThreadId` (Zustand
-persist parziale, solo questo campo, non tutto lo store).
-
-**Acceptance**:
-- Creazione 3 task consecutivi in chat → 3 task nel DB (non 6 o 9)
-- Navigazione via e ritorno → conversazione continua
-- Reload pagina → thread riprende
 
 ---
 
@@ -163,6 +155,45 @@ Include tutti i follow-up registrati durante Task 1:
 8. `prisma validate` + `DATABASE_URL` reachability in fase build
 
 Più: password policy, backup Neon Pro, Plausible analytics, Sentry advanced.
+
+---
+
+## 📋 Backlog
+
+Task emersi durante il lavoro corrente, da ripianificare in una fase
+successiva.
+
+### 🟡 Task 3.6 — Consolidamento progetti Vercel
+
+Quattro progetti Vercel paralleli (`shadow-app`, `shadow-app1`,
+`shadow-app2`, `shadow-app-m5fh`) collegati allo stesso repo, tutti con
+auto-deploy attivo su ogni push. Consolidare in un singolo progetto e
+disconnettere gli altri.
+
+**Acceptance**:
+- Un solo progetto Vercel attivo, gli altri disconnessi o cancellati
+- URL produzione canonico documentato (oggi `https://shadow-app2.vercel.app/`,
+  da decidere se mantenere o rinominare)
+- Nessun build duplicato che parte sullo stesso commit
+
+---
+
+### 🟡 Task 3.7 — Service Worker: origine e destino
+
+`public/sw.js` è stato aggiunto da GLM 5.1 nello scaffold iniziale (commit
+`d39c6a8`), senza una libreria PWA. Decidere se PWA / offline mode è davvero
+un obiettivo del prodotto:
+
+- **Se sì**: sostituire `sw.js` hand-rolled con una libreria manutenuta
+  (`next-pwa`, `@serwist/next`, simili). Continuare a manutenere un service
+  worker custom è fragile (Task 3.5 ha bypassato solo le HTML navigation;
+  restano intercettazioni su `/api/auth/session` e altre superfici già
+  documentate in `docs/tasks/02-onboarding-flow-map.md`).
+- **Se no**: rimuovere `sw.js`, la registrazione client in
+  `src/app/tasks/page.tsx`, e l'entry skip nel middleware.
+
+**Acceptance**: decisione presa e documentata, una delle due strade
+implementata end-to-end.
 
 ---
 
