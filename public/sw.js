@@ -4,8 +4,8 @@
 // Features: caching strategies, push notifications, background sync, quick capture
 
 const CACHE_NAME = 'shadow-v2';
-const STATIC_CACHE = 'shadow-static-v2';
-const DYNAMIC_CACHE = 'shadow-dynamic-v2';
+const STATIC_CACHE = 'shadow-static-v3';
+const DYNAMIC_CACHE = 'shadow-dynamic-v3';
 
 const STATIC_ASSETS = [
   '/',
@@ -48,6 +48,15 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // Navigation requests bypass the SW so middleware always evaluates
+  // fresh auth/onboarding state. Caching HTML caused stale redirect
+  // loops after the onboardingComplete flag flipped server-side.
+  if (request.mode === 'navigate' ||
+      (request.method === 'GET' &&
+       request.headers.get('accept')?.includes('text/html'))) {
+    return;
+  }
 
   if (request.method !== 'GET') return;
   if (!url.protocol.startsWith('http')) return;
