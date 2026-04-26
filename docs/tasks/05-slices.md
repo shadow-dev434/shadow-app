@@ -30,6 +30,8 @@
 
 ## Slice 2 — Trigger e finestra serale
 
+**Stato:** ✅ chiuso (commit `e770d34`, 26 aprile 2026).
+
 **Scope:**
 - Helper `isInsideEveningWindow(now, settings)` che dice "siamo dentro la finestra dell'utente?".
 - Estensione di `/api/chat/active-thread` (guard di Task 3): se utente apre Shadow dentro la finestra + nessuna `Review` per oggi + nessun thread `evening_review` aperto → segnala al client di avviare la review.
