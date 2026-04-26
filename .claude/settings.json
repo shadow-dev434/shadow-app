@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "default",
+
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+
+      "Bash(ls:*)",
+      "Bash(pwd)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(find:*)",
+      "Bash(diff:*)",
+      "Bash(stat:*)",
+      "Bash(echo:*)",
+
+      "Bash(git status)",
+      "Bash(git status:*)",
+      "Bash(git diff)",
+      "Bash(git diff:*)",
+      "Bash(git log)",
+      "Bash(git log:*)",
+      "Bash(git show)",
+      "Bash(git show:*)",
+      "Bash(git branch)",
+      "Bash(git branch:*)",
+      "Bash(git remote -v)",
+      "Bash(git rev-parse:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git stash:*)",
+
+      "Bash(git add:*)",
+      "Bash(git restore --staged:*)",
+      "Bash(git reset HEAD:*)",
+
+      "Bash(bun run:*)",
+      "Bash(bun install)",
+      "Bash(bunx tsc:*)",
+      "Bash(bunx next:*)",
+      "Bash(bunx prisma generate)",
+      "Bash(bunx prisma format)",
+      "Bash(bunx prisma validate)",
+
+      "Bash(npm view:*)",
+      "Bash(npm info:*)"
+    ],
+
+    "ask": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)",
+
+      "Bash(bunx prisma migrate:*)",
+      "Bash(bunx prisma db push:*)",
+      "Bash(bunx prisma db execute:*)",
+      "Bash(bunx prisma db seed:*)",
+      "Bash(bunx prisma studio)",
+
+      "Bash(rm:*)",
+      "Bash(mv:*)",
+
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+
+      "Write(prisma/schema.prisma)",
+      "Edit(prisma/schema.prisma)",
+      "Write(.env)",
+      "Edit(.env)",
+      "Write(.env.local)",
+      "Edit(.env.local)",
+      "Write(.env.production)",
+      "Edit(.env.production)",
+      "Write(next.config.*)",
+      "Edit(next.config.*)",
+      "Write(package.json)",
+      "Edit(package.json)"
+    ],
+
+    "deny": [
+      "Read(.env)",
+      "Read(.env.local)",
+      "Read(.env.production)",
+      "Read(.env.*.local)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(rm -rf:*)",
+      "Bash(sudo:*)"
+    ]
+  },
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/block-dangerous.js"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/protect-secrets.js"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/typecheck-on-ts-edit.js"
+          }
+        ]
+      }
+    ]
+  }
+}
