@@ -149,3 +149,65 @@ bunx prisma studio       # UI tabellare DB
 bunx prisma migrate dev  # nuova migration dopo change schema
 bunx prisma migrate status
 ```
+# Snippet per `CLAUDE.md`
+
+Aggiungi questa sezione al `CLAUDE.md` esistente, in coda (o subito prima
+delle "Regole non negoziabili"). Documenta a Claude Code il nuovo setup
+così non ci sono sorprese a inizio sessione.
+
+---
+
+## Setup Claude Code (.claude/)
+
+A partire dal 2026-04-26 il progetto ha un `.claude/` configurato con:
+
+- **`settings.json`**: rules di permission che auto-approvano comandi safe
+  (Read/Glob/Grep, `git status/diff/log`, `git add`, `bun run build`, `bunx
+  tsc`, `bunx prisma generate/format/validate`) e chiedono conferma per
+  comandi che toccano repo remoti, DB, schema, env (`git commit/push`,
+  `prisma migrate/db push/db execute`, edit di `prisma/schema.prisma` e
+  `.env*`).
+- **Hook `block-dangerous.js`**: blocca pattern distruttivi (`rm -rf`,
+  `git push --force`, `sudo`, pipe-to-shell). Exit code 2 = stop.
+- **Hook `protect-secrets.js`**: blocca lettura/edit di `.env*`, file di
+  chiavi (`.pem`, `.key`, `id_rsa`), credenziali Google.
+- **Hook `typecheck-on-ts-edit.js`**: dopo Edit/Write su `.ts`/`.tsx`
+  dentro `src/` o `prisma/`, lancia `bunx tsc --noEmit --incremental` e
+  segnala errori. Non bloccante.
+- **Skill `/post-mortem`**: invocabile manualmente da Antonio per
+  generare doc strutturati di debug.
+
+### Implicazioni operative
+
+1. **Non chiedere conferma per comandi auto-approvati.** Se vedi un
+   comando in `permissions.allow` di `settings.json`, eseguilo
+   direttamente senza preambolo.
+
+2. **Per comandi in `ask`** (commit, push, migrate, schema/env edit),
+   continua a fermarti e chiedere conferma esplicita ad Antonio. La
+   convenzione consolidata è opzione 1, mai opzione 2.
+
+3. **Se un hook ti blocca**, leggi attentamente il messaggio stderr.
+   Probabilmente stai per fare qualcosa di distruttivo. NON tentare di
+   aggirare l'hook (es. spezzando il comando in più step) senza prima
+   spiegare ad Antonio cosa stavi cercando di fare e perché.
+
+4. **Errori TypeScript dal hook `typecheck-on-ts-edit.js`**: se vedi
+   `[typecheck] N errori TS dopo edit di X`, valuta se sistemare prima
+   di proseguire. Se gli errori sono preesistenti (non causati dal tuo
+   edit), segnalalo ad Antonio e continua.
+
+5. **`/post-mortem` non si auto-invoca.** Aspetti che Antonio lo digiti.
+
+### File da non toccare in autonomia
+
+Anche con permission "ask" che chiede conferma, questi file richiedono
+discussione PRIMA del cambio (non solo conferma del diff):
+- `prisma/schema.prisma` (qualunque modifica → impatto migration)
+- `.env*` (qualunque modifica → potenziale rottura prod)
+- `.claude/settings.json` (modifiche al setup permessi → impatto
+  workflow)
+- `.claude/hooks/*.js` (modifiche a hook di sicurezza)
+
+Se proponi di modificarli, fermati e spiega cosa vuoi cambiare e perché,
+prima di proporre il diff.
