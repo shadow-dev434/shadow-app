@@ -56,6 +56,9 @@ interface ActiveThreadResponse {
     messages: ActiveThreadMessage[];
     hasMore: boolean;
   } | null;
+  eveningReview: {
+    shouldStart: boolean;
+  };
 }
 
 const SUGGESTED_PROMPTS = [
@@ -74,6 +77,7 @@ export function ChatView() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
+  const [eveningReviewShouldStart, setEveningReviewShouldStart] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -91,10 +95,22 @@ export function ChatView() {
     (async () => {
       // Tentativo 1: rehydrate thread attivo esistente.
       let rehydrated = false;
+
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mi = String(now.getMinutes()).padStart(2, '0');
+      const clientDate = `${yyyy}-${mm}-${dd}`;
+      const clientTime = `${hh}:${mi}`;
+
       try {
-        const res = await fetch('/api/chat/active-thread');
+        const url = `/api/chat/active-thread?clientTime=${encodeURIComponent(clientTime)}&clientDate=${encodeURIComponent(clientDate)}`;
+        const res = await fetch(url);
         if (res.ok) {
           const data = (await res.json()) as ActiveThreadResponse;
+          setEveningReviewShouldStart(data.eveningReview.shouldStart);
           if (data.activeThread) {
             // TODO(task-futuro): usare data.activeThread.hasMore per
             // mostrare un affordance "carica messaggi precedenti".
@@ -270,7 +286,9 @@ export function ChatView() {
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
         {messages.length === 0 && !sending && !bootstrapping && (
-          <EmptyState onSuggestion={handleSuggestion} />
+          eveningReviewShouldStart
+            ? <EveningReviewCard />
+            : <EmptyState onSuggestion={handleSuggestion} />
         )}
 
         {bootstrapping && messages.length === 0 && (
@@ -355,6 +373,18 @@ function EmptyState({ onSuggestion }: { onSuggestion: (prompt: string) => void }
             {s.label}
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function EveningReviewCard() {
+  return (
+    <div className="flex flex-col items-center justify-center py-12 px-2 text-center">
+      <div className="w-full max-w-sm bg-zinc-800/50 border border-zinc-700/50 rounded-lg px-4 py-6">
+        <p className="text-sm text-zinc-200">
+          Sei nella finestra serale. Vuoi iniziare la review?
+        </p>
       </div>
     </div>
   );

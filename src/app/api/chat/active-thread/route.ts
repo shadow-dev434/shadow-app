@@ -11,9 +11,22 @@
  *
  * Auth: richiede NextAuth session cookie (requireSession).
  *
+ * Query params:
+ *   ?clientTime=HH:MM   ora locale del client (timezone-agnostic).
+ *                       Usato per decidere se l'utente e' dentro la
+ *                       finestra serale configurata in Settings.
+ *   ?clientDate=YYYY-MM-DD  data locale del client. Usato per cercare
+ *                           una eventuale Review esistente per oggi.
+ *
+ * Entrambi i parametri sono opzionali ma necessari insieme per il
+ * segnale eveningReview: se mancanti o malformati, la response
+ * contiene eveningReview.shouldStart=false e un warning viene loggato
+ * server-side.
+ *
  * Response shape:
  *   200 OK, body =
- *     { activeThread: null }
+ *     { activeThread: null,
+ *       eveningReview: { shouldStart: boolean } }
  *   oppure
  *     { activeThread: {
  *         threadId: string,
@@ -27,7 +40,8 @@
  *         hasMore: boolean  // true se esistono messaggi piu' vecchi
  *                           //   dei 200 restituiti (paginazione in
  *                           //   task futuro)
- *       }
+ *       },
+ *       eveningReview: { shouldStart: boolean }
  *     }
  *
  * L'endpoint ritorna al massimo gli ultimi 200 messaggi ordinati
@@ -47,8 +61,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { isInsideEveningWindow } from '@/lib/evening-review/window';
 
 const MESSAGE_LIMIT = 200;
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 interface ActiveThreadMessage {
   id: string;
@@ -64,13 +81,67 @@ interface ActiveThreadPayload {
   hasMore: boolean;
 }
 
+interface EveningReviewPayload {
+  shouldStart: boolean;
+}
+
 interface ActiveThreadResponse {
   activeThread: ActiveThreadPayload | null;
+  eveningReview: EveningReviewPayload;
+}
+
+async function computeEveningReview(
+  userId: string,
+  clientTime: string | null,
+  clientDate: string | null,
+): Promise<EveningReviewPayload> {
+  if (
+    !clientTime ||
+    !TIME_PATTERN.test(clientTime) ||
+    !clientDate ||
+    !DATE_PATTERN.test(clientDate)
+  ) {
+    console.warn(
+      '[active-thread] missing or invalid clientTime/clientDate, defaulting to shouldStart=false',
+    );
+    return { shouldStart: false };
+  }
+
+  const settings = await db.settings.findFirst({
+    where: { userId },
+    select: { eveningWindowStart: true, eveningWindowEnd: true },
+  });
+  if (!settings) return { shouldStart: false };
+
+  if (!isInsideEveningWindow(clientTime, settings)) {
+    return { shouldStart: false };
+  }
+
+  const reviewToday = await db.review.findFirst({
+    where: { userId, date: clientDate },
+    select: { id: true },
+  });
+  if (reviewToday) return { shouldStart: false };
+
+  const eveningThread = await db.chatThread.findFirst({
+    where: {
+      userId,
+      mode: 'evening_review',
+      state: { in: ['active', 'paused'] },
+    },
+    select: { id: true },
+  });
+  if (eveningThread) return { shouldStart: false };
+
+  return { shouldStart: true };
 }
 
 export async function GET(req: NextRequest) {
   const { error, userId } = await requireSession(req);
   if (error) return error;
+
+  const clientTime = req.nextUrl.searchParams.get('clientTime');
+  const clientDate = req.nextUrl.searchParams.get('clientDate');
 
   try {
     const thread = await db.chatThread.findFirst({
@@ -80,7 +151,8 @@ export async function GET(req: NextRequest) {
     });
 
     if (!thread) {
-      const body: ActiveThreadResponse = { activeThread: null };
+      const eveningReview = await computeEveningReview(userId, clientTime, clientDate);
+      const body: ActiveThreadResponse = { activeThread: null, eveningReview };
       return NextResponse.json(body);
     }
 
@@ -118,6 +190,7 @@ export async function GET(req: NextRequest) {
         messages,
         hasMore,
       },
+      eveningReview: { shouldStart: false },
     };
     return NextResponse.json(body);
   } catch (err) {
