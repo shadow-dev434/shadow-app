@@ -5,7 +5,19 @@
 import { db } from '@/lib/db';
 import { callLLM, type LLMMessage } from '@/lib/llm/client';
 import { buildSystemPrompt } from './prompts';
-import { CHAT_TOOLS, executeTool } from './tools';
+import { executeTool, getToolsForMode, type ToolExecutionResult } from './tools';
+import {
+  selectCandidates,
+  computeEffectiveList,
+  reasonsFromCandidates,
+  type Candidate,
+  type TaskProjection,
+  type TriageState,
+} from '@/lib/evening-review/triage';
+import {
+  DEADLINE_PROXIMITY_DAYS,
+  CANDIDATE_LIST_SOFT_CAP,
+} from '@/lib/evening-review/config';
 
 export type ChatMode =
   | 'morning_checkin'
@@ -21,6 +33,8 @@ export interface OrchestratorInput {
   mode: ChatMode;
   userMessage: string;
   relatedTaskId?: string | null;
+  /** YYYY-MM-DD, used by evening_review mode for the deadline cutoff in Europe/Rome. */
+  clientDate?: string;
 }
 
 export interface OrchestratorOutput {
@@ -76,6 +90,35 @@ export async function orchestrate(
   // ── 3. User context ──────────────────────────────────────────────────
   const userContext = await buildUserContext(input.userId);
 
+  // ── 3.5. Evening review triage state ────────────────────────────────
+  let triageState: TriageState | null = null;
+  let allTasks: TaskProjection[] | null = null;
+  let modeContext = '';
+  let isFirstTurn = false;
+
+  if (input.mode === 'evening_review') {
+    const loaded = loadTriageStateFromContext(thread.contextJson);
+    if (loaded === null) {
+      // Primo turno: init
+      isFirstTurn = true;
+      if (!input.clientDate) {
+        console.warn('[evening-review] clientDate missing, falling back to server-side Europe/Rome');
+      }
+      const result = await initEveningReview(
+        input.userId,
+        input.clientDate ?? formatTodayInRome(),
+      );
+      triageState = result.triageState;
+      allTasks = result.allTasks;
+    } else {
+      // Turni successivi: load (loaded narrowed to TriageState in this branch)
+      isFirstTurn = false;
+      triageState = loaded;
+      allTasks = await loadAllNonTerminalTasks(input.userId);
+    }
+    modeContext = buildEveningReviewModeContext(triageState, isFirstTurn, allTasks);
+  }
+
   // ── 4. Build messages for LLM ────────────────────────────────────────
   const llmMessages: LLMMessage[] = previousMessages
     .filter(m => m.role === 'user' || m.role === 'assistant')
@@ -98,7 +141,7 @@ export async function orchestrate(
   const isStructuredMode = input.mode !== 'general';
   const modelTier = isStructuredMode ? 'smart' : 'fast';
 
-  const systemPrompt = buildSystemPrompt(input.mode, userContext);
+  const systemPrompt = buildSystemPrompt(input.mode, userContext, modeContext);
 
   let totalCost = 0;
   let totalTokensIn = 0;
@@ -111,7 +154,7 @@ export async function orchestrate(
     tier: modelTier,
     systemPrompt,
     messages: llmMessages,
-    tools: CHAT_TOOLS,
+    tools: getToolsForMode(input.mode),
     maxTokens: 500,
     temperature: 0.5,
   });
@@ -124,16 +167,42 @@ export async function orchestrate(
 
   const toolsExecuted: OrchestratorOutput['toolsExecuted'] = [];
   let finalAssistantMessage = firstResponse.text;
+  // pendingTriageState !== null is the signal that we're in evening_review
+  // AND have a state to persist in chunk H's transaction commit.
+  let pendingTriageState: TriageState | null = triageState;
 
   // ── 7. Handle tool calls ─────────────────────────────────────────────
   if (firstResponse.toolCalls.length > 0) {
-    const toolResults = await Promise.all(
-      firstResponse.toolCalls.map(async (tc) => {
-        const result = await executeTool(tc.name, tc.input, input.userId);
+    const toolResults: Array<{
+      toolCall: typeof firstResponse.toolCalls[number];
+      result: ToolExecutionResult;
+    }> = [];
+
+    if (input.mode === 'evening_review') {
+      // Sequential: chain triage mutations through pendingTriageState.
+      // Multiple tool calls in the same turn (e.g., remove A then add B) must see
+      // each other's effects, so they cannot run in parallel.
+      for (const tc of firstResponse.toolCalls) {
+        const result = await executeTool(tc.name, tc.input, input.userId, {
+          triageState: pendingTriageState ?? undefined,
+        });
         toolsExecuted.push({ name: tc.name, input: tc.input, result: result.data });
-        return { toolCall: tc, result };
-      }),
-    );
+        toolResults.push({ toolCall: tc, result });
+        if (result.kind === 'mutator') {
+          pendingTriageState = result.newTriageState;
+        }
+      }
+    } else {
+      // Parallel (historical pattern for non-evening_review modes).
+      const parallelResults = await Promise.all(
+        firstResponse.toolCalls.map(async (tc) => {
+          const result = await executeTool(tc.name, tc.input, input.userId);
+          toolsExecuted.push({ name: tc.name, input: tc.input, result: result.data });
+          return { toolCall: tc, result };
+        }),
+      );
+      toolResults.push(...parallelResults);
+    }
 
     llmMessages.push({
       role: 'assistant',
@@ -161,7 +230,7 @@ export async function orchestrate(
       tier: modelTier,
       systemPrompt,
       messages: llmMessages,
-      tools: CHAT_TOOLS,
+      tools: getToolsForMode(input.mode),
       maxTokens: 500,
       temperature: 0.5,
     });
@@ -192,28 +261,38 @@ export async function orchestrate(
     finalAssistantMessage = finalAssistantMessage.replace(QR_REGEX, '').trim();
   }
 
-  // ── 9. Save assistant message ────────────────────────────────────────
-  await db.chatMessage.create({
-    data: {
-      threadId: thread.id,
-      role: 'assistant',
-      content: finalAssistantMessage,
-      payloadJson: quickReplies.length > 0
-        ? JSON.stringify({ quickReplies, toolsExecuted })
-        : toolsExecuted.length > 0
-          ? JSON.stringify({ toolsExecuted })
-          : null,
-      modelUsed: lastModel,
-      tokensIn: totalTokensIn,
-      tokensOut: totalTokensOut,
-      latencyMs: totalLatencyMs,
-    },
-  });
+  // ── 9. Atomic commit: assistant message + thread update (lastTurnAt + optional contextJson)
+  // Single $transaction so a partial write cannot leave an orphan assistant message
+  // without the corresponding triage state, and vice versa.
+  const threadUpdateData: { lastTurnAt: Date; contextJson?: string } = {
+    lastTurnAt: new Date(),
+  };
+  if (pendingTriageState !== null) {
+    threadUpdateData.contextJson = JSON.stringify({ triage: pendingTriageState });
+  }
 
-  await db.chatThread.update({
-    where: { id: thread.id },
-    data: { lastTurnAt: new Date() },
-  });
+  await db.$transaction([
+    db.chatMessage.create({
+      data: {
+        threadId: thread.id,
+        role: 'assistant',
+        content: finalAssistantMessage,
+        payloadJson: quickReplies.length > 0
+          ? JSON.stringify({ quickReplies, toolsExecuted })
+          : toolsExecuted.length > 0
+            ? JSON.stringify({ toolsExecuted })
+            : null,
+        modelUsed: lastModel,
+        tokensIn: totalTokensIn,
+        tokensOut: totalTokensOut,
+        latencyMs: totalLatencyMs,
+      },
+    }),
+    db.chatThread.update({
+      where: { id: thread.id },
+      data: threadUpdateData,
+    }),
+  ]);
 
   return {
     threadId: thread.id,
@@ -261,4 +340,114 @@ async function buildUserContext(userId: string): Promise<string> {
   }
 
   return parts.join('\n');
+}
+
+// ── Evening review helpers ────────────────────────────────────────────────
+
+async function loadAllNonTerminalTasks(userId: string): Promise<TaskProjection[]> {
+  return db.task.findMany({
+    where: { userId, status: { notIn: ['completed', 'abandoned'] } },
+    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true },
+  });
+}
+
+function loadTriageStateFromContext(contextJson: string | null): TriageState | null {
+  if (!contextJson) return null;
+  try {
+    const parsed = JSON.parse(contextJson) as { triage?: TriageState };
+    if (parsed && typeof parsed === 'object' && parsed.triage) {
+      return parsed.triage;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+async function initEveningReview(
+  userId: string,
+  clientDate: string,
+): Promise<{ triageState: TriageState; allTasks: TaskProjection[] }> {
+  const allTasks = await loadAllNonTerminalTasks(userId);
+
+  const candidates = selectCandidates({
+    tasks: allTasks,
+    clientDate,
+    deadlineProximityDays: DEADLINE_PROXIMITY_DAYS,
+    softCap: CANDIDATE_LIST_SOFT_CAP,
+  });
+
+  const triageState: TriageState = {
+    candidateTaskIds: candidates.map((c) => c.id),
+    addedTaskIds: [],
+    excludedTaskIds: [],
+    reasonsByTaskId: reasonsFromCandidates(candidates),
+    computedAt: new Date().toISOString(),
+    clientDate,
+  };
+
+  return { triageState, allTasks };
+}
+
+/**
+ * Builds the modeContext block for the evening_review system prompt.
+ *
+ * La lista candidate (triageState.candidateTaskIds) e' congelata al primo turno.
+ * La inbox-fuori-triage invece e' dinamica: i task creati durante la review
+ * (es. via create_task) appaiono qui nei turni successivi. Il modello puo'
+ * proporli o ignorarli. Se vorremo congelare anche l'inbox, salvare
+ * allTaskIds in triageState al primo turno.
+ */
+function buildEveningReviewModeContext(
+  triageState: TriageState,
+  isFirstTurn: boolean,
+  allTasks: TaskProjection[],
+): string {
+  const taskMap = new Map(allTasks.map((t) => [t.id, t]));
+
+  const effectiveIds = computeEffectiveList(triageState);
+  const candidateLines: string[] = [];
+  effectiveIds.forEach((id, idx) => {
+    const task = taskMap.get(id);
+    if (!task) return;
+    const isOriginal = triageState.candidateTaskIds.includes(id);
+    const dl = task.deadline ? task.deadline.toISOString().split('T')[0] : 'nessuna';
+    if (isOriginal) {
+      const reason = triageState.reasonsByTaskId[id] ?? 'unknown';
+      candidateLines.push(
+        `${idx + 1}. [id=${task.id}] ${task.title} -- reason=${reason}, deadline=${dl}, avoidance=${task.avoidanceCount}`,
+      );
+    } else {
+      candidateLines.push(
+        `${idx + 1}. [id=${task.id}] ${task.title} -- reason=added, deadline=${dl}, avoidance=${task.avoidanceCount}`,
+      );
+    }
+  });
+
+  const outOfTriage = allTasks.filter((t) => !effectiveIds.includes(t.id));
+  const outLines = outOfTriage.map((t) => `- [id=${t.id}] ${t.title}`);
+
+  const lines: string[] = ['TRIAGE CORRENTE'];
+  lines.push(`IS_FIRST_TURN=${isFirstTurn}`);
+  lines.push(`N=${candidateLines.length} candidate, M=${outOfTriage.length} task in inbox fuori dal triage.`);
+  lines.push('');
+  lines.push('Candidate (in ordine):');
+  if (candidateLines.length > 0) {
+    lines.push(...candidateLines);
+  } else {
+    lines.push('(lista vuota)');
+  }
+  lines.push('');
+  if (outLines.length > 0) {
+    lines.push('Inbox-fuori-triage:');
+    lines.push(...outLines);
+  } else {
+    lines.push('Inbox-fuori-triage: (vuoto)');
+  }
+
+  return lines.join('\n');
+}
+
+function formatTodayInRome(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
 }

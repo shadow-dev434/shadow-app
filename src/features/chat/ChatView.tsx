@@ -217,6 +217,9 @@ export function ChatView() {
           threadId,
           mode,
           userMessage: trimmed,
+          ...(mode === 'evening_review' && {
+            clientDate: new Intl.DateTimeFormat('en-CA').format(new Date()),
+          }),
         }),
       });
 
@@ -267,6 +270,12 @@ export function ChatView() {
     }
   };
 
+  const handleStartEveningReview = () => {
+    setEveningReviewShouldStart(false);
+    setMode('evening_review');
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100">
       <header className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur flex-shrink-0">
@@ -287,7 +296,7 @@ export function ChatView() {
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
         {messages.length === 0 && !sending && !bootstrapping && (
           eveningReviewShouldStart
-            ? <EveningReviewCard />
+            ? <EveningReviewCard onStart={handleStartEveningReview} />
             : <EmptyState onSuggestion={handleSuggestion} />
         )}
 
@@ -378,13 +387,20 @@ function EmptyState({ onSuggestion }: { onSuggestion: (prompt: string) => void }
   );
 }
 
-function EveningReviewCard() {
+function EveningReviewCard({ onStart }: { onStart: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 px-2 text-center">
-      <div className="w-full max-w-sm bg-zinc-800/50 border border-zinc-700/50 rounded-lg px-4 py-6">
+      <div className="w-full max-w-sm bg-zinc-800/50 border border-zinc-700/50 rounded-lg px-4 py-6 space-y-4">
         <p className="text-sm text-zinc-200">
           Sei nella finestra serale. Vuoi iniziare la review?
         </p>
+        <button
+          type="button"
+          onClick={onStart}
+          className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-100 rounded-md text-sm transition-colors"
+        >
+          Inizia la review
+        </button>
       </div>
     </div>
   );

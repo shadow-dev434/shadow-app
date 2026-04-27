@@ -19,7 +19,9 @@ export const TARGET_REVIEW_DURATION_MAX_MINUTES = 12;
 
 // Entry perimeter (Area 2.1, 2.2)
 
-export const DEADLINE_PROXIMITY_HOURS = 48;
+// Spec 2.1: "scadenza vicina (<=48h proposto, calibrabile)" interpretato come 2 giorni di calendario nel timezone Europe/Rome (vedi triage.ts; Settings.timezone in V1.1).
+export const DEADLINE_PROXIMITY_DAYS = 2;
+export const CANDIDATE_LIST_SOFT_CAP = 12;
 export const POSTPONE_PATTERN_THRESHOLD = 3;
 
 // Plan sizing - fill ratio (Area 4.5)

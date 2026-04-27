@@ -1,7 +1,7 @@
 /**
  * POST /api/chat/turn
  *
- * Body: { threadId?: string, mode: ChatMode, userMessage: string, relatedTaskId?: string }
+ * Body: { threadId?: string, mode: ChatMode, userMessage: string, relatedTaskId?: string, clientDate?: string }
  * Response: { threadId, assistantMessage, toolsExecuted, costUsd, ... }
  *
  * Auth: requires NextAuth session cookie. Set by /api/auth/login.
@@ -26,11 +26,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { threadId, mode, userMessage, relatedTaskId } = body as {
+    const { threadId, mode, userMessage, relatedTaskId, clientDate } = body as {
       threadId?: string;
       mode?: string;
       userMessage?: string;
       relatedTaskId?: string;
+      clientDate?: string;
     };
 
     if (!userMessage || typeof userMessage !== 'string' || !userMessage.trim()) {
@@ -44,12 +45,23 @@ export async function POST(req: NextRequest) {
       ? (mode as ChatMode)
       : 'general';
 
+    // clientDate: optional 'YYYY-MM-DD' used by evening_review for the deadline cutoff.
+    // Silent validation: invalid -> drop, let orchestrator fall back to server-side Europe/Rome.
+    const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+    const validClientDate =
+      typeof clientDate === 'string' &&
+      DATE_PATTERN.test(clientDate) &&
+      !isNaN(new Date(clientDate).getTime())
+        ? clientDate
+        : undefined;
+
     const result = await orchestrate({
       userId,
       threadId: threadId ?? null,
       mode: chatMode,
       userMessage: userMessage.trim(),
       relatedTaskId: relatedTaskId ?? null,
+      clientDate: validClientDate,
     });
 
     return NextResponse.json(result);
