@@ -47,6 +47,8 @@
 
 ## Slice 3 — Lazy archive + pause
 
+**Stato:** ✅ chiuso (commit `<da aggiungere post-commit>`, 27 aprile 2026).
+
 **Scope:**
 - Quando l'utente apre Shadow fuori dalla finestra serale e c'è un `evening_review` orfano (in stato `paused` o `active` da prima), Shadow lo archivia automaticamente.
 - Inattività ≥10 minuti dentro un thread review → transizione a `paused`.

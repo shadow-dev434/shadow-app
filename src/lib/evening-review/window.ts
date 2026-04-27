@@ -32,3 +32,33 @@ export function isInsideEveningWindow(
   }
   return nowMin >= startMin || nowMin < endMin;
 }
+
+/**
+ * Returns the duration of the user's evening window, in minutes.
+ *
+ * - Supporta wrap-around mezzanotte: es. 22:00-02:00 -> 240 min.
+ * - Stringhe HH:MM mal formate o start==end -> 0, dove 0 significa
+ *   "finestra invalida, coerente con isInsideEveningWindow che ritorna
+ *   false". NON significa "finestra di 24 ore": una finestra valida ha
+ *   sempre durata > 0 e < 1440.
+ * - Granularita' al minuto.
+ *
+ * Coerente con isInsideEveningWindow: stessa parseHHMM, stessa convenzione
+ * sul wrap-around, stesso failsafe. Usata da normalize.ts ramo 5
+ * (stale_orphan detection). In pratica unreachable con input malformato
+ * dal call site di normalize, perche' ramo 5 e' raggiunto solo dopo che
+ * isInsideEveningWindow ha gia' confermato che start/end parsano.
+ */
+export function windowDurationMinutes(
+  settings: { eveningWindowStart: string; eveningWindowEnd: string },
+): number {
+  const startMin = parseHHMM(settings.eveningWindowStart);
+  const endMin = parseHHMM(settings.eveningWindowEnd);
+  if (startMin === null || endMin === null) return 0;
+  if (startMin === endMin) return 0;
+
+  if (startMin < endMin) {
+    return endMin - startMin;
+  }
+  return (24 * 60 - startMin) + endMin;
+}
