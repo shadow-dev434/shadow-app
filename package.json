@@ -11,7 +11,8 @@
     "db:generate": "bun run prisma:dev generate",
     "db:migrate": "bun run prisma:dev migrate dev",
     "db:reset": "bun run prisma:dev migrate reset",
-    "prisma:dev": "dotenv -e .env.local -- prisma"
+    "prisma:dev": "dotenv -e .env.local -- prisma",
+    "prisma:studio": "dotenv -e .env.local -- prisma studio"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
