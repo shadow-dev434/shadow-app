@@ -347,11 +347,11 @@ async function buildUserContext(userId: string): Promise<string> {
 async function loadAllNonTerminalTasks(userId: string): Promise<TaskProjection[]> {
   return db.task.findMany({
     where: { userId, status: { notIn: ['completed', 'abandoned'] } },
-    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true },
+    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true },
   });
 }
 
-function loadTriageStateFromContext(contextJson: string | null): TriageState | null {
+export function loadTriageStateFromContext(contextJson: string | null): TriageState | null {
   if (!contextJson) return null;
   try {
     const parsed = JSON.parse(contextJson) as { triage?: TriageState };

@@ -1,4 +1,8 @@
 import { addDaysIso, endOfDayInZone } from './dates';
+import {
+  HIGH_AVOIDANCE_THRESHOLD,
+  RECENT_AVOIDANCE_HOURS,
+} from './config';
 
 /**
  * Default timezone for evening-review triage.
@@ -12,6 +16,9 @@ export type TaskProjection = {
   deadline: Date | null;
   avoidanceCount: number;
   createdAt: Date;
+  // Slice 5: required to make Layer 1 (recency-based avoidance ordering) deterministic.
+  // null = never avoided; concrete Date = last time the user evaded the task.
+  lastAvoidedAt: Date | null;
 };
 
 export type CandidateReason = 'deadline' | 'new' | 'carryover';
@@ -124,6 +131,34 @@ export function reasonsFromCandidates(
 // computeEffectiveList -- slice 4 contextJson "triage" namespace
 // ----------------------------------------------------------------------------
 
+/**
+ * Outcome registrato dal modello via mark_entry_discussed quando chiude
+ * la conversazione su un'entry. Side effects DB per outcome sono gestiti
+ * dal tool executor (Slice 5 commit 2):
+ *   'kept'           -> nessun side effect, solo update di TriageState.outcomes
+ *   'postponed'      -> Task.postponedCount += 1 (lastAvoidedAt invariato)
+ *   'cancelled'      -> Task.status = 'archived'
+ *   'parked'         -> nessun side effect; max MAX_PARKED_ENTRIES simultanee
+ *   'emotional_skip' -> LearningSignal{signalType:'task_emotional_skip'}
+ */
+export type EntryOutcome =
+  | 'kept'
+  | 'postponed'
+  | 'cancelled'
+  | 'parked'
+  | 'emotional_skip';
+
+/**
+ * Workspace di decomposizione corrente (transient, vive solo in TriageState).
+ * Solo level=1 viene persistito su Task.microSteps via approve_decomposition.
+ * Level 2 e 3 vivono solo in chat (decisione di prodotto Slice 5).
+ */
+export type DecompositionWorkspace = {
+  taskId: string;
+  level: 1 | 2 | 3;
+  proposedSteps: { text: string }[];
+};
+
 export type TriageState = {
   candidateTaskIds: string[];
   addedTaskIds: string[];
@@ -138,6 +173,24 @@ export type TriageState = {
   reasonsByTaskId: Record<string, CandidateReason>;
   computedAt: string;   // ISO
   clientDate: string;   // YYYY-MM-DD
+
+  // Slice 5 -- per-entry conversation state.
+  // Optional fields keep retro-compatibility with persisted Slice 4 contextJson
+  // (a thread opened pre-Slice-5 deploy and reloaded post-deploy still loads
+  // cleanly: helpers below handle absence via `?? defaults`).
+
+  /** Cursor: id of the entry currently under discussion, or null between entries. */
+  currentEntryId?: string | null;
+
+  /**
+   * Outcome map for entries the model has marked as discussed.
+   * Insertion order is meaningful: helpers (countParked iteration, modeContext
+   * listing of parked entries) rely on it. Do not reorder.
+   */
+  outcomes?: Record<string, EntryOutcome>;
+
+  /** Active decomposition workspace, or null when no decomposition is in progress. */
+  decomposition?: DecompositionWorkspace | null;
 };
 
 /**
@@ -225,4 +278,170 @@ export function removeCandidate(state: TriageState, taskId: string): TriageState
     ...state,
     excludedTaskIds: [...state.excludedTaskIds, taskId],
   };
+}
+
+// ----------------------------------------------------------------------------
+// Slice 5 -- per-entry conversation: cursor + outcomes + decomposition
+// ----------------------------------------------------------------------------
+
+/**
+ * Sets the cursor on a specific entry. No-op if:
+ *   - cursor is already pointing at taskId
+ *   - taskId is not in the effective list
+ *   - taskId already has a non-'parked' outcome (already processed)
+ *
+ * Allows re-attaching to a 'parked' task: parked is non-terminal, the user
+ * can return to it. The cursor change does NOT clear the existing outcome;
+ * only applyOutcome with a different value replaces 'parked' with a new one.
+ */
+export function setCurrentEntry(state: TriageState, taskId: string): TriageState {
+  if (state.currentEntryId === taskId) return state;
+  const effective = computeEffectiveList(state);
+  if (!effective.includes(taskId)) return state;
+  const outcomes = state.outcomes ?? {};
+  const existing = outcomes[taskId];
+  if (existing !== undefined && existing !== 'parked') return state;
+  return { ...state, currentEntryId: taskId };
+}
+
+export function clearCurrentEntry(state: TriageState): TriageState {
+  if (state.currentEntryId == null) return state;
+  return { ...state, currentEntryId: null };
+}
+
+/**
+ * Records an outcome for an entry. If the cursor was on this taskId, clears it.
+ * Idempotent on identical (taskId, outcome) UNLESS the cursor still points at
+ * taskId (in which case we return a new state with cursor=null).
+ *
+ * Allows any transition (parked -> kept, kept -> parked, etc.): the model
+ * can correct itself or revisit a parked entry to terminate it.
+ */
+export function applyOutcome(
+  state: TriageState,
+  taskId: string,
+  outcome: EntryOutcome,
+): TriageState {
+  const outcomes = state.outcomes ?? {};
+  const sameOutcome = outcomes[taskId] === outcome;
+  const cursorOnThis = state.currentEntryId === taskId;
+
+  if (sameOutcome && !cursorOnThis) return state;
+
+  const next: TriageState = { ...state };
+  if (!sameOutcome) {
+    next.outcomes = { ...outcomes, [taskId]: outcome };
+  }
+  if (cursorOnThis) {
+    next.currentEntryId = null;
+  }
+  return next;
+}
+
+/**
+ * Sets the active decomposition workspace. Idempotent on identical workspace
+ * (same taskId, level, and ordered list of step texts).
+ */
+export function setDecomposition(
+  state: TriageState,
+  workspace: DecompositionWorkspace,
+): TriageState {
+  const current = state.decomposition ?? null;
+  if (current !== null && sameWorkspace(current, workspace)) return state;
+  return { ...state, decomposition: workspace };
+}
+
+export function clearDecomposition(state: TriageState): TriageState {
+  if ((state.decomposition ?? null) === null) return state;
+  return { ...state, decomposition: null };
+}
+
+function sameWorkspace(a: DecompositionWorkspace, b: DecompositionWorkspace): boolean {
+  if (a.taskId !== b.taskId) return false;
+  if (a.level !== b.level) return false;
+  if (a.proposedSteps.length !== b.proposedSteps.length) return false;
+  for (let i = 0; i < a.proposedSteps.length; i++) {
+    if (a.proposedSteps[i].text !== b.proposedSteps[i].text) return false;
+  }
+  return true;
+}
+
+/**
+ * Counts entries currently parked (outcome === 'parked'). Used by the
+ * mark_entry_discussed executor (Slice 5 commit 2) to enforce
+ * MAX_PARKED_ENTRIES.
+ */
+export function countParked(state: TriageState): number {
+  const outcomes = state.outcomes ?? {};
+  let n = 0;
+  for (const id in outcomes) {
+    if (outcomes[id] === 'parked') n++;
+  }
+  return n;
+}
+
+/**
+ * True iff every effective entry has an outcome that is NOT 'parked'.
+ * Hook for the Slice 6 transition (plan-building): until this returns true,
+ * the review cannot proceed. Slice 5 only exposes the helper.
+ */
+export function allOutcomesAssigned(state: TriageState): boolean {
+  const effective = computeEffectiveList(state);
+  if (effective.length === 0) return true;
+  const outcomes = state.outcomes ?? {};
+  for (const id of effective) {
+    const o = outcomes[id];
+    if (o === undefined || o === 'parked') return false;
+  }
+  return true;
+}
+
+/**
+ * Layer 1 mitigation (D4 Slice 5): a task is "recently avoided" iff
+ * avoidanceCount >= threshold AND lastAvoidedAt within recentMs of nowMs.
+ * Both required. lastAvoidedAt === null ("never avoided") => not recent.
+ */
+export function isRecentlyAvoided(
+  task: { avoidanceCount: number; lastAvoidedAt: Date | null },
+  nowMs: number,
+  threshold: number = HIGH_AVOIDANCE_THRESHOLD,
+  recentMs: number = RECENT_AVOIDANCE_HOURS * 60 * 60 * 1000,
+): boolean {
+  if (task.avoidanceCount < threshold) return false;
+  if (task.lastAvoidedAt === null) return false;
+  return nowMs - task.lastAvoidedAt.getTime() < recentMs;
+}
+
+/**
+ * Stable partition of effectiveIds: not-recently-avoided first (preserving
+ * input order), then recently-avoided (preserving input order). Determines
+ * the order in which the model picks the next cursor.
+ *
+ * Decisione di prodotto Slice 5 (D4): Layer 1 e' deterministico server-side,
+ * non lasciato al modello. Layer 2 (apertura morbida) resta prompt-driven via
+ * il flag recentlyAvoided esposto nel modeContext.
+ *
+ * Tasks missing from taskMap are treated as not-recently-avoided (fail-open):
+ * meglio non degradare il flow se un id non si risolve.
+ */
+export function sortForCursorSelection<
+  T extends { avoidanceCount: number; lastAvoidedAt: Date | null },
+>(
+  effectiveIds: string[],
+  taskMap: Map<string, T>,
+  nowMs: number,
+  threshold: number = HIGH_AVOIDANCE_THRESHOLD,
+  recentMs: number = RECENT_AVOIDANCE_HOURS * 60 * 60 * 1000,
+): string[] {
+  const head: string[] = [];
+  const tail: string[] = [];
+  for (const id of effectiveIds) {
+    const t = taskMap.get(id);
+    if (t && isRecentlyAvoided(t, nowMs, threshold, recentMs)) {
+      tail.push(id);
+    } else {
+      head.push(id);
+    }
+  }
+  return [...head, ...tail];
 }

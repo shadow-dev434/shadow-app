@@ -76,6 +76,28 @@ export const TASK_SOURCE = {
 
 export type TaskSource = (typeof TASK_SOURCE)[keyof typeof TASK_SOURCE];
 
+// Cursor selection + outcomes (Slice 5, Area 3)
+// MAX_PARKED_ENTRIES is the hard cap on simultaneously parked entries within
+// a single review. Above the cap, the model must force closure of an open
+// parked entry before parking another (see prompts.ts evening_review section).
+
+export const MAX_PARKED_ENTRIES = 2;
+
+// Layer 1 mitigation for cursor ordering (avoidance-first with recency filter):
+// tasks with avoidanceCount >= HIGH_AVOIDANCE_THRESHOLD AND
+// lastAvoidedAt within RECENT_AVOIDANCE_HOURS get pushed to the tail of the
+// effective list when picking the next cursor. Deterministic, server-side.
+
+export const HIGH_AVOIDANCE_THRESHOLD = 3;
+export const RECENT_AVOIDANCE_HOURS = 24;
+
+// Opportunistic decomposition (Slice 5, Area 3.2)
+// Only level 1 is persisted to Task.microSteps. Levels 2-3 live in chat only.
+
+export const MAX_DECOMPOSITION_LEVEL = 3;
+export const MIN_MICRO_STEPS = 3;
+export const MAX_MICRO_STEPS = 5;
+
 // Review chat thread mode (matches ChatThread.mode)
 
 export const EVENING_REVIEW_MODE = 'evening_review' as const;

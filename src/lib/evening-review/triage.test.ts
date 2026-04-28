@@ -5,10 +5,25 @@ import {
   addCandidate,
   removeCandidate,
   reasonsFromCandidates,
+  setCurrentEntry,
+  clearCurrentEntry,
+  applyOutcome,
+  setDecomposition,
+  clearDecomposition,
+  countParked,
+  allOutcomesAssigned,
+  isRecentlyAvoided,
+  sortForCursorSelection,
   type Candidate,
+  type DecompositionWorkspace,
   type TaskProjection,
   type TriageState,
 } from './triage';
+// TEMP (Slice 5 commit 1): loadTriageStateFromContext lives in
+// orchestrator.ts. Will be moved to triage.ts as canonical location in
+// commit 2 (orchestrator integration rewrite). At that point this import
+// becomes `from './triage'` and the test stops depending on chat/orchestrator.
+import { loadTriageStateFromContext } from '@/lib/chat/orchestrator';
 
 const CLIENT_DATE = '2026-04-27';
 const DEADLINE_DAYS = 2;
@@ -23,6 +38,7 @@ function makeTask(overrides: Partial<TaskProjection>): TaskProjection {
     deadline: null,
     avoidanceCount: 0,
     createdAt: new Date('2026-04-20T10:00:00Z'),
+    lastAvoidedAt: null,
     ...overrides,
   };
 }
@@ -304,6 +320,7 @@ describe('reasonsFromCandidates', () => {
         deadline: null,
         avoidanceCount: 0,
         createdAt: new Date('2026-04-27T10:00:00Z'),
+        lastAvoidedAt: null,
         reason: 'deadline',
       },
       {
@@ -312,9 +329,447 @@ describe('reasonsFromCandidates', () => {
         deadline: null,
         avoidanceCount: 2,
         createdAt: new Date('2026-04-20T10:00:00Z'),
+        lastAvoidedAt: null,
         reason: 'carryover',
       },
     ];
     expect(reasonsFromCandidates(candidates)).toEqual({ a: 'deadline', b: 'carryover' });
+  });
+});
+
+// ----------------------------------------------------------------------------
+// Slice 5 -- per-entry conversation state
+// ----------------------------------------------------------------------------
+
+describe('setCurrentEntry', () => {
+  it('sets the cursor when taskId is in the effective list and unprocessed', () => {
+    const s = makeState({ candidateTaskIds: ['a', 'b'] });
+    const r = setCurrentEntry(s, 'a');
+    expect(r.currentEntryId).toBe('a');
+  });
+
+  it('is no-op when the cursor is already pointing at taskId (returns same ref)', () => {
+    const s = makeState({ candidateTaskIds: ['a'], currentEntryId: 'a' });
+    const r = setCurrentEntry(s, 'a');
+    expect(r).toBe(s);
+  });
+
+  it('is no-op when taskId is not in the effective list', () => {
+    const s = makeState({ candidateTaskIds: ['a'] });
+    const r = setCurrentEntry(s, 'unknown');
+    expect(r).toBe(s);
+  });
+
+  it('is no-op when taskId is in excludedTaskIds', () => {
+    const s = makeState({ candidateTaskIds: ['a', 'b'], excludedTaskIds: ['b'] });
+    const r = setCurrentEntry(s, 'b');
+    expect(r).toBe(s);
+  });
+
+  it('is no-op when taskId already has a non-parked outcome', () => {
+    const s = makeState({
+      candidateTaskIds: ['a', 'b'],
+      outcomes: { a: 'kept' },
+    });
+    const r = setCurrentEntry(s, 'a');
+    expect(r).toBe(s);
+  });
+
+  it('allows re-attaching to a parked task (parked is non-terminal)', () => {
+    const s = makeState({
+      candidateTaskIds: ['a', 'b'],
+      outcomes: { a: 'parked' },
+    });
+    const r = setCurrentEntry(s, 'a');
+    expect(r.currentEntryId).toBe('a');
+    expect(r.outcomes).toEqual({ a: 'parked' });
+  });
+
+  it('does not mutate the input state', () => {
+    const s = makeState({ candidateTaskIds: ['a'] });
+    const before = JSON.parse(JSON.stringify(s));
+    setCurrentEntry(s, 'a');
+    expect(s).toEqual(before);
+  });
+});
+
+describe('clearCurrentEntry', () => {
+  it('clears a non-null cursor', () => {
+    const s = makeState({ candidateTaskIds: ['a'], currentEntryId: 'a' });
+    const r = clearCurrentEntry(s);
+    expect(r.currentEntryId).toBeNull();
+  });
+
+  it('is no-op when cursor is already null (returns same ref)', () => {
+    const s = makeState({ candidateTaskIds: ['a'], currentEntryId: null });
+    const r = clearCurrentEntry(s);
+    expect(r).toBe(s);
+  });
+
+  it('is no-op when currentEntryId is undefined (returns same ref)', () => {
+    const s = makeState({ candidateTaskIds: ['a'] });
+    const r = clearCurrentEntry(s);
+    expect(r).toBe(s);
+  });
+});
+
+describe('applyOutcome', () => {
+  it('records each outcome value in the outcomes map', () => {
+    const outcomes: Array<['kept' | 'postponed' | 'cancelled' | 'parked' | 'emotional_skip']> = [
+      ['kept'], ['postponed'], ['cancelled'], ['parked'], ['emotional_skip'],
+    ];
+    for (const [o] of outcomes) {
+      const s = makeState({ candidateTaskIds: ['a'] });
+      const r = applyOutcome(s, 'a', o);
+      expect(r.outcomes).toEqual({ a: o });
+    }
+  });
+
+  it('clears the cursor when the outcome is recorded on the current entry', () => {
+    const s = makeState({ candidateTaskIds: ['a'], currentEntryId: 'a' });
+    const r = applyOutcome(s, 'a', 'kept');
+    expect(r.currentEntryId).toBeNull();
+    expect(r.outcomes).toEqual({ a: 'kept' });
+  });
+
+  it('does not clear the cursor when the outcome is recorded on a different entry', () => {
+    const s = makeState({ candidateTaskIds: ['a', 'b'], currentEntryId: 'b' });
+    const r = applyOutcome(s, 'a', 'kept');
+    expect(r.currentEntryId).toBe('b');
+  });
+
+  it('is idempotent on identical (taskId, outcome) when cursor is not on it (returns same ref)', () => {
+    const s = makeState({
+      candidateTaskIds: ['a'],
+      outcomes: { a: 'kept' },
+    });
+    const r = applyOutcome(s, 'a', 'kept');
+    expect(r).toBe(s);
+  });
+
+  it('clears the cursor even on idempotent outcome assignment if cursor is on the entry', () => {
+    const s = makeState({
+      candidateTaskIds: ['a'],
+      currentEntryId: 'a',
+      outcomes: { a: 'kept' },
+    });
+    const r = applyOutcome(s, 'a', 'kept');
+    expect(r).not.toBe(s);
+    expect(r.currentEntryId).toBeNull();
+    expect(r.outcomes).toEqual({ a: 'kept' });
+  });
+
+  it('allows transitioning from any outcome to any other outcome', () => {
+    let s = makeState({ candidateTaskIds: ['a'] });
+    s = applyOutcome(s, 'a', 'parked');
+    expect(s.outcomes).toEqual({ a: 'parked' });
+    s = applyOutcome(s, 'a', 'kept');
+    expect(s.outcomes).toEqual({ a: 'kept' });
+    s = applyOutcome(s, 'a', 'parked');
+    expect(s.outcomes).toEqual({ a: 'parked' });
+    s = applyOutcome(s, 'a', 'cancelled');
+    expect(s.outcomes).toEqual({ a: 'cancelled' });
+  });
+
+  it('preserves insertion order in the outcomes map across transitions', () => {
+    let s = makeState({ candidateTaskIds: ['a', 'b', 'c'] });
+    s = applyOutcome(s, 'a', 'parked');
+    s = applyOutcome(s, 'b', 'kept');
+    s = applyOutcome(s, 'c', 'parked');
+    expect(Object.keys(s.outcomes ?? {})).toEqual(['a', 'b', 'c']);
+    s = applyOutcome(s, 'b', 'cancelled');
+    expect(Object.keys(s.outcomes ?? {})).toEqual(['a', 'b', 'c']);
+  });
+
+  it('does not mutate the input state', () => {
+    const s = makeState({ candidateTaskIds: ['a'], outcomes: { a: 'parked' } });
+    const before = JSON.parse(JSON.stringify(s));
+    applyOutcome(s, 'a', 'kept');
+    expect(s).toEqual(before);
+  });
+});
+
+describe('setDecomposition / clearDecomposition', () => {
+  const wsA: DecompositionWorkspace = {
+    taskId: 'a',
+    level: 1,
+    proposedSteps: [{ text: 'apri il file' }, { text: 'leggi la prima riga' }],
+  };
+
+  it('sets a workspace from null', () => {
+    const s = makeState({ candidateTaskIds: ['a'] });
+    const r = setDecomposition(s, wsA);
+    expect(r.decomposition).toEqual(wsA);
+  });
+
+  it('replaces an existing workspace with a different taskId', () => {
+    const s = makeState({ candidateTaskIds: ['a', 'b'], decomposition: wsA });
+    const wsB: DecompositionWorkspace = {
+      taskId: 'b',
+      level: 1,
+      proposedSteps: [{ text: 'altro' }],
+    };
+    const r = setDecomposition(s, wsB);
+    expect(r.decomposition).toEqual(wsB);
+  });
+
+  it('replaces an existing workspace when level changes', () => {
+    const s = makeState({ candidateTaskIds: ['a'], decomposition: wsA });
+    const ws2: DecompositionWorkspace = { ...wsA, level: 2 };
+    const r = setDecomposition(s, ws2);
+    expect(r.decomposition?.level).toBe(2);
+  });
+
+  it('replaces an existing workspace when proposed steps differ', () => {
+    const s = makeState({ candidateTaskIds: ['a'], decomposition: wsA });
+    const ws2: DecompositionWorkspace = {
+      ...wsA,
+      proposedSteps: [{ text: 'apri il file' }, { text: 'cambiata' }],
+    };
+    const r = setDecomposition(s, ws2);
+    expect(r.decomposition?.proposedSteps[1].text).toBe('cambiata');
+  });
+
+  it('is idempotent on identical workspace (returns same ref)', () => {
+    const s = makeState({ candidateTaskIds: ['a'], decomposition: wsA });
+    const wsClone: DecompositionWorkspace = {
+      taskId: 'a',
+      level: 1,
+      proposedSteps: [{ text: 'apri il file' }, { text: 'leggi la prima riga' }],
+    };
+    const r = setDecomposition(s, wsClone);
+    expect(r).toBe(s);
+  });
+
+  it('clearDecomposition clears a non-null workspace', () => {
+    const s = makeState({ candidateTaskIds: ['a'], decomposition: wsA });
+    const r = clearDecomposition(s);
+    expect(r.decomposition).toBeNull();
+  });
+
+  it('clearDecomposition is no-op when decomposition is null (returns same ref)', () => {
+    const s = makeState({ candidateTaskIds: ['a'], decomposition: null });
+    const r = clearDecomposition(s);
+    expect(r).toBe(s);
+  });
+
+  it('clearDecomposition is no-op when decomposition is undefined (returns same ref)', () => {
+    const s = makeState({ candidateTaskIds: ['a'] });
+    const r = clearDecomposition(s);
+    expect(r).toBe(s);
+  });
+});
+
+describe('countParked', () => {
+  it('returns 0 when outcomes is undefined', () => {
+    const s = makeState({ candidateTaskIds: ['a'] });
+    expect(countParked(s)).toBe(0);
+  });
+
+  it('returns 0 when no entry is parked', () => {
+    const s = makeState({
+      candidateTaskIds: ['a', 'b'],
+      outcomes: { a: 'kept', b: 'cancelled' },
+    });
+    expect(countParked(s)).toBe(0);
+  });
+
+  it('counts parked entries', () => {
+    const s = makeState({
+      candidateTaskIds: ['a', 'b', 'c'],
+      outcomes: { a: 'parked', b: 'kept', c: 'parked' },
+    });
+    expect(countParked(s)).toBe(2);
+  });
+
+  it('parked -> kept transition decrements the count', () => {
+    let s = makeState({ candidateTaskIds: ['x', 'y'] });
+    s = setCurrentEntry(s, 'x');
+    s = applyOutcome(s, 'x', 'parked');
+    expect(countParked(s)).toBe(1);
+    s = setCurrentEntry(s, 'y');
+    s = applyOutcome(s, 'y', 'kept');
+    expect(countParked(s)).toBe(1);
+    s = setCurrentEntry(s, 'x');
+    expect(s.currentEntryId).toBe('x');
+    s = applyOutcome(s, 'x', 'kept');
+    expect(countParked(s)).toBe(0);
+  });
+});
+
+describe('allOutcomesAssigned', () => {
+  it('returns true when the effective list is empty', () => {
+    const s = makeState({});
+    expect(allOutcomesAssigned(s)).toBe(true);
+  });
+
+  it('returns false when at least one effective entry has no outcome', () => {
+    const s = makeState({
+      candidateTaskIds: ['a', 'b'],
+      outcomes: { a: 'kept' },
+    });
+    expect(allOutcomesAssigned(s)).toBe(false);
+  });
+
+  it('returns false when an effective entry is parked', () => {
+    const s = makeState({
+      candidateTaskIds: ['a', 'b'],
+      outcomes: { a: 'kept', b: 'parked' },
+    });
+    expect(allOutcomesAssigned(s)).toBe(false);
+  });
+
+  it('returns true when every effective entry has a non-parked outcome', () => {
+    const s = makeState({
+      candidateTaskIds: ['a', 'b'],
+      outcomes: { a: 'kept', b: 'cancelled' },
+    });
+    expect(allOutcomesAssigned(s)).toBe(true);
+  });
+
+  it('ignores outcomes for excluded entries', () => {
+    const s = makeState({
+      candidateTaskIds: ['a', 'b'],
+      excludedTaskIds: ['b'],
+      outcomes: { a: 'kept' },
+    });
+    expect(allOutcomesAssigned(s)).toBe(true);
+  });
+});
+
+describe('isRecentlyAvoided', () => {
+  const NOW = new Date('2026-04-27T20:00:00Z').getTime();
+  const HOUR = 3600 * 1000;
+
+  it('returns false when avoidanceCount is below threshold', () => {
+    const t = { avoidanceCount: 2, lastAvoidedAt: new Date(NOW - HOUR) };
+    expect(isRecentlyAvoided(t, NOW)).toBe(false);
+  });
+
+  it('returns false when lastAvoidedAt is null (never avoided)', () => {
+    const t = { avoidanceCount: 5, lastAvoidedAt: null };
+    expect(isRecentlyAvoided(t, NOW)).toBe(false);
+  });
+
+  it('returns false when avoidanceCount >= threshold but lastAvoidedAt is older than 24h', () => {
+    const t = { avoidanceCount: 3, lastAvoidedAt: new Date(NOW - 25 * HOUR) };
+    expect(isRecentlyAvoided(t, NOW)).toBe(false);
+  });
+
+  it('returns true when avoidanceCount >= threshold AND lastAvoidedAt within 24h', () => {
+    const t = { avoidanceCount: 3, lastAvoidedAt: new Date(NOW - 12 * HOUR) };
+    expect(isRecentlyAvoided(t, NOW)).toBe(true);
+  });
+
+  it('boundary: lastAvoidedAt exactly 24h ago is NOT recent (strict inequality)', () => {
+    const t = { avoidanceCount: 3, lastAvoidedAt: new Date(NOW - 24 * HOUR) };
+    expect(isRecentlyAvoided(t, NOW)).toBe(false);
+  });
+});
+
+describe('sortForCursorSelection', () => {
+  const NOW = new Date('2026-04-27T20:00:00Z').getTime();
+  const HOUR = 3600 * 1000;
+
+  function taskWithAvoidance(
+    id: string,
+    avoidanceCount: number,
+    lastAvoidedAt: Date | null,
+  ) {
+    return { id, avoidanceCount, lastAvoidedAt };
+  }
+
+  it('preserves the input order when no task is recently avoided', () => {
+    const tasks = [
+      taskWithAvoidance('a', 0, null),
+      taskWithAvoidance('b', 1, new Date(NOW - 5 * HOUR)),
+      taskWithAvoidance('c', 5, new Date(NOW - 30 * HOUR)),
+    ];
+    const map = new Map(tasks.map((t) => [t.id, t]));
+    expect(sortForCursorSelection(['a', 'b', 'c'], map, NOW)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('moves a recently-avoided task to the tail (D4 Layer 1 deterministic)', () => {
+    const tasks = [
+      taskWithAvoidance('a', 0, null),
+      taskWithAvoidance('b', 4, new Date(NOW - 2 * HOUR)),
+      taskWithAvoidance('c', 1, null),
+    ];
+    const map = new Map(tasks.map((t) => [t.id, t]));
+    expect(sortForCursorSelection(['a', 'b', 'c'], map, NOW)).toEqual(['a', 'c', 'b']);
+  });
+
+  it('preserves relative order among recently-avoided tasks', () => {
+    const tasks = [
+      taskWithAvoidance('a', 3, new Date(NOW - 1 * HOUR)),
+      taskWithAvoidance('b', 0, null),
+      taskWithAvoidance('c', 4, new Date(NOW - 2 * HOUR)),
+    ];
+    const map = new Map(tasks.map((t) => [t.id, t]));
+    expect(sortForCursorSelection(['a', 'b', 'c'], map, NOW)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('treats tasks missing from the map as not-recently-avoided (fail-open)', () => {
+    const tasks = [taskWithAvoidance('b', 4, new Date(NOW - 2 * HOUR))];
+    const map = new Map(tasks.map((t) => [t.id, t]));
+    expect(sortForCursorSelection(['unknown', 'b'], map, NOW)).toEqual(['unknown', 'b']);
+  });
+});
+
+describe('Slice 5 retro-compat with persisted Slice 4 contextJson', () => {
+  // contextJson scritto da Slice 4 non contiene currentEntryId, outcomes,
+  // decomposition. Carico una stringa-tipo di quel formato e verifico che
+  // i nuovi helper Slice 5 la gestiscano senza crash, con i default impliciti
+  // (no parked, no decomposition in progress, no cursor).
+
+  const slice4ContextJson = JSON.stringify({
+    triage: {
+      candidateTaskIds: ['a', 'b'],
+      addedTaskIds: [],
+      excludedTaskIds: [],
+      reasonsByTaskId: { a: 'deadline', b: 'new' },
+      computedAt: '2026-04-26T19:00:00.000Z',
+      clientDate: '2026-04-26',
+    },
+  });
+
+  it('loadTriageStateFromContext loads a Slice 4 contextJson without runtime error', () => {
+    const state = loadTriageStateFromContext(slice4ContextJson);
+    expect(state).not.toBeNull();
+    if (state === null) return;
+    expect(state.candidateTaskIds).toEqual(['a', 'b']);
+    expect(state.currentEntryId).toBeUndefined();
+    expect(state.outcomes).toBeUndefined();
+    expect(state.decomposition).toBeUndefined();
+  });
+
+  it('countParked returns 0 on a Slice 4 state (no outcomes field)', () => {
+    const state = loadTriageStateFromContext(slice4ContextJson);
+    expect(state).not.toBeNull();
+    if (state === null) return;
+    expect(countParked(state)).toBe(0);
+  });
+
+  it('setCurrentEntry works on a Slice 4 state without crashing', () => {
+    const state = loadTriageStateFromContext(slice4ContextJson);
+    expect(state).not.toBeNull();
+    if (state === null) return;
+    const r = setCurrentEntry(state, 'a');
+    expect(r.currentEntryId).toBe('a');
+  });
+
+  it('applyOutcome works on a Slice 4 state and initializes outcomes from undefined', () => {
+    const state = loadTriageStateFromContext(slice4ContextJson);
+    expect(state).not.toBeNull();
+    if (state === null) return;
+    const r = applyOutcome(state, 'a', 'kept');
+    expect(r.outcomes).toEqual({ a: 'kept' });
+  });
+
+  it('returns null on malformed or missing contextJson', () => {
+    expect(loadTriageStateFromContext(null)).toBeNull();
+    expect(loadTriageStateFromContext('')).toBeNull();
+    expect(loadTriageStateFromContext('{not valid json')).toBeNull();
+    expect(loadTriageStateFromContext('{}')).toBeNull();
   });
 });
