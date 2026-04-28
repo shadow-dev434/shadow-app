@@ -19,6 +19,10 @@ export type TaskProjection = {
   // Slice 5: required to make Layer 1 (recency-based avoidance ordering) deterministic.
   // null = never avoided; concrete Date = last time the user evaded the task.
   lastAvoidedAt: Date | null;
+  // Slice 5 commit 2: required for CURRENT_ENTRY_DETAIL block in modeContext
+  // (apertura variants di Area 3.1) and for postponed pattern detection.
+  source: string;          // 'manual' | 'gmail' | 'review_carryover' (Task.source)
+  postponedCount: number;  // counter incrementato da mark_entry_discussed con outcome='postponed'
 };
 
 export type CandidateReason = 'deadline' | 'new' | 'carryover';
@@ -184,14 +188,40 @@ export type TriageState = {
 
   /**
    * Outcome map for entries the model has marked as discussed.
-   * Insertion order is meaningful: helpers (countParked iteration, modeContext
-   * listing of parked entries) rely on it. Do not reorder.
+   * IMPORTANT: insertion order is semantically significant (display order
+   * in modeContext OUTCOMES_ASSIGNED block, listing of parked entries).
+   * Do NOT replace with Map<>, do NOT sort. Relying on ES2015+ spec for
+   * non-integer string key insertion order: cuid taskIds are non-integer,
+   * so order is preserved. countParked iteration also depends on this
+   * contract. If a future refactor proposes Map<>, promote to an explicit
+   * `outcomesOrder: string[]` companion field instead.
    */
   outcomes?: Record<string, EntryOutcome>;
 
   /** Active decomposition workspace, or null when no decomposition is in progress. */
   decomposition?: DecompositionWorkspace | null;
 };
+
+/**
+ * Parses a TriageState from a ChatThread.contextJson string. Returns null
+ * if the JSON is missing/empty/malformed or doesn't contain a triage namespace.
+ *
+ * Canonical location for this helper. Spostata da orchestrator.ts in Slice 5
+ * commit 2: la funzione opera su TriageState, vive logicamente nel suo
+ * dominio (evening-review). Orchestrator e test importano entrambi da qui.
+ */
+export function loadTriageStateFromContext(contextJson: string | null): TriageState | null {
+  if (!contextJson) return null;
+  try {
+    const parsed = JSON.parse(contextJson) as { triage?: TriageState };
+    if (parsed && typeof parsed === 'object' && parsed.triage) {
+      return parsed.triage;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 /**
  * Computes the current effective candidate list as

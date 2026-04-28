@@ -14,16 +14,12 @@ import {
   allOutcomesAssigned,
   isRecentlyAvoided,
   sortForCursorSelection,
+  loadTriageStateFromContext,
   type Candidate,
   type DecompositionWorkspace,
   type TaskProjection,
   type TriageState,
 } from './triage';
-// TEMP (Slice 5 commit 1): loadTriageStateFromContext lives in
-// orchestrator.ts. Will be moved to triage.ts as canonical location in
-// commit 2 (orchestrator integration rewrite). At that point this import
-// becomes `from './triage'` and the test stops depending on chat/orchestrator.
-import { loadTriageStateFromContext } from '@/lib/chat/orchestrator';
 
 const CLIENT_DATE = '2026-04-27';
 const DEADLINE_DAYS = 2;
@@ -39,6 +35,8 @@ function makeTask(overrides: Partial<TaskProjection>): TaskProjection {
     avoidanceCount: 0,
     createdAt: new Date('2026-04-20T10:00:00Z'),
     lastAvoidedAt: null,
+    source: 'manual',
+    postponedCount: 0,
     ...overrides,
   };
 }
@@ -321,6 +319,8 @@ describe('reasonsFromCandidates', () => {
         avoidanceCount: 0,
         createdAt: new Date('2026-04-27T10:00:00Z'),
         lastAvoidedAt: null,
+        source: 'manual',
+        postponedCount: 0,
         reason: 'deadline',
       },
       {
@@ -330,6 +330,8 @@ describe('reasonsFromCandidates', () => {
         avoidanceCount: 2,
         createdAt: new Date('2026-04-20T10:00:00Z'),
         lastAvoidedAt: null,
+        source: 'manual',
+        postponedCount: 0,
         reason: 'carryover',
       },
     ];

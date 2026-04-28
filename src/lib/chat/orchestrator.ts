@@ -12,6 +12,9 @@ import {
   selectCandidates,
   computeEffectiveList,
   reasonsFromCandidates,
+  loadTriageStateFromContext,
+  isRecentlyAvoided,
+  countParked,
   type Candidate,
   type TaskProjection,
   type TriageState,
@@ -19,6 +22,7 @@ import {
 import {
   DEADLINE_PROXIMITY_DAYS,
   CANDIDATE_LIST_SOFT_CAP,
+  MAX_PARKED_ENTRIES,
 } from '@/lib/evening-review/config';
 
 export type ChatMode =
@@ -118,7 +122,7 @@ export async function orchestrate(
       triageState = loaded;
       allTasks = await loadAllNonTerminalTasks(input.userId);
     }
-    modeContext = buildEveningReviewModeContext(triageState, isFirstTurn, allTasks);
+    modeContext = buildEveningReviewModeContext(triageState, isFirstTurn, allTasks, Date.now());
   }
 
   // ── 4. Build messages for LLM ────────────────────────────────────────
@@ -190,7 +194,7 @@ export async function orchestrate(
         });
         toolsExecuted.push({ name: tc.name, input: tc.input, result: result.data });
         toolResults.push({ toolCall: tc, result });
-        if (result.kind === 'mutator') {
+        if (result.kind === 'mutator' || result.kind === 'mutatorWithSideEffects') {
           pendingTriageState = result.newTriageState;
         }
       }
@@ -349,21 +353,8 @@ async function buildUserContext(userId: string): Promise<string> {
 async function loadAllNonTerminalTasks(userId: string): Promise<TaskProjection[]> {
   return db.task.findMany({
     where: { userId, status: { notIn: terminalTaskStatuses() } },
-    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true },
+    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true, source: true, postponedCount: true },
   });
-}
-
-export function loadTriageStateFromContext(contextJson: string | null): TriageState | null {
-  if (!contextJson) return null;
-  try {
-    const parsed = JSON.parse(contextJson) as { triage?: TriageState };
-    if (parsed && typeof parsed === 'object' && parsed.triage) {
-      return parsed.triage;
-    }
-  } catch {
-    return null;
-  }
-  return null;
 }
 
 async function initEveningReview(
@@ -386,6 +377,13 @@ async function initEveningReview(
     reasonsByTaskId: reasonsFromCandidates(candidates),
     computedAt: new Date().toISOString(),
     clientDate,
+    // Slice 5 commit 2: defaults espliciti per i campi opzionali introdotti
+    // in commit 1. I helper li trattano come undefined/empty in ogni caso
+    // (retro-compat con contextJson Slice 4), ma esplicitarli qui rende
+    // l'init coerente con la nuova estensione del tipo.
+    currentEntryId: null,
+    outcomes: {},
+    decomposition: null,
   };
 
   return { triageState, allTasks };
@@ -404,6 +402,7 @@ function buildEveningReviewModeContext(
   triageState: TriageState,
   isFirstTurn: boolean,
   allTasks: TaskProjection[],
+  nowMs: number,
 ): string {
   const taskMap = new Map(allTasks.map((t) => [t.id, t]));
 
@@ -445,6 +444,62 @@ function buildEveningReviewModeContext(
     lines.push(...outLines);
   } else {
     lines.push('Inbox-fuori-triage: (vuoto)');
+  }
+
+  // Slice 5 commit 2: per-entry conversation state.
+  lines.push('');
+  const currentId = triageState.currentEntryId ?? null;
+  lines.push(`CURRENT_ENTRY=${currentId ?? 'none'}`);
+  if (currentId !== null) {
+    const t = taskMap.get(currentId);
+    if (t) {
+      const lastAvoidedHoursAgo = t.lastAvoidedAt
+        ? Math.floor((nowMs - t.lastAvoidedAt.getTime()) / 3_600_000)
+        : null;
+      const recentlyAvoided = isRecentlyAvoided(t, nowMs);
+      // Concatenazione esplicita: la stringa runtime resta su una sola linea
+      // dentro il prompt finale (un template literal multi-riga del codice
+      // sorgente includerebbe \n + indent nella stringa).
+      const detail =
+        `CURRENT_ENTRY_DETAIL: source=${t.source}, ` +
+        `avoidanceCount=${t.avoidanceCount}, ` +
+        `postponedCount=${t.postponedCount}, ` +
+        `lastAvoidedHoursAgo=${lastAvoidedHoursAgo ?? 'never'}, ` +
+        `recentlyAvoided=${recentlyAvoided}`;
+      lines.push(detail);
+    } else {
+      lines.push('CURRENT_ENTRY_DETAIL: (task not resolved in taskMap)');
+    }
+  }
+
+  lines.push('');
+  const outcomes = triageState.outcomes ?? {};
+  const outcomeIds = Object.keys(outcomes);
+  if (outcomeIds.length > 0) {
+    lines.push('OUTCOMES_ASSIGNED:');
+    for (const id of outcomeIds) {
+      const t = taskMap.get(id);
+      const title = t?.title ?? '(unknown)';
+      lines.push(`- [id=${id}] (${title}): ${outcomes[id]}`);
+    }
+  } else {
+    lines.push('OUTCOMES_ASSIGNED: (none)');
+  }
+
+  lines.push('');
+  // Source of truth singola per il count: countParked di triage.ts.
+  // parkedIds calcolati separatamente filtrando outcomeIds (insertion order
+  // del Record JS preservato; vedi commento sul tipo TriageState.outcomes).
+  const parkedCount = countParked(triageState);
+  const parkedIds = outcomeIds.filter((id) => outcomes[id] === 'parked');
+  lines.push(`PARKED_COUNT=${parkedCount}/${MAX_PARKED_ENTRIES}`);
+  if (parkedIds.length > 0) {
+    lines.push('PARKED_TASKS:');
+    for (const id of parkedIds) {
+      const t = taskMap.get(id);
+      const title = t?.title ?? '(unknown)';
+      lines.push(`- [id=${id}] (${title})`);
+    }
   }
 
   return lines.join('\n');
