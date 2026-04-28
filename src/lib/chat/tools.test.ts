@@ -369,3 +369,128 @@ describe('executeTool: mark_entry_discussed', () => {
     expect(db.task.findFirst).not.toHaveBeenCalled();
   });
 });
+
+// ── approve_decomposition ────────────────────────────────────────────────
+
+describe('executeTool: approve_decomposition', () => {
+  // Helper locale: input array di {text} con N step. Coerente con shape che
+  // il modello passera' (executor genera id e default duration).
+  function steps(n: number): Array<{ text: string }> {
+    return Array.from({ length: n }, (_, i) => ({ text: `step ${i + 1}` }));
+  }
+
+  it('writes microSteps to DB on success and returns mutatorWithSideEffects', async () => {
+    mockTaskOwned('a', 'Task A');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.task.update).mockResolvedValue({ id: 'a' } as any);
+    const state = makeState();
+    const result = await executeTool(
+      'approve_decomposition',
+      { entryId: 'a', microSteps: steps(3) },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutatorWithSideEffects');
+    if (result.kind !== 'mutatorWithSideEffects') return;
+    expect(result.success).toBe(true);
+    expect((result.data as { stepCount: number }).stepCount).toBe(3);
+    expect((result.data as { action: string }).action).toBe('decomposition_approved');
+    expect(result.newTriageState).toBe(state); // executor non muta state in 3a
+
+    expect(db.task.update).toHaveBeenCalledTimes(1);
+    const updateArg = vi.mocked(db.task.update).mock.calls[0][0];
+    expect(updateArg.where).toEqual({ id: 'a' });
+    // microSteps deve essere una stringa JSON-valida che parse a array
+    // di lunghezza pari al N richiesto, con id auto, done=false,
+    // estimatedSeconds=0.
+    const dataAny = updateArg.data as { microSteps: string };
+    const parsed = JSON.parse(dataAny.microSteps) as Array<{ id: string; text: string; done: boolean; estimatedSeconds: number }>;
+    expect(parsed).toHaveLength(3);
+    for (let i = 0; i < parsed.length; i++) {
+      expect(parsed[i].id).toMatch(/^step_/);
+      expect(parsed[i].text).toBe(`step ${i + 1}`);
+      expect(parsed[i].done).toBe(false);
+      expect(parsed[i].estimatedSeconds).toBe(0);
+    }
+  });
+
+  it('fails with sideEffect when task is not owned (findFirst null esplicito)', async () => {
+    vi.mocked(db.task.findFirst).mockResolvedValue(null);
+    const state = makeState();
+    const result = await executeTool(
+      'approve_decomposition',
+      { entryId: 'unknown', microSteps: steps(3) },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/not found|not owned/);
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+
+  it('fails with sideEffect when triageState is missing (context undefined)', async () => {
+    const result = await executeTool(
+      'approve_decomposition',
+      { entryId: 'a', microSteps: steps(3) },
+      'user1',
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Triage state missing/i);
+    expect(db.task.findFirst).not.toHaveBeenCalled();
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+
+  it('fails when length is below MIN_MICRO_STEPS (=3)', async () => {
+    const state = makeState();
+    const result = await executeTool(
+      'approve_decomposition',
+      { entryId: 'a', microSteps: steps(2) },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Too few steps/);
+    expect(result.data).toEqual({ provided: 2, min: 3 });
+    expect(db.task.findFirst).not.toHaveBeenCalled();
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+
+  it('fails when length is above MAX_MICRO_STEPS (=5)', async () => {
+    const state = makeState();
+    const result = await executeTool(
+      'approve_decomposition',
+      { entryId: 'a', microSteps: steps(6) },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Too many steps/);
+    expect(result.data).toEqual({ provided: 6, max: 5 });
+    expect(db.task.findFirst).not.toHaveBeenCalled();
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+
+  it('fails when microSteps is not an array', async () => {
+    const state = makeState();
+    const result = await executeTool(
+      'approve_decomposition',
+      { entryId: 'a', microSteps: 'not an array' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/microSteps must be an array/);
+    expect(db.task.findFirst).not.toHaveBeenCalled();
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+});

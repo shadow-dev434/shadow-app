@@ -15,6 +15,7 @@ import {
   loadTriageStateFromContext,
   isRecentlyAvoided,
   countParked,
+  hasMicroSteps,
   type Candidate,
   type TaskProjection,
   type TriageState,
@@ -23,6 +24,7 @@ import {
   DEADLINE_PROXIMITY_DAYS,
   CANDIDATE_LIST_SOFT_CAP,
   MAX_PARKED_ENTRIES,
+  POSTPONE_PATTERN_THRESHOLD,
 } from '@/lib/evening-review/config';
 
 export type ChatMode =
@@ -353,7 +355,7 @@ async function buildUserContext(userId: string): Promise<string> {
 async function loadAllNonTerminalTasks(userId: string): Promise<TaskProjection[]> {
   return db.task.findMany({
     where: { userId, status: { notIn: terminalTaskStatuses() } },
-    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true, source: true, postponedCount: true },
+    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true, source: true, postponedCount: true, microSteps: true },
   });
 }
 
@@ -460,12 +462,16 @@ function buildEveningReviewModeContext(
       // Concatenazione esplicita: la stringa runtime resta su una sola linea
       // dentro il prompt finale (un template literal multi-riga del codice
       // sorgente includerebbe \n + indent nella stringa).
+      const recentlyPostponed = t.postponedCount >= POSTPONE_PATTERN_THRESHOLD;
+      const hasExistingMicroSteps = hasMicroSteps(t);
       const detail =
         `CURRENT_ENTRY_DETAIL: source=${t.source}, ` +
         `avoidanceCount=${t.avoidanceCount}, ` +
         `postponedCount=${t.postponedCount}, ` +
         `lastAvoidedHoursAgo=${lastAvoidedHoursAgo ?? 'never'}, ` +
-        `recentlyAvoided=${recentlyAvoided}`;
+        `recentlyAvoided=${recentlyAvoided}, ` +
+        `recentlyPostponed=${recentlyPostponed}, ` +
+        `hasExistingMicroSteps=${hasExistingMicroSteps}`;
       lines.push(detail);
     } else {
       lines.push('CURRENT_ENTRY_DETAIL: (task not resolved in taskMap)');

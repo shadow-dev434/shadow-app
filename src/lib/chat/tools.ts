@@ -27,6 +27,7 @@
  *   (commit 3).
  */
 
+import { randomUUID } from 'node:crypto';
 import { db } from '@/lib/db';
 import type { LLMTool } from '@/lib/llm/client';
 import {
@@ -39,9 +40,13 @@ import {
   type EntryOutcome,
   type TriageState,
 } from '@/lib/evening-review/triage';
-import { MAX_PARKED_ENTRIES } from '@/lib/evening-review/config';
+import {
+  MAX_PARKED_ENTRIES,
+  MIN_MICRO_STEPS,
+  MAX_MICRO_STEPS,
+} from '@/lib/evening-review/config';
 // Task in stato terminale (esclusi dalle viste live).
-import { terminalTaskStatuses } from '@/lib/types/shadow';
+import { terminalTaskStatuses, type MicroStep } from '@/lib/types/shadow';
 
 export const CHAT_TOOLS: LLMTool[] = [
   {
@@ -142,6 +147,29 @@ export const EVENING_REVIEW_TOOLS: LLMTool[] = [
       required: ['entryId', 'outcome'],
     },
   },
+  {
+    name: 'approve_decomposition',
+    description:
+      'Persiste una decomposizione di micro-step approvata dall\'utente sul task corrente. Chiamala quando l\'utente conferma esplicitamente la lista di step proposta. Range: 3-5 step. Sovrascrive eventuali microSteps esistenti senza warning -- il prompt deve aver gia\' chiesto conferma all\'utente prima di chiamare questo tool.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        entryId: { type: 'string', description: 'ID del task per cui persistere la decomposizione' },
+        microSteps: {
+          type: 'array',
+          description: 'Array di micro-step approvati. Ogni elemento ha solo un campo text (l\'executor genera id e default duration). Range length: 3-5.',
+          items: {
+            type: 'object',
+            properties: {
+              text: { type: 'string', description: 'Frase imperativa concreta del micro-step' },
+            },
+            required: ['text'],
+          },
+        },
+      },
+      required: ['entryId', 'microSteps'],
+    },
+  },
 ];
 
 /**
@@ -216,6 +244,8 @@ export async function executeTool(
         return await executeSetCurrentEntry(input, userId, context?.triageState);
       case 'mark_entry_discussed':
         return await executeMarkEntryDiscussed(input, userId, context?.triageState);
+      case 'approve_decomposition':
+        return await executeApproveDecomposition(input, userId, context?.triageState);
       default:
         return { kind: 'sideEffect', success: false, error: `Unknown tool: ${toolName}` };
     }
@@ -576,5 +606,108 @@ async function executeMarkEntryDiscussed(
     success: true,
     data: { entryId, taskTitle: task.title, outcome, action: 'marked_discussed' },
     newTriageState: newState,
+  };
+}
+
+async function executeApproveDecomposition(
+  input: Record<string, unknown>,
+  userId: string,
+  triageState: TriageState | undefined,
+): Promise<ToolExecutionResult> {
+  if (!triageState) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'Triage state missing (tool called outside evening_review context)',
+    };
+  }
+
+  const entryId = String(input.entryId ?? '').trim();
+  if (!entryId) {
+    return { kind: 'sideEffect', success: false, error: 'entryId is required' };
+  }
+
+  const rawSteps = input.microSteps;
+  if (!Array.isArray(rawSteps)) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'microSteps must be an array of {text}',
+    };
+  }
+  if (rawSteps.length < MIN_MICRO_STEPS) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      data: { provided: rawSteps.length, min: MIN_MICRO_STEPS },
+      error: `Too few steps: ${rawSteps.length} provided, minimum ${MIN_MICRO_STEPS}.`,
+    };
+  }
+  if (rawSteps.length > MAX_MICRO_STEPS) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      data: { provided: rawSteps.length, max: MAX_MICRO_STEPS },
+      error: `Too many steps: ${rawSteps.length} provided, maximum ${MAX_MICRO_STEPS}.`,
+    };
+  }
+
+  // Verify ownership.
+  const task = await db.task.findFirst({
+    where: { id: entryId, userId },
+    select: { id: true, title: true },
+  });
+  if (!task) {
+    return { kind: 'sideEffect', success: false, error: `Task ${entryId} not found or not owned by user` };
+  }
+
+  // Validazione e normalizzazione: il modello passa solo {text}, l'executor
+  // aggiunge id auto-generato, done=false, estimatedSeconds=0 (default).
+  // Sovrascrittura totale di Task.microSteps esistenti senza warning: il
+  // guard semantico ("hai gia' una decomposizione, partiamo da quella o
+  // ricominciamo?") vive nel prompt 3b. Vedi commit message per scope v1.
+  const fullSteps: MicroStep[] = [];
+  for (const raw of rawSteps) {
+    if (typeof raw !== 'object' || raw === null) {
+      return {
+        kind: 'sideEffect',
+        success: false,
+        error: 'microSteps items must be objects with a `text` field',
+      };
+    }
+    const obj = raw as Record<string, unknown>;
+    if (typeof obj.text !== 'string' || obj.text.trim() === '') {
+      return {
+        kind: 'sideEffect',
+        success: false,
+        error: 'microSteps items must have a non-empty `text` string',
+      };
+    }
+    fullSteps.push({
+      id: `step_${randomUUID()}`,
+      text: obj.text.trim(),
+      done: false,
+      estimatedSeconds: 0,
+    });
+  }
+
+  await db.task.update({
+    where: { id: entryId },
+    data: { microSteps: JSON.stringify(fullSteps) },
+  });
+
+  // executor non muta state in 3a: il workspace di decomposizione
+  // (triageState.decomposition) e' commit 3b territory; per ora ritorniamo
+  // identita' su newTriageState.
+  return {
+    kind: 'mutatorWithSideEffects',
+    success: true,
+    data: {
+      entryId,
+      taskTitle: task.title,
+      stepCount: fullSteps.length,
+      action: 'decomposition_approved',
+    },
+    newTriageState: triageState,
   };
 }

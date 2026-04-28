@@ -3,6 +3,7 @@ import {
   HIGH_AVOIDANCE_THRESHOLD,
   RECENT_AVOIDANCE_HOURS,
 } from './config';
+import type { MicroStep } from '@/lib/types/shadow';
 
 /**
  * Default timezone for evening-review triage.
@@ -23,6 +24,10 @@ export type TaskProjection = {
   // (apertura variants di Area 3.1) and for postponed pattern detection.
   source: string;          // 'manual' | 'gmail' | 'review_carryover' (Task.source)
   postponedCount: number;  // counter incrementato da mark_entry_discussed con outcome='postponed'
+  // Slice 5 commit 3a: JSON-encoded MicroStep[] (default '[]'). Letto da
+  // hasMicroSteps per esporre hasExistingMicroSteps in CURRENT_ENTRY_DETAIL.
+  // Scritto da approve_decomposition con sovrascrittura totale (no merge).
+  microSteps: string;
 };
 
 export type CandidateReason = 'deadline' | 'new' | 'carryover';
@@ -474,4 +479,53 @@ export function sortForCursorSelection<
     }
   }
   return [...head, ...tail];
+}
+
+// ----------------------------------------------------------------------------
+// Slice 5 commit 3a -- microSteps parsing helpers
+// ----------------------------------------------------------------------------
+
+/**
+ * Parses Task.microSteps JSON to a runtime-safe MicroStep[]. Filters out
+ * malformed/null/primitive entries instead of throwing.
+ *
+ * Edge cases coperti:
+ * - json vuoto o null-ish -> []
+ * - JSON non parseable -> []
+ * - JSON parsa a non-array (es. oggetto, primitivo) -> []
+ * - array con elementi non-object o null -> filtrati silenziosamente
+ *
+ * Il filter usa cast esplicito a Record<string, unknown> dopo aver escluso
+ * null per evitare TypeError su accesso ai campi (typeof null === 'object').
+ */
+export function parseMicroSteps(json: string): MicroStep[] {
+  if (!json) return [];
+  try {
+    const parsed: unknown = JSON.parse(json);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((s): s is MicroStep => {
+      if (typeof s !== 'object' || s === null) return false;
+      const obj = s as Record<string, unknown>;
+      return (
+        typeof obj.id === 'string' &&
+        typeof obj.text === 'string' &&
+        typeof obj.done === 'boolean' &&
+        typeof obj.estimatedSeconds === 'number'
+      );
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * True iff Task.microSteps contiene almeno uno step ben formato.
+ * Usato da buildEveningReviewModeContext per esporre hasExistingMicroSteps
+ * nel CURRENT_ENTRY_DETAIL block.
+ */
+export function hasMicroSteps(task: { microSteps: string }): boolean {
+  // Fast path: stringa vuota o '[]' (default del campo) = nessuno step.
+  // Evita JSON.parse nel caso comunissimo "task senza decomposizione".
+  if (!task.microSteps || task.microSteps === '[]') return false;
+  return parseMicroSteps(task.microSteps).length > 0;
 }

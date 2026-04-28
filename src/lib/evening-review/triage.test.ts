@@ -15,6 +15,8 @@ import {
   isRecentlyAvoided,
   sortForCursorSelection,
   loadTriageStateFromContext,
+  parseMicroSteps,
+  hasMicroSteps,
   type Candidate,
   type DecompositionWorkspace,
   type TaskProjection,
@@ -37,6 +39,7 @@ function makeTask(overrides: Partial<TaskProjection>): TaskProjection {
     lastAvoidedAt: null,
     source: 'manual',
     postponedCount: 0,
+    microSteps: '[]',
     ...overrides,
   };
 }
@@ -321,6 +324,7 @@ describe('reasonsFromCandidates', () => {
         lastAvoidedAt: null,
         source: 'manual',
         postponedCount: 0,
+        microSteps: '[]',
         reason: 'deadline',
       },
       {
@@ -332,6 +336,7 @@ describe('reasonsFromCandidates', () => {
         lastAvoidedAt: null,
         source: 'manual',
         postponedCount: 0,
+        microSteps: '[]',
         reason: 'carryover',
       },
     ];
@@ -773,5 +778,68 @@ describe('Slice 5 retro-compat with persisted Slice 4 contextJson', () => {
     expect(loadTriageStateFromContext('')).toBeNull();
     expect(loadTriageStateFromContext('{not valid json')).toBeNull();
     expect(loadTriageStateFromContext('{}')).toBeNull();
+  });
+});
+
+// ----------------------------------------------------------------------------
+// Slice 5 commit 3a -- microSteps parsing helpers
+// ----------------------------------------------------------------------------
+
+describe('parseMicroSteps', () => {
+  it('parses a valid JSON array of well-formed MicroStep into MicroStep[]', () => {
+    const json = JSON.stringify([
+      { id: 's1', text: 'apri il file', done: false, estimatedSeconds: 30 },
+      { id: 's2', text: 'leggi la prima riga', done: true, estimatedSeconds: 60 },
+    ]);
+    expect(parseMicroSteps(json)).toEqual([
+      { id: 's1', text: 'apri il file', done: false, estimatedSeconds: 30 },
+      { id: 's2', text: 'leggi la prima riga', done: true, estimatedSeconds: 60 },
+    ]);
+  });
+
+  it('returns [] on malformed JSON without throwing', () => {
+    expect(parseMicroSteps('{not valid json')).toEqual([]);
+  });
+
+  it('returns [] on empty string and on JSON empty array', () => {
+    expect(parseMicroSteps('')).toEqual([]);
+    expect(parseMicroSteps('[]')).toEqual([]);
+  });
+
+  it('returns [] when JSON parses to a non-array (object, primitive)', () => {
+    expect(parseMicroSteps(JSON.stringify({ id: 's1' }))).toEqual([]);
+    expect(parseMicroSteps('42')).toEqual([]);
+    expect(parseMicroSteps('"a string"')).toEqual([]);
+    expect(parseMicroSteps('null')).toEqual([]);
+  });
+
+  it('filters out non-object/null/primitive entries without throwing', () => {
+    // JSON.stringify converte undefined a null in array; ne mettiamo solo
+    // valori che JSON sa serializzare per testare il guard runtime.
+    const dirty = JSON.stringify([
+      null,
+      42,
+      'string',
+      { id: 's1', text: 'valid', done: false, estimatedSeconds: 30 },
+      { id: 's2' }, // shape incompleta
+      { id: 1, text: 'wrong types', done: 'no', estimatedSeconds: '30' },
+    ]);
+    expect(parseMicroSteps(dirty)).toEqual([
+      { id: 's1', text: 'valid', done: false, estimatedSeconds: 30 },
+    ]);
+  });
+});
+
+describe('hasMicroSteps', () => {
+  it('returns false on default empty value (\'[]\') without parsing', () => {
+    expect(hasMicroSteps({ microSteps: '[]' })).toBe(false);
+    expect(hasMicroSteps({ microSteps: '' })).toBe(false);
+  });
+
+  it('returns true when microSteps contains at least one well-formed step', () => {
+    const json = JSON.stringify([
+      { id: 's1', text: 'apri', done: false, estimatedSeconds: 30 },
+    ]);
+    expect(hasMicroSteps({ microSteps: json })).toBe(true);
   });
 });
