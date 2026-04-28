@@ -197,6 +197,45 @@ implementata end-to-end.
 
 ---
 
+### 🟡 Task 11 — Body doubling voice-first
+
+Quando l'utente tappa un task della lista per "farlo con Shadow", si
+apre una modalità body doubling vocale: un avatar 1D animato (figura
+semplice con stati: in ascolto / parla / pensa / pausa) parla via
+TTS streaming, l'utente risponde via microfono → STT streaming. Si
+combina con la decomposizione progressiva di Task 5 Slice 5
+(livelli 2-3 in chat, non persistiti) per arrivare al "primo passo
+che non puoi non fare". Modalità di chat coinvolta: `focus_companion`
+(esistente nello schema).
+
+**Razionale**: body doubling è pattern noto in letteratura ADHD
+(Focusmate, Caveday). Un avatar voice-first replica leggerezza-
+presenza senza il peso sociale di una persona vera, e funziona nei
+momenti in cui un partner umano non è disponibile.
+
+**Stack tecnico**: STT (Deepgram o OpenAI Whisper streaming) +
+Claude API + TTS (ElevenLabs streaming, voce italiana) + avatar
+SVG/Lottie con 4 stati. Costo stimato: ~3-5 cent/min utente attivo.
+Lavoro stimato: 2-3 settimane MVP, più 1-2 settimane iterazione UX
+su feedback tester.
+
+**Dipendenze**:
+- Task 5 chiuso (decomposizione persistita su `Task.microSteps`
+  esistente — Slice 5 garantisce compatibilità)
+- Beta v1 lanciata e feedback raccolto sulla review testuale
+- Decisione PWA (Task 3.7) — body doubling su mobile è caso d'uso
+  primario, va capito che cornice di app stiamo costruendo
+
+**Acceptance**: un task decomposto della lista può essere "fatto in
+body doubling" → sessione voce-first di N minuti che porta l'utente
+a iniziare lo step 1 e (idealmente) completarlo.
+
+**Quando**: post-beta v1, dopo aver visto se la chat testuale di
+review serale funziona davvero per i primi tester. **Non bloccante
+per beta v1.**
+
+---
+
 ## Come lavorare su un task
 
 1. Aprire Claude Code: `claude` in `C:\shadow-app`
