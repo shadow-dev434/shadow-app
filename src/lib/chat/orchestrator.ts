@@ -6,6 +6,8 @@ import { db } from '@/lib/db';
 import { callLLM, type LLMMessage } from '@/lib/llm/client';
 import { buildSystemPrompt } from './prompts';
 import { executeTool, getToolsForMode, type ToolExecutionResult } from './tools';
+// Task in stato terminale (esclusi dalle viste live).
+import { terminalTaskStatuses } from '@/lib/types/shadow';
 import {
   selectCandidates,
   computeEffectiveList,
@@ -346,7 +348,7 @@ async function buildUserContext(userId: string): Promise<string> {
 
 async function loadAllNonTerminalTasks(userId: string): Promise<TaskProjection[]> {
   return db.task.findMany({
-    where: { userId, status: { notIn: ['completed', 'abandoned'] } },
+    where: { userId, status: { notIn: terminalTaskStatuses() } },
     select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true },
   });
 }

@@ -20,7 +20,8 @@ import {
   type NudgeContext,
 } from '@/lib/engines/nudge-engine';
 import { getAdaptiveScore, dbRecordToProfileData } from '@/lib/engines/learning-engine';
-import type { AdaptiveProfileData } from '@/lib/types/shadow';
+// Task in stato terminale (esclusi dalle viste live).
+import { terminalTaskStatuses, type AdaptiveProfileData } from '@/lib/types/shadow';
 
 // ── Helper: Get or create adaptive profile ───────────────────────────────────
 
@@ -161,7 +162,7 @@ export async function POST(request: NextRequest) {
         }
 
         const tasks = await db.task.findMany({
-          where: { userId, status: { notIn: ['completed', 'abandoned'] } },
+          where: { userId, status: { notIn: terminalTaskStatuses() } },
           take: 20,
           orderBy: { createdAt: 'desc' },
         });
@@ -239,7 +240,7 @@ export async function POST(request: NextRequest) {
         }
 
         const tasks = await db.task.findMany({
-          where: { userId, status: { notIn: ['completed', 'abandoned'] } },
+          where: { userId, status: { notIn: terminalTaskStatuses() } },
           take: 20,
         });
 
@@ -414,7 +415,7 @@ export async function GET(request: NextRequest) {
     }
 
     const tasks = await db.task.findMany({
-      where: { userId, status: { notIn: ['completed', 'abandoned'] } },
+      where: { userId, status: { notIn: terminalTaskStatuses() } },
       take: 20,
       orderBy: { createdAt: 'desc' },
     });

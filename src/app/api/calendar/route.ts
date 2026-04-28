@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+// Task in stato terminale (esclusi dalle viste live).
+import { terminalTaskStatuses } from '@/lib/types/shadow';
 
 // GET /api/calendar — Get calendar events (from tasks with deadlines or calendarEventId)
 export async function GET(req: NextRequest) {
@@ -15,7 +17,7 @@ export async function GET(req: NextRequest) {
           { deadline: { not: null } },
           { calendarEventId: { not: '' } },
         ],
-        status: { notIn: ['completed', 'abandoned'] },
+        status: { notIn: terminalTaskStatuses() },
       },
       orderBy: { deadline: 'asc' },
     });

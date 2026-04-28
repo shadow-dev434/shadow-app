@@ -21,6 +21,8 @@ import {
   removeCandidate,
   type TriageState,
 } from '@/lib/evening-review/triage';
+// Task in stato terminale (esclusi dalle viste live).
+import { terminalTaskStatuses } from '@/lib/types/shadow';
 
 export const CHAT_TOOLS: LLMTool[] = [
   {
@@ -217,7 +219,7 @@ async function executeGetTodayTasks(userId: string): Promise<ToolExecutionResult
   const tasks = await db.task.findMany({
     where: {
       userId,
-      status: { notIn: ['completed', 'abandoned'] },
+      status: { notIn: terminalTaskStatuses() },
     },
     orderBy: [
       { priorityScore: 'desc' },

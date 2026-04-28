@@ -11,7 +11,31 @@ export type Decision =
   | 'eliminate'
   | 'unclassified';
 
-export type TaskStatus = 'inbox' | 'planned' | 'active' | 'in_progress' | 'completed' | 'abandoned';
+export type TaskStatus = 'inbox' | 'planned' | 'active' | 'in_progress' | 'completed' | 'abandoned' | 'archived';
+
+export type TerminalTaskStatus = 'completed' | 'abandoned' | 'archived';
+
+/**
+ * Stati terminali del Task: il task non appare piu' nelle viste live (review
+ * serale, daily plan, calendario, suggerimenti AI). Estendere SOLO se si
+ * introduce un nuovo stato genuinamente terminale (cambio di modello dati,
+ * non calibrazione). I 7 consumer attuali chiamano questa funzione:
+ *   - src/lib/chat/orchestrator.ts (loadAllNonTerminalTasks)
+ *   - src/lib/chat/tools.ts (executeGetTodayTasks)
+ *   - src/app/api/daily-plan/route.ts
+ *   - src/app/api/ai-assistant/route.ts (3 punti)
+ *   - src/app/api/calendar/route.ts
+ *
+ * Implementata come factory invece di costante esportata: ogni call site
+ * riceve una copia fresh dell'array, eliminando il rischio di mutazione
+ * globale condivisa. Tentativi precedenti (`as const`, `readonly TerminalTaskStatus[]`)
+ * rifiutati da Prisma notIn che richiede string[] mutable. Non "ottimizzare"
+ * questa funzione tornando a una costante senza riconsiderare il problema
+ * di variance.
+ */
+export function terminalTaskStatuses(): TerminalTaskStatus[] {
+  return ['completed', 'abandoned', 'archived'];
+}
 
 export type ExecutionMode = 'none' | 'launch' | 'hold' | 'recovery';
 

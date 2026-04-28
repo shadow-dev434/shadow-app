@@ -5,7 +5,8 @@ import {
   prioritizeTask,
 } from '@/lib/engines/priority-engine';
 import { buildDailyPlan, getCurrentTimeSlot } from '@/lib/engines/execution-engine';
-import type { ExecutionContext, TaskRecord } from '@/lib/types/shadow';
+// Task in stato terminale (esclusi dalle viste live).
+import { terminalTaskStatuses, type ExecutionContext, type TaskRecord } from '@/lib/types/shadow';
 
 function toTaskRecord(t: Awaited<ReturnType<typeof db.task.findMany>>[0]): TaskRecord {
   return {
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
     };
 
     const tasks = await db.task.findMany({
-      where: { userId, status: { notIn: ['completed', 'abandoned'] } },
+      where: { userId, status: { notIn: terminalTaskStatuses() } },
     });
 
     const taskRecords = tasks.map(toTaskRecord);
