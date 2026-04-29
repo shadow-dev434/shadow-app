@@ -10,6 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { orchestrate } from '@/lib/chat/orchestrator';
+import { isInsideEveningWindow } from '@/lib/evening-review/window';
+import { eveningReviewHasPriority } from '@/lib/evening-review/priority';
 
 export async function POST(req: NextRequest) {
   const { error, userId } = await requireSession(req);
@@ -45,6 +47,23 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // NEW guard (Slice 5 fix): evening_review priority.
+    // Simmetria con active-thread/route.ts:computeEveningReview per la
+    // pipeline di query. Asimmetria deliberata sul ramo finale: in
+    // active-thread, ogni esito negativo del helper produce return
+    // { shouldStart: false } al client (terminale). Qui invece
+    // priorita'=false (fuori finestra, settings assenti, review odierna
+    // esistente, eveningThread paused/active) significa fall-through al
+    // codice esistente (shouldTriggerMorningCheckin), NON early return.
+    // Solo priorita'=true short-circuita con triggered:false.
+    if (await shouldEveningReviewTakePriority(userId)) {
+      console.log('[bootstrap] skip: evening_review has priority', { userId });
+      return NextResponse.json({
+        triggered: false,
+        reason: 'evening_priority',
+      });
+    }
+
     const shouldTrigger = await shouldTriggerMorningCheckin(userId);
 
     if (!shouldTrigger) {
@@ -66,6 +85,61 @@ export async function POST(req: NextRequest) {
     console.error('[bootstrap] ERROR:', err);
     return NextResponse.json({ triggered: false });
   }
+}
+
+/**
+ * Decide se evening_review ha priorita' sul flow di apertura app.
+ *
+ * Pipeline sequenziale di query con short-circuit, simmetrica ad
+ * active-thread/route.ts:computeEveningReview. Solo nel ramo "tutti i
+ * pre-check passati" delega al helper puro eveningReviewHasPriority,
+ * che resta single source of truth della decisione (vedi priority.ts).
+ *
+ * Returns true: evening ha priorita'. Il caller (POST handler) skippa
+ * il trigger di morning_checkin con triggered:false reason:evening_priority.
+ * Returns false: fall-through al flusso esistente del bootstrap.
+ */
+async function shouldEveningReviewTakePriority(userId: string): Promise<boolean> {
+  const clientTime = nowHHMMInRome();
+  const clientDate = formatTodayInRome();
+
+  const settings = await db.settings.findFirst({
+    where: { userId },
+    select: { eveningWindowStart: true, eveningWindowEnd: true },
+  });
+  if (!settings) return false;
+
+  // Fast-path: skippa query DB review/eveningThread se non in finestra.
+  // Il helper rifa lo stesso check come safety net (vedi priority.ts).
+  // Duplicazione voluta, simmetrica ad active-thread.
+  if (!isInsideEveningWindow(clientTime, settings)) return false;
+
+  // Sequenziale con short-circuit, simmetrico ad active-thread.
+  const reviewToday = await db.review.findFirst({
+    where: { userId, date: clientDate },
+    select: { id: true },
+  });
+  if (reviewToday) return false;
+
+  const eveningThread = await db.chatThread.findFirst({
+    where: {
+      userId,
+      mode: 'evening_review',
+      state: { in: ['active', 'paused'] },
+    },
+    select: { id: true },
+  });
+  if (eveningThread) return false;
+
+  // Tautologico oggi (pre-check passati -> helper ritorna true), valore
+  // strutturale per Slice 6 quando si aggiungeranno nuovi booleani.
+  return eveningReviewHasPriority({
+    clientTime,
+    clientDate,
+    settings,
+    reviewExists: false,
+    eveningThreadExists: false,
+  });
 }
 
 async function shouldTriggerMorningCheckin(userId: string): Promise<boolean> {
@@ -92,4 +166,33 @@ async function shouldTriggerMorningCheckin(userId: string): Promise<boolean> {
   }
 
   return true;
+}
+
+/**
+ * Helper locali di formattazione tempo/data nel timezone Europe/Rome.
+ * Forma robusta via formatToParts (pattern simile a formatDateInZone in
+ * triage.ts) per garantire formato HH:MM e YYYY-MM-DD validi rispetto ai
+ * regex TIME_PATTERN/DATE_PATTERN dei consumer (vedi window.ts e
+ * active-thread/route.ts).
+ *
+ * formatTodayInRome e' duplicato locale di orchestrator.ts:514. La
+ * duplicazione (3 righe) e' voluta in questo commit per non toccare
+ * orchestrator.ts e mantenere il rollback semplice. Estrazione futura
+ * in dates.ts come mini-task di pulizia separato.
+ */
+function nowHHMMInRome(): string {
+  const fmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Rome',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    fmt.formatToParts(new Date()).map((p) => [p.type, p.value]),
+  );
+  return `${parts.hour}:${parts.minute}`;
+}
+
+function formatTodayInRome(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
 }

@@ -64,6 +64,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { isInsideEveningWindow } from '@/lib/evening-review/window';
+import { eveningReviewHasPriority } from '@/lib/evening-review/priority';
 import { INACTIVITY_PAUSE_MINUTES } from '@/lib/evening-review/config';
 import { normalizeThreadState } from '@/lib/evening-review/normalize';
 
@@ -110,11 +111,13 @@ async function computeEveningReview(
   validatedNowHHMM: string | null,
   clientDate: string | null,
 ): Promise<EveningReviewPayload> {
-  if (
-    !validatedNowHHMM ||
-    !clientDate ||
-    !DATE_PATTERN.test(clientDate)
-  ) {
+  // Validation locale al caller: helper accetta clientDate gia' validato
+  // (null se invalido). Rename clientDate -> validatedClientDate per
+  // simmetria con validatedNowHHMM gia' nel parametro.
+  const validatedClientDate =
+    clientDate && DATE_PATTERN.test(clientDate) ? clientDate : null;
+
+  if (!validatedNowHHMM || !validatedClientDate) {
     console.warn(
       '[active-thread] missing or invalid clientTime/clientDate, defaulting to shouldStart=false',
     );
@@ -124,12 +127,20 @@ async function computeEveningReview(
   const settings = await loadSettings(userId);
   if (!settings) return { shouldStart: false };
 
+  // Fast-path: skippa query DB review/eveningThread se non in finestra.
+  // Il helper rifa lo stesso check come safety net (vedi priority.ts), ma
+  // qui evitiamo 2 round-trip DB: active-thread e' chiamato a ogni mount
+  // di ChatView, frequenza alta. Duplicazione voluta, vedi commento helper.
   if (!isInsideEveningWindow(validatedNowHHMM, settings)) {
     return { shouldStart: false };
   }
 
+  // Pattern sequenziale con short-circuit (invariato da pre-refactor):
+  // se reviewToday esiste, evitiamo la query eveningThread. Decisione
+  // delegata al helper solo nel caso entrambe null, dove il helper aggiunge
+  // valore come centro per estensioni Slice 6.
   const reviewToday = await db.review.findFirst({
-    where: { userId, date: clientDate },
+    where: { userId, date: validatedClientDate },
     select: { id: true },
   });
   if (reviewToday) return { shouldStart: false };
@@ -147,7 +158,18 @@ async function computeEveningReview(
   });
   if (eveningThread) return { shouldStart: false };
 
-  return { shouldStart: true };
+  // Entrambi null + tutti i pre-check passati: delego al helper la
+  // decisione finale. Tautologico oggi (helper ritorna true), valore
+  // strutturale per Slice 6 quando si aggiungeranno nuovi booleani.
+  const hasPriority = eveningReviewHasPriority({
+    clientTime: validatedNowHHMM,
+    clientDate: validatedClientDate,
+    settings,
+    reviewExists: false,
+    eveningThreadExists: false,
+  });
+
+  return { shouldStart: hasPriority };
 }
 
 export async function GET(req: NextRequest) {
