@@ -159,7 +159,9 @@ Mini-task `fix(evening-review): harden prompt + guard for V1.1`. Tre strade:
 
 Retest mirato post-fix: S2/S5 turno 2 (variazione style in pressure), S4 turni 1-4 completo (D4 trigger linguistico), S5 turni 1-3 completo (D4 trigger numerico, completare anche turno 3 saltato in commit 3b sessione 2026-04-29).
 
-### Tech debt cumulativi (15 item) emersi durante la sessione
+> **Update post-retest 2026-04-29 sera.** Strada 1 (prompt hardening) applicata via commit `0582e1c` (fix #14: nuovo tool `propose_decomposition` + guard server-side + esempi multi-turno nel prompt) e `89eb0bc` (fix #11: 12 esempi few-shot mirati a `EVENING_REVIEW_PROMPT`). Esito retest mirato (sez. "Retest V1.1 — verdetti 2026-04-29 sera" sotto): fix #14 chiuso 2/2, fix #11 parziale 2/4 (caso B della pre-reg sez. 7). **Strada 2 (#15) promossa a candidato attivo V1.1**, sessione di pianificazione dedicata pre-beta. Strada 1 da sola insufficiente per chiudere il pattern di style mismatch in apertura.
+
+### Tech debt cumulativi (16 item) emersi durante la sessione
 
 #### Blocker promozione 3b (root cause diagnosticate)
 
@@ -190,6 +192,7 @@ Retest mirato post-fix: S2/S5 turno 2 (variazione style in pressure), S4 turni 1
 #### Investigativi (lettura codice fatta, fix futuro)
 
 - **#12 — Verifica guard server-side orchestrator per `approve_decomposition` senza pre-check (LETTURA FATTA durante diagnosi #14).** Confermato: nessun tool evening_review ha guard conversazionale. Pattern di guard è "args + ownership + state-check di triage". Niente check "ultimo userMessage matcha conferma" o "decomposition workspace pre-popolato". Manifestazione bug modello (tool emesso senza pre-condizioni soddisfatte) sarebbe NON mascherata in `payloadJson.toolsExecuted` perché executor non blocca. End-to-end osservabile, rubric D4 valida. Fix V1.1: Strada 2 (server-side guard light).
+- **#16 — `approve_decomposition` non muta `Task.status` per design V1 (osservato post-retest 2026-04-29 sera).** Task con decomposizione approvata resta `status='inbox'`, ripescato come candidato delle review serali successive. Manifestazione concreta durante setup S2 tentativo 1 del retest V1.1 (vedi sez. "Retest V1.1 — verdetti 2026-04-29 sera" sotto): atteso 1 candidate, osservato 2 con S4 (decomposizione approvata in S4 chiuso poco prima) ripescato. Setup compromesso, evento 2 della pre-reg sez. 5 (artefatto setup) triggerato, fix manuale via archive S4 + thread. La spec V1 (`docs/tasks/05-review-serale-spec.md`) non specifica che `approve_decomposition` debba cambiare `Task.status`. Implicazione: ogni task con decomposizione approvata resta candidato delle review successive finché non viene chiuso esplicitamente con `mark_entry_discussed`. Pattern correlato a #1 (entrambi sono "stati che dovrebbero essere terminali per il workflow corrente ma non lo sono per design V1"). Fix V1.1 da valutare in pianificazione dedicata: `approve_decomposition` promuove implicitamente `status='inbox' → 'pending'` (o equivalente), oppure UI espone shortcut "task con micro-step approvati" per evitare ricomparsa nel triage successivo.
 
 ### Manipolazioni DB durante la sessione (annotabili)
 
@@ -206,3 +209,65 @@ Retest mirato post-fix: S2/S5 turno 2 (variazione style in pressure), S4 turni 1
 - Cross-check post-turno via `scripts/lookup-thread-state.ts` con `TARGET_FIRST_ENTRY_ID` env var. Output verbatim incollabile in chat, no Studio screenshot.
 - Disciplina rubric meccanica: liste chiuse di marker pre-registrate, applicazione binaria. Riformulazione rubric on-the-fly vietata. Quando ipotesi alternative (es. ipotesi sovrascrittura parziale AdaptiveProfile) sono emerse, investigazione live separata da applicazione rubric.
 - Pattern operativo replicabile per E2E commit 4 (asse 3.3 frizione emotiva, scope futuro): stesso seed structure, stesso flow lookup, rubric F1∧F2∧F3 da pre-registrare con liste chiuse simmetriche a G/C.
+
+## Retest V1.1 — verdetti 2026-04-29 sera
+
+Retest mirato dei due commit V1.1 fix (`0582e1c` per #14, `89eb0bc` per #11) su tre scenari ridotti rispetto agli E2E originali. Pre-registrazione formale in `docs/tasks/05-retest-v1-1-preregistration.md`. Setup operativo annotato sotto retroattivamente (decisioni operative non in pre-reg, da L4 retro-mortem).
+
+### Verdetto formale: caso B (parziale, #15 promosso a candidato attivo V1.1)
+
+| Fix | Punti totali | PASS | Soglia pre-reg | Esito |
+|---|---|---|---|---|
+| #14 sequenza propose/confirm/approve | 2 sequenze (S4 + S5) | 2/2 | 2/2 → CHIUSO | **CHIUSO** |
+| #11 style × pressure | 4 punti effettivi (vedi nota meta sotto) | 2/4 | ≥4/5 → CHIUSO; 2-3/5 → PARZIALE | **PARZIALE → caso B** |
+
+Decisione di scaling: caso B della pre-registrazione sez. 7 → **Strada 2 (#15) promossa a candidato attivo V1.1**, sessione di pianificazione dedicata pre-beta. Estensione di `buildUserContext` per esporre più dimensioni di `AdaptiveProfile` (in particolare `shameFrustrationSensitivity` e altri segnali di tono oggi non visibili al modello). Per la corrispondenza con la numerazione tripartita (precedente al consolidamento) della sezione "Fix path V1.1 raccomandato" sopra, vedi update inline lì.
+
+### Tabella verdetti rubric meccanica
+
+#### Fix #14 — asserzioni A1/A2/A3 per sequenza
+
+| Scenario | Trigger | A1 (propose al turno N) | A2 (no approve al turno N) | A3 (approve al turno N+2) |
+|---|---|---|---|---|
+| S4 turni 1-4 | linguistico ("non so da dove iniziare") | PASS | PASS | PASS |
+| S5 turni 1-3 | numerico (`postponedCount=3`) | PASS | PASS | PASS |
+
+#### Fix #11 — punti G1-G5
+
+| Punto | Posizione semantica | Asserzioni | Esito |
+|---|---|---|---|
+| 1 | S2 turno 2 (follow-up post-"boh", gentle) | G1 + G2 | **FAIL** (G1 FAIL, G2 FAIL — output `"Cosa ti blocca? Tempo, info, voglia?"` = 6 parole, copia letterale esempio direct di `FOLLOW-UP DOPO APERTURA` in `prompts.ts:221`) |
+| 2 | S5 turno 2 (apertura entry post-"vai", gentle) | G1 + G2 | **FAIL** (G1 FAIL, G2 FAIL — output `"Telefonare al commercialista per F24 - dimmi."` = 6 parole, formula direct asciutta) |
+| 3 | S5 turno N (proposta decomposizione, gentle) | G3 + G4 | PASS (marker `"ho pensato a"`, `"passi piccoli"`, `"praticabile"`, lunghezza ≥25 parole) |
+| 4 | S5 turno N+2 (post-conferma utente, gentle) | G5 | PASS (marker scelta aperta `"adesso o domani"`) |
+
+### Annotazioni meta
+
+- **Discrepanza pre-reg sez. 3 (5 punti dichiarati, 4 effettivi).** La pre-registrazione dichiarava "Totale asserzioni gentle: G1+G2 (×2 scenari) + G3+G4 + G5 = **5 punti**". La somma esplicita è 4 (2 + 1 + 1). Errore aritmetico in fase di drafting della pre-reg. Conteggi del retest applicati su 4 punti effettivi. Soglia originale ≥4/5 riproporzionata su 4 punti = ≥3.2 → di fatto 4/4, irraggiungibile dato S5 turno 2 FAIL osservato in S5. Esito determinato verso caso B indipendentemente da S2 confermato. La pre-reg resta immutabile post-retest per disciplina L4, errore annotato qui solo come avviso al lettore.
+
+- **Pattern emergente: apertura direct su profilo gentle, sistemico.** Osservato in entrambi gli scenari gentle (S2 e S5), in posizioni diverse del flow per-entry: apertura entry (S5 turno 2) e follow-up post-utente vago (S2 turno 6 = "turno 2 per-entry"). Il modello replica gli esempi few-shot del prompt verbatim (formula direct copiata letterale in S2), ma la **scelta dello style** sembra guidata da inerzia del default `direct` di `CORE_IDENTITY` più che dal `preferredPromptStyle="gentle"` esposto in `buildUserContext`. Il fix #11 ha aggiunto esempi gentle ma non ha cambiato il meccanismo di scelta dello style. Coerente con tech debt #11 originale ("modello converge su direct quando context ha pressure"), ma il retest mostra che il pattern si manifesta anche **senza pressure** (S2 ha `postponedCount=0`, `avoidanceCount=0`, deadline `null`). Quindi la diagnosi deve essere allargata: non è solo "pressure contamina apertura", è "default direct contamina apertura quando profile gentle non è abbastanza salient nel context". Implicazione operativa per Strada 2 (#15): rinforzare la salience di `preferredPromptStyle` nel `buildUserContext` (oggi è una stringa cosmetica accanto ad altri 3 campi) potrebbe non bastare; serve probabilmente una sezione dedicata "VOICE PROFILE" del system prompt che apra il profilo come blocco salient e rinforzi il binding stile↔comportamento.
+
+- **`approve_decomposition` non muta `Task.status` per design V1.** Annotato come tech debt #16 sopra (sez. "Investigativi"). Osservato durante setup S2 tentativo 1 (atteso 1 candidate, osservato 2 con S4 ripescato). Pattern correlato a tech debt #1 (entrambi sono "stati che dovrebbero essere terminali per il workflow corrente ma non lo sono per design V1"). Fix V1.1 da valutare in pianificazione dedicata.
+
+- **Trigger numerico `postponedCount≥3` salta il follow-up gentle.** Osservato in S5: il modello dopo apertura entry asciutta + risposta vaga utente non ha prodotto un follow-up gentle, è andato direttamente a `propose_decomposition`. Pattern coerente con SEQUENZA OBBLIGATORIA della spec (trigger numerico anticipa la decomposizione senza aspettare blocco esplicito), ma collateralmente sottrae al test G1+G2 il "turno 2 gentle" atteso. Effetto positivo per A1 fix #14 (`propose_decomposition` chiamato correttamente), effetto secondario sul conteggio fix #11 (un punto valutativo perso). Da considerare per future rubric: in scenari con trigger numerico, il punto G1+G2 va valutato sull'apertura (turno 1 per-entry) invece che sul follow-up — la pre-reg sez. 3 lo presupponeva implicitamente ma non lo dichiarava esplicitamente.
+
+- **Tech debt #1 (lazy archive thread non-evening) non manifestato in questo retest.** Setup pulito iniziale (`ChatThread state in (active, paused) = []`) confermato via lookup. Pattern correlato osservato però: il "task con decomposizione approvata resta candidato della review successiva" (#16) è una manifestazione analoga del problema più generale "stati che dovrebbero essere terminali per il workflow corrente ma non lo sono per design V1". Tech debt #1 e #16 sono cugini operativi, da considerare insieme nel pianificare V1.1.
+
+### Setup operativo del 2026-04-29 sera (annotazione retroattiva)
+
+Decisioni operative del setup, non in pre-reg, fissate retroattivamente per audit futuro (lezione L4: pre-registrazione include rubric + scope + criteri sospensione, le decisioni operative possono essere annotate post-hoc).
+
+- **Test user.** `cmoh92ksv0006ibkseihlh38g` (`egiulio.psi@gmail.com`).
+- **Task seedati.**
+  - S4: `"Preparare presentazione cliente Q3"`, source=manual, deadline=`2026-05-01T12:00:00Z` (dopodomani Europe/Rome a noon UTC), `postponedCount=0`, `avoidanceCount=0`, urgency=4, importance=4, category="work".
+  - S2: `"Aggiornare CV con ultimi due progetti"`, source=manual, deadline=null, `postponedCount=0`, `avoidanceCount=0`, urgency=3, importance=3, category="personal".
+  - S5: `"Telefonare al commercialista per F24"`, source=manual, deadline=null, `postponedCount=3` (trigger numerico), `avoidanceCount=0`, urgency=3, importance=4, category="admin".
+- **Profilo test user.** `preferredPromptStyle="direct"` per S4 (default schema, nessuno shift). Shift `direct → gentle` post-S4, prima di S2 e S5. Altri campi (`shameFrustrationSensitivity=3`, `motivationProfile` 6 dimensioni a 0.5, `nudgeTypeEffectiveness="{}"`, `totalSignals=0`, `confidenceLevel=0.3`) non toccati.
+- **Ordine retest effettivo.** S4 (PASS clean) → shift profilo → S2 (tentativo 1, **fallito setup**: S4 ripescato come candidate, modello ha aperto S4 invece di S2) → archive S4 + thread fallito → S5 (PASS clean su A1+A2+A3 + G3+G4 + G5) → archive S5 + thread → S2 (tentativo 2, ultimo).
+- **Archive operations.** 2 task residui sessione precedente (`[E2E-S1-filler]`, `[E2E-S1-decoy]`) all'inizio + thread evening_review S4 + task S4 + thread S2-fallito + task S5 + thread S5. Tutti via update Prisma diretto in `bun -e` (no script committato), `status='archived'` per task, `state='archived' + endedAt=now()` per thread.
+
+### Pattern operativo replicabile
+
+- **Pre-registrazione formale prima del retest.** Documento separato (`05-retest-v1-1-preregistration.md`) salvato e committato prima dell'esecuzione, congelato durante il retest. Disciplina L4 retro-mortem applicata: rubric meccanica + scope + criteri sospensione fissati a priori, applicazione binaria post-turno. Errore aritmetico nella pre-reg (5 vs 4 punti) annotato post-hoc senza patch alla pre-reg, per fedeltà alla disciplina di immutabilità.
+- **Eventi sospensione effettivamente innescati.** Evento 2 (artefatto setup) → S2 tentativo 1 fallito, ipotesi "S4 in candidate" verificata in <5 min via lookup, fix manuale, riesecuzione pulita. Pattern: investigare ipotesi setup-related quando il modello apre un'entry inattesa, non assumere drift comportamentale finché lookup non conferma.
+- **Strategia "fix non in-flight" rispettata.** Niente patch al prompt o al codice durante il retest, fail emersi annotati e proseguito (L1). Decisioni di prodotto (caso B, #15 promosso) deliberate post-retest, non during.
