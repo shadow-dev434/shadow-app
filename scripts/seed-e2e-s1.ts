@@ -5,19 +5,26 @@
  * - Archivia tutti i task non-terminali esistenti del user.
  * - Upsert AdaptiveProfile con preferredPromptStyle='direct'.
  * - Crea 4 Task con fingerprint nei title:
- *     A "Bolletta luce [E2E-S1]"            gmail,  deadline ~ +1 giorno @ 18:00 UTC -> reason='deadline', idx=1
- *     B "Fattura idraulico [E2E-S1-decoy]"  manual, deadline ~ +2 giorni @ 12:00 UTC -> reason='deadline', idx=2
- *     C "Doc presentazione [E2E-S1-decoy]"  manual, deadline=null, createdAt oggi    -> reason='new',     idx=3
- *     D "Riordinare archivio [E2E-S1-filler]" manual, deadline ~ +10 giorni, createdAt ~ -15 giorni
+ *     A "Bolletta gas [E2E-S1]"                       gmail,  deadline ~ +1 giorno @ 18:00 UTC -> reason='deadline', idx=1
+ *     B "Aggiornare CV [E2E-S1-decoy]"                manual, deadline ~ +2 giorni @ 12:00 UTC -> reason='deadline', idx=2
+ *     C "Email risposta cliente Rossi [E2E-S1-decoy]" manual, deadline=null, createdAt oggi    -> reason='new',     idx=3
+ *     D "Riordinare archivio [E2E-S1-filler]"         manual, deadline ~ +10 giorni, createdAt ~ -15 giorni
  *       -> escluso da pickReason -> inbox-fuori-triage (M=1)
  * - Sotto-verifica createdAt storico su Task D. Fallback $executeRawUnsafe se
  *   il primary path Prisma non lo materializza.
  * - Sotto-verifica DB-side post-create: findMany filtrato per fingerprint
- *   '[E2E-S1', assert count === 4. Anticipa errori che la voce 3 lato app
- *   non distinguerebbe da branch Neon mismatch.
+ *   '[E2E-S1' AND status non-terminale, assert count === 4. Anticipa errori
+ *   che la voce 3 lato app non distinguerebbe da branch Neon mismatch.
  *
  * Date relative a Date.now() per idempotenza temporale: lo script viene
  * committato e riutilizzato in sessioni future, niente date assolute.
+ *
+ * Titoli scelti per evitare collision con esempi EVENING_REVIEW_PROMPT
+ * (prompts.ts:181-208). I titoli del prompt ("Bolletta luce", "Fattura
+ * idraulico", "Doc presentazione") triggeravano replica letterale come
+ * few-shot dal modello, indebolendo l'asse testuale dei check stilistici
+ * negli scenari E2E. Vedi tech debt #7 deploy-notes Slice 5
+ * (sessione 2026-04-29).
  *
  * Lancio:
  *   bunx dotenv-cli -e .env.local -- bun run scripts/seed-e2e-s1.ts
@@ -83,7 +90,7 @@ async function main(): Promise<void> {
   const taskA = await db.task.create({
     data: {
       userId: user.id,
-      title: 'Bolletta luce [E2E-S1]',
+      title: 'Bolletta gas [E2E-S1]',
       source: 'gmail',
       deadline: TASK_A_DEADLINE,
       avoidanceCount: 0,
@@ -99,7 +106,7 @@ async function main(): Promise<void> {
   const taskB = await db.task.create({
     data: {
       userId: user.id,
-      title: 'Fattura idraulico [E2E-S1-decoy]',
+      title: 'Aggiornare CV [E2E-S1-decoy]',
       source: 'manual',
       deadline: TASK_B_DEADLINE,
       avoidanceCount: 0,
@@ -115,7 +122,7 @@ async function main(): Promise<void> {
   const taskC = await db.task.create({
     data: {
       userId: user.id,
-      title: 'Doc presentazione [E2E-S1-decoy]',
+      title: 'Email risposta cliente Rossi [E2E-S1-decoy]',
       source: 'manual',
       deadline: null,
       avoidanceCount: 0,
@@ -179,6 +186,7 @@ async function main(): Promise<void> {
     where: {
       userId: user.id,
       title: { contains: '[E2E-S1' },
+      status: { notIn: terminalTaskStatuses() },
     },
     select: { id: true, title: true },
     orderBy: { title: 'asc' },

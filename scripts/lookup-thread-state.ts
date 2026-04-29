@@ -83,6 +83,29 @@ async function main(): Promise<void> {
   console.log(`[triage] decomposition=${JSON.stringify(triage.decomposition ?? null)}`);
   console.log(`[triage] reasonsByTaskId=${JSON.stringify(triage.reasonsByTaskId)}`);
 
+  // ChatMessage del thread, ordinati cronologicamente. Per ogni messaggio:
+  // role, createdAt, content (truncato a 1500 char se lungo), payloadJson (se !=null).
+  // Truncation 1500: un assistant message di apertura serale puo' arrivare a
+  // 600-800 char legittimi (formula spec + 3 candidate + ti-va), 1500 protegge
+  // da dump giganti senza tagliare contenuto normale.
+  const messages = await db.chatMessage.findMany({
+    where: { threadId: thread.id },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, role: true, content: true, payloadJson: true, createdAt: true },
+  });
+  console.log(`\n[messages] ${messages.length} ChatMessage in thread ${thread.id}:`);
+  for (const [i, m] of messages.entries()) {
+    const idx = i + 1;
+    const truncatedContent =
+      m.content.length > 1500 ? `${m.content.slice(0, 1500)}... [TRUNCATED ${m.content.length - 1500} chars]` : m.content;
+    const oneLineContent = truncatedContent.replace(/\n/g, '\\n');
+    console.log(`\n  [${idx}] role=${m.role} createdAt=${m.createdAt.toISOString()} id=${m.id}`);
+    console.log(`      content: ${oneLineContent}`);
+    if (m.payloadJson !== null) {
+      console.log(`      payloadJson: ${m.payloadJson}`);
+    }
+  }
+
   // Cross-check ordering: stampo verdetto se il TARGET e' noto via env var,
   // altrimenti stampo solo il currentEntryId per ispezione manuale.
   const target = process.env.TARGET_FIRST_ENTRY_ID;
