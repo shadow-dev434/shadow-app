@@ -35,6 +35,8 @@ import {
   removeCandidate,
   setCurrentEntry,
   applyOutcome,
+  setDecomposition,
+  clearDecomposition,
   countParked,
   computeEffectiveList,
   type EntryOutcome,
@@ -148,9 +150,32 @@ export const EVENING_REVIEW_TOOLS: LLMTool[] = [
     },
   },
   {
+    name: 'propose_decomposition',
+    description:
+      'Registra che hai proposto una decomposizione in micro-step all\'utente per la entry corrente. Chiamala SUBITO dopo aver scritto la prosa di proposta, NEL TURNO DELLA PROPOSTA, prima della conferma utente. Apre una pausa di conferma verificata server-side: il successivo approve_decomposition rifiuta se questa proposta non e\' stata registrata. Range: 3-5 step. Non scrive sul DB - solo stato di review.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        entryId: { type: 'string', description: 'ID del task per cui proponi la decomposizione (deve coincidere con il cursor corrente)' },
+        microSteps: {
+          type: 'array',
+          description: 'Array di micro-step proposti. Ogni elemento ha solo un campo text. Range length: 3-5.',
+          items: {
+            type: 'object',
+            properties: {
+              text: { type: 'string', description: 'Frase imperativa concreta del micro-step' },
+            },
+            required: ['text'],
+          },
+        },
+      },
+      required: ['entryId', 'microSteps'],
+    },
+  },
+  {
     name: 'approve_decomposition',
     description:
-      'Persiste una decomposizione di micro-step approvata dall\'utente sul task corrente. Chiamala quando l\'utente conferma esplicitamente la lista di step proposta. Range: 3-5 step. Sovrascrive eventuali microSteps esistenti senza warning -- il prompt deve aver gia\' chiesto conferma all\'utente prima di chiamare questo tool.',
+      'Persiste una decomposizione di micro-step approvata dall\'utente sul task corrente. Chiamala SOLO al turno successivo a propose_decomposition, dopo conferma esplicita dell\'utente. Range: 3-5 step. Sovrascrive eventuali microSteps esistenti senza warning -- il prompt deve aver gia\' chiesto conferma all\'utente prima di chiamare questo tool. Rifiuta se propose_decomposition non e\' stato chiamato per la stessa entry.',
     input_schema: {
       type: 'object',
       properties: {
@@ -244,6 +269,8 @@ export async function executeTool(
         return await executeSetCurrentEntry(input, userId, context?.triageState);
       case 'mark_entry_discussed':
         return await executeMarkEntryDiscussed(input, userId, context?.triageState);
+      case 'propose_decomposition':
+        return await executeProposeDecomposition(input, userId, context?.triageState);
       case 'approve_decomposition':
         return await executeApproveDecomposition(input, userId, context?.triageState);
       default:
@@ -412,7 +439,12 @@ async function executeRemoveCandidateFromReview(
     return { kind: 'sideEffect', success: false, error: `Task ${taskId} not found or not owned by user` };
   }
 
-  const newTriageState = removeCandidate(triageState, taskId);
+  // V1.1 side fix: simmetrico a executeMarkEntryDiscussed. Se il task rimosso
+  // aveva una decomposizione pending, pulisci il flag transient.
+  let newTriageState = removeCandidate(triageState, taskId);
+  if (newTriageState.decomposition?.taskId === taskId) {
+    newTriageState = clearDecomposition(newTriageState);
+  }
   return {
     kind: 'mutator',
     success: true,
@@ -600,11 +632,124 @@ async function executeMarkEntryDiscussed(
       break;
   }
 
-  const newState = applyOutcome(triageState, entryId, outcome);
+  // V1.1 side fix: se la entry chiusa aveva una decomposizione pending
+  // (propose chiamato, approve mai arrivato), pulisci il flag transient.
+  // Senza questo reset, il modeContext del turno successivo mostrerebbe
+  // DECOMPOSITION_PROPOSED=<old_taskId> con cursor su entry diversa,
+  // stato che nessun esempio del prompt copre.
+  let newState = applyOutcome(triageState, entryId, outcome);
+  if (newState.decomposition?.taskId === entryId) {
+    newState = clearDecomposition(newState);
+  }
   return {
     kind: 'mutatorWithSideEffects',
     success: true,
     data: { entryId, taskTitle: task.title, outcome, action: 'marked_discussed' },
+    newTriageState: newState,
+  };
+}
+
+async function executeProposeDecomposition(
+  input: Record<string, unknown>,
+  userId: string,
+  triageState: TriageState | undefined,
+): Promise<ToolExecutionResult> {
+  if (!triageState) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'Triage state missing (tool called outside evening_review context)',
+    };
+  }
+
+  const entryId = String(input.entryId ?? '').trim();
+  if (!entryId) {
+    return { kind: 'sideEffect', success: false, error: 'entryId is required' };
+  }
+
+  // Cursor must already point at this entry: propose lives inside the per-entry
+  // flow opened by set_current_entry. Mismatch indicates an out-of-sequence call.
+  if (triageState.currentEntryId !== entryId) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: `Current entry is ${triageState.currentEntryId ?? 'none'}, but propose called for ${entryId}. Set the cursor first via set_current_entry.`,
+    };
+  }
+
+  const rawSteps = input.microSteps;
+  if (!Array.isArray(rawSteps)) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'microSteps must be an array of {text}',
+    };
+  }
+  if (rawSteps.length < MIN_MICRO_STEPS) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      data: { provided: rawSteps.length, min: MIN_MICRO_STEPS },
+      error: `Too few steps: ${rawSteps.length} provided, minimum ${MIN_MICRO_STEPS}.`,
+    };
+  }
+  if (rawSteps.length > MAX_MICRO_STEPS) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      data: { provided: rawSteps.length, max: MAX_MICRO_STEPS },
+      error: `Too many steps: ${rawSteps.length} provided, maximum ${MAX_MICRO_STEPS}.`,
+    };
+  }
+
+  // Verify ownership.
+  const task = await db.task.findFirst({
+    where: { id: entryId, userId },
+    select: { id: true, title: true },
+  });
+  if (!task) {
+    return { kind: 'sideEffect', success: false, error: `Task ${entryId} not found or not owned by user` };
+  }
+
+  // Struct validation: ogni step e' { text: non-empty string } dopo trim.
+  // Mirror della validazione in executeApproveDecomposition.
+  const proposedSteps: { text: string }[] = [];
+  for (const raw of rawSteps) {
+    if (typeof raw !== 'object' || raw === null) {
+      return {
+        kind: 'sideEffect',
+        success: false,
+        error: 'microSteps items must be objects with a `text` field',
+      };
+    }
+    const obj = raw as Record<string, unknown>;
+    if (typeof obj.text !== 'string' || obj.text.trim() === '') {
+      return {
+        kind: 'sideEffect',
+        success: false,
+        error: 'microSteps items must have a non-empty `text` string',
+      };
+    }
+    proposedSteps.push({ text: obj.text.trim() });
+  }
+
+  // TODO: level 2/3 in commit dedicato. Per Slice 5 commit 3b solo level=1.
+  const newState = setDecomposition(triageState, {
+    taskId: entryId,
+    level: 1,
+    proposedSteps,
+  });
+
+  return {
+    kind: 'mutator',
+    success: true,
+    data: {
+      entryId,
+      taskTitle: task.title,
+      stepCount: proposedSteps.length,
+      proposedSteps,
+      action: 'decomposition_proposed',
+    },
     newTriageState: newState,
   };
 }
@@ -652,6 +797,27 @@ async function executeApproveDecomposition(
     };
   }
 
+  // V1.1 fix #14: approve_decomposition richiede propose_decomposition
+  // chiamato precedentemente nello stesso flusso review. Il flag transient
+  // triageState.decomposition e' settato da executeProposeDecomposition,
+  // resettato qui al success path, e resettato anche da executeMarkEntryDiscussed
+  // / executeRemoveCandidateFromReview se l'entry viene chiusa senza approve.
+  const proposed = triageState.decomposition;
+  if (!proposed) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'No decomposition proposed yet. Call propose_decomposition first with the steps, then wait for explicit user confirmation, then call approve_decomposition.',
+    };
+  }
+  if (proposed.taskId !== entryId) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: `Decomposition proposed for entry ${proposed.taskId}, but approve called for ${entryId}. Mismatch.`,
+    };
+  }
+
   // Verify ownership.
   const task = await db.task.findFirst({
     where: { id: entryId, userId },
@@ -696,9 +862,11 @@ async function executeApproveDecomposition(
     data: { microSteps: JSON.stringify(fullSteps) },
   });
 
-  // executor non muta state in 3a: il workspace di decomposizione
-  // (triageState.decomposition) e' commit 3b territory; per ora ritorniamo
-  // identita' su newTriageState.
+  // V1.1 fix #14: chiude la pausa di conferma aperta da propose_decomposition
+  // resettando il flag transient. Lasciarlo settato confonderebbe il
+  // DECOMPOSITION_PROPOSED del modeContext del turno successivo.
+  const finalState = clearDecomposition(triageState);
+
   return {
     kind: 'mutatorWithSideEffects',
     success: true,
@@ -708,6 +876,6 @@ async function executeApproveDecomposition(
       stepCount: fullSteps.length,
       action: 'decomposition_approved',
     },
-    newTriageState: triageState,
+    newTriageState: finalState,
   };
 }

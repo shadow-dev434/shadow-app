@@ -479,6 +479,18 @@ function buildEveningReviewModeContext(
   }
 
   lines.push('');
+  // V1.1 fix #14: espone la "pausa di conferma" decomposizione al modello.
+  // Settato da propose_decomposition, resettato da approve / mark_entry_discussed
+  // / remove_candidate_from_review (vedi tools.ts). Il prompt usa questa riga
+  // per capire se sta in fase "ho proposto, aspetto conferma" o "non ancora".
+  const proposedDecomp = triageState.decomposition;
+  if (proposedDecomp) {
+    lines.push(`DECOMPOSITION_PROPOSED=${proposedDecomp.taskId}`);
+  } else {
+    lines.push('DECOMPOSITION_PROPOSED=none');
+  }
+
+  lines.push('');
   const outcomes = triageState.outcomes ?? {};
   const outcomeIds = Object.keys(outcomes);
   if (outcomeIds.length > 0) {

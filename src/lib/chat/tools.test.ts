@@ -45,6 +45,37 @@ function mockTaskOwned(id: string, title: string) {
   vi.mocked(db.task.findFirst).mockResolvedValue({ id, title } as any);
 }
 
+// ── remove_candidate_from_review (V1.1 side fix) ──────────────────────────
+// Describe parziale: copre solo il side fix V1.1 di state hygiene. La
+// semantica generale di remove_candidate (excludedTaskIds, ownership,
+// idempotenza) e' coperta a livello di triage.ts unit test.
+
+describe('executeTool: remove_candidate_from_review', () => {
+  it('V1.1 side fix: removing entry with pending decomposition resetta state.decomposition', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b'],
+      decomposition: {
+        taskId: 'a',
+        level: 1,
+        proposedSteps: [{ text: 'step 1' }, { text: 'step 2' }, { text: 'step 3' }],
+      },
+    });
+    const result = await executeTool(
+      'remove_candidate_from_review',
+      { taskId: 'a' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutator');
+    if (result.kind !== 'mutator') return;
+    // Semantica originale di remove: taskId in excludedTaskIds.
+    expect(result.newTriageState.excludedTaskIds).toContain('a');
+    // V1.1 side fix: flag transient pulito.
+    expect(result.newTriageState.decomposition).toBeNull();
+  });
+});
+
 // ── set_current_entry ─────────────────────────────────────────────────────
 
 describe('executeTool: set_current_entry', () => {
@@ -368,6 +399,99 @@ describe('executeTool: mark_entry_discussed', () => {
     expect(result.error).toMatch(/Triage state missing/i);
     expect(db.task.findFirst).not.toHaveBeenCalled();
   });
+
+  // V1.1 side fix: chiudere una entry con decomposition pending pulisce il flag.
+  it('V1.1 side fix: cancelled outcome resetta state.decomposition se taskId matcha', async () => {
+    mockTaskOwned('a', 'Task A');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.task.update).mockResolvedValue({ id: 'a' } as any);
+    const state = makeState({
+      currentEntryId: 'a',
+      decomposition: {
+        taskId: 'a',
+        level: 1,
+        proposedSteps: [{ text: 'step 1' }, { text: 'step 2' }, { text: 'step 3' }],
+      },
+    });
+    const result = await executeTool(
+      'mark_entry_discussed',
+      { entryId: 'a', outcome: 'cancelled' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutatorWithSideEffects');
+    if (result.kind !== 'mutatorWithSideEffects') return;
+    expect(result.newTriageState.outcomes).toEqual({ a: 'cancelled' });
+    expect(result.newTriageState.decomposition).toBeNull();
+  });
+});
+
+// ── propose_decomposition (V1.1 fix #14) ─────────────────────────────────
+
+describe('executeTool: propose_decomposition', () => {
+  function steps(n: number): Array<{ text: string }> {
+    return Array.from({ length: n }, (_, i) => ({ text: `step ${i + 1}` }));
+  }
+
+  it('happy path: cursor on entry, valid 3 steps -> mutator success, decomposition set in newTriageState', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({ currentEntryId: 'a' });
+    const result = await executeTool(
+      'propose_decomposition',
+      { entryId: 'a', microSteps: steps(3) },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutator');
+    if (result.kind !== 'mutator') return;
+    expect(result.success).toBe(true);
+    expect((result.data as { action: string }).action).toBe('decomposition_proposed');
+    expect((result.data as { stepCount: number }).stepCount).toBe(3);
+    // Flag transient settato sul taskId del cursor.
+    expect(result.newTriageState.decomposition).toEqual({
+      taskId: 'a',
+      level: 1,
+      proposedSteps: [
+        { text: 'step 1' },
+        { text: 'step 2' },
+        { text: 'step 3' },
+      ],
+    });
+    // No DB write (mutator pattern).
+    expect(db.task.update).not.toHaveBeenCalled();
+    expect(db.task.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails with sideEffect when entryId mismatches currentEntryId', async () => {
+    const state = makeState({ currentEntryId: 'a' });
+    const result = await executeTool(
+      'propose_decomposition',
+      { entryId: 'b', microSteps: steps(3) },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Current entry is a, but propose called for b/);
+    expect(db.task.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('fails when length is below MIN_MICRO_STEPS (=3)', async () => {
+    const state = makeState({ currentEntryId: 'a' });
+    const result = await executeTool(
+      'propose_decomposition',
+      { entryId: 'a', microSteps: steps(2) },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Too few steps/);
+    expect(result.data).toEqual({ provided: 2, min: 3 });
+    expect(db.task.findFirst).not.toHaveBeenCalled();
+  });
 });
 
 // ── approve_decomposition ────────────────────────────────────────────────
@@ -383,7 +507,12 @@ describe('executeTool: approve_decomposition', () => {
     mockTaskOwned('a', 'Task A');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(db.task.update).mockResolvedValue({ id: 'a' } as any);
-    const state = makeState();
+    // V1.1 fix #14: approve richiede propose precedente. State con decomposition
+    // settato sul taskId che si va ad approvare.
+    const state = makeState({
+      currentEntryId: 'a',
+      decomposition: { taskId: 'a', level: 1, proposedSteps: steps(3) },
+    });
     const result = await executeTool(
       'approve_decomposition',
       { entryId: 'a', microSteps: steps(3) },
@@ -395,7 +524,8 @@ describe('executeTool: approve_decomposition', () => {
     expect(result.success).toBe(true);
     expect((result.data as { stepCount: number }).stepCount).toBe(3);
     expect((result.data as { action: string }).action).toBe('decomposition_approved');
-    expect(result.newTriageState).toBe(state); // executor non muta state in 3a
+    // V1.1 fix #14: success path resetta il flag transient.
+    expect(result.newTriageState.decomposition).toBeNull();
 
     expect(db.task.update).toHaveBeenCalledTimes(1);
     const updateArg = vi.mocked(db.task.update).mock.calls[0][0];
@@ -416,7 +546,12 @@ describe('executeTool: approve_decomposition', () => {
 
   it('fails with sideEffect when task is not owned (findFirst null esplicito)', async () => {
     vi.mocked(db.task.findFirst).mockResolvedValue(null);
-    const state = makeState();
+    // V1.1 fix #14: state con decomposition sul taskId 'unknown' per
+    // superare il guard e arrivare al findFirst.
+    const state = makeState({
+      currentEntryId: 'unknown',
+      decomposition: { taskId: 'unknown', level: 1, proposedSteps: steps(3) },
+    });
     const result = await executeTool(
       'approve_decomposition',
       { entryId: 'unknown', microSteps: steps(3) },
@@ -492,5 +627,83 @@ describe('executeTool: approve_decomposition', () => {
     expect(result.error).toMatch(/microSteps must be an array/);
     expect(db.task.findFirst).not.toHaveBeenCalled();
     expect(db.task.update).not.toHaveBeenCalled();
+  });
+
+  // V1.1 fix #14: guard tests
+  it('V1.1 guard: rejects when state.decomposition is null (no propose precedente)', async () => {
+    const state = makeState({ decomposition: null });
+    const result = await executeTool(
+      'approve_decomposition',
+      { entryId: 'a', microSteps: steps(3) },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/No decomposition proposed yet/);
+    expect(db.task.findFirst).not.toHaveBeenCalled();
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+
+  it('V1.1 guard: rejects when state.decomposition.taskId mismatches entryId', async () => {
+    const state = makeState({
+      currentEntryId: 'a',
+      decomposition: { taskId: 'a', level: 1, proposedSteps: steps(3) },
+    });
+    const result = await executeTool(
+      'approve_decomposition',
+      { entryId: 'b', microSteps: steps(3) },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Decomposition proposed for entry a, but approve called for b\. Mismatch/);
+    expect(db.task.findFirst).not.toHaveBeenCalled();
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+});
+
+// ── sequenza propose -> approve (V1.1 fix #14 E2E) ───────────────────────
+
+describe('executeTool: sequenza propose_decomposition -> approve_decomposition', () => {
+  function steps(n: number): Array<{ text: string }> {
+    return Array.from({ length: n }, (_, i) => ({ text: `step ${i + 1}` }));
+  }
+
+  it('end-to-end: propose imposta state.decomposition, approve lo legge e lo resetta', async () => {
+    mockTaskOwned('a', 'Task A');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.task.update).mockResolvedValue({ id: 'a' } as any);
+
+    // Turno 1: propose.
+    const initialState = makeState({ currentEntryId: 'a' });
+    const proposeResult = await executeTool(
+      'propose_decomposition',
+      { entryId: 'a', microSteps: steps(4) },
+      'user1',
+      { triageState: initialState },
+    );
+    expect(proposeResult.kind).toBe('mutator');
+    if (proposeResult.kind !== 'mutator') return;
+    expect(proposeResult.newTriageState.decomposition?.taskId).toBe('a');
+    expect(proposeResult.newTriageState.decomposition?.proposedSteps).toHaveLength(4);
+
+    // Turno 2: approve, feed-forward dello state.
+    const approveResult = await executeTool(
+      'approve_decomposition',
+      { entryId: 'a', microSteps: steps(4) },
+      'user1',
+      { triageState: proposeResult.newTriageState },
+    );
+    expect(approveResult.kind).toBe('mutatorWithSideEffects');
+    if (approveResult.kind !== 'mutatorWithSideEffects') return;
+    expect(approveResult.success).toBe(true);
+    // Esplicito: la pausa di conferma e' chiusa, flag transient null.
+    expect(approveResult.newTriageState.decomposition).toBeNull();
+    // DB scritto una sola volta (al turno approve).
+    expect(db.task.update).toHaveBeenCalledTimes(1);
   });
 });
