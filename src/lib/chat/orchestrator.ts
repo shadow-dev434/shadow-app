@@ -62,6 +62,7 @@ export interface OrchestratorOutput {
 }
 
 const MAX_HISTORY_MESSAGES = 20;
+const MAX_TOOL_ITERATIONS = 5;
 
 // Regex to match [[QR: opt1 | opt2 | opt3]] at end of message (or anywhere, but
 // typically trailing). Captures the inner content.
@@ -158,7 +159,7 @@ export async function orchestrate(
   let lastModel = '';
 
   // ── 6. First LLM call ────────────────────────────────────────────────
-  const firstResponse = await callLLM({
+  let currentResponse = await callLLM({
     tier: modelTier,
     systemPrompt,
     messages: llmMessages,
@@ -167,22 +168,29 @@ export async function orchestrate(
     temperature: 0.5,
   });
 
-  totalCost += firstResponse.costUsd;
-  totalTokensIn += firstResponse.tokensIn;
-  totalTokensOut += firstResponse.tokensOut;
-  totalLatencyMs += firstResponse.latencyMs;
-  lastModel = firstResponse.model;
+  totalCost += currentResponse.costUsd;
+  totalTokensIn += currentResponse.tokensIn;
+  totalTokensOut += currentResponse.tokensOut;
+  totalLatencyMs += currentResponse.latencyMs;
+  lastModel = currentResponse.model;
 
   const toolsExecuted: OrchestratorOutput['toolsExecuted'] = [];
-  let finalAssistantMessage = firstResponse.text;
+  let finalAssistantMessage = currentResponse.text;
   // pendingTriageState !== null is the signal that we're in evening_review
   // AND have a state to persist in chunk H's transaction commit.
   let pendingTriageState: TriageState | null = triageState;
 
-  // ── 7. Handle tool calls ─────────────────────────────────────────────
-  if (firstResponse.toolCalls.length > 0) {
+  // ── 7. Tool-use loop (multi-iteration with cap) ─────────────────────
+  let iteration = 0;
+  while (
+    currentResponse.stopReason === 'tool_use' &&
+    currentResponse.toolCalls.length > 0 &&
+    iteration < MAX_TOOL_ITERATIONS
+  ) {
+    iteration++;
+
     const toolResults: Array<{
-      toolCall: typeof firstResponse.toolCalls[number];
+      toolCall: typeof currentResponse.toolCalls[number];
       result: ToolExecutionResult;
     }> = [];
 
@@ -190,7 +198,7 @@ export async function orchestrate(
       // Sequential: chain triage mutations through pendingTriageState.
       // Multiple tool calls in the same turn (e.g., remove A then add B) must see
       // each other's effects, so they cannot run in parallel.
-      for (const tc of firstResponse.toolCalls) {
+      for (const tc of currentResponse.toolCalls) {
         const result = await executeTool(tc.name, tc.input, input.userId, {
           triageState: pendingTriageState ?? undefined,
         });
@@ -203,7 +211,7 @@ export async function orchestrate(
     } else {
       // Parallel (historical pattern for non-evening_review modes).
       const parallelResults = await Promise.all(
-        firstResponse.toolCalls.map(async (tc) => {
+        currentResponse.toolCalls.map(async (tc) => {
           const result = await executeTool(tc.name, tc.input, input.userId);
           toolsExecuted.push({ name: tc.name, input: tc.input, result: result.data });
           return { toolCall: tc, result };
@@ -215,8 +223,8 @@ export async function orchestrate(
     llmMessages.push({
       role: 'assistant',
       content: [
-        ...(firstResponse.text ? [{ type: 'text' as const, text: firstResponse.text }] : []),
-        ...firstResponse.toolCalls.map(tc => ({
+        ...(currentResponse.text ? [{ type: 'text' as const, text: currentResponse.text }] : []),
+        ...currentResponse.toolCalls.map(tc => ({
           type: 'tool_use' as const,
           id: tc.id,
           name: tc.name,
@@ -234,7 +242,7 @@ export async function orchestrate(
       })),
     });
 
-    const secondResponse = await callLLM({
+    const nextResponse = await callLLM({
       tier: modelTier,
       systemPrompt,
       messages: llmMessages,
@@ -243,13 +251,27 @@ export async function orchestrate(
       temperature: 0.5,
     });
 
-    totalCost += secondResponse.costUsd;
-    totalTokensIn += secondResponse.tokensIn;
-    totalTokensOut += secondResponse.tokensOut;
-    totalLatencyMs += secondResponse.latencyMs;
-    lastModel = secondResponse.model;
+    totalCost += nextResponse.costUsd;
+    totalTokensIn += nextResponse.tokensIn;
+    totalTokensOut += nextResponse.tokensOut;
+    totalLatencyMs += nextResponse.latencyMs;
+    lastModel = nextResponse.model;
 
-    finalAssistantMessage = secondResponse.text;
+    finalAssistantMessage = nextResponse.text;
+    currentResponse = nextResponse;
+  }
+
+  // ── 7b. Cap fallback ────────────────────────────────────────────────
+  if (
+    iteration >= MAX_TOOL_ITERATIONS &&
+    currentResponse.stopReason === 'tool_use' &&
+    currentResponse.toolCalls.length > 0
+  ) {
+    console.error(
+      `[orchestrator] tool_use loop hit cap MAX_TOOL_ITERATIONS=${MAX_TOOL_ITERATIONS}: ` +
+      `threadId=${thread.id}, mode=${input.mode}, lastToolCalls=${currentResponse.toolCalls.map(tc => tc.name).join(',')}`,
+    );
+    finalAssistantMessage = 'Mi sono inceppato un attimo, riprova';
   }
 
   // ── 8. Parse [[QR:...]] tag from text ───────────────────────────────
