@@ -2352,6 +2352,7 @@ function FocusView() {
     }
 
     // Record learning signal for strict exit
+    // @ts-expect-error TS2367 -- 'active_strict' missing from strictModeState type union, scoped to Task 9 (split file)
     const wasStrict = store.strictModeState === 'active_strict' || store.strictModeState === 'active_soft';
     if (wasStrict) {
       recordSignal('strict_exited', selectedTask?.id, { taskCompleted: false });
