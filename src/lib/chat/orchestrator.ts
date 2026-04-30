@@ -4,7 +4,7 @@
 
 import { db } from '@/lib/db';
 import { callLLM, type LLMMessage } from '@/lib/llm/client';
-import { buildSystemPrompt } from './prompts';
+import { buildSystemPrompt, buildVoiceProfile } from './prompts';
 import { executeTool, getToolsForMode, type ToolExecutionResult } from './tools';
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses } from '@/lib/types/shadow';
@@ -96,7 +96,7 @@ export async function orchestrate(
   });
 
   // ── 3. User context ──────────────────────────────────────────────────
-  const userContext = await buildUserContext(input.userId);
+  const { userContext, voiceProfile } = await buildContextAndVoice(input.userId);
 
   // ── 3.5. Evening review triage state ────────────────────────────────
   let triageState: TriageState | null = null;
@@ -149,7 +149,7 @@ export async function orchestrate(
   const isStructuredMode = input.mode !== 'general';
   const modelTier = isStructuredMode ? 'smart' : 'fast';
 
-  const systemPrompt = buildSystemPrompt(input.mode, userContext, modeContext);
+  const systemPrompt = buildSystemPrompt(input.mode, userContext, modeContext, voiceProfile);
 
   let totalCost = 0;
   let totalTokensIn = 0;
@@ -317,7 +317,9 @@ export async function orchestrate(
 
 // ── User context builder ──────────────────────────────────────────────────
 
-async function buildUserContext(userId: string): Promise<string> {
+async function buildContextAndVoice(
+  userId: string,
+): Promise<{ userContext: string; voiceProfile: string }> {
   const [profile, memories] = await Promise.all([
     db.adaptiveProfile.findUnique({ where: { userId } }).catch(() => null),
     db.userMemory
@@ -333,7 +335,7 @@ async function buildUserContext(userId: string): Promise<string> {
 
   if (profile) {
     parts.push(
-      `Profilo adattivo: completionRate=${(profile.averageCompletionRate ?? 0).toFixed(2)}, avoidanceRate=${(profile.averageAvoidanceRate ?? 0).toFixed(2)}, activation=${(profile.activationDifficulty ?? 0).toFixed(2)}, promptStyle=${profile.preferredPromptStyle ?? 'gentle'}`,
+      `Profilo adattivo: completionRate=${(profile.averageCompletionRate ?? 0).toFixed(2)}, avoidanceRate=${(profile.averageAvoidanceRate ?? 0).toFixed(2)}, activation=${(profile.activationDifficulty ?? 0).toFixed(2)}`,
     );
   }
 
@@ -347,7 +349,29 @@ async function buildUserContext(userId: string): Promise<string> {
     parts.push('Utente nuovo, poche info disponibili. Sii breve ed essenziale.');
   }
 
-  return parts.join('\n');
+  const voiceProfile = buildVoiceProfile({
+    preferredPromptStyle: profile?.preferredPromptStyle ?? 'direct',
+    preferredTaskStyle: profile?.preferredTaskStyle ?? 'guided',
+    shameFrustrationSensitivity: profile?.shameFrustrationSensitivity ?? 3,
+    optimalSessionLength: profile?.optimalSessionLength ?? 25,
+    motivationProfile: safeParseJSON<Record<string, number>>(
+      profile?.motivationProfile ?? '{}',
+      {},
+    ),
+  });
+
+  return {
+    userContext: parts.join('\n'),
+    voiceProfile,
+  };
+}
+
+function safeParseJSON<T>(json: string, fallback: T): T {
+  try {
+    return JSON.parse(json) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 // ── Evening review helpers ────────────────────────────────────────────────

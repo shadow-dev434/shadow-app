@@ -345,14 +345,55 @@ NOTE DI FORMATTAZIONE:
 - Quando citi un task nel messaggio, preferisci la forma piana ("la fattura idraulico", "la bolletta luce") rispetto a forme con punti interni ("fattura.idraulico"). Il client chat fa autolinking dei pattern parola.parola.
 - Tono caldo, breve, niente liste, niente markdown — vedi CORE_IDENTITY.`;
 
+export interface VoiceProfileInput {
+  preferredPromptStyle: string;
+  preferredTaskStyle: string;
+  shameFrustrationSensitivity: number;
+  optimalSessionLength: number;
+  motivationProfile: Record<string, number>;
+}
+
+export function buildVoiceProfile(input: VoiceProfileInput): string {
+  const m = (k: string) => (input.motivationProfile[k] ?? 0).toFixed(1);
+  const shame = input.shameFrustrationSensitivity.toFixed(1);
+  return `Stile preferito dell'utente: ${input.preferredPromptStyle}.
+
+Se gentle:
+- Riconoscimento esplicito prima della domanda (es. "OK", "Sento che", "Vediamo insieme", "Capisco")
+- Lunghezza minima turno 20 parole
+- Niente formule asciutte tipo "dimmi", "cosa c'e'", "vai"
+- Chiusura propone scelta aperta ("o", "vuoi cominciare", "ci pensiamo")
+
+Se direct:
+- Frasing asciutto, max 15 parole
+- Domanda diagnostica diretta
+- Senza riconoscimenti espliciti, va al punto
+
+Se challenge:
+- Asciutto e diretto come direct, ma con cornice di sfida (es. "Quante volte l'abbiamo gia' spostata?")
+- Max 15 parole
+- Niente paternalismo, niente sarcasmo
+
+Sensibilita' a colpa/frustrazione: ${shame}/5.
+Se >=4, ammorbidisci ulteriormente: anche in direct/challenge usa riconoscimento minimo, evita pressing temporale.
+
+Eccezione high-avoidance: quando l'entry corrente ha avoidanceCount >= 3 o postponedCount >= 3 (Layer 2 della mossa 3.1 della spec evening_review), il tono descrittivo non confrontativo prevale sulle prescrizioni dello stile dichiarato qui.
+
+Stile preferito di task: ${input.preferredTaskStyle}.
+Sessione ottimale: ${input.optimalSessionLength} minuti.
+Profilo motivazionale: reward ${m('reward')}, identity ${m('identity')}, accountability ${m('accountability')}, urgency ${m('urgency')}, relief ${m('relief')}, curiosity ${m('curiosity')}.`;
+}
+
 export function buildSystemPrompt(
   mode: string,
   userContext: string,
   modeContext: string = '',
+  voiceProfile: string = '',
 ): string {
   const modePrompt = getModePrompt(mode);
   const ctx = modeContext ? `\n\n${modeContext}` : '';
-  return `${CORE_IDENTITY}
+  const voice = voiceProfile ? `\n\nVOICE PROFILE:\n${voiceProfile}` : '';
+  return `${CORE_IDENTITY}${voice}
 
 CONTESTO UTENTE:
 ${userContext}
