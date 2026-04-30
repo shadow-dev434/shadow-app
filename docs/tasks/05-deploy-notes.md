@@ -194,6 +194,10 @@ Retest mirato post-fix: S2/S5 turno 2 (variazione style in pressure), S4 turni 1
 - **#12 — Verifica guard server-side orchestrator per `approve_decomposition` senza pre-check (LETTURA FATTA durante diagnosi #14).** Confermato: nessun tool evening_review ha guard conversazionale. Pattern di guard è "args + ownership + state-check di triage". Niente check "ultimo userMessage matcha conferma" o "decomposition workspace pre-popolato". Manifestazione bug modello (tool emesso senza pre-condizioni soddisfatte) sarebbe NON mascherata in `payloadJson.toolsExecuted` perché executor non blocca. End-to-end osservabile, rubric D4 valida. Fix V1.1: Strada 2 (server-side guard light).
 - **#16 — `approve_decomposition` non muta `Task.status` per design V1 (osservato post-retest 2026-04-29 sera).** Task con decomposizione approvata resta `status='inbox'`, ripescato come candidato delle review serali successive. Manifestazione concreta durante setup S2 tentativo 1 del retest V1.1 (vedi sez. "Retest V1.1 — verdetti 2026-04-29 sera" sotto): atteso 1 candidate, osservato 2 con S4 (decomposizione approvata in S4 chiuso poco prima) ripescato. Setup compromesso, evento 2 della pre-reg sez. 5 (artefatto setup) triggerato, fix manuale via archive S4 + thread. La spec V1 (`docs/tasks/05-review-serale-spec.md`) non specifica che `approve_decomposition` debba cambiare `Task.status`. Implicazione: ogni task con decomposizione approvata resta candidato delle review successive finché non viene chiuso esplicitamente con `mark_entry_discussed`. Pattern correlato a #1 (entrambi sono "stati che dovrebbero essere terminali per il workflow corrente ma non lo sono per design V1"). Fix V1.1 da valutare in pianificazione dedicata: `approve_decomposition` promuove implicitamente `status='inbox' → 'pending'` (o equivalente), oppure UI espone shortcut "task con micro-step approvati" per evitare ricomparsa nel triage successivo.
 
+- **#17 — Orchestrator twin-shot ignora `secondResponse.toolCalls` (CHIUSO 2026-04-30 sera).** Manifestazione: durante retest fix #15, turno utente "boh" su S2 (entry MANUAL, postponedCount=0, gentle, mode=evening_review) ha mostrato `(nessuna risposta)` placeholder client. Diagnosi via `scripts/diag-tech-debt-17.ts`: ChatMessage `cmolsrj4m000tib80y17fvogm` aveva `content` vuoto + `payloadJson.toolsExecuted=[set_current_entry → cursor_set]` + `tokensOut=232` (output non perso, non salvato). Lookup `src/lib/chat/orchestrator.ts:160-253`: pattern strutturale twin-shot `if (firstResponse.toolCalls.length > 0) { ... secondResponse = await callLLM(); finalAssistantMessage = secondResponse.text; }`, niente check `stop_reason`, niente loop. Se `secondResponse` emette tool_use, viene scartato silenziosamente: tool non eseguito, prosa eventuale ignorata. Fix: refactor multi-iteration loop su `currentResponse.stopReason === 'tool_use' && toolCalls.length > 0 && iteration < MAX_TOOL_ITERATIONS=5`. Cap fallback: `console.error` strutturato + prosa user-facing `'Mi sono inceppato un attimo, riprova'` se cap hit con tool_use ancora pendente. Logica sequential (evening_review) vs parallel (altri mode) preservata verbatim dentro il loop. Validato tsc (0 nuovi errori), vitest 138/138, bunx next build (compile + 38 pages), retest E2E PASS netto su tutti i tool path (set_current_entry, propose_decomposition, approve_decomposition, mark_entry_discussed). Status: CHIUSO.
+
+- **#18 — Zero unit test orchestrator (APERTO, V1.1 post-beta).** Manifestazione: grep `orchestrator|prompts` su `**/*.test.ts` → zero match. `src/lib/chat/orchestrator.ts` non ha coverage unitaria. Fix #17 (refactor strutturale del flow tool calls) validato solo via E2E manuale, niente regression test che blocchi rotture future. Rischio: Slice 6 (piano del giorno) introdurrà flow multi-tool consecutivi (es. `set_current_entry + propose_decomposition + add_to_plan + mark_entry_discussed`) che esercitano il loop multi-iteration in modo più stressante. Senza unit test, regressioni potrebbero affiorare solo durante E2E manuali. Coverage minima target: (a) zero tool calls path, (b) single-iteration tool call, (c) multi-iteration tool call (3-4 iter), (d) cap-hit fallback, (e) sequential vs parallel branch, (f) `pendingTriageState` mutator chain. Priorità: V1.1 post-beta. Lavoro stimato: 1-2 sessioni di setup vitest mock (Prisma + LLM client + executeTool) + suite di test.
+
 ### Manipolazioni DB durante la sessione (annotabili)
 
 - `Settings.eveningWindowStart` shiftato a `08:00` per test diurni, ripristinato a `20:00` (default schema) a fine sessione via `temp-shift-evening-window.ts`.
@@ -271,3 +275,52 @@ Decisioni operative del setup, non in pre-reg, fissate retroattivamente per audi
 - **Pre-registrazione formale prima del retest.** Documento separato (`05-retest-v1-1-preregistration.md`) salvato e committato prima dell'esecuzione, congelato durante il retest. Disciplina L4 retro-mortem applicata: rubric meccanica + scope + criteri sospensione fissati a priori, applicazione binaria post-turno. Errore aritmetico nella pre-reg (5 vs 4 punti) annotato post-hoc senza patch alla pre-reg, per fedeltà alla disciplina di immutabilità.
 - **Eventi sospensione effettivamente innescati.** Evento 2 (artefatto setup) → S2 tentativo 1 fallito, ipotesi "S4 in candidate" verificata in <5 min via lookup, fix manuale, riesecuzione pulita. Pattern: investigare ipotesi setup-related quando il modello apre un'entry inattesa, non assumere drift comportamentale finché lookup non conferma.
 - **Strategia "fix non in-flight" rispettata.** Niente patch al prompt o al codice durante il retest, fail emersi annotati e proseguito (L1). Decisioni di prodotto (caso B, #15 promosso) deliberate post-retest, non during.
+
+## Retest V1.1 #15 — verdetti 2026-04-30 sera
+
+Sessione di chiusura V1.1 con tre obiettivi: (a) implementare fix #15 e validarlo via E2E sui 2 punti FAIL del retest 2026-04-29 (S2 turno 2 + S5 turno 2, rubric gentle G1+G2); (b) chiudere o accettare residui di fix #11; (c) diagnosticare e fissare eventuali nuovi tech debt emersi.
+
+Esito: fix #15 commit `687c04a`, fix #17 commit nuovo (orchestrator multi-iteration loop), fix #11 chiuso per beta con riserva (soglia 20 parole calibrabile post-beta).
+
+### Verdetto formale
+
+| Fix / Tech debt | Status | Note |
+|---|---|---|
+| #15 — `buildContextAndVoice` + VOICE PROFILE prompt block | **CHIUSO** | Commit `687c04a`. 2 file: `prompts.ts` (+42), `orchestrator.ts` (+29). Niente schema change. |
+| #11 — style × pressure (retest punti 1-2 post fix #15) | **CHIUSO per beta con riserva** | S2 turno 2 PARZIALE PASS (3/4 marker pieni, lunghezza 18 parole vs soglia 20 marginale). S5 turno 2 PARZIALE PASS (Layer 2 high-avoidance attivo, tono descrittivo coerente). Nessun caso direct-letterale come nel retest precedente. Soglia 20 parole calibrabile post-beta se serve. |
+| #17 — orchestrator twin-shot ignora `secondResponse.toolCalls` | **CHIUSO** | Diagnosi via `scripts/diag-tech-debt-17.ts`. Fix: multi-iteration loop con cap=5 + fallback prosa. Vedi sez. "Investigativi" sopra. |
+| #18 — zero unit test orchestrator | **APERTO** (V1.1 post-beta) | Vedi sez. "Investigativi" sopra. |
+
+### Tabella verdetti retest fix #11 punti 1-2 post fix #15
+
+| Punto | Posizione semantica | Esito retest 2026-04-29 | Esito retest 2026-04-30 |
+|---|---|---|---|
+| 1 | S2 turno 2 (follow-up post-"boh", gentle) | FAIL (G1+G2 6 parole copia direct) | **PARZIALE PASS** (3/4 marker pieni, 18 parole vs 20 marginale) |
+| 2 | S5 turno 2 (apertura entry post-"vai", gentle) | FAIL (G1+G2 6 parole formula direct asciutta) | **PARZIALE PASS** (Layer 2 high-avoidance attivo, tono descrittivo coerente) |
+
+### Setup operativo del 2026-04-30 sera
+
+- **Test user.** `cmoh92ksv0006ibkseihlh38g` (`egiulio.psi@gmail.com`), invariato.
+- **Task seedati.** S2 + S5 identici al setup 2026-04-29 (vedi sez. "Setup operativo del 2026-04-29 sera" sopra). Niente S4 (out of scope). Re-seed multiplo nella sessione: setup iniziale → cleanup deviazioni → re-seed pre-fix-17 retest. Id finali: S2 `cmolu7sba0001ib0g81x5x2am`, S5 `cmolu7si50003ib0ggld3s924`.
+- **Profilo test user.** `preferredPromptStyle="gentle"` carryover dal setup 2026-04-29, niente shift in questa sessione. `shameFrustrationSensitivity=3`, `motivationProfile` 6 dimensioni a 0.5, `optimalSessionLength=45`. AdaptiveProfile invariato.
+- **Settings.eveningWindowStart shiftato `20:00 → 19:00`** via `scripts/setup-retest-v1-1.ts`. Motivo: dev server lanciato alle 19:25 Europe/Rome, fuori finestra default. Da ripristinare a `20:00` post-sessione (annotazione manuale, non in commit).
+
+### Deviazioni rilevate durante setup (3)
+
+- **Vecchio S2 residuo del 2026-04-29** (`cmokez8lo0003ibfgwuflhhah`, postponedCount=0, status=inbox). Atteso archiviato post-retest precedente, trovato vivo. Hard delete via `scripts/cleanup-deviazioni.ts`. LearningSignal con quel taskId restano orfani come da pattern (taskId nullable, niente FK cascade). Cause probabile: archive operation di fine sessione 2026-04-29 incompleto su S2.
+- **ChatThread orfano del 2026-04-29** (`cmokgg4jy001fib8ooehl8t5e`, mode=evening_review, state=active). `state='archived'` (no delete, ChatMessage history preservata per debug). Cause: cleanup di fine sessione 2026-04-29 mancante per il thread.
+- **ChatThread paused post-401 del 2026-04-30** (`cmolrupz60001ib0oe9ba7syf`, mode=evening_review, state=paused, lifetime ~14 min 19:42→19:56 Europe/Rome). Generato dal primo tentativo di retest fallito su 401 da Anthropic API (vedi pattern operativo sotto). Thread creato lato server PRIMA della chiamata API, post-fail finito in `paused`. Cleanup via `scripts/cleanup-active-threads.ts` (`updateMany state='archived'` su tutti i thread `state IN (active, paused)` del test user).
+
+### Manipolazioni DB durante la sessione
+
+- 4 hard delete Task (vecchio S2 + S2 stamattina + S5 stamattina). Pattern: matching su titolo esatto in `RESIDUI_TITLES = ['Aggiornare CV...', 'Telefonare al commercialista...']` per evitare false positive.
+- 2 update ChatThread `state → 'archived'` (orfano 2026-04-29 + paused post-401 2026-04-30). 1 ulteriore via `cleanup-active-threads.ts` post-retest fix-17 (thread `cmolsjab60005ib80hnf58rc0` del retest pre-fix-17 con bug `(nessuna risposta)`).
+- 1 update Settings `eveningWindowStart 20:00 → 19:00` (da ripristinare manualmente post-sessione).
+- 4 task seedati (2 setup iniziale + 2 re-seed pre-fix-17 retest), 2 vivi a fine sessione (S2 nuovo + S5 nuovo).
+
+### Pattern operativo: fragilità env shell Windows User-level
+
+- **Manifestazione.** Variabile env `LA_TUA_API_KEY` permanente settata a livello User di Windows da progetto esterno ha inquinato il dev server Shadow al primo refresh del retest, causando 401 sulla prima chiamata Anthropic API. Il dev server Next.js eredita le env User-level del processo padre (PowerShell), e Anthropic SDK ha priorità a `process.env.ANTHROPIC_API_KEY` sopra `.env.local` se entrambe presenti.
+- **Diagnosi.** Lookup via PowerShell: `[Environment]::GetEnvironmentVariable('VAR_NAME', 'User')`. Se non null per pattern `*API_KEY*` esterni al progetto, env permanente inquinante.
+- **Pulizia.** `[Environment]::SetEnvironmentVariable('VAR_NAME', $null, 'User')` rimuove la variabile a livello User. Restart shell per propagazione del nuovo environment.
+- **Implicazione setup E2E future.** Lookup env `*API_KEY*` (qualunque pattern) prima di lanciare dev server da PowerShell. Se trovata env permanente esterna al progetto, rimuoverla o sovrascriverla con override targato User-level (priorità più alta di System).
