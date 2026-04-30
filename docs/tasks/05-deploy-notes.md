@@ -324,3 +324,37 @@ Esito: fix #15 commit `687c04a`, fix #17 commit nuovo (orchestrator multi-iterat
 - **Diagnosi.** Lookup via PowerShell: `[Environment]::GetEnvironmentVariable('VAR_NAME', 'User')`. Se non null per pattern `*API_KEY*` esterni al progetto, env permanente inquinante.
 - **Pulizia.** `[Environment]::SetEnvironmentVariable('VAR_NAME', $null, 'User')` rimuove la variabile a livello User. Restart shell per propagazione del nuovo environment.
 - **Implicazione setup E2E future.** Lookup env `*API_KEY*` (qualunque pattern) prima di lanciare dev server da PowerShell. Se trovata env permanente esterna al progetto, rimuoverla o sovrascriverla con override targato User-level (priorità più alta di System).
+
+## Decisioni tecniche emerse durante mini-task pulizia tech debt 2026-04-30
+
+Sessione di chiusura tech debt pre-Slice 6/7. Cinque mini-task pianificati, cinque chiusi. Un'operazione DB side. Pattern operativi consolidati e nuovi pattern scoperti.
+
+- **`next-env.d.ts` ora gitignored.** Pattern Next.js moderno standard. File autogenerato a ogni `next dev`/`next build`, oscillava tra `./.next/dev/types/routes.d.ts` e `./.next/types/routes.d.ts` generando rumore in `git status`. Rimosso dall'index via `git rm --cached`, aggiunto a `.gitignore`. Closes mini-task #1 from `05-slices.md` issues pre-esistenti.
+
+- **Comando canonico TS validation: `bun run typecheck`.** Aggiunto script `"typecheck": "tsc --noEmit"` in `package.json`. Nota empirica: `bun run typecheck` normalizza l'exit code (0 vs >0), mentre `bunx tsc --noEmit` propaga l'exit di `tsc` originale (1, 2, 4 a seconda della granularità errori). Per dev workflow e CI è sufficiente la distinzione binaria di `bun run`; se serve granularità (raro) usare `bunx tsc` direttamente. Pattern da evitare: `bunx tsc --noEmit | tail -N` — la pipe maschera l'exit code (lo stesso pattern che era stato annotato in deploy-notes Slice 1 come ipotesi è stato confermato sperimentalmente, ma il problema esisteva solo nelle invocazioni manuali, non in script committati).
+
+- **`ignoreBuildErrors: true` rimosso da `next.config.ts`.** `next build` ora valida i tipi effettivamente. Sono stati gestiti due errori TS preesistenti che erano nascosti dal flag:
+  - `scripts/debug-rollback-v10.ts` — cancellato come artefatto di test V10 chiuso (file untracked, gitignored sotto `scripts/debug-*.ts`, mai committato; storia git non aveva nulla da preservare). Lezione: gli script `debug-*.ts` sono effimeri per design, hardcoded di task/thread ID di un test specifico, non template riusabili. Per template di rollback usare `scripts/temp-shift-evening-window.ts` (parametrizzato, idempotente, validato).
+  - `src/app/tasks/page.tsx:2355` (TS2367 `wasStrict`) — coperto con `@ts-expect-error` esplicito + commento che documenta lo scope Task 9 (split file). Il commento contiene `'active_strict' missing from strictModeState type union, scoped to Task 9` per facilitare il fix futuro nello split. Il `@ts-expect-error` è intrinsecamente self-cleaning: se in futuro il TS2367 sparisce (es. fix non intenzionale), TypeScript segnala `Unused @ts-expect-error directive` e forza la rimozione del workaround.
+
+- **`bun run build` passa end-to-end su Windows.** Diagnosi: il problema non era `cp -r` non disponibile (come ipotizzato in deploy-notes Slice 1), ma `cp` di Bun shell builtin essere POSIX strict e rifiutare `-r` (alias GNU coreutils) accettando solo `-R` (POSIX standard). Fix: due caratteri `r → R` nelle due `cp` del build script. Cross-platform: Linux GNU e macOS BSD trattano `-r` e `-R` come alias, Bun shell solo `-R`. Pipeline build ora pulita: `prisma generate && next build && cp -R .next/static .next/standalone/.next/ && cp -R public .next/standalone/`, ~15s. La validazione TS di `next build` (post-rimozione `ignoreBuildErrors`) richiede ~7s e conferma che il `@ts-expect-error` di sopra è riconosciuto anche in fase Next.
+
+- **`vite-tsconfig-paths` rimosso, sostituito da `resolve.tsconfigPaths: true` nativo Vite 8.** Vitest emetteva un warning verbatim "The plugin vite-tsconfig-paths is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option". Verifica empirica post-edit: warning ASSENTE, 138/138 test passati, niente `Cannot find module` su `@/lib/db` o `@/lib/evening-review/triage` (tools.test.ts continua a risolvere). Bonus: vitest run più veloce di ~50ms (overhead plugin sparito). Una dependency npm in meno.
+
+### Pattern operativi consolidati o scoperti
+
+- **Sub-process zombie su Windows post-typecheck.** L'hook `.claude/hooks/typecheck-on-ts-edit.js` lascia talvolta un sub-process `node` orfano dopo l'esecuzione. Sintomo: `Get-Process node` mostra un PID con StartTime recente non riconducibile a dev server. Auto-cleanup entro 30-60s. Non è blocker per build (`prisma generate` non da EPERM), ma se accumulati potrebbero interferire con build futuri. Da indagare se l'accumulo diventa visibile.
+
+- **PowerShell `CategoryInfo: NotSpecified ... NativeCommandError`.** PowerShell tratta certo stderr verbose di Bun come "errore" anche quando è puramente informativo. Se `EXIT: $LASTEXITCODE` è 0, l'output `NativeCommandError` è rumore PowerShell, non un fail reale.
+
+- **Pipe `| tail` mangia exit code in shell PowerShell e bash.** Pattern da evitare quando si vuole il vero exit di un comando precedente. Se serve troncare output e propagare exit, usare in PowerShell `; echo "EXIT: $LASTEXITCODE"` separatamente, oppure in bash `set -o pipefail`. Questo problema era stato annotato come ipotesi in Slice 1, è stato confermato in questa sessione che si presentava solo nelle invocazioni manuali ad-hoc, non in script committati.
+
+- **Autolink markdown indesiderato in commit message.** Il pattern `vite.dev` (URL-like) è stato auto-trasformato in `[vite.dev](http://vite.dev)` da un layer di rendering nella catena di tooling. Catturato pre-commit via `Get-Content` + revisione visuale. Pattern preventivo per future sessioni: nei commit message, evitare URL-like bare dove possibile, preferire formulazioni descrittive.
+
+- **Pattern `git rm --cached` vs `rm` su file gitignored.** Se un file è già gitignored ma non tracked, `git rm --cached` fallisce con "did not match any files". In quel caso usare `rm` semplice. Tipico per file inseriti nel `.gitignore` dopo essere stati creati (mai committati). Differente da `git rm --cached` di un file tracked che si vuole untrackare mantenendo il file fisico (caso del `next-env.d.ts` di questa sessione).
+
+### Issues residui non chiusi (out of scope, tracking)
+
+- **Sub-process zombie post-typecheck-hook** — annotazione mentale, non investigato. Se diventa visibile in futuro, indagare l'hook `.claude/hooks/typecheck-on-ts-edit.js`.
+- **Errore TS2367 `tasks/page.tsx:2355`** — coperto con `@ts-expect-error`, fix vero in scope Task 9 (split file).
+- **`bun run build` rotto da Prisma EPERM su Windows** — situazionale (solo se `bun run dev` o `bunx prisma studio` attivi in altri terminali). Workaround: spegnere i processi Prisma prima del build. Documentare in README sezione "troubleshooting Windows" come mini-task futuro.
