@@ -233,17 +233,17 @@ Bimodale, default + modulazione `shameFrustrationSensitivity`:
 
 ```typescript
 // src/lib/evening-review/config.ts
-export const FILL_RATIO_DEFAULT = 0.6;
-export const FILL_RATIO_HIGH_SENSITIVITY = 0.5;
-export const SENSITIVITY_THRESHOLD_HIGH = 4;
+export const DEFAULT_FILL_RATIO = 0.6;
+export const FILL_RATIO_FOR_HIGH_SENSITIVITY = 0.5;
+export const SENSITIVITY_HIGH_THRESHOLD = 4;
 export const FILL_RATIO_FLOOR = 0.3;
 export const FILL_RATIO_CEILING = 0.85;
 
 function getFillRatio(profile: AdaptiveProfile): number {
-  if (profile.shameFrustrationSensitivity >= SENSITIVITY_THRESHOLD_HIGH) {
-    return FILL_RATIO_HIGH_SENSITIVITY;
+  if (profile.shameFrustrationSensitivity >= SENSITIVITY_HIGH_THRESHOLD) {
+    return FILL_RATIO_FOR_HIGH_SENSITIVITY;
   }
-  return FILL_RATIO_DEFAULT;
+  return DEFAULT_FILL_RATIO;
 }
 ```
 
