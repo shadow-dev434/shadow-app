@@ -79,6 +79,8 @@
 
 ## Slice 5 — Conversazione per-entry
 
+**Stato:** ✅ chiuso V1.1 con riserva (commit `687c04a`, `2544168`, `3c6710b`). Fix #11 PARZIALE PASS (3/4 marker gentle), accettato per beta. Riferimento: `05-deploy-notes.md` sezione "Retest V1.1 #15 — verdetti 2026-04-30 sera".
+
 **Scope:**
 - Variazione mossa apertura per `source × preferredPromptStyle` (Gmail/manual/carry-over × direct/gentle/challenge).
 - Decomposizione opportunistica scatenata da: blocco esplicito dell'utente, o `postponedCount ≥ 3`.
