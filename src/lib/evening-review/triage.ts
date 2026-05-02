@@ -28,6 +28,9 @@ export type TaskProjection = {
   // hasMicroSteps per esporre hasExistingMicroSteps in CURRENT_ENTRY_DETAIL.
   // Scritto da approve_decomposition con sovrascrittura totale (no merge).
   microSteps: string;
+  // Slice 6a: necessari per CandidateTaskInput in buildDailyPlanPreview.
+  size: number;          // Task.size Int default 3
+  priorityScore: number; // Task.priorityScore Float default 0
 };
 
 export type CandidateReason = 'deadline' | 'new' | 'carryover';

@@ -26,6 +26,12 @@ import {
   MAX_PARKED_ENTRIES,
   POSTPONE_PATTERN_THRESHOLD,
 } from '@/lib/evening-review/config';
+import { parseBestTimeWindows } from '@/lib/evening-review/slot-allocation';
+import {
+  buildDailyPlanPreview,
+  formatPlanPreviewForPrompt,
+  type CandidateTaskInput,
+} from '@/lib/evening-review/plan-preview';
 
 export type ChatMode =
   | 'morning_checkin'
@@ -107,25 +113,70 @@ export async function orchestrate(
 
   if (input.mode === 'evening_review') {
     const loaded = loadTriageStateFromContext(thread.contextJson);
-    if (loaded === null) {
-      // Primo turno: init
-      isFirstTurn = true;
-      if (!input.clientDate) {
-        console.warn('[evening-review] clientDate missing, falling back to server-side Europe/Rome');
+    // Triage init/load + profile + settings in parallelo (Slice 6a).
+    // Bundle in 1 round-trip DB invece di 2 sequenziali.
+    const triageWork = (async (): Promise<{
+      triageState: TriageState;
+      allTasks: TaskProjection[];
+      isFirstTurn: boolean;
+    }> => {
+      if (loaded === null) {
+        if (!input.clientDate) {
+          console.warn('[evening-review] clientDate missing, falling back to server-side Europe/Rome');
+        }
+        const result = await initEveningReview(
+          input.userId,
+          input.clientDate ?? formatTodayInRome(),
+        );
+        return { triageState: result.triageState, allTasks: result.allTasks, isFirstTurn: true };
       }
-      const result = await initEveningReview(
-        input.userId,
-        input.clientDate ?? formatTodayInRome(),
-      );
-      triageState = result.triageState;
-      allTasks = result.allTasks;
-    } else {
-      // Turni successivi: load (loaded narrowed to TriageState in this branch)
-      isFirstTurn = false;
-      triageState = loaded;
-      allTasks = await loadAllNonTerminalTasks(input.userId);
-    }
-    modeContext = buildEveningReviewModeContext(triageState, isFirstTurn, allTasks, Date.now());
+      const tasks = await loadAllNonTerminalTasks(input.userId);
+      return { triageState: loaded, allTasks: tasks, isFirstTurn: false };
+    })();
+
+    const [triageResult, profileRow, settingsRow] = await Promise.all([
+      triageWork,
+      db.adaptiveProfile.findUnique({ where: { userId: input.userId } }).catch(() => null),
+      db.settings.findFirst({ where: { userId: input.userId } }).catch(() => null),
+    ]);
+    triageState = triageResult.triageState;
+    allTasks = triageResult.allTasks;
+    isFirstTurn = triageResult.isFirstTurn;
+
+    // Slice 6a: defensive defaults inline (piano B.2).
+    const previewProfile = {
+      optimalSessionLength: profileRow?.optimalSessionLength ?? 25,
+      shameFrustrationSensitivity: profileRow?.shameFrustrationSensitivity ?? 3,
+      bestTimeWindows: parseBestTimeWindows(profileRow?.bestTimeWindows ?? '[]'),
+    };
+    const previewSettings = {
+      wakeTime: settingsRow?.wakeTime ?? '07:00',
+      sleepTime: settingsRow?.sleepTime ?? '23:00',
+    };
+
+    // candidateTasks dalla effective list (originali - excluded + added),
+    // mappata via taskMap a CandidateTaskInput.
+    const taskMap = new Map(allTasks.map((t) => [t.id, t]));
+    const candidateTasks: CandidateTaskInput[] = computeEffectiveList(triageState)
+      .map((id) => taskMap.get(id))
+      .filter((t): t is TaskProjection => t !== undefined)
+      .map((t) => ({
+        taskId: t.id,
+        title: t.title,
+        size: t.size,
+        priorityScore: t.priorityScore,
+      }));
+
+    const preview = buildDailyPlanPreview({
+      candidateTasks,
+      profile: previewProfile,
+      settings: previewSettings,
+    });
+
+    modeContext =
+      buildEveningReviewModeContext(triageState, isFirstTurn, allTasks, Date.now()) +
+      '\n\n' +
+      formatPlanPreviewForPrompt(preview);
   }
 
   // ── 4. Build messages for LLM ────────────────────────────────────────
@@ -401,7 +452,7 @@ function safeParseJSON<T>(json: string, fallback: T): T {
 async function loadAllNonTerminalTasks(userId: string): Promise<TaskProjection[]> {
   return db.task.findMany({
     where: { userId, status: { notIn: terminalTaskStatuses() } },
-    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true, source: true, postponedCount: true, microSteps: true },
+    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true, source: true, postponedCount: true, microSteps: true, size: true, priorityScore: true },
   });
 }
 

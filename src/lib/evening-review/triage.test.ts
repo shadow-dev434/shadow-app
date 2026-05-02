@@ -40,6 +40,8 @@ function makeTask(overrides: Partial<TaskProjection>): TaskProjection {
     source: 'manual',
     postponedCount: 0,
     microSteps: '[]',
+    size: 3,
+    priorityScore: 0,
     ...overrides,
   };
 }

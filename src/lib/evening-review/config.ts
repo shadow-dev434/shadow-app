@@ -24,6 +24,14 @@ export const DEADLINE_PROXIMITY_DAYS = 2;
 export const CANDIDATE_LIST_SOFT_CAP = 12;
 export const POSTPONE_PATTERN_THRESHOLD = 3;
 
+// Plan slot bounds (Area 4.2)
+// Midpoint constants for the morning/afternoon/evening split. Lower bound is
+// Settings.wakeTime, upper bound is Settings.sleepTime. See plan decisions
+// docs/tasks/05-slice-6-decisions.md Area 4.2.1.
+
+export const SLOT_MORNING_END = '12:00';
+export const SLOT_AFTERNOON_END = '17:00';
+
 // Plan sizing - fill ratio (Area 4.5)
 
 export const DEFAULT_FILL_RATIO = 0.6;
