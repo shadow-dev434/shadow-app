@@ -15,9 +15,10 @@ Pensato per il workflow Shadow: approvazione esplicita su `git commit`,
 .claude/
 ├── settings.json              ← permessi e hooks registrati
 ├── hooks/
-│   ├── block-dangerous.js     ← blocca rm -rf, force push, sudo, pipe-to-shell
-│   ├── protect-secrets.js     ← blocca lettura/edit di .env, .pem, key files
-│   └── typecheck-on-ts-edit.js ← lancia tsc dopo edit di .ts (non bloccante)
+│   ├── block-dangerous.js            ← blocca rm -rf, force push, sudo, pipe-to-shell
+│   ├── protect-secrets.js            ← blocca lettura/edit di .env, .pem, key files
+│   ├── typecheck-on-ts-edit.js       ← lancia tsc dopo edit di .ts (non bloccante)
+│   └── auto-approve-safe-edits.js    ← auto-approve Edit/Write su file in whitelist
 └── skills/
     └── post-mortem/
         └── SKILL.md           ← /post-mortem per documentare debug ostici
@@ -52,9 +53,12 @@ Pensato per il workflow Shadow: approvazione esplicita su `git commit`,
      bloccato dall'hook `block-dangerous.js`. Vedrai un messaggio rosso.
    - "Leggi il file `.env`." → deve essere bloccato da `protect-secrets.js`.
    - "CommitTa con `git commit -m test`." → deve **chiedere** approvazione.
+   - "Modifica `src/lib/chat/orchestrator.ts`." → deve **chiedere** approvazione (file in blacklist). Log contiene `"decision":"PASSTHROUGH"` con `reason: blacklist match: chat-orchestrator`.
+   - "Aggiungi un commento in coda a `src/lib/evening-review/duration-estimation.ts`." → deve essere **auto-approvato** senza chiedere. Verifica che `.claude/hooks-audit.log` contenga una linea `"decision":"AUTO_APPROVE"`.
+   - "Modifica un file in `src/lib/evening-review/` rimuovendo un `export function`." → deve **chiedere** approvazione. Log contiene `"decision":"PASSTHROUGH"` con `reason: ... export removal detected`.
 
    Se uno di questi test non funziona, fermati e dimmi quale. Non committare
-   il setup finché tutti e 4 i test passano.
+   il setup finché tutti i test passano.
 
 6. **Commit del setup.**
    ```powershell
@@ -138,6 +142,61 @@ prosegue. Antonio decide se fixare subito o continuare.
 primo `bun run build`, l'hook si attiva.
 
 **Timeout:** 60 secondi. Se tsc non finisce in tempo, viene killato.
+
+### `hooks/auto-approve-safe-edits.js`
+
+PreToolUse hook su `Write`/`Edit`/`MultiEdit`. Auto-approva edit su file in
+whitelist se non rimuovono o rinominano export. Tutti gli altri casi
+(blacklist, default, file non whitelisted) passano al permission system
+standard, che chiede conferma a Antonio come prima.
+
+**Whitelist** (estendi modificando le costanti in cima al file):
+- `src/lib/evening-review/**/*.ts(x)` (anche `.test.ts`)
+- `src/lib/**/*.ts(x)` (eccetto blacklist)
+- `docs/**/*.md`
+
+**Blacklist** (sempre review manuale):
+- `src/lib/chat/orchestrator.ts`, `src/lib/chat/prompts.ts`
+- `src/lib/chat/tools/*-handler.ts`
+- `prisma/**` (incluso `schema.prisma`, migrations, seed)
+- `*.config.ts/js/mjs/cjs`, `next.config.*`, `tsconfig.json`, `package.json`
+- `src/app/api/**`, `src/app/**/page|layout|route.tsx?`
+- `.claude/**` (anti-self-modification)
+- `public/sw.js` (lezione Task 3.5: il SW ha causato bug nascosti)
+
+**Check signature** (solo `.ts`/`.tsx`, salta `.test.ts` e `.md`):
+ricostruisce il file post-edit applicando `tool_input` al contenuto su disco,
+poi confronta i token export (`export function/const/class/type/interface/enum`,
+`export {...}`, `export default`) tra vecchio e nuovo. Se uno è scomparso →
+passthrough. Aggiunte e modifiche additivo-opzionali (es. nuovo parametro
+opzionale a funzione esistente) passano: lo scopo è bloccare *rimozioni* e
+*rinomine*, non micro-cambi di firma (catturati dal `typecheck-on-ts-edit.js`
+PostToolUse).
+
+**Audit log:** `.claude/hooks-audit.log` (JSONL, gitignored via `*.log`).
+Una linea per ogni decisione: `AUTO_APPROVE` o `PASSTHROUGH` con motivo.
+
+**AUDIT REMINDER:** ogni 5 auto-approvazioni cumulative, l'hook inietta un
+`additionalContext` nel turno di Claude Code che ricorda di rileggere il
+log. Soglia configurabile via `AUDIT_REMINDER_INTERVAL` in cima al file.
+
+**Limiti noti:**
+- Check basato su nome simbolo, non firma completa. Cambio del tipo di
+  parametro non viene rilevato (accettabile: typecheck post-edit lo cattura).
+- Per `MultiEdit` con `old_string` non trovato (lettura stale del file in
+  Claude Code), `String.replace` lascia invariato e il check potrebbe
+  vedere `oldT === newT` pure se l'edit reale rimuove un export. Falso
+  negativo accettabile per la stessa ragione.
+- La blacklist vince sempre sulla whitelist. Il default per path non
+  matchato è passthrough, mai auto-approve.
+
+**Estendere:** aggiungi un pattern in cima al file (`WHITELIST` o
+`BLACKLIST`), audita 1-2 settimane di log per verificare zero falsi
+positivi, poi committi.
+
+**Timeout:** 5 secondi (configurato in `settings.json`). Se per qualche
+motivo l'hook si pianta (es. log lock contention), 5s lo killa e fa
+passthrough invece di bloccare la sessione di Antonio.
 
 ### `skills/post-mortem/SKILL.md`
 

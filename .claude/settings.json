@@ -117,6 +117,16 @@
             "command": "node .claude/hooks/protect-secrets.js"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/auto-approve-safe-edits.js",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PostToolUse": [
