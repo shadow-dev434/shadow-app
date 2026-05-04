@@ -101,7 +101,7 @@
 
 **⚠️ Attenzione:** questa è la fetta più grossa del piano. Validato il 25 aprile che **va probabilmente spezzata in sotto-slice** quando ci si arriva. Proposta:
 
-- **6a** — Stima durate (4.1) + fasce qualitative (4.2)
+- **6a** ✅ chiuso (commit `6ca5fb1`, 2 maggio 2026) — Stima durate (4.1) + fasce qualitative (4.2)
 - **6b** — Taglio piano (4.4) + pinning (con stato in `ChatThread.contextJson`)
 - **6c** — Buffer calibrato + floor/soffitto (4.5)
 - **6d** — Suggerimenti energia (4.3) — eventualmente inline in 6a

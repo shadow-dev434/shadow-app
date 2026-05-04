@@ -64,6 +64,7 @@ export type TaskAllocationInput = {
 export type AllocatedTask = {
   taskId: string;
   title: string;
+  size: number;              // 4.3.1: tiebreak energyHint + metadata
   durationLabel: DurationLabel;
   durationMinutes: number;   // server-side, non esposto al modello
   energyHint: string | null;
@@ -324,6 +325,7 @@ type FillState = 'low' | 'balanced' | 'full' | 'overflowing';
 interface AllocatedTask {
   taskId: string;
   title: string;
+  size: number;                  // 4.3.1: tiebreak energyHint + metadata
   durationLabel: DurationLabel;
   durationMinutes: number;       // server-side, non in formatPlanPreviewForPrompt
   energyHint: string | null;
@@ -361,6 +363,7 @@ interface DailyPlanPreview {
 | `morning/afternoon/evening: AllocatedTask[]` | popolato | popolato | da `allocateTasks` |
 | `AllocatedTask.taskId` | sì | sì | |
 | `AllocatedTask.title` | sì | sì | |
+| `AllocatedTask.size` | sì | sì | tiebreak energyHint + metadata |
 | `AllocatedTask.durationLabel` | sì | sì | da `estimateDuration` |
 | `AllocatedTask.durationMinutes` | sì | sì | server-side |
 | `AllocatedTask.energyHint` | sì (max 1 winner) | sì | logica 4.3.1 |
@@ -485,6 +488,33 @@ in 6c questo path verra' sostituito: task va in cut[].
 DOC-STRING di allocateTasks deve esplicitare:
 "in 6a, overflow va in slot max residual; in 6c, va in cut[]".
 Ritorna { morning, afternoon, evening, cut: [], warnings: [] }
+
+
+### Logica di tiebreak per slot allocation
+
+Quando piu' slot hanno capacity residua sufficiente per ospitare un task,
+l'ordine di preferenza e' deterministico:
+
+  SLOT_TIEBREAK_ORDER: morning > afternoon > evening (strict)
+
+Implementazione: il task viene allocato al primo slot della lista
+SLOT_TIEBREAK_ORDER che ha residual capacity >= durationMinutes del task.
+Confronto con strict ">" (non ">="), quindi a parita' di capacity, morning
+vince su afternoon, e afternoon su evening.
+
+Razionale:
+- Idempotenza: stessi input = stesso output, sempre. Niente non-determinismo
+  da floating point o iteration order.
+- Coerenza con bestTimeWindows tipici (morning come finestra piu' produttiva
+  per la maggioranza degli utenti ADHD, vedi spec 4.3.1).
+- Predicibilita' per il modello: riga task nel modeContext sempre nello stesso
+  slot dato lo stesso input, evita che il modello "veda" allocazioni diverse
+  tra turni consecutivi e si confonda.
+
+Edge case: overflow virtuale (un task con durationMinutes > capacity di tutti
+gli slot) viene allocato allo slot con maxResidual al momento della chiamata,
+con tiebreak deterministico SLOT_TIEBREAK_ORDER. In Slice 6a non genera
+warning (warnings: []), in 6c questo path scatena cut[] popolato.
 
 
 ### D.5 `buildDailyPlanPreview(input) → DailyPlanPreview`
