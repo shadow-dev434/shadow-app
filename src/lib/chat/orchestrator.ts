@@ -30,8 +30,15 @@ import { parseBestTimeWindows } from '@/lib/evening-review/slot-allocation';
 import {
   buildDailyPlanPreview,
   formatPlanPreviewForPrompt,
+  type BuildDailyPlanPreviewInput,
   type CandidateTaskInput,
 } from '@/lib/evening-review/plan-preview';
+import {
+  applyPreviewOverrides,
+  EMPTY_PREVIEW_STATE,
+  loadPreviewStateFromContext,
+  type PreviewState,
+} from '@/lib/evening-review/apply-overrides';
 
 export type ChatMode =
   | 'morning_checkin'
@@ -108,11 +115,16 @@ export async function orchestrate(
   // ── 3.5. Evening review triage state ────────────────────────────────
   let triageState: TriageState | null = null;
   let allTasks: TaskProjection[] | null = null;
+  let pendingPreviewState: PreviewState | null = null;
+  let baseInput: BuildDailyPlanPreviewInput | null = null;
   let modeContext = '';
   let isFirstTurn = false;
 
   if (input.mode === 'evening_review') {
     const loaded = loadTriageStateFromContext(thread.contextJson);
+    // Valore iniziale per pendingPreviewState; mutato dal multi-iteration loop
+    // in 3g.7 quando il modello chiama update_plan_preview.
+    pendingPreviewState = loadPreviewStateFromContext(thread.contextJson);
     // Triage init/load + profile + settings in parallelo (Slice 6a).
     // Bundle in 1 round-trip DB invece di 2 sequenziali.
     const triageWork = (async (): Promise<{
@@ -167,11 +179,41 @@ export async function orchestrate(
         priorityScore: t.priorityScore,
       }));
 
-    const preview = buildDailyPlanPreview({
+    // 6b: composizione end-to-end. baseInput contiene anche allUserTasks
+    // filtrato a 'inbox' (decisione 3g.1) come pool per `adds` in
+    // applyPreviewOverrides. Status non-inbox skippati silenziosamente
+    // (decisione documentata in 05-deploy-notes.md, sezione 6b).
+    const localBaseInput: BuildDailyPlanPreviewInput = {
       candidateTasks,
       profile: previewProfile,
       settings: previewSettings,
-    });
+      // Filter+map: TaskProjection -> CandidateTaskInput (proiezione id->taskId).
+      allUserTasks: allTasks
+        .filter((t) => t.status === 'inbox')
+        .map((t) => ({
+          taskId: t.id,
+          title: t.title,
+          size: t.size,
+          priorityScore: t.priorityScore,
+        })),
+    };
+    // Espone baseInput al fuori-branch per uso in 3g.7 (multi-iteration loop
+    // dispatching tool). Local const evita TS narrowing perso su `let` dichiarato
+    // fuori dal branch.
+    baseInput = localBaseInput;
+    // applyPreviewOverrides chiamato sempre in evening_review (G.2):
+    // turno 1 con state EMPTY -> no-op deterministico (test 3d caso 1).
+    // pendingPreviewState ?? EMPTY: il narrowing del tipo non sopravvive
+    // all'await sopra, TS lo vede come PreviewState | null. EMPTY come
+    // fallback teorico (in pratica e' sempre stato assegnato a riga 123)
+    // e' anche difensivo: applyPreviewOverrides con state EMPTY e' no-op,
+    // quindi se domani qualcuno accidentalmente cancellasse l'assignment,
+    // il preview funziona comunque con state vuoto.
+    const modifiedInput = applyPreviewOverrides(
+      localBaseInput,
+      pendingPreviewState ?? EMPTY_PREVIEW_STATE,
+    );
+    const preview = buildDailyPlanPreview(modifiedInput);
 
     modeContext =
       buildEveningReviewModeContext(triageState, isFirstTurn, allTasks, Date.now()) +
@@ -252,11 +294,16 @@ export async function orchestrate(
       for (const tc of currentResponse.toolCalls) {
         const result = await executeTool(tc.name, tc.input, input.userId, {
           triageState: pendingTriageState ?? undefined,
+          previewState: pendingPreviewState ?? undefined,
+          baseInput: baseInput ?? undefined,
         });
         toolsExecuted.push({ name: tc.name, input: tc.input, result: result.data });
         toolResults.push({ toolCall: tc, result });
         if (result.kind === 'mutator' || result.kind === 'mutatorWithSideEffects') {
           pendingTriageState = result.newTriageState;
+        }
+        if (result.kind === 'previewMutator') {
+          pendingPreviewState = result.newPreviewState;
         }
       }
     } else {
@@ -348,8 +395,16 @@ export async function orchestrate(
   const threadUpdateData: { lastTurnAt: Date; contextJson?: string } = {
     lastTurnAt: new Date(),
   };
-  if (pendingTriageState !== null) {
-    threadUpdateData.contextJson = JSON.stringify({ triage: pendingTriageState });
+  if (pendingTriageState !== null || pendingPreviewState !== null) {
+    // 6b: serializza entrambi i namespace via spread condizionale.
+    // Backward compatible: thread 6a (solo 'triage') letto correttamente da
+    // loadTriageStateFromContext (narrow su parsed.triage), e 6b previewState
+    // idem da loadPreviewStateFromContext. Pattern '...(cond && obj)' produce
+    // {} quando cond=false (ECMAScript object spread on false = no-op).
+    threadUpdateData.contextJson = JSON.stringify({
+      ...(pendingTriageState !== null && { triage: pendingTriageState }),
+      ...(pendingPreviewState !== null && { previewState: pendingPreviewState }),
+    });
   }
 
   await db.$transaction([
@@ -452,7 +507,7 @@ function safeParseJSON<T>(json: string, fallback: T): T {
 async function loadAllNonTerminalTasks(userId: string): Promise<TaskProjection[]> {
   return db.task.findMany({
     where: { userId, status: { notIn: terminalTaskStatuses() } },
-    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true, source: true, postponedCount: true, microSteps: true, size: true, priorityScore: true },
+    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true, source: true, postponedCount: true, microSteps: true, size: true, priorityScore: true, status: true },
   });
 }
 

@@ -119,6 +119,52 @@ describe('buildDailyPlanPreview', () => {
     expect(preview.fillEstimate.state).toBe('low');
     expect(preview.fillEstimate.percentage).toBe(0);
   });
+
+  it('caso 9 - pinnedTaskIds=[t1] -> task t1 ha pinned=true', () => {
+    const preview = buildDailyPlanPreview({
+      candidateTasks: [makeCandidate({ taskId: 't1', title: 'task pin', size: 2 })],
+      profile: makeProfile({ bestTimeWindows: ['morning'] as SlotName[] }),
+      settings: makeSettings(),
+      pinnedTaskIds: ['t1'],
+    });
+    const allTasks = [...preview.morning, ...preview.afternoon, ...preview.evening];
+    const t1 = allTasks.find((t) => t.taskId === 't1');
+    expect(t1).toBeDefined();
+    expect(t1!.pinned).toBe(true);
+  });
+
+  it('caso 10 - blockedSlots=["morning"] con 3 task -> morning vuota, task in afternoon/evening', () => {
+    const preview = buildDailyPlanPreview({
+      candidateTasks: [
+        makeCandidate({ taskId: 't1', title: 'a', size: 2 }),
+        makeCandidate({ taskId: 't2', title: 'b', size: 2 }),
+        makeCandidate({ taskId: 't3', title: 'c', size: 2 }),
+      ],
+      profile: makeProfile({ bestTimeWindows: ['morning'] as SlotName[] }),
+      settings: makeSettings(),
+      blockedSlots: ['morning'],
+    });
+    expect(preview.morning).toEqual([]);
+    const placedIds = [...preview.afternoon, ...preview.evening].map((t) => t.taskId).sort();
+    expect(placedIds).toEqual(['t1', 't2', 't3']);
+  });
+
+  it('caso 11 - perTaskOverrides durationLabel=quick -> label e minutes ricalcolati, energyHint preservato', () => {
+    const preview = buildDailyPlanPreview({
+      candidateTasks: [makeCandidate({ taskId: 't1', title: 'big task', size: 5 })],
+      profile: makeProfile({ bestTimeWindows: ['morning'] as SlotName[] }),
+      settings: makeSettings(),
+      perTaskOverrides: { t1: { durationLabel: 'quick' } },
+    });
+    const allTasks = [...preview.morning, ...preview.afternoon, ...preview.evening];
+    const t1 = allTasks.find((t) => t.taskId === 't1');
+    expect(t1).toBeDefined();
+    expect(t1!.durationLabel).toBe('quick');
+    expect(t1!.durationMinutes).toBe(5);
+    // energyHint si basa su size (=5) + bestTimeWindows match, non su minutes:
+    // override durata non lo rimuove.
+    expect(t1!.energyHint).not.toBeNull();
+  });
 });
 
 describe('formatPlanPreviewForPrompt', () => {

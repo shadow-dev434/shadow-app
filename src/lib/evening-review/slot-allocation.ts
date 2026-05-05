@@ -5,11 +5,12 @@
  * un AdaptiveProfile.bestTimeWindows e i bounds delle 3 fasce, ritorna
  * { morning[], afternoon[], evening[], cut[], warnings[] }.
  *
- * In Slice 6a:
+ * In Slice 6a/6b:
  * - capacity di una slot = bounds.minutes (no fillRatio)
  * - cut[] resta sempre vuoto (overflow virtuale -> max residual con
  *   residual negativo accettato; vedi doc-string allocateTasks)
- * - warnings[] resta sempre vuoto (rigido per Osservazione 2)
+ * - warnings[] resta vuoto in 6a; in 6b puo' contenere
+ *   "forced slot blocked, allocating to fallback" (edge case G.10).
  *
  * Rif: docs/tasks/05-slice-6-decisions.md Area 4.2 +
  *      docs/tasks/05-slice-6a-plan.md sezioni A.2 + D.3 + D.4.
@@ -40,6 +41,10 @@ export type TaskAllocationInput = {
   priorityScore: number;
   pinned: boolean;          // 6a: sempre false
   fixedTime: string | null; // 6a: sempre null
+  // 6b (decisione G.10): se presente, alloca direttamente a quello slot.
+  // Se forcedSlot e' anche in input.blockedSlots, emette warning e cade
+  // nella logica residual standard.
+  forcedSlot?: SlotName;
 };
 
 export type AllocatedTask = {
@@ -67,6 +72,7 @@ const DEFAULT_WAKE = '07:00';
 const DEFAULT_SLEEP = '23:00';
 const KNOWN_SLOTS: ReadonlySet<SlotName> = new Set<SlotName>(['morning', 'afternoon', 'evening']);
 const SLOT_TIEBREAK_ORDER: SlotName[] = ['morning', 'afternoon', 'evening'];
+const WARN_FORCED_SLOT_BLOCKED = 'forced slot blocked, allocating to fallback';
 
 export function getSlotBounds(settings: { wakeTime: string; sleepTime: string }): SlotBounds {
   let wake = settings.wakeTime;
@@ -104,6 +110,13 @@ export function getSlotBounds(settings: { wakeTime: string; sleepTime: string })
  * Allocazione deterministica dei task nelle 3 fasce.
  *
  * Algoritmo (4.2.2 step 3):
+ * Pre-Step 1 (Slice 6b): se input.blockedSlots e' non vuoto, clone i
+ * bounds e azzera capacity per ogni slot bloccato. Skip clone e
+ * overhead se blockedSlots e' undefined o []: il path 6a paga zero.
+ * Step 1.5 (Slice 6b): per ogni task con forcedSlot != null, allochiamo
+ * direttamente a quello slot. Se forcedSlot e' in blockedSlots, emette
+ * warning "forced slot blocked, allocating to fallback" e cade nella
+ * logica residual standard (decisione G.10: warning interno, prosa esterna).
  * 1. Per ogni task in input.tasks (ordine preservato):
  *    a) se task.size >= 4 e bestTimeWindows non vuoto:
  *       prova le bestTimeWindows in ordine; assegna alla prima con
@@ -112,27 +125,54 @@ export function getSlotBounds(settings: { wakeTime: string; sleepTime: string })
  * 2. Tiebreak max residual: ordine fisso morning > afternoon > evening
  *    (deterministico per stabilita' test).
  *
- * Overflow in Slice 6a: quando NESSUNO slot ha residual sufficiente
+ * Overflow in Slice 6a/6b: quando NESSUNO slot ha residual sufficiente
  * per un task (capacity totale giorno < durata task), il task va
  * comunque in slot max residual e residual diventa negativo. cut[]
  * resta vuoto. In Slice 6c, questo path verra' sostituito: il task
- * in eccesso andra' in cut[]. warnings[] resta sempre vuoto in 6a
- * (Osservazione 2).
+ * in eccesso andra' in cut[].
  */
 export function allocateTasks(input: {
   tasks: TaskAllocationInput[];
   bestTimeWindows: SlotName[];
   bounds: SlotBounds;
+  blockedSlots?: SlotName[];
 }): AllocationResult {
+  const blockedSlots = input.blockedSlots ?? [];
+
+  // Pre-Step 1 6b: clone solo se serve (preserva input.bounds invariato).
+  let effectiveBounds: SlotBounds = input.bounds;
+  if (blockedSlots.length > 0) {
+    effectiveBounds = {
+      morning: input.bounds.morning,
+      afternoon: input.bounds.afternoon,
+      evening: input.bounds.evening,
+    };
+    for (const slot of blockedSlots) {
+      effectiveBounds[slot] = { ...effectiveBounds[slot], minutes: 0 };
+    }
+  }
+
   const slots: Record<SlotName, AllocatedTask[]> = { morning: [], afternoon: [], evening: [] };
   const residual: Record<SlotName, number> = {
-    morning: input.bounds.morning.minutes,
-    afternoon: input.bounds.afternoon.minutes,
-    evening: input.bounds.evening.minutes,
+    morning: effectiveBounds.morning.minutes,
+    afternoon: effectiveBounds.afternoon.minutes,
+    evening: effectiveBounds.evening.minutes,
   };
+  const warnings: string[] = [];
 
   for (const task of input.tasks) {
-    const targetSlot = pickSlotForTask(task, input.bestTimeWindows, residual);
+    let targetSlot: SlotName;
+    if (task.forcedSlot !== undefined) {
+      if (blockedSlots.includes(task.forcedSlot)) {
+        // 6b edge case G.10: forcedSlot su slot bloccato.
+        warnings.push(WARN_FORCED_SLOT_BLOCKED);
+        targetSlot = pickSlotForTask(task, input.bestTimeWindows, residual);
+      } else {
+        targetSlot = task.forcedSlot;
+      }
+    } else {
+      targetSlot = pickSlotForTask(task, input.bestTimeWindows, residual);
+    }
     slots[targetSlot].push(makeAllocatedTask(task, targetSlot));
     residual[targetSlot] -= task.durationMinutes;
   }
@@ -142,7 +182,7 @@ export function allocateTasks(input: {
     afternoon: slots.afternoon,
     evening: slots.evening,
     cut: [],
-    warnings: [],
+    warnings,
   };
 }
 

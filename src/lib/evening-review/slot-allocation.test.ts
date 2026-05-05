@@ -153,6 +153,100 @@ describe('allocateTasks', () => {
     expect(result.cut).toEqual([]);
     expect(result.warnings).toEqual([]);
   });
+
+  it('caso 14 - forcedSlot=morning vince anche se afternoon ha piu residual', () => {
+    // bounds: morning=100, afternoon=600, evening=360. Senza forcedSlot,
+    // pickMaxResidualSlot sceglierebbe afternoon (600). Con forcedSlot=morning,
+    // vince morning a prescindere.
+    const result = allocateTasks({
+      tasks: [
+        makeAllocInput({ taskId: 'a', size: 3, durationMinutes: 25, forcedSlot: 'morning' }),
+      ],
+      bestTimeWindows: [],
+      bounds: makeBounds({ morning: 100, afternoon: 600, evening: 360 }),
+    });
+    expect(result.morning.map((t) => t.taskId)).toEqual(['a']);
+    expect(result.afternoon).toEqual([]);
+    expect(result.evening).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('caso 15 - forcedSlot=morning vince su bestTimeWindows=["evening"]', () => {
+    // size=5 + bestTimeWindows=["evening"] normalmente -> evening.
+    // forcedSlot=morning batte la logica bestTimeWindows.
+    const result = allocateTasks({
+      tasks: [
+        makeAllocInput({
+          taskId: 'a',
+          size: 5,
+          durationMinutes: 75,
+          durationLabel: 'long',
+          forcedSlot: 'morning',
+        }),
+      ],
+      bestTimeWindows: ['evening'],
+      bounds: makeBounds(),
+    });
+    expect(result.morning.map((t) => t.taskId)).toEqual(['a']);
+    expect(result.evening).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('caso 16 - forcedSlot=morning + blockedSlots=["morning"] -> fallback residual + warning', () => {
+    // morning bloccata -> capacity=0. forcedSlot non puo' essere onorato.
+    // pickMaxResidualSlot con (0, 300, 360) -> evening (360 max).
+    const result = allocateTasks({
+      tasks: [
+        makeAllocInput({ taskId: 'a', size: 3, durationMinutes: 25, forcedSlot: 'morning' }),
+      ],
+      bestTimeWindows: [],
+      bounds: makeBounds(),
+      blockedSlots: ['morning'],
+    });
+    expect(result.morning).toEqual([]);
+    expect(result.evening.map((t) => t.taskId)).toEqual(['a']);
+    expect(result.warnings).toContain('forced slot blocked, allocating to fallback');
+    expect(result.warnings.length).toBe(1);
+  });
+
+  it('caso 17 - blockedSlots=["morning"] senza forcedSlot -> task distribuiti fuori dalla mattina', () => {
+    // morning bloccata. 3 task da 25 min, no forcedSlot, no bestTimeWindows.
+    // Niente task perso, niente warning. Distribuzione esatta tra afternoon/evening
+    // e' dettaglio implementativo del tiebreak/argmax: non testato qui.
+    const result = allocateTasks({
+      tasks: [
+        makeAllocInput({ taskId: 'a', size: 3, durationMinutes: 25 }),
+        makeAllocInput({ taskId: 'b', size: 3, durationMinutes: 25 }),
+        makeAllocInput({ taskId: 'c', size: 3, durationMinutes: 25 }),
+      ],
+      bestTimeWindows: [],
+      bounds: makeBounds(),
+      blockedSlots: ['morning'],
+    });
+    expect(result.morning).toEqual([]);
+    expect(result.afternoon.length + result.evening.length).toBe(3);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('caso 18 - blockedSlots=["morning","afternoon"] + overflow su evening -> tutti in evening, cut=[]', () => {
+    // 2 slot bloccati + 2 task da 200 min -> totale 400 min su evening da 360.
+    // Residual evening va negativo (-40). Invariante 6b: capacity infinita
+    // server-side, niente cut[]. Il taglio e' deliverable di 6c.
+    const result = allocateTasks({
+      tasks: [
+        makeAllocInput({ taskId: 'a', size: 3, durationMinutes: 200 }),
+        makeAllocInput({ taskId: 'b', size: 3, durationMinutes: 200 }),
+      ],
+      bestTimeWindows: [],
+      bounds: makeBounds(),
+      blockedSlots: ['morning', 'afternoon'],
+    });
+    expect(result.morning).toEqual([]);
+    expect(result.afternoon).toEqual([]);
+    expect(result.evening.map((t) => t.taskId)).toEqual(['a', 'b']);
+    expect(result.cut).toEqual([]);
+    expect(result.warnings).toEqual([]);
+  });
 });
 
 describe('parseBestTimeWindows', () => {

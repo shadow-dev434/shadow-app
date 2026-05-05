@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { estimateDuration, mapMinutesToLabel, type DurationLabel } from './duration-estimation';
+import {
+  estimateDuration,
+  mapMinutesToLabel,
+  labelToCanonicalMinutes,
+  type DurationLabel,
+} from './duration-estimation';
 
 function makeTask(overrides: Partial<{ size: number }> = {}): { size: number } {
   return { size: 3, ...overrides };
@@ -77,6 +82,21 @@ describe('mapMinutesToLabel', () => {
     ];
     for (const [minutes, expected] of cases) {
       expect(mapMinutesToLabel(minutes)).toBe(expected);
+    }
+  });
+});
+
+describe('labelToCanonicalMinutes', () => {
+  it('caso 8 - midpoint per ogni label: quick=5, short=20, medium=45, long=75, deep=110', () => {
+    const cases: Array<[DurationLabel, number]> = [
+      ['quick', 5],
+      ['short', 20],
+      ['medium', 45],
+      ['long', 75],
+      ['deep', 110],
+    ];
+    for (const [label, expected] of cases) {
+      expect(labelToCanonicalMinutes(label)).toBe(expected);
     }
   });
 });

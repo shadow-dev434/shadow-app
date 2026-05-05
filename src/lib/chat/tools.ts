@@ -49,6 +49,13 @@ import {
 } from '@/lib/evening-review/config';
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses, type MicroStep } from '@/lib/types/shadow';
+import {
+  UPDATE_PLAN_PREVIEW_TOOL,
+  type UpdatePlanPreviewArgs,
+} from './tools/update-plan-preview-tool';
+import { handleUpdatePlanPreview } from './tools/update-plan-preview-handler';
+import type { PreviewState } from '@/lib/evening-review/apply-overrides';
+import type { BuildDailyPlanPreviewInput } from '@/lib/evening-review/plan-preview';
 
 export const CHAT_TOOLS: LLMTool[] = [
   {
@@ -204,7 +211,7 @@ export const EVENING_REVIEW_TOOLS: LLMTool[] = [
  */
 export function getToolsForMode(mode: string): LLMTool[] {
   if (mode === 'evening_review') {
-    return [...CHAT_TOOLS, ...EVENING_REVIEW_TOOLS];
+    return [...CHAT_TOOLS, ...EVENING_REVIEW_TOOLS, UPDATE_PLAN_PREVIEW_TOOL];
   }
   return CHAT_TOOLS;
 }
@@ -229,16 +236,26 @@ export type ToolExecutionResult =
       success: true;
       data?: unknown;
       newTriageState: TriageState;
+    }
+  | {
+      kind: 'previewMutator';
+      success: true;
+      data?: unknown;
+      newPreviewState: PreviewState;
     };
 
 export interface ToolExecutionContext {
   triageState?: TriageState;
+  previewState?: PreviewState;
+  baseInput?: BuildDailyPlanPreviewInput;
 }
 
 /**
  * Executes a tool call and returns its result.
  *
- * Three result kinds (see file header for the full convention):
+ * Three result kinds (see file header for the full convention).
+ * Slice 6b: aggiunto 'previewMutator' per update_plan_preview, parallelo
+ * a 'mutator' ma su PreviewState invece di TriageState.
  * - 'sideEffect': DB writes done in executor; no triage state mutation.
  *   Also the failure mode for any kind: ownership/validation failures
  *   return { kind: 'sideEffect', success: false, error }. The try/catch
@@ -246,6 +263,9 @@ export interface ToolExecutionContext {
  * - 'mutator' (Slice 4): triage state delta only, no DB writes.
  * - 'mutatorWithSideEffects' (Slice 5): DB writes done in executor AND
  *   triage state delta returned for orchestrator commit.
+ * - 'previewMutator' (Slice 6b): preview state delta only, no DB writes.
+ *   Handler ritorna newPreviewState; orchestrator accumula in
+ *   pendingPreviewState e flush in $transaction (3g.8).
  */
 export async function executeTool(
   toolName: string,
@@ -273,6 +293,8 @@ export async function executeTool(
         return await executeProposeDecomposition(input, userId, context?.triageState);
       case 'approve_decomposition':
         return await executeApproveDecomposition(input, userId, context?.triageState);
+      case 'update_plan_preview':
+        return await executeUpdatePlanPreview(input, userId, context);
       default:
         return { kind: 'sideEffect', success: false, error: `Unknown tool: ${toolName}` };
     }
@@ -877,5 +899,46 @@ async function executeApproveDecomposition(
       action: 'decomposition_approved',
     },
     newTriageState: finalState,
+  };
+}
+
+async function executeUpdatePlanPreview(
+  input: Record<string, unknown>,
+  userId: string,
+  context: ToolExecutionContext | undefined,
+): Promise<ToolExecutionResult> {
+  // Guard: orchestrator deve passare previewState + baseInput + triageState.
+  // Se mancano, l'orchestrator non e' in evening_review fase preview oppure
+  // c'e' wiring sbagliato. Messaggio model-friendly: il modello vede questo
+  // se per errore chiama il tool fuori fase.
+  if (!context?.previewState || !context.baseInput || !context.triageState) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'update_plan_preview is only available during the evening review preview phase',
+    };
+  }
+
+  const result = await handleUpdatePlanPreview({
+    userId,
+    args: input as UpdatePlanPreviewArgs,
+    currentPreviewState: context.previewState,
+    baseInput: context.baseInput,
+    triageState: context.triageState,
+  });
+
+  if (!result.ok) {
+    return { kind: 'sideEffect', success: false, error: result.error };
+  }
+
+  // Tool result al modello: solo segnale 'ok'. Il preview aggiornato passa
+  // via mode-context al turno successivo (orchestrator ricostruisce con
+  // applyPreviewOverrides + buildDailyPlanPreview), non via tool_result.
+  // Decisione G.6: canale espositivo unico.
+  return {
+    kind: 'previewMutator',
+    success: true,
+    data: { ok: true },
+    newPreviewState: result.newPreviewState,
   };
 }

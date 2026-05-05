@@ -72,18 +72,34 @@
       "Bash(curl:*)",
       "Bash(wget:*)",
 
+      "Edit(src/lib/chat/orchestrator.ts)",
+      "Write(src/lib/chat/orchestrator.ts)",
+      "MultiEdit(src/lib/chat/orchestrator.ts)",
+      "Edit(src/lib/chat/prompts.ts)",
+      "Write(src/lib/chat/prompts.ts)",
+      "MultiEdit(src/lib/chat/prompts.ts)",
+      "Edit(src/lib/chat/tools/update-plan-preview-handler.ts)",
+      "Write(src/lib/chat/tools/update-plan-preview-handler.ts)",
+      "MultiEdit(src/lib/chat/tools/update-plan-preview-handler.ts)",
+
       "Write(prisma/schema.prisma)",
       "Edit(prisma/schema.prisma)",
+      "MultiEdit(prisma/schema.prisma)",
       "Write(.env)",
       "Edit(.env)",
+      "MultiEdit(.env)",
       "Write(.env.local)",
       "Edit(.env.local)",
+      "MultiEdit(.env.local)",
       "Write(.env.production)",
       "Edit(.env.production)",
+      "MultiEdit(.env.production)",
       "Write(next.config.*)",
       "Edit(next.config.*)",
+      "MultiEdit(next.config.*)",
       "Write(package.json)",
-      "Edit(package.json)"
+      "Edit(package.json)",
+      "MultiEdit(package.json)"
     ],
 
     "deny": [

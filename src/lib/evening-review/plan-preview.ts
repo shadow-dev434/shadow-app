@@ -10,7 +10,7 @@
  * pinned/fixedTime sempre default. Vedi 05-slice-6a-plan.md A.3 + D.5 + D.6.
  */
 
-import { estimateDuration } from './duration-estimation';
+import { estimateDuration, labelToCanonicalMinutes, type DurationLabel } from './duration-estimation';
 import {
   allocateTasks,
   getSlotBounds,
@@ -47,6 +47,14 @@ export type CandidateTaskInput = {
   priorityScore: number;
 };
 
+// Slice 6b: override per-task applicati da applyPreviewOverrides (3d).
+// Definito qui per evitare ciclo plan-preview <-> apply-overrides:
+// apply-overrides.ts importera' questo tipo come `import type`.
+export type PerTaskOverride = {
+  durationLabel?: DurationLabel;
+  forcedSlot?: SlotName;
+};
+
 export type BuildDailyPlanPreviewInput = {
   candidateTasks: CandidateTaskInput[];
   profile: {
@@ -58,6 +66,13 @@ export type BuildDailyPlanPreviewInput = {
     wakeTime: string;
     sleepTime: string;
   };
+  // 6b additivi opzionali. Default undefined -> path 6a invariato.
+  // allUserTasks NON viene letto da buildDailyPlanPreview: serve a
+  // applyPreviewOverrides (3d) come pool per `adds`.
+  allUserTasks?: CandidateTaskInput[];
+  blockedSlots?: SlotName[];
+  perTaskOverrides?: Record<string, PerTaskOverride>;
+  pinnedTaskIds?: string[];
 };
 
 const ENERGY_HINT_PEAK = 'peak window for hard task';
@@ -70,17 +85,34 @@ const SLOT_ORDER: readonly SlotName[] = ['morning', 'afternoon', 'evening'] as c
 
 export function buildDailyPlanPreview(input: BuildDailyPlanPreviewInput): DailyPlanPreview {
   const allocationInputs: TaskAllocationInput[] = input.candidateTasks.map((c) => {
-    const { minutes, label } = estimateDuration(c, input.profile);
-    return {
+    const baseEst = estimateDuration(c, input.profile);
+    const override = input.perTaskOverrides?.[c.taskId];
+
+    // 6b override durata (decisione G.9): se l'utente ha fornito una label
+    // qualitativa via tool, sostituisce label + minuti canonici. Altrimenti
+    // resta la stima di estimateDuration. Non altera energyHint, che si
+    // basa su `size`.
+    let durationMinutes = baseEst.minutes;
+    let durationLabel = baseEst.label;
+    if (override?.durationLabel !== undefined) {
+      durationLabel = override.durationLabel;
+      durationMinutes = labelToCanonicalMinutes(durationLabel);
+    }
+
+    const result: TaskAllocationInput = {
       taskId: c.taskId,
       title: c.title,
       size: c.size,
-      durationMinutes: minutes,
-      durationLabel: label,
+      durationMinutes,
+      durationLabel,
       priorityScore: c.priorityScore,
-      pinned: false,
+      pinned: input.pinnedTaskIds?.includes(c.taskId) ?? false,
       fixedTime: null,
     };
+    if (override?.forcedSlot !== undefined) {
+      result.forcedSlot = override.forcedSlot;
+    }
+    return result;
   });
 
   const bounds = getSlotBounds(input.settings);
@@ -88,6 +120,7 @@ export function buildDailyPlanPreview(input: BuildDailyPlanPreviewInput): DailyP
     tasks: allocationInputs,
     bestTimeWindows: input.profile.bestTimeWindows,
     bounds,
+    blockedSlots: input.blockedSlots,
   });
 
   // EnergyHint 4.3.1: muta in-place l'AllocatedTask vincente (creato da

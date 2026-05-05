@@ -42,6 +42,7 @@ function makeTask(overrides: Partial<TaskProjection>): TaskProjection {
     microSteps: '[]',
     size: 3,
     priorityScore: 0,
+    status: 'inbox',
     ...overrides,
   };
 }
@@ -327,6 +328,9 @@ describe('reasonsFromCandidates', () => {
         source: 'manual',
         postponedCount: 0,
         microSteps: '[]',
+        size: 3,
+        priorityScore: 0,
+        status: 'inbox',
         reason: 'deadline',
       },
       {
@@ -339,6 +343,9 @@ describe('reasonsFromCandidates', () => {
         source: 'manual',
         postponedCount: 0,
         microSteps: '[]',
+        size: 3,
+        priorityScore: 0,
+        status: 'inbox',
         reason: 'carryover',
       },
     ];

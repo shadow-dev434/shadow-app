@@ -38,6 +38,26 @@ export function mapMinutesToLabel(minutes: number): DurationLabel {
   return 'deep';
 }
 
+// Slice 6b (decisione G.9): mappatura inversa label -> minuti canonici.
+// Usata da applyPreviewOverrides quando l'utente fornisce un override
+// qualitativo della durata ("la mail e' una cosa al volo" -> label 'quick').
+// Il valore e' il midpoint del range di mapMinutesToLabel: serve solo per
+// fillEstimate.percentage e allocation, la label resta esposta al modello.
+export function labelToCanonicalMinutes(label: DurationLabel): number {
+  switch (label) {
+    case 'quick':
+      return 5;
+    case 'short':
+      return 20;
+    case 'medium':
+      return 45;
+    case 'long':
+      return 75;
+    case 'deep':
+      return 110;
+  }
+}
+
 function clampSizeKey(size: number): 1 | 2 | 3 | 4 | 5 {
   if (!Number.isFinite(size)) return FALLBACK_SIZE_KEY;
   const rounded = Math.round(size);

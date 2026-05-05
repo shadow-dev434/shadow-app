@@ -31,6 +31,10 @@ export type TaskProjection = {
   // Slice 6a: necessari per CandidateTaskInput in buildDailyPlanPreview.
   size: number;          // Task.size Int default 3
   priorityScore: number; // Task.priorityScore Float default 0
+  // Slice 6b: necessario per filtrare allUserTasks a 'inbox' soltanto
+  // prima di passarli ad applyPreviewOverrides come pool per `adds`.
+  status: string;        // 'inbox' | 'planned' | 'active' | 'in_progress'
+                         // (dopo filter terminalTaskStatuses; valori da shadow.ts)
 };
 
 export type CandidateReason = 'deadline' | 'new' | 'carryover';
