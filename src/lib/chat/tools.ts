@@ -40,6 +40,7 @@ import {
   countParked,
   computeEffectiveList,
   type EntryOutcome,
+  type EveningReviewPhase,
   type TriageState,
 } from '@/lib/evening-review/triage';
 import {
@@ -54,6 +55,8 @@ import {
   type UpdatePlanPreviewArgs,
 } from './tools/update-plan-preview-tool';
 import { handleUpdatePlanPreview } from './tools/update-plan-preview-handler';
+import { CONFIRM_PLAN_PREVIEW_TOOL } from './tools/confirm-plan-preview-tool';
+import { handleConfirmPlanPreview } from './tools/confirm-plan-preview-handler';
 import type { PreviewState } from '@/lib/evening-review/apply-overrides';
 import type { BuildDailyPlanPreviewInput } from '@/lib/evening-review/plan-preview';
 
@@ -211,7 +214,12 @@ export const EVENING_REVIEW_TOOLS: LLMTool[] = [
  */
 export function getToolsForMode(mode: string): LLMTool[] {
   if (mode === 'evening_review') {
-    return [...CHAT_TOOLS, ...EVENING_REVIEW_TOOLS, UPDATE_PLAN_PREVIEW_TOOL];
+    return [
+      ...CHAT_TOOLS,
+      ...EVENING_REVIEW_TOOLS,
+      UPDATE_PLAN_PREVIEW_TOOL,
+      CONFIRM_PLAN_PREVIEW_TOOL,
+    ];
   }
   return CHAT_TOOLS;
 }
@@ -242,12 +250,19 @@ export type ToolExecutionResult =
       success: true;
       data?: unknown;
       newPreviewState: PreviewState;
+    }
+  | {
+      kind: 'phaseMutator';
+      success: true;
+      data?: unknown;
+      newPhase: EveningReviewPhase;
     };
 
 export interface ToolExecutionContext {
   triageState?: TriageState;
   previewState?: PreviewState;
   baseInput?: BuildDailyPlanPreviewInput;
+  currentPhase?: EveningReviewPhase;
 }
 
 /**
@@ -295,6 +310,8 @@ export async function executeTool(
         return await executeApproveDecomposition(input, userId, context?.triageState);
       case 'update_plan_preview':
         return await executeUpdatePlanPreview(input, userId, context);
+      case 'confirm_plan_preview':
+        return executeConfirmPlanPreview(context);
       default:
         return { kind: 'sideEffect', success: false, error: `Unknown tool: ${toolName}` };
     }
@@ -510,17 +527,76 @@ async function executeSetCurrentEntry(
     return { kind: 'sideEffect', success: false, error: `Task ${entryId} not found or not owned by user` };
   }
 
+  // V1.2.2 alreadyOpen detection (skipped-close): se l'entry e' gia'
+  // currentEntryId AND outcomes[entryId] e' undefined, il modello sta
+  // aprendo entry che era stata aperta nel turno precedente ma non chiusa.
+  // Pattern: turno N apre entry X, turno N+1 dovrebbe chiudere X (mark) e
+  // aprire next, modello invece replica solo l'apertura dell'entry X.
+  // Bias di self-perception: modello tratta turno N+1 come prima apertura
+  // del flow per_entry, ignora che X era gia' aperta.
+  //
+  // Escape hatch firstTurnAfterResume: dopo resume di review interrotta
+  // (paused -> active in active-thread/route.ts), il modello legittimamente
+  // puo' richiamare set_current_entry per ri-orientarsi sulla entry
+  // resumed. Se il flag e' true, skippiamo il guard e procediamo con
+  // l'idempotenza V1.2 (cursor_already_set success), clearando il flag.
+  // Vedi TriageState.firstTurnAfterResume in triage.ts per il razionale
+  // catastrofico.
+  if (
+    triageState.currentEntryId === entryId &&
+    triageState.outcomes?.[entryId] === undefined &&
+    !triageState.firstTurnAfterResume
+  ) {
+    // Two-pass next-entry selection (stesso algoritmo di V1.2.1
+    // executeMarkEntryDiscussed): prefer unprocessed, fallback parked.
+    // id !== entryId in entrambi i pass: simmetria difensiva, invariante
+    // a futuri cambi della guard condition (oggi outcomes[entryId] ===
+    // undefined garantisce che pass 2 non matcherebbe entryId comunque).
+    const effective = computeEffectiveList(triageState);
+    const outcomes = triageState.outcomes ?? {};
+    let suggestedNextEntryId: string | null = effective.find(
+      (id) => id !== entryId && outcomes[id] === undefined,
+    ) ?? null;
+    if (suggestedNextEntryId === null) {
+      suggestedNextEntryId = effective.find(
+        (id) => id !== entryId && outcomes[id] === 'parked',
+      ) ?? null;
+    }
+
+    console.warn(
+      `[V1.2.2 skipped-close detection] set_current_entry rejected: ` +
+      `entryId=${entryId} (already currentEntryId, outcome undefined) ` +
+      `suggestedNextEntryId=${suggestedNextEntryId ?? 'null'} ` +
+      `(setting selfCorrectedInPreviousTurn=true)`,
+    );
+    return {
+      kind: 'sideEffect',
+      success: false,
+      data: { entryId, alreadyOpen: true, suggestedNextEntryId },
+      error: suggestedNextEntryId !== null
+        ? `Entry ${entryId} is already the active CURRENT_ENTRY but has no outcome assigned. The current user message closes it. Required next actions: (1) call mark_entry_discussed({entryId: '${entryId}', outcome: ...}) based on user's response (kept/postponed/cancelled/parked/emotional_skip), then (2) call set_current_entry({entryId: '${suggestedNextEntryId}'}) on the next unprocessed entry.`
+        : `Entry ${entryId} is already the active CURRENT_ENTRY but has no outcome assigned. The current user message closes it. Required next action: call mark_entry_discussed({entryId: '${entryId}', outcome: ...}) to close it, then transition to plan_preview phase (all candidate entries processed).`,
+    };
+  }
+
   // Idempotent fast-path: cursor already on this entry => mutator success no-op.
-  // Returns same triageState ref; orchestrator chain assigns same ref harmlessly.
-  // Prompt-side handling of action='cursor_already_set' will land in commit 3-4
-  // (TODO): the model must read it as "entry is already current, proceed with
-  // conversation, do not re-call set_current_entry".
+  // Post-V1.2.2: arrivamo qui solo se (a) outcomes[entryId] e' definito
+  // (parked re-attach o sub-flow legittimo), oppure (b) firstTurnAfterResume
+  // e' true (escape hatch resume). In entrambi i casi, clearano il flag se
+  // settato (Opzione beta: reset solo nei handler V1.2.2-relevanti).
+  // V1.3.1 (refactor V1.3 lifecycle): clear di selfCorrectedInPreviousTurn
+  // RIMOSSO da qui. Vedi mark_entry_discussed sopra e triage.ts JSDoc per
+  // il lifecycle V1.3.1 completo (clear ora in orchestrator.ts sezione 5.5).
   if (triageState.currentEntryId === entryId) {
+    let newTriageState = triageState;
+    if (triageState.firstTurnAfterResume) {
+      newTriageState = { ...newTriageState, firstTurnAfterResume: false };
+    }
     return {
       kind: 'mutator',
       success: true,
       data: { entryId, taskTitle: task.title, action: 'cursor_already_set' },
-      newTriageState: triageState,
+      newTriageState,
     };
   }
 
@@ -603,6 +679,52 @@ async function executeMarkEntryDiscussed(
     return { kind: 'sideEffect', success: false, error: `Task ${entryId} not found or not owned by user` };
   }
 
+  // V1.2 replica detection (V1.2.1 patch 2026-05-06): se l'entry ha gia' un
+  // outcome diverso da 'parked', il modello sta replicando il tool call del
+  // turno precedente. Re-mark di entry parked resta legittimo (re-attach flow
+  // Slice 5 commit f9c53ac, 2026-04-28).
+  //
+  // V1.2 originale ritornava un error narrativo che chiedeva al modello di
+  // "ricalcolare dal modeContext". Retest E2E 2026-05-06 ha mostrato che il
+  // modello ignora l'istruzione argomentativa: replica per 3 iter di seguito,
+  // bias di self-perception "io sto rispondendo correttamente perche' il mio
+  // testo finale matcha currentEntryId server-side". V1.2.1 porge il valore
+  // concreto via data.suggestedNextEntryId (calcolato two-pass: unprocessed
+  // first, parked fallback). Il prompt SELF-CORRECTION HANDLING istruisce a
+  // chiamare set_current_entry con quel valore esatto, riducendo il carico
+  // cognitivo da "compute next" a "use this".
+  const existingOutcome = triageState.outcomes?.[entryId];
+  if (existingOutcome !== undefined && existingOutcome !== 'parked') {
+    // Two-pass: parked e' sospensione transitoria dell'utente, va consumato
+    // dopo gli unprocessed, non in mezzo. Single-pass mischiato ridurrebbe
+    // la semantica del parking come scelta esplicita.
+    const effective = computeEffectiveList(triageState);
+    const outcomes = triageState.outcomes ?? {};
+    let suggestedNextEntryId: string | null = effective.find(
+      (id) => outcomes[id] === undefined,
+    ) ?? null;
+    if (suggestedNextEntryId === null) {
+      suggestedNextEntryId = effective.find(
+        (id) => outcomes[id] === 'parked',
+      ) ?? null;
+    }
+
+    console.warn(
+      `[V1.2 replica detection] mark_entry_discussed rejected: ` +
+      `entryId=${entryId} existingOutcome=${existingOutcome} ` +
+      `suggestedNextEntryId=${suggestedNextEntryId ?? 'null'} ` +
+      `(setting selfCorrectedInPreviousTurn=true)`,
+    );
+    return {
+      kind: 'sideEffect',
+      success: false,
+      data: { entryId, existingOutcome, alreadyClosed: true, suggestedNextEntryId },
+      error: suggestedNextEntryId !== null
+        ? `Entry already closed: outcome=${existingOutcome}. This is mechanical replay. Next action: call set_current_entry({entryId: '${suggestedNextEntryId}'}), then conduct the conversation, then call mark_entry_discussed on that new entry.`
+        : `Entry already closed: outcome=${existingOutcome}. This is mechanical replay. All candidate entries processed. Transition to plan_preview phase instead of calling set_current_entry.`,
+    };
+  }
+
   // Parking limit: re-park dello stesso entry e' idempotente e non incrementa
   // il count; park di un entry non-gia'-parked richiede countParked < MAX.
   if (outcome === 'parked' && triageState.outcomes?.[entryId] !== 'parked') {
@@ -663,6 +785,23 @@ async function executeMarkEntryDiscussed(
   if (newState.decomposition?.taskId === entryId) {
     newState = clearDecomposition(newState);
   }
+  // V1.2.2 Opzione beta: clear firstTurnAfterResume flag al primo tool
+  // call V1.2.2-relevante del turno post-resume. set_current_entry e
+  // mark_entry_discussed sono entrambi handler di transizione cursor;
+  // clearare in entrambi garantisce che indipendentemente da quale tool
+  // il modello chiami per primo (apertura nuova vs chiusura corrente),
+  // il flag esce dal lifecycle. Vedi triage.ts firstTurnAfterResume.
+  if (newState.firstTurnAfterResume) {
+    newState = { ...newState, firstTurnAfterResume: false };
+  }
+  // V1.3.1 (refactor V1.3 lifecycle): clear di selfCorrectedInPreviousTurn
+  // RIMOSSO da qui. Il SET avviene in orchestrator.ts for-loop su detection
+  // guard failure, e il CLEAR avviene in orchestrator.ts sezione 5.5 PRIMA
+  // del first callLLM del turno N+1, dopo il calc isAtRiskTurn. Razionale:
+  // il bug V1.3 era che self-correction loop avviene NELLO STESSO turno
+  // (multi-iteration), quindi il clear handler-side rimuoveva il flag
+  // prima che il turno N+1 potesse vederlo. Vedi triage.ts JSDoc
+  // selfCorrectedInPreviousTurn per il lifecycle V1.3.1 completo.
   return {
     kind: 'mutatorWithSideEffects',
     success: true,
@@ -940,5 +1079,37 @@ async function executeUpdatePlanPreview(
     success: true,
     data: { ok: true },
     newPreviewState: result.newPreviewState,
+  };
+}
+
+function executeConfirmPlanPreview(
+  context: ToolExecutionContext | undefined,
+): ToolExecutionResult {
+  // Guard: orchestrator deve passare triageState. Se manca, non siamo in
+  // evening_review oppure wiring sbagliato. Messaggio model-friendly.
+  if (!context?.triageState) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'confirm_plan_preview is only available during the evening review preview phase',
+    };
+  }
+
+  const result = handleConfirmPlanPreview({
+    triageState: context.triageState,
+    currentPhase: context.currentPhase,
+  });
+
+  if (!result.ok) {
+    return { kind: 'sideEffect', success: false, error: result.error };
+  }
+
+  // Tool result al modello: solo segnale 'ok'. La phase change passa via
+  // mode-context al turno successivo (B.5.6 sezione FASE CLOSING del prompt).
+  return {
+    kind: 'phaseMutator',
+    success: true,
+    data: { ok: true },
+    newPhase: result.newPhase,
   };
 }

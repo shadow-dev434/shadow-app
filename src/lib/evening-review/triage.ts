@@ -212,6 +212,116 @@ export type TriageState = {
 
   /** Active decomposition workspace, or null when no decomposition is in progress. */
   decomposition?: DecompositionWorkspace | null;
+
+  /**
+   * Slice 5 V1.2.2 (2026-05-06): true sse il thread evening_review ha
+   * appena transitato da 'paused' a 'active' (resume di review interrotta).
+   * Settato da active-thread/route.ts al momento del state-change paused
+   * -> active. Cleared dai handler tools.ts (mark_entry_discussed,
+   * set_current_entry) al primo tool call che muta state nel turno
+   * post-resume.
+   *
+   * Scopo: escape hatch per il guard V1.2.2 alreadyOpen detection in
+   * executeSetCurrentEntry. Senza questo flag, il modello che chiama
+   * set_current_entry sull'entry resumed (legittimo per ri-orientarsi
+   * alla conversazione) verrebbe falsamente rilevato come skipped-close
+   * e suggerirebbe la prossima entry da aprire, facendo saltare
+   * silenziosamente l'entry resumed. Catastrofico: outcome non assegnato,
+   * conversazione mai avvenuta, utente non se ne accorge.
+   */
+  firstTurnAfterResume?: boolean;
+
+  /**
+   * Slice 5 V1.3 (2026-05-08), refactored V1.3.1 (2026-05-09): true sse nel
+   * turno precedente uno dei guard di self-correction (V1.2 alreadyClosed in
+   * mark_entry_discussed o V1.2.2 alreadyOpen in set_current_entry) ha
+   * scattato. Lifecycle V1.3.1 — entrambi orchestrator-side:
+   * - SET: orchestrator.ts for-loop tool execution (Blocco C V1.3) su
+   *   detection di guard failure nel turno corrente (quando un tool_result
+   *   ha data.alreadyClosed === true o data.alreadyOpen === true). Mutua
+   *   pendingTriageState con flag=true; commit a fine turno.
+   * - CLEAR: orchestrator.ts sezione 5.5 al turno N+1, DOPO calc
+   *   isAtRiskTurn (che legge il flag), PRIMA del first callLLM. Mutua
+   *   triageState; il clear propaga a pendingTriageState via init a riga
+   *   326 post-callLLM.
+   *
+   * Razionale architetturale del refactor V1.3.1: lifecycle distinto da
+   * firstTurnAfterResume (CLEAR handler-side perche' SET esterno via
+   * route.ts active-thread su paused -> active). Per
+   * selfCorrectedInPreviousTurn, sia SET che CLEAR sono orchestrator-side
+   * perche' il SET avviene durante il for-loop dello stesso turno e il
+   * CLEAR deve avvenire al turno N+1, non al turno N.
+   *
+   * Bug V1.3 originale (fixato in V1.3.1): clear handler-side eseguiva
+   * CLEAR nello stesso turno del SET, perche' self-correction loop avviene
+   * via multi-iteration nel medesimo turno utente. Quando turno N+1 partiva,
+   * flag era gia' false, isAtRiskTurn falso, force non applicato. Diagnosi
+   * via stderr telemetry retest E2E 2026-05-08: V1.2 + V1.2.2 + V1.3
+   * detection tutti firing al turno 12, ma turni 13-15 replica testuale
+   * con payloadJson === null. Fix V1.3.1: spostato CLEAR da handler a
+   * orchestrator pre-callLLM.
+   *
+   * Scopo: trigger per forced tool_choice nell'orchestrator V1.3. Quando
+   * questo flag e' true OR firstTurnAfterResume e' true, il turno corrente
+   * e' "a rischio" (post-resume o post-self-correction): l'orchestrator
+   * passa toolChoice: { type: 'any' } al first callLLM per forzare il
+   * modello a tool-call invece di text response. Neutralizza il bug
+   * "tool-call avoidance post-self-correction su history lunga": il
+   * modello sa che dovrebbe chiamare set/mark (per error message +
+   * suggestedNextEntryId), ma in long history sceglie a volte di
+   * rispondere in TEXT bypassando la self-correction. Catastrofico:
+   * loop di replica testuale "X - dimmi" con payloadJson === null per
+   * turni consecutivi.
+   *
+   * NON forzato sul multi-iteration loop iter >=1 (tool_choice default auto):
+   * dopo il first callLLM forzato, le iter successive dello stesso turno
+   * sono guidate dai tool_results del primo, non serve force.
+   */
+  selfCorrectedInPreviousTurn?: boolean;
+
+  /**
+   * Slice 5 V1.3.2 (2026-05-09): true sse il turno utente precedente nello
+   * stesso thread evening_review fase per_entry e' terminato senza che il
+   * modello abbia chiamato alcun tool (text-only response, payloadJson === null).
+   * Lifecycle simmetrico a selfCorrectedInPreviousTurn V1.3.1 — entrambi
+   * orchestrator-side:
+   * - SET: orchestrator.ts post for-loop tool execution, pre-commit a
+   *   contextJson. Predicato: mode='evening_review' && pendingTriageState
+   *   non-null && effectivePhase='per_entry' && toolsExecuted.length === 0
+   *   && lastTurnWasTextOnly !== true (idempotenza, evita re-set su turni
+   *   text-only consecutivi e spread waste).
+   * - CLEAR: orchestrator.ts sezione 5.5 al turno N+1, DOPO calc isAtRiskTurn,
+   *   PRIMA del first callLLM. Pattern identico al clear di
+   *   selfCorrectedInPreviousTurn (V1.3.1-C).
+   *
+   * Scopo: terzo trigger per forced tool_choice (oltre firstTurnAfterResume
+   * V1.2.2 e selfCorrectedInPreviousTurn V1.3). Quando questo flag e' true,
+   * isAtRiskTurn=true e l'orchestrator passa toolChoice='any' al first
+   * callLLM, forzando il modello a tool-call invece di text response.
+   *
+   * Bug V1.3.1 originale (fixato in V1.3.2): V1.3 + V1.3.1 detectano solo
+   * "modello chiama tool sbagliato" via guard handler-side (V1.2 alreadyClosed
+   * o V1.2.2 alreadyOpen). Bug residuo emerso retest E2E 2026-05-09: il
+   * modello smette di chiamare tool entirely (history dominance pura, NESSUN
+   * guard fired). Evidence Studio payloadJson: turno 12 success normale con
+   * tool calls (mark t10 + set t11), poi turni 13-18 payloadJson === null
+   * (modello text-only puro), V1.2/V1.2.2/V1.3 detection mai attivati.
+   * Self-correction V1.3 inerte perche' richiede un guard fire per settare
+   * il proprio flag. Fix V1.3.2: detection text-only post-turno, force al
+   * turno successivo via terzo trigger isAtRiskTurn.
+   *
+   * Scope ristretto: mode='evening_review' && effectivePhase='per_entry'.
+   * Le altre fasi (plan_preview, closing) hanno semantica diversa dove
+   * text-only puo' essere legittimo (apertura piano in prosa, frase
+   * chiusura unica). Esclusione deliberata per evitare false positive
+   * cross-fase.
+   *
+   * Edge case turno N+1 forced ma modello ANCORA text-only: clear pre-callLLM
+   * consume flag turno N. for-loop empty (no tool). post for-loop SET ri-scatta
+   * a true. Commit fine turno persiste flag=true. Force al turno N+2. Loop di
+   * force finche' modello chiama tool. Comportamento corretto.
+   */
+  lastTurnWasTextOnly?: boolean;
 };
 
 /**
@@ -436,6 +546,50 @@ export function allOutcomesAssigned(state: TriageState): boolean {
     if (o === undefined || o === 'parked') return false;
   }
   return true;
+}
+
+/**
+ * Stati del flow review serale (Slice 6c, decisione G.D7).
+ * Phase machine esplicita salvata in ChatThread.contextJson.phase a livello
+ * root. Migration lazy: assenza del campo -> derivata via isPreviewPhaseActive.
+ */
+export type EveningReviewPhase = 'per_entry' | 'plan_preview' | 'closing';
+
+/**
+ * True iff il triage e' completo: outcomes assegnati a TUTTE le entry effective
+ * (incluso 'parked', a differenza di allOutcomesAssigned).
+ * Usato come guard per update_plan_preview (6b) e confirm_plan_preview (6c),
+ * e come fallback della phase machine readPhase() in orchestrator (G.D7).
+ */
+export function isPreviewPhaseActive(state: TriageState): boolean {
+  const effective = computeEffectiveList(state);
+  if (effective.length === 0) return false;
+  const outcomes = state.outcomes ?? {};
+  return effective.every((id) => outcomes[id] !== undefined);
+}
+
+/**
+ * Parses EveningReviewPhase da ChatThread.contextJson.phase. Pattern coerente
+ * con loadTriageStateFromContext / loadPreviewStateFromContext.
+ *
+ * Ritorna undefined se contextJson assente, malformato, o senza campo 'phase'
+ * valido. Migration lazy (G.D7): thread aperti pre-6c hanno phase undefined ->
+ * orchestrator usa fallback derivato (isPreviewPhaseActive su triageState).
+ */
+export function loadPhaseFromContext(contextJson: string | null): EveningReviewPhase | undefined {
+  if (!contextJson) return undefined;
+  try {
+    const parsed = JSON.parse(contextJson) as { phase?: unknown };
+    if (parsed && typeof parsed === 'object' && typeof parsed.phase === 'string') {
+      const value = parsed.phase;
+      if (value === 'per_entry' || value === 'plan_preview' || value === 'closing') {
+        return value;
+      }
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

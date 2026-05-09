@@ -59,6 +59,29 @@ export interface LLMTool {
   };
 }
 
+/**
+ * V1.3 (2026-05-08): tool_choice control over Anthropic SDK behavior.
+ * Quattro varianti supportate dalla SDK >= 0.18.x (verificato su 0.90.0):
+ * - 'auto' (default SDK se omesso): modello decide se chiamare tool o testo.
+ * - 'any': modello DEVE chiamare un qualsiasi tool, niente testo libero.
+ * - 'tool' (con name): modello DEVE chiamare il tool nominato.
+ * - 'none': modello non puo' chiamare alcun tool, solo testo.
+ *
+ * Discriminated union: la variante 'tool' richiede name obbligatorio,
+ * le altre lo escludono. Match strutturale con l'union SDK ToolChoice
+ * (ToolChoiceAuto | ToolChoiceAny | ToolChoiceTool | ToolChoiceNone).
+ *
+ * Usato dall'orchestrator V1.3 in turni a rischio (firstTurnAfterResume
+ * o selfCorrectedInPreviousTurn) per forzare tool-call e neutralizzare
+ * il bug "tool-call avoidance post-self-correction su history lunga"
+ * emerso nel retest E2E 2026-05-07.
+ */
+export type ToolChoiceParam =
+  | { type: 'auto' }
+  | { type: 'any' }
+  | { type: 'tool'; name: string }
+  | { type: 'none' };
+
 export interface LLMCallParams {
   tier?: ModelTier;        // 'fast' | 'smart' — default 'fast'
   model?: ModelName;        // override tier with specific model
@@ -67,6 +90,11 @@ export interface LLMCallParams {
   tools?: LLMTool[];
   maxTokens?: number;
   temperature?: number;     // 0.0-1.0, default 0.5
+  /**
+   * V1.3: tool_choice forwarded to Anthropic SDK. Undefined = SDK default 'auto'.
+   * Vedi ToolChoiceParam JSDoc per il razionale e le 4 varianti.
+   */
+  toolChoice?: ToolChoiceParam;
 }
 
 export interface LLMResponse {
@@ -170,6 +198,8 @@ export async function callLLM(params: LLMCallParams): Promise<LLMResponse> {
       system: params.systemPrompt,
       messages: anthropicMessages,
       tools: anthropicTools,
+      // V1.3: forwarda tool_choice solo se definito. Undefined = SDK default 'auto'.
+      ...(params.toolChoice !== undefined ? { tool_choice: params.toolChoice } : {}),
     }),
   );
 

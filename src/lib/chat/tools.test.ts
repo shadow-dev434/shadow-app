@@ -96,9 +96,18 @@ describe('executeTool: set_current_entry', () => {
     expect(db.task.findFirst).toHaveBeenCalledTimes(1);
   });
 
-  it('returns mutator success with action=cursor_already_set when cursor is already on the entry', async () => {
+  // V1.2.2 (2026-05-06): l'idempotenza V1.2 fast-path "cursor already on entry"
+  // resta valida solo per i path che il nuovo alreadyOpen guard non intercetta:
+  // (i) outcome === 'parked' (re-attach legittimo), (ii) firstTurnAfterResume
+  // === true (escape hatch resume). Il caso "outcomes vuoti, entry just-opened"
+  // ora e' alreadyOpen failure (vedi V1.2.2 test scenari sotto). Questo test
+  // copre il caso (i): re-attach idempotenza preservata.
+  it('returns mutator success with action=cursor_already_set on parked re-attach (V1.2.2 preserves)', async () => {
     mockTaskOwned('a', 'Task A');
-    const state = makeState({ currentEntryId: 'a' });
+    const state = makeState({
+      currentEntryId: 'a',
+      outcomes: { a: 'parked' },
+    });
     const result = await executeTool(
       'set_current_entry',
       { entryId: 'a' },
@@ -203,6 +212,233 @@ describe('executeTool: set_current_entry', () => {
     expect(result.kind).toBe('sideEffect');
     if (result.kind !== 'sideEffect') return;
     expect(result.error).toMatch(/not in effective candidate list/);
+  });
+
+  // V1.2.2 alreadyOpen guard (skipped-close detection): 4 scenari sotto.
+  // Vedi tools.ts executeSetCurrentEntry per il razionale del guard.
+  it('V1.2.2 alreadyOpen: scenario (i) skipped-close detected, suggests next', async () => {
+    mockTaskOwned('b', 'Task B');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b', 'c'],
+      currentEntryId: 'b',
+      outcomes: { a: 'kept' },
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'b' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    const data = result.data as { alreadyOpen: boolean; suggestedNextEntryId: string | null };
+    expect(data.alreadyOpen).toBe(true);
+    expect(data.suggestedNextEntryId).toBe('c');
+    expect(result.error).toMatch(/is already the active CURRENT_ENTRY/);
+    expect(result.error).toMatch(/entryId: 'c'/);
+  });
+
+  it('V1.2.2 alreadyOpen: scenario (ii) skipped-close, all processed, transition to plan_preview', async () => {
+    mockTaskOwned('b', 'Task B');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b'],
+      currentEntryId: 'b',
+      outcomes: { a: 'kept' },
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'b' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    const data = result.data as { alreadyOpen: boolean; suggestedNextEntryId: string | null };
+    expect(data.alreadyOpen).toBe(true);
+    expect(data.suggestedNextEntryId).toBeNull();
+    expect(result.error).toMatch(/transition to plan_preview/);
+    // Difensivo: il null-path NON deve scrivere set_current_entry({entryId: ...}).
+    expect(result.error).not.toMatch(/set_current_entry\(\{entryId/);
+  });
+
+  it('V1.2.2 alreadyOpen: scenario (iii) legit cursor change, entryId !== currentEntryId, no fire', async () => {
+    mockTaskOwned('c', 'Task C');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b', 'c'],
+      currentEntryId: 'b',
+      outcomes: { a: 'kept', b: 'kept' },
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'c' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutator');
+    if (result.kind !== 'mutator') return;
+    expect(result.success).toBe(true);
+    expect((result.data as { action: string }).action).toBe('cursor_set');
+  });
+
+  it('V1.2.2 alreadyOpen: scenario (iv) first entry of per_entry flow, currentEntryId null, no fire', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b'],
+      currentEntryId: null,
+      outcomes: {},
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'a' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutator');
+    if (result.kind !== 'mutator') return;
+    expect(result.success).toBe(true);
+    expect((result.data as { action: string }).action).toBe('cursor_set');
+  });
+
+  // V1.2.2 escape hatch firstTurnAfterResume: 3 scenari sotto.
+  // Il flag viene settato da active-thread/route.ts al paused -> active.
+  // Cleared dai handler tools.ts al primo tool call V1.2.2-relevante.
+  it('V1.2.2 escape hatch: scenario (v) flag=true skips guard, cursor_already_set, clears flag', async () => {
+    mockTaskOwned('b', 'Task B');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b'],
+      currentEntryId: 'b',
+      outcomes: { a: 'kept' },
+      firstTurnAfterResume: true,
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'b' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutator');
+    if (result.kind !== 'mutator') return;
+    expect(result.success).toBe(true);
+    expect((result.data as { action: string }).action).toBe('cursor_already_set');
+    expect(result.newTriageState.firstTurnAfterResume).toBe(false);
+  });
+
+  it('V1.2.2 escape hatch: scenario (vi) subsequent set after flag cleared, alreadyOpen fires', async () => {
+    mockTaskOwned('b', 'Task B');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b'],
+      currentEntryId: 'b',
+      outcomes: { a: 'kept' },
+      firstTurnAfterResume: false,
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'b' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    const data = result.data as { alreadyOpen: boolean };
+    expect(data.alreadyOpen).toBe(true);
+  });
+
+  it('V1.2.2 escape hatch: scenario (vii) parked re-attach + flag, both paths clear flag', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({
+      currentEntryId: 'a',
+      outcomes: { a: 'parked' },
+      firstTurnAfterResume: true,
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'a' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutator');
+    if (result.kind !== 'mutator') return;
+    expect(result.success).toBe(true);
+    expect((result.data as { action: string }).action).toBe('cursor_already_set');
+    // Il flag clearato anche nel parked re-attach (Path 1 normale,
+    // guard non fira per outcome === 'parked' precondition fail).
+    expect(result.newTriageState.firstTurnAfterResume).toBe(false);
+  });
+
+  // V1.3 (2026-05-08): telemetria suffix + clear selfCorrectedInPreviousTurn
+  // + escape hatch interaction. Vedi triage.ts JSDoc per il razionale
+  // catastrofico. Split beta: handler clearano, orchestrator setta.
+  it('V1.3 telemetry: set V1.2.2 alreadyOpen log includes selfCorrectedInPreviousTurn=true suffix', async () => {
+    mockTaskOwned('b', 'Task B');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const state = makeState({
+      candidateTaskIds: ['a', 'b', 'c'],
+      currentEntryId: 'b',
+      outcomes: { a: 'kept' },
+    });
+    await executeTool(
+      'set_current_entry',
+      { entryId: 'b' },
+      'user1',
+      { triageState: state },
+    );
+    expect(warnSpy).toHaveBeenCalled();
+    const warnArgs = warnSpy.mock.calls.map((call) => call.join(' ')).join(' | ');
+    expect(warnArgs).toMatch(/\[V1\.2\.2 skipped-close detection\]/);
+    expect(warnArgs).toMatch(/setting selfCorrectedInPreviousTurn=true/);
+    warnSpy.mockRestore();
+  });
+
+  it('V1.3.1 (refactor V1.3 lifecycle): set_current_entry idempotent path preserves selfCorrectedInPreviousTurn (clear moved to orchestrator)', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({
+      currentEntryId: 'a',
+      outcomes: { a: 'parked' },
+      selfCorrectedInPreviousTurn: true,
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'a' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutator');
+    if (result.kind !== 'mutator') return;
+    expect(result.success).toBe(true);
+    expect((result.data as { action: string }).action).toBe('cursor_already_set');
+    // V1.3.1: il flag NON viene clearato dal handler (era V1.3 bug: clear
+    // intra-turn sabotava il lifecycle di force al turno N+1). Clear ora
+    // in orchestrator.ts sezione 5.5, pre-callLLM del turno N+1.
+    expect(result.newTriageState.selfCorrectedInPreviousTurn).toBe(true);
+  });
+
+  it('V1.3 escape hatch interaction: firstTurnAfterResume skips V1.2.2 guard, no V1.2.2 log emitted', async () => {
+    mockTaskOwned('b', 'Task B');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const state = makeState({
+      candidateTaskIds: ['a', 'b'],
+      currentEntryId: 'b',
+      outcomes: { a: 'kept' },
+      firstTurnAfterResume: true,
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'b' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutator');
+    if (result.kind !== 'mutator') return;
+    expect(result.success).toBe(true);
+    expect((result.data as { action: string }).action).toBe('cursor_already_set');
+    // V1.3 verifica: log V1.2.2 NON emesso (guard skipped via escape hatch).
+    // Indirettamente: orchestrator V1.3 detection NON troverebbe alreadyOpen
+    // signal, quindi NON setterebbe selfCorrectedInPreviousTurn=true.
+    const warnArgs = warnSpy.mock.calls.map((call) => call.join(' ')).join(' | ');
+    expect(warnArgs).not.toMatch(/\[V1\.2\.2 skipped-close detection\]/);
+    warnSpy.mockRestore();
   });
 });
 
@@ -423,6 +659,260 @@ describe('executeTool: mark_entry_discussed', () => {
     if (result.kind !== 'mutatorWithSideEffects') return;
     expect(result.newTriageState.outcomes).toEqual({ a: 'cancelled' });
     expect(result.newTriageState.decomposition).toBeNull();
+  });
+
+  // V1.2 replica detection: i 4 test sotto coprono la famiglia di replica
+  // strutturale del tool pair mark_entry_discussed + set_current_entry su
+  // entry gia' processata. Vedi Slice 5 V1.2 e deploy-notes.md sezione
+  // "Bug strutturale modello replica tool calls in per_entry su history lunga".
+  it('V1.2 replica detection: rejects entry already kept', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({ outcomes: { a: 'kept' } });
+    const result = await executeTool(
+      'mark_entry_discussed',
+      { entryId: 'a', outcome: 'kept' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Entry already closed: outcome=kept/);
+    expect(result.error).toMatch(/mechanical replay/);
+    expect(result.data).toEqual({
+      entryId: 'a',
+      existingOutcome: 'kept',
+      alreadyClosed: true,
+      suggestedNextEntryId: 'b',
+    });
+    expect(db.task.update).not.toHaveBeenCalled();
+    expect(db.learningSignal.create).not.toHaveBeenCalled();
+  });
+
+  it('V1.2 replica detection: rejects entry already postponed', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({ outcomes: { a: 'postponed' } });
+    const result = await executeTool(
+      'mark_entry_discussed',
+      { entryId: 'a', outcome: 'kept' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/Entry already closed: outcome=postponed/);
+    expect(result.error).toMatch(/mechanical replay/);
+    expect(result.data).toEqual({
+      entryId: 'a',
+      existingOutcome: 'postponed',
+      alreadyClosed: true,
+      suggestedNextEntryId: 'b',
+    });
+    expect(db.task.update).not.toHaveBeenCalled();
+    expect(db.learningSignal.create).not.toHaveBeenCalled();
+  });
+
+  it('V1.2 replica detection: allows re-mark of parked entry (legitimate re-attach flow)', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({
+      currentEntryId: 'a',
+      outcomes: { a: 'parked' },
+    });
+    const result = await executeTool(
+      'mark_entry_discussed',
+      { entryId: 'a', outcome: 'kept' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutatorWithSideEffects');
+    if (result.kind !== 'mutatorWithSideEffects') return;
+    expect(result.success).toBe(true);
+    expect(result.newTriageState.outcomes).toEqual({ a: 'kept' });
+    expect(result.newTriageState.currentEntryId).toBeNull();
+    // Re-mark di parked con outcome 'kept' non triggera DB writes (kept outcome
+    // ha pattern no-side-effect; vedi test "'kept' outcome: no DB writes" sopra).
+    expect(db.task.update).not.toHaveBeenCalled();
+    expect(db.learningSignal.create).not.toHaveBeenCalled();
+  });
+
+  // V1.2.1 (2026-05-06): server-suggested next entry. I 4 scenari sotto
+  // verificano che data.suggestedNextEntryId sia calcolato correttamente
+  // dal handler in modo che il modello possa usarlo invece di ricalcolare.
+  // Two-pass: prefer unprocessed (mai discussi), fallback parked (re-attach).
+  it('V1.2.1 suggested next: scenario (i) unprocessed first', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b'],
+      outcomes: { a: 'kept' },
+    });
+    const result = await executeTool(
+      'mark_entry_discussed',
+      { entryId: 'a', outcome: 'kept' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    const data = result.data as { suggestedNextEntryId: string | null };
+    expect(data.suggestedNextEntryId).toBe('b');
+    expect(result.error).toMatch(/entryId: 'b'/);
+  });
+
+  it('V1.2.1 suggested next: scenario (ii) all processed returns null', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b'],
+      outcomes: { a: 'kept', b: 'kept' },
+    });
+    const result = await executeTool(
+      'mark_entry_discussed',
+      { entryId: 'a', outcome: 'kept' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    const data = result.data as { suggestedNextEntryId: string | null };
+    expect(data.suggestedNextEntryId).toBeNull();
+    expect(result.error).toMatch(/All candidate entries processed/);
+    expect(result.error).toMatch(/Transition to plan_preview/);
+    // Difensivo: il null-path NON deve scrivere set_current_entry({entryId: null}).
+    expect(result.error).not.toMatch(/set_current_entry\(\{entryId/);
+  });
+
+  it('V1.2.1 suggested next: scenario (iii) parked fallback when no unprocessed', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b'],
+      outcomes: { a: 'kept', b: 'parked' },
+    });
+    const result = await executeTool(
+      'mark_entry_discussed',
+      { entryId: 'a', outcome: 'kept' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    const data = result.data as { suggestedNextEntryId: string | null };
+    // No unprocessed entries; pass 2 fallback returns parked entry 'b'.
+    expect(data.suggestedNextEntryId).toBe('b');
+    expect(result.error).toMatch(/entryId: 'b'/);
+  });
+
+  it('V1.2.1 suggested next: scenario (iv) two-pass discriminante - unprocessed beats parked', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b', 'c'],
+      outcomes: { a: 'kept', b: 'parked' },
+    });
+    const result = await executeTool(
+      'mark_entry_discussed',
+      { entryId: 'a', outcome: 'kept' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    const data = result.data as { suggestedNextEntryId: string | null };
+    // Pass 1 trova 'c' unprocessed prima di considerare 'b' parked.
+    // Cattura regressione futura a single-pass (che restituirebbe 'b' qui).
+    expect(data.suggestedNextEntryId).toBe('c');
+    expect(result.error).toMatch(/entryId: 'c'/);
+  });
+
+  it('V1.2.2 firstTurnAfterResume cleared by mark_entry_discussed (Opzione beta simmetria)', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b'],
+      currentEntryId: 'a',
+      outcomes: {},
+      firstTurnAfterResume: true,
+    });
+    const result = await executeTool(
+      'mark_entry_discussed',
+      { entryId: 'a', outcome: 'kept' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutatorWithSideEffects');
+    if (result.kind !== 'mutatorWithSideEffects') return;
+    expect(result.success).toBe(true);
+    expect(result.newTriageState.outcomes).toEqual({ a: 'kept' });
+    expect(result.newTriageState.currentEntryId).toBeNull();
+    // V1.2.2 Opzione beta: anche mark_entry_discussed clear il flag.
+    expect(result.newTriageState.firstTurnAfterResume).toBe(false);
+  });
+
+  // V1.3 (2026-05-08): telemetria suffix + clear selfCorrectedInPreviousTurn.
+  // Il flag e' settato dall'orchestrator su detection di guard failure
+  // (alreadyClosed/alreadyOpen) e clearato dai handler V1.3-relevanti su
+  // success path. Pattern split beta: handler clearano, orchestrator setta.
+  it('V1.3 telemetry: mark V1.2 alreadyClosed log includes selfCorrectedInPreviousTurn=true suffix', async () => {
+    mockTaskOwned('a', 'Task A');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const state = makeState({ outcomes: { a: 'kept' } });
+    await executeTool(
+      'mark_entry_discussed',
+      { entryId: 'a', outcome: 'kept' },
+      'user1',
+      { triageState: state },
+    );
+    expect(warnSpy).toHaveBeenCalled();
+    const warnArgs = warnSpy.mock.calls.map((call) => call.join(' ')).join(' | ');
+    expect(warnArgs).toMatch(/\[V1\.2 replica detection\]/);
+    expect(warnArgs).toMatch(/setting selfCorrectedInPreviousTurn=true/);
+    warnSpy.mockRestore();
+  });
+
+  it('V1.3.1 (refactor V1.3 lifecycle): mark_entry_discussed success path preserves selfCorrectedInPreviousTurn (clear moved to orchestrator)', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({
+      currentEntryId: 'a',
+      outcomes: {},
+      selfCorrectedInPreviousTurn: true,
+    });
+    const result = await executeTool(
+      'mark_entry_discussed',
+      { entryId: 'a', outcome: 'kept' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutatorWithSideEffects');
+    if (result.kind !== 'mutatorWithSideEffects') return;
+    expect(result.success).toBe(true);
+    // V1.3.1: il flag NON viene clearato dal handler (era V1.3 bug: clear
+    // intra-turn sabotava il lifecycle di force al turno N+1). Clear ora
+    // in orchestrator.ts sezione 5.5, pre-callLLM del turno N+1.
+    expect(result.newTriageState.selfCorrectedInPreviousTurn).toBe(true);
+  });
+
+  it('V1.3.1 regression: mark_entry_discussed coexistence — handler clears firstTurnAfterResume but preserves selfCorrectedInPreviousTurn (orchestrator owns clear)', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({
+      currentEntryId: 'a',
+      outcomes: {},
+      firstTurnAfterResume: true,
+      selfCorrectedInPreviousTurn: true,
+    });
+    const result = await executeTool(
+      'mark_entry_discussed',
+      { entryId: 'a', outcome: 'kept' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutatorWithSideEffects');
+    if (result.kind !== 'mutatorWithSideEffects') return;
+    expect(result.success).toBe(true);
+    // Coexistence: i due flag hanno lifecycle distinto.
+    // - firstTurnAfterResume: handler clear (V1.2.2) perche' SET esterno
+    //   via active-thread/route.ts su paused -> active.
+    // - selfCorrectedInPreviousTurn: handler PRESERVES (V1.3.1) perche'
+    //   sia SET che CLEAR sono orchestrator-side.
+    expect(result.newTriageState.firstTurnAfterResume).toBe(false);
+    expect(result.newTriageState.selfCorrectedInPreviousTurn).toBe(true);
   });
 });
 

@@ -192,7 +192,7 @@ export async function GET(req: NextRequest) {
         ],
       },
       orderBy: { lastTurnAt: 'desc' },
-      select: { id: true, mode: true, state: true, lastTurnAt: true },
+      select: { id: true, mode: true, state: true, lastTurnAt: true, contextJson: true },
     });
 
     // Lazy archive / state normalization per thread evening_review.
@@ -212,12 +212,46 @@ export async function GET(req: NextRequest) {
           settings,
           inactivityPauseMinutes: INACTIVITY_PAUSE_MINUTES,
         });
+        // V1.2.2: detection paused -> active = resume di review interrotta.
+        // Settiamo firstTurnAfterResume=true nel triageState (contextJson)
+        // come escape hatch per il guard alreadyOpen di set_current_entry.
+        // Vedi tools.ts executeSetCurrentEntry V1.2.2 e triage.ts
+        // firstTurnAfterResume per il razionale catastrofico.
+        const becameActiveFromPaused =
+          thread.state === 'paused' &&
+          result.desiredState === 'active' &&
+          result.shouldPersist;
+        let updatedContextJson: string | null = null;
+        if (becameActiveFromPaused && thread.contextJson) {
+          try {
+            // Preserva tutti i namespace (triage, previewState, phase) via
+            // spread del JSON originale. Pattern coerente con orchestrator.ts
+            // serializzazione contextJson.
+            const parsed = JSON.parse(thread.contextJson) as {
+              triage?: Record<string, unknown>;
+              [key: string]: unknown;
+            };
+            if (parsed.triage) {
+              updatedContextJson = JSON.stringify({
+                ...parsed,
+                triage: { ...parsed.triage, firstTurnAfterResume: true },
+              });
+            }
+          } catch {
+            // contextJson malformato: skip silenzioso, no-op. Il guard V1.2.2
+            // continuera' a scattare in modo sub-ottimale ma non rompera'
+            // la review.
+            updatedContextJson = null;
+          }
+        }
+
         if (result.shouldPersist) {
           await db.chatThread.update({
             where: { id: thread.id },
             data: {
               state: result.desiredState,
               ...(result.desiredState === 'archived' ? { endedAt: now } : {}),
+              ...(updatedContextJson !== null ? { contextJson: updatedContextJson } : {}),
             },
           });
         }

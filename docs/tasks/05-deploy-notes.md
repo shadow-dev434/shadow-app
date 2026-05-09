@@ -394,3 +394,239 @@ Sessione di chiusura tech debt pre-Slice 6/7. Cinque mini-task pianificati, cinq
 - **Test override esplicitamente verificati in smoke E2E 6b.** 5 override path verdi: (1) `removes` singolo task, (2) `blockSlot` single fascia, (3) `durationOverride` con label `long`, (4) `moves` con overwrite forcedSlot e preserve durationLabel pre-esistente, (5) failure handling pre-fase (chiamata tool durante TRIAGE → ack onesto). Persistenza compositiva confermata: tutti gli override coesistono in `previewState` senza interferenze. Merge per-task overrides funzionante: setting `forcedSlot` non azzera `durationLabel` esistente, e viceversa (vedi `applyToolCallToState` D.1 in plan 6b). Tabella di smoke verde è baseline empirica per regression testing slice future.
 
 - **Conflitto pin-vs-blockedSlot rilevato emergentemente dal modello (6b smoke turno 9).** Setup: `blockSlot: 'morning'` + presentazione/mail entrambe pinnate con `forcedSlot: 'morning'`. Stato semanticamente conflittuale: l'algoritmo `allocateTasks` applica fallback (`WARN_FORCED_SLOT_BLOCKED` + redistribuzione via residual logic) ma il piano risultante è degradato. Il modello ha sollevato il conflitto in chat con clarifying question all'utente ("ho la mattina bloccata ma X e Y sono pinnate lì, vuoi che le sposti o togliamo il blocco?"), invece di affidarsi al silent fallback server-side. Comportamento corretto, da preservare in prompt future. Tech debt eventuale per 6c o V1.1: rebuild logic con resolve automatico del conflitto (es. blockedSlots ha priorità su forcedSlot pinnato → degrade a slot residuo) + signal esplicito al modello dei conflitti rilevati.
+
+## Decisioni tecniche emerse durante Slice 6c
+
+- **Bug noto: drift comportamentale post-closing.** In fase phase=closing, se l'utente scrive un input neutro (es. "grazie", "ciao", saluti puri) NON match dei pattern espliciti B.5.4 ("ok va bene", "ok ciao", "blocca", ecc.), il modello replica l'ultimo update_plan_preview di successo come tool call (parametri identici), genera risposta "Prego. Il piano aggiornato arriva..." e re-attiva la conversazione come se fosse plan_preview. PHASE_MARKER: closing è correttamente applicato al modeContext server-side (verificato via log temporaneo durante smoke E2E Round 1, turno 12), ma il modello lo ignora per inerzia da history (history-based replay dell'ultimo tool call success).
+
+- **Workaround utente in V1:** scrivere "ok ciao" / "va bene così" / equivalenti che matchano B.5.4 invece di saluti puri. Trigger ambiguo "ok"+saluto interpretato come confirm idempotente, no-op safe.
+
+- **Fix architetturale rinviato a Slice 7.** La transizione phase=closing → state=completed + endedAt=now() chiuderà il thread atomicamente nella transazione di chiusura review serale. Nuova request del client non troverà thread aperti, attivare chat normale. Bug post-closing evapora per costruzione: niente più re-engagement, niente history per replay.
+
+- **Smoke E2E Round 1 PASS (con riserva post-closing).** Flow critico verde: triage → preview → override (update_plan_preview) → confirm (confirm_plan_preview) → frase chiusura unica nello stesso turno (no acknowledge separato). PHASE_MARKER: closing scritto in DB e applicato a modeContext per turni successivi. Drift post-closing accettato come known issue V1.
+
+- **Intent ambiguo "ok"+saluto.** B.5.4 lista pattern positivi include "ok per me", "ok va bene così", ecc. Il modello matcha "ok ciao" come confirm e chiama confirm_plan_preview idempotente (no-op se phase=closing già). Risposta è "Piano bloccato. A domani." (corretta B.5.6). Comportamento accettabile in V1: confirm idempotente è safe, frase finale corretta. Da rivedere post-beta se i tester segnalano che "ok ciao" senza intent confirm produce closing inatteso.
+
+### Round 2 Smoke E2E — Verdict PASS-CON-RISERVA
+
+Eseguito il 2026-05-05 alle 21:00 ora locale. Setup tipo 1 distorto (giornata 16h, 
+OSL atteso=200, sensitivity=4 → fillRatio=0.5, ceiling=816 min, effective=480 min). 
+Dataset 8 task con 3 deadline-immuni + 5 non-immuni. priorityScore fixate manualmente 
+in Studio post-creazione (priority-engine non chiamato sui task creati via chat di 
+Shadow). 15 turni totali, costo ~$0.65 Sonnet 4.5.
+
+**Pattern testati con successo:**
+- B.5.1 low_priority cut presentation (turno 10, snaturato 5/5 cut, frase corretta)
+- B.5.2 inversione di agency ceiling (turno 13, frase verbatim few-shot riga 403, 
+  ma solo dopo probing esplicito)
+- B.5.4 trigger duale "togli" → update_plan_preview (turno 14, pulito)
+- B.5.4 trigger duale "blocca" → confirm_plan_preview (turno 15, pulito)
+- B.5.6 frase chiusura unica stile direct (turno 15: "Piano bloccato. A domani.")
+- Persistenza pinnedTaskIds turn-on-turn (verifiche multiple su contextJson)
+- applyToolCallToState removes filtra pinnedTaskIds correttamente (turno 14)
+- Phase machine plan_preview → closing atomica (turno 15)
+
+### Bug 1 (CRITICO) — applyTrimming Step 1 non rispetta pinnedTaskIds
+
+Quando `previewState.pinnedTaskIds` ha task la cui somma durata supera 
+`ceilingCapacityMinutes`, il sistema dovrebbe (piano 6c riga 124-133):
+- return early con cut[]=[] e warnings=['pinned_exceeds_ceiling']
+- lasciare la scelta del taglio all'utente
+
+**Sintomo osservato:** con 5 pin attivi (presentazione+studio+riunione+mail+follow-up), 
+il sistema ha applicato low_priority cut normale come se i pin non esistessero. Il 
+modello al turno 13 cita verbatim: "il piano totale sforava la capacità giornaliera 
+(20 ore contro 8 disponibili), quindi ho tagliato automaticamente i 5 task con priorità 
+più bassa".
+
+**Ipotesi root cause da investigare:**
+- (a) Step 1 di applyTrimming non implementato in `src/lib/evening-review/trimming.ts`
+- (b) Step 1 implementato ma `sumPinnedMinutes` calcolato male (es. usa durate dal 
+      task catalog invece che dalle durate post-applyOverrides)
+- (c) Step 1 implementato ma `warnings.push('pinned_exceeds_ceiling')` non viene 
+      aggiunto al ritorno
+
+**Test E.2 #14** (piano 6c riga 616) copre questo case con valori sintetici 
+(4 task pinnati 9h totali, capacity raw=10h ceiling 8.5h). Verde negli unit test 
+significa che Step 1 ESISTE. Sospetto è (b) o (c) — bug di integrazione fra unit 
+test (sintetico) e flow E2E reale.
+
+### Bug 2 (medio) — Drift LLM su previewState.pinnedTaskIds nel mode-context
+
+Il `previewState.pinnedTaskIds` arriva correttamente al modello in mode-context 
+(verificato indirettamente: dopo probing esplicito al turno 13, il modello cita 
+correttamente "Hai pinnato cinque task: presentazione, studio, riunione, mail e 
+follow-up"). Tuttavia in condizioni normali (turno 13 prima del probing), il 
+modello asserisce "Non hai pinnato nessun task".
+
+Diagnosi: drift LLM da inerzia. Ai turni 11-12 il modello tratta i pin come 
+acknowledge transient ("Pinnato.") e nel turno 13 quando l'utente chiede sintesi, 
+il modello ricostruisce la rappresentazione pre-pin invece di leggere il previewState 
+corrente.
+
+**Pattern simile al known issue Round 1 post-closing** (drift inerziale da history).
+
+**Mitigazione V1.1:** rinforzare prompt B.5.X con few-shot positivi che dimostrano 
+"sempre leggere previewState.pinnedTaskIds dal mode-context, non ricostruire da history".
+
+### Bug 3 (medio) — Formula size→minutes diversa da specifica 4.1.1
+
+Modello cita "20 ore contro 8 disponibili" → 1200 min su 8 task size=3 = 
+**150 min/task**. Atteso con `AdaptiveProfile.optimalSessionLength=200` (verificato 
+in Studio) e formula piano 6c §4.1.1 (`size 3 → 1.0 × OSL`) è **200 min/task**.
+
+**Differenza:** server usa coefficiente diverso da 1.0 per size 3, oppure formula 
+non-lineare, oppure legge OSL da fonte diversa.
+
+**Ipotesi forte:** server legge `UserProfile.preferredSessionLength` (default=25 da 
+schema) invece di `AdaptiveProfile.optimalSessionLength`. Se preferredSessionLength=25 
+con qualche moltiplicatore non-banale, può dare 150. Da verificare in 
+`src/lib/evening-review/duration-estimation.ts`.
+
+### Issue minori osservate (non bug, da annotare per V1.1)
+
+- **Issue A:** modello chiama `update_plan_preview` due volte separate per pin multipli 
+  ("presentazione e studio" turno 11) invece di una chiamata combinata 
+  `{pin: {taskIds: [A,B]}}`. Costo extra ~50% latenza. Funzionalmente equivalente 
+  (union semantics piano 6b G.3). Da few-shot V1.1.
+
+- **Issue B:** modello sotto-rappresenta il preview in prosa dopo i pin (turno 12). 
+  Recita frase del turno 10 a memoria invece di leggere preview ricalcolato. 
+  Compounding del bug 2.
+
+- **Issue C:** modello rifiuta pin per ambiguità fittizia (turno 12-bis: "la riunione 
+  è già nel piano" — falso, era in cut). Pattern di clarification eccessiva. Da 
+  prompt-hardening V1.1.
+
+- **Issue D:** triage del perimetro frozen al `triage.computedAt` (turno 1 della 
+  review). Task creati DOPO l'apertura della review ma PRIMA del primo turno 
+  effettivo non vengono mai inclusi in quella review. Slice 4 issue, riconfermato. 
+  Mitigazione V1.1: refresh triage al primo turno effettivo.
+
+- **Issue E:** classifier AI in mode general non chiama `add_task` tool su frasi 
+  tipo "leggere articolo settoriale" (urgenza bassa). Risponde "Aggiunto" senza 
+  effettiva tool call. Riprodotto 2/2 in setup Round 2. Pattern hallucinated tool 
+  call. Workaround: insistere o creare via Studio. Da indagare con log delle 
+  chiamate tool, fuori scope 6c.
+
+### Tech debt: setup Sezione H non realistico con setup default
+
+Il dataset 8 task del piano canonico Sezione H non produce simultaneamente 
+`cut[]` visibile + ceiling sforabile con `optimalSessionLength=25` (default) e 
+`sensitivity=4` (fillRatio=0.5). Round 2 ha richiesto setup distorto (OSL=200, 
+manuale fix priorityScore in Studio) per esercitare i pattern target. Da 
+ricalibrare la Sezione H se i tester della beta producono dataset reali con 
+dinamiche diverse, o aggiungere alla spec una nota esplicita sul setup di test 
+distorto richiesto.
+
+Bug strutturale "modello replica tool calls in per_entry su history lunga" — blocca Round 2 Slice 6c.
+Durante Round 2 di Slice 6c, dopo 9 turni per_entry corretti (8 task marcati kept, currentEntryId avanzato al 9° task), il modello ha smesso di calcolare nuovi tool call sul nuovo userMessage e ha iniziato a replicare meccanicamente l'ultima coppia mark_entry_discussed + set_current_entry del turno precedente. Sintomi runtime: outcomes invariato a 8, currentEntryId bloccato sul 9° task, modello in chat ripete "X — dimmi" sullo stesso task indipendentemente dal nuovo input ("la faccio domani"). Diagnosi via ChatMessage.payloadJson degli ultimi 4 messaggi assistant: il modello chiama mark_entry_discussed con entryId di un task già kept in outcomes, e set_current_entry punta sempre allo stesso cuid; handler ritorna cursor_already_set come segnale ignorato dal modello.
+Famiglia "replica struttura ultima osservata", già osservata altrove durante Slice 6c testing:
+
+"Task ricreato in eco al turno successivo" (creazione task multi-turno in morning_checkin/general).
+"Le altre N candidate messe da parte" (apertura evening_review con excludedTaskIds=[] — modello inventa esclusi inesistenti per inerzia da few-shot prompt).
+
+Test V1.1 #15 di Slice 5 non aveva esercitato per_entry su perimetri ≥9 task; il bug è latente fino a quando la history del thread non supera una soglia di lunghezza che attiva replica per inerzia. Implicazione operativa: per_entry non è affidabile su perimetri ampi in V1.1, riserva su Slice 5 chiusura più seria del previsto.
+Mini-task dedicato pre-Slice 7: "Slice 5 V1.2 — replica tool calls in per_entry su history lunga". Prerequisito di Round 2 di Slice 6c. Approccio probabile: indagare prompts.ts sezione per_entry per istruzioni esplicite "se result è cursor_already_set, ricalcola entryId da outcomes e candidateTaskIds correnti", più eventuali few-shot negativi. Tech debt #18 (zero unit test orchestrator) rinforza priorità: senza test su loop multi-iteration con history lunga, regressione futura non rilevabile.
+Stato Slice 6c post-Round 2 abortito: Round 1 PASS-CON-RISERVA confermato come stato finale provvisorio. Round 2 e Round 3 rinviati a post-fix Slice 5 V1.2. Slice 6c non committata, codice WIP locale.
+
+## Slice 5 V1.x — replica pattern hardening (consolidato V1.2 → V1.3.2)
+
+### Diagnosi unificata: history dominance
+
+Il bug emerso in Round 2 Slice 6c (2026-05-06) e progressivamente chiarito dai retest 2026-05-07 → 2026-05-09 e' una sola classe architetturale: **history dominance**. In long history evening_review per_entry, il modello replica la struttura dell'ultimo turno valido invece di calcolare lo stato corrente da modeContext. Si manifesta in due forme:
+
+- **(a) Tool-call replica**: il modello chiama tool sbagliati (mark/set su entry gia' processata). Detectabile handler-side via guard.
+- **(b) Tool-call avoidance**: il modello smette di chiamare tool entirely e produce text response. NON detectabile handler-side (nessun guard fired): serve detection orchestrator-side post-turno.
+
+V1.x consolida 6 iterazioni di fix che attaccano entrambe le forme a strati:
+
+- **V1.2** (8 edit, handler-side mark guard): `executeMarkEntryDiscussed` rifiuta entry gia' in `outcomes` (non-parked) con `alreadyClosed=true`. Riformulazione SELF-CORRECTION HANDLING in prompts.ts. RULES OF STATE RECALCULATION + 5 negativi mirati ai sintomi famiglia.
+- **V1.2.1** (3 edit, server-suggested next): `data.suggestedNextEntryId` calcolato two-pass (unprocessed first, parked fallback). Riduce carico cognitivo modello da "compute next" a "use this".
+- **V1.2.2** (5 edit, alreadyOpen guard + escape hatch): `executeSetCurrentEntry` rifiuta `entryId === currentEntryId AND outcomes[entryId]===undefined` con `alreadyOpen=true`. Escape hatch `firstTurnAfterResume` settato da `active-thread/route.ts` su `paused -> active`. Field aggiunto a TriageState con JSDoc catastrofico.
+- **V1.3** (7 edit, forced tool_choice): bug residuo "tool-call avoidance" emerso retest 2026-05-07. Orchestrator passa `tool_choice: { type: 'any' }` al first callLLM in turni a rischio. Field `selfCorrectedInPreviousTurn` aggiunto.
+- **V1.3.1** (6 edit, refactor lifecycle): bug architetturale del clear handler-side scoperto retest 2026-05-09 (clear intra-turn sabotava force al turno N+1). CLEAR spostato da handler a orchestrator pre-callLLM.
+- **V1.3.2** (4 edit, terzo trigger lastTurnWasTextOnly): bug residuo "modello smette di chiamare tool" (history dominance pura, NESSUN guard fired) emerso retest 2026-05-09 V1.3.1-F. Detection text-only post-turno + force al turno successivo. Field `lastTurnWasTextOnly` aggiunto.
+
+### Pre-fix evidence (cronologia retest)
+
+**Retest 2026-05-07 (post-V1.2.2)**: turni 12-17 producevano replica testuale `"Scrivere capitolo tesi - dimmi"` con `payloadJson === null` mentre `currentEntryId === t11`. V1.2.2 inerte perche' handler-side: funziona solo se modello chiama tool. Diagnosi: V1.2.x risolve "modello chiama tool sbagliato", NON "modello evita tool entirely". Triggera V1.3.
+
+**Retest 2026-05-09 (post-V1.3)**: stderr telemetry mostra V1.2 + V1.2.2 + V1.3 detection firing al turno 12, ma turni 13-15 ancora replica testuale `payloadJson === null`. Diagnosi via lifecycle audit: clear handler-side `selfCorrectedInPreviousTurn` rimuoveva il flag NELLO STESSO turno del SET (multi-iteration loop intra-turn), non al turno N+1. Quando turno N+1 partiva, flag gia' false, isAtRiskTurn falso, force non applicato. Triggera V1.3.1.
+
+**Retest 2026-05-09 (post-V1.3.1)**: lifecycle clear-pre-callLLM funziona ma turni 13-18 ancora `payloadJson === null` consecutivi. Diagnosi: V1.3 + V1.3.1 detectano solo "modello chiama tool sbagliato" via guard handler-side. Bug residuo: il modello smette di chiamare tool entirely (history dominance pura, NESSUN guard fired). Self-correction V1.3 inerte perche' richiede guard fire per settare flag. Triggera V1.3.2.
+
+### Post-fix evidence V1.3.2 (retest 2026-05-09 sera) — PASS-con-riserva
+
+Setup: 11 task seed via `scripts/seed-v1.3-replica-bug.ts`, per_entry sequenziale 15 turni utente.
+
+Stderr telemetria osservata (4 prefissi distinti):
+- `[V1.2 replica detection]` (1 fire al turno 15, mark su Scrivere capitolo tesi gia' kept).
+- `[V1.3 forced tool_choice]` (3 fire come `at-risk turn detected: lastTurnWasTextOnly=true` + 1 fire come `set selfCorrectedInPreviousTurn=true trigger:alreadyClosed`).
+- `[V1.3.2 set]` (3 fire su turni text-only).
+- `[V1.3.2 clear]` (3 fire al turno N+1, lifecycle pulito SET → use → CLEAR).
+
+Correlazione stderr × payloadJson:
+- 3 turni text-only osservati (turn 1 apertura, turn 11, turn 14). Per ognuno: `[V1.3.2 set]` fired + flag persistito a contextJson.
+- 2 turni recovery (turn 12 post-11, turn 15 post-14): `[V1.3 forced tool_choice] at-risk turn detected lastTurnWasTextOnly=true` + `[V1.3.2 clear]` + modello chiama tool. Lag 1 turno (atteso da design).
+- Review chiusa correttamente: `outcomes={11 kept}`, transizione `phase=plan_preview` al turn 15 con piano in prosa.
+
+Pre-fix vs post-fix delta:
+- Pre-V1.3.2: turni 13-18 `payloadJson === null` consecutivi (loop 6 turni).
+- Post-V1.3.2: max 1 turno text-only consecutivo, recovery via force al turno N+1. 2 episodi anomali isolati su 15 turni totali (~13% in fase per_entry).
+
+### Known issue 1 — Hallucinated content turn
+
+Il modello a volte produce text-only turn `[task title] — dimmi` per task NON `currentEntryId` mentre lo stato server-side e' corretto. Esempio retest 2026-05-09: turni 11 e 14 dicono "Preparare presentazione meeting — dimmi" mentre `currentEntryId` punta ad altra entry (Scrivere capitolo tesi al turno 11, Studiare per esame al turno 14). 
+
+V1.3.2 forza tool call al turno successivo per recuperare. Effetto utente: 1-2 turni di confusione testuale per ogni episodio. Utente deve mandare un altro input ("si", "ok") per scatenare recovery turn.
+
+Frequenza retest 2026-05-09: ~13% turni della fase per_entry. Mitigation V1.3.2 attiva.
+
+Future fix candidato: V1.4 compaction history (attacca root cause history dominance, scope alto). Out-of-scope V1.x.
+
+### Known issue 2 — V1.3.2 SET su turno 1 opening
+
+Rilevato durante audit retest 2026-05-09: il turno 1 della review (formula apertura "Stasera ho N candidate...") e' text-only by design (nessun tool da chiamare al primo turno). Il predicate V1.3.2 `mode='evening_review' && phase='per_entry' && toolsExecuted.length===0` matcha questo caso e fa SET `lastTurnWasTextOnly=true` non desiderato.
+
+Effetto: turno 2 viene forced con `tool_choice='any'`. Innocuo perche' al turno 2 il modello chiamerebbe `set_current_entry` comunque (apertura prima entry); il force ne accelera l'emissione senza side effect funzionale.
+
+Frequenza: 1/15 turni della retest 2026-05-09 (turn 1 sempre, una volta per review). Low impact.
+
+Future fix candidato: aggiungere predicate `&& isFirstTurn === false` o equivalent. Edit ristretto se diventa rilevante. Annotato per V1.4 o slice dedicata.
+
+### Edit numbering V1.x cumulato (40 edit logici totali)
+
+- **V1.2** (8 edit): handler mark guard, prompt CORE_IDENTITY refactor, riga 158 reformulation, RULES OF STATE RECALCULATION sezione, 5 negativi, SELF-CORRECTION HANDLING, puntatore tabella.
+- **V1.2.1** (3 edit): handler two-pass suggestedNextEntryId, 4 nuovi test, prompt update.
+- **V1.2.2** (5 edit): triage.ts campo firstTurnAfterResume, tools.ts handler V1.2.2 alreadyOpen + clear, tools.test.ts 8 nuovi test, active-thread/route.ts paused→active detection, prompts.ts 4 cambiamenti.
+- **V1.3** (7 edit): client.ts ToolChoiceParam, tools.ts log suffix V1.3 + clear handler-side (poi rimosso V1.3.1), tools.test.ts 5 test V1.3, triage.ts campo selfCorrectedInPreviousTurn, orchestrator.ts Blocco A/B/C, scripts/seed-v1.3-replica-bug.ts, deploy-notes update.
+- **V1.3.1** (6 edit): tools.ts clear handler-side rimosso, tools.test.ts 2 test V1.3 aggiornati a "preserves" + 1 regression test, orchestrator.ts clear pre-callLLM (V1.3.1-C), triage.ts JSDoc lifecycle, orchestrator.ts telemetria [V1.3.1 clear] (V1.3.1-F).
+- **V1.3.2** (4 edit): triage.ts campo lastTurnWasTextOnly, orchestrator.ts B1 predicate + B2 telemetria + B3 clear, orchestrator.ts SET post for-loop pre-commit (V1.3.2-C). D skip per assenza suite orchestrator test.
+
+### Tech debt #18 — zero unit test orchestrator (inalterato)
+
+V1.3 + V1.3.1 + V1.3.2 SET/CLEAR/predicate orchestrator-side NON coperti da unit test. Verificati solo via:
+- Retest E2E manuale (2026-05-07, 2026-05-09 ×3).
+- Integration tests handler-side (260 verdi continuano a passare = no regression handler-side).
+
+Refactor candidato future slice: estrarre helper `shouldForceToolChoice(triageState, mode)` + `shouldSetTextOnlyFlag(toolsExecuted, effectivePhase)` + `shouldClearAtRiskFlags(triageState)` come pure functions in nuovo `src/lib/chat/at-risk-detection.ts`, testabili isolate, lasciando orchestrator thin wiring layer. Stima: ~30min refactor + 10-15 test.
+
+### Tech debt — date convention split (Rome triage vs UTC DailyPlan/Review)
+
+Discrepancy emerso durante implementazione del seed script V1.3 Edit 6/9:
+
+- **Triage evening_review**: `formatTodayInRome()` in `orchestrator.ts` usa `Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' })`.
+- **DailyPlan.date** (`daily-plan/route.ts:89`): `new Date().toISOString().split('T')[0]` — UTC YYYY-MM-DD.
+- **Review.date** (`review/route.ts:14`): stesso pattern UTC.
+
+Edge case (00:00-02:00 Rome, CEST=UTC+2): utente apre Shadow alle 00:30 Rome (UTC 22:30 di ieri), il piano "per domani" finisce con `date='ieri'` nel DB (UTC del giorno precedente).
+
+Status: out-of-scope V1.x. Non triggera bug funzionale nella fascia 20:00-23:00 Rome (le due timezone collassano). Candidato per slice dedicata pre-beta:
+- (a) unificare a UTC tutto.
+- (b) unificare a Europe/Rome tutto (richiede `Settings.timezone`, Slice 9 candidata).
+- (c) documentare convention split + fix solo edge case 00:00-02:00.
+
+### Annotazione operativa
+
+Il seed script V1.3 setta `createdAt = NOW - 1h` sui task creati per evitare che `selectCandidates` filtri task troppo recenti. 1h di age e' sufficiente per evitare il filtro ma marca i task come "in inbox da poco". Pattern utilizzabile per future seed E2E che richiedono task "in inbox da almeno qualche tempo".

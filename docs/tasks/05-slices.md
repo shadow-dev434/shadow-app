@@ -79,7 +79,7 @@
 
 ## Slice 5 — Conversazione per-entry
 
-**Stato:** ✅ chiuso V1.1 con riserva (commit `687c04a`, `2544168`, `3c6710b`). Fix #11 PARZIALE PASS (3/4 marker gentle), accettato per beta. Riferimento: `05-deploy-notes.md` sezione "Retest V1.1 #15 — verdetti 2026-04-30 sera".
+**Stato:** ✅ chiuso V1.x consolidato 2026-05-09 (V1.2 → V1.3.2 replica pattern hardening). Reopened 2026-05-06 per V1.2 — bug emerso durante Round 2 Slice 6c. Sei iterazioni di fix consolidate in singolo commit feat(slice-5): V1.2 (mark guard) → V1.2.1 (suggested next) → V1.2.2 (alreadyOpen + escape hatch resume) → V1.3 (forced tool_choice) → V1.3.1 (refactor lifecycle clear) → V1.3.2 (terzo trigger lastTurnWasTextOnly). Verdict V1.3.2 retest 2026-05-09: PASS-con-riserva, ~13% turni con replica testuale isolata 1-2 turni recuperata via force tool_choice. Vedi 05-deploy-notes.md sezione "Slice 5 V1.x — replica pattern hardening (consolidato V1.2 → V1.3.2)". Pre-V1.x: chiuso V1.1 con riserva (commit `687c04a`, `2544168`, `3c6710b`).
 
 **Scope:**
 - Variazione mossa apertura per `source × preferredPromptStyle` (Gmail/manual/carry-over × direct/gentle/challenge).
@@ -103,7 +103,7 @@
 
 - **6a** ✅ chiuso (commit `6ca5fb1`, 2 maggio 2026) — Stima durate (4.1) + fasce qualitative (4.2)
 - **6b** — Taglio piano (4.4) + pinning (con stato in `ChatThread.contextJson`)
-- **6c** — Buffer calibrato + floor/soffitto (4.5)
+- **6c** — Buffer calibrato + floor/soffitto (4.5) Slice 6c — IN CORSO ma bloccata. Round 1 PASS-CON-RISERVA (smoke E2E flow critici verde, vedi 05-deploy-notes.md sezione 6c). Round 2 abortito 2026-05-06 per bug strutturale Slice 5 emerso (replica tool calls in per_entry su history lunga). Codice 6c implementato e in WIP locale, non committato. Riprenderà dopo chiusura Slice 5 V1.2. Non c'è commit hash perché niente è stato pushato.
 - **6d** — Suggerimenti energia (4.3) — eventualmente inline in 6a
 
 **Quando Claude Code proporrà Slice 6 in un colpo, fermarsi e ridiscutere lo spezzamento.**
