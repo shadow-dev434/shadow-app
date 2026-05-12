@@ -161,7 +161,8 @@ Più: password policy, backup Neon Pro, Plausible analytics, Sentry advanced.
 ## 📋 Backlog
 
 Task emersi durante il lavoro corrente, da ripianificare in una fase
-successiva.
+successiva. 
+Task 5.5 — Slice 5 V1.2: fix replica tool calls in per_entry su history lunga
 
 ### 🟡 Task 3.6 — Consolidamento progetti Vercel
 

@@ -17,6 +17,7 @@ function makeCandidate(overrides: Partial<CandidateTaskInput> = {}): CandidateTa
     title: 'task',
     size: 3,
     priorityScore: 0,
+    deadline: null,
     ...overrides,
   };
 }

@@ -14,7 +14,7 @@ import type { TriageState } from '@/lib/evening-review/triage';
 import type { db } from '@/lib/db';
 
 function makeCandidate(overrides: Partial<CandidateTaskInput> = {}): CandidateTaskInput {
-  return { taskId: 't', title: 'task', size: 3, priorityScore: 0, ...overrides };
+  return { taskId: 't', title: 'task', size: 3, priorityScore: 0, deadline: null, ...overrides };
 }
 
 function makeBaseInput(

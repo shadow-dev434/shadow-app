@@ -1,13 +1,15 @@
 /**
- * Plan preview orchestrator per Slice 6a (Area 4.2 + 4.3.1 + 4.5.4).
+ * Plan preview orchestrator per Slice 6 (Area 4.2 + 4.3.1 + 4.4 + 4.5).
  *
  * Orchestrator puro: dato un set di candidate task + AdaptiveProfile + Settings,
- * costruisce DailyPlanPreview con allocazione + energyHint + fillEstimate.
+ * costruisce DailyPlanPreview con allocazione + energyHint + trimming + fillEstimate.
  * Niente DB, niente I/O. La preview e' strutturata per il consumo del prompt
  * via formatPlanPreviewForPrompt.
  *
- * In Slice 6a: cut[] = [], appointmentAware = false, warnings = [],
- * pinned/fixedTime sempre default. Vedi 05-slice-6a-plan.md A.3 + D.5 + D.6.
+ * Slice 6c (Area 4.4 + 4.5):
+ *  - bounds_effettive = bounds_raw * getFillRatio(profile)
+ *  - applyTrimming dopo allocateTasks: cut[] popolato + warnings strutturali
+ *  - fillEstimate.percentage usa effectiveCapacityMinutes come denominatore
  */
 
 import { estimateDuration, labelToCanonicalMinutes, type DurationLabel } from './duration-estimation';
@@ -18,6 +20,9 @@ import {
   type SlotName,
   type TaskAllocationInput,
 } from './slot-allocation';
+import { getFillRatio } from './buffer';
+import { applyTrimming, type TaskMeta, type TaskWithCutReason, type CutReason } from './trimming';
+import { FILL_RATIO_CEILING } from './config';
 
 export type FillState = 'low' | 'balanced' | 'full' | 'overflowing';
 
@@ -28,16 +33,20 @@ export type FillEstimate = {
   percentage: number; // server-side, escluso da formatPlanPreviewForPrompt
 };
 
-export type CutTask = AllocatedTask & { cutReason?: string };
+// 6c (G.D5): cutReason ora union type esplicito + required.
+// Alias retro-compat: i caller che importavano CutTask continuano a funzionare,
+// shape diversa (cutReason obbligatorio) ma niente call site assumeva opzionalita'.
+export type { CutReason };
+export type CutTask = TaskWithCutReason;
 
 export type DailyPlanPreview = {
   morning: AllocatedTask[];
   afternoon: AllocatedTask[];
   evening: AllocatedTask[];
-  cut: CutTask[];            // 6a: sempre []
+  cut: CutTask[];
   fillEstimate: FillEstimate;
-  appointmentAware: boolean; // 6a: sempre false
-  warnings: string[];        // 6a: sempre []
+  appointmentAware: boolean; // 6c: sempre false (calendar awareness V1.1)
+  warnings: string[];
 };
 
 export type CandidateTaskInput = {
@@ -45,6 +54,8 @@ export type CandidateTaskInput = {
   title: string;
   size: number;
   priorityScore: number;
+  // 6c: per immunita' trimming (deadline <= 48h). null = no deadline = no immunita'.
+  deadline: Date | null;
 };
 
 // Slice 6b: override per-task applicati da applyPreviewOverrides (3d).
@@ -73,6 +84,9 @@ export type BuildDailyPlanPreviewInput = {
   blockedSlots?: SlotName[];
   perTaskOverrides?: Record<string, PerTaskOverride>;
   pinnedTaskIds?: string[];
+  // 6c: per immunita' deadline. Default new Date() se assente (safety net).
+  // L'orchestrator passa esplicitamente al call site.
+  now?: Date;
 };
 
 const ENERGY_HINT_PEAK = 'peak window for hard task';
@@ -116,35 +130,73 @@ export function buildDailyPlanPreview(input: BuildDailyPlanPreviewInput): DailyP
   });
 
   const bounds = getSlotBounds(input.settings);
+  const ratio = getFillRatio(input.profile);
+
+  // 6c step 3.5: bounds effettive post fillRatio. Clone difensivo per
+  // preservare bounds raw (servono al ceiling calc + immunita' deadline non
+  // dipende da capacity).
+  const effectiveBounds = {
+    morning: { ...bounds.morning, minutes: Math.round(bounds.morning.minutes * ratio) },
+    afternoon: { ...bounds.afternoon, minutes: Math.round(bounds.afternoon.minutes * ratio) },
+    evening: { ...bounds.evening, minutes: Math.round(bounds.evening.minutes * ratio) },
+  };
+
   const allocation = allocateTasks({
     tasks: allocationInputs,
     bestTimeWindows: input.profile.bestTimeWindows,
-    bounds,
+    bounds: effectiveBounds,
     blockedSlots: input.blockedSlots,
   });
 
-  // EnergyHint 4.3.1: muta in-place l'AllocatedTask vincente (creato da
-  // allocateTasks, riferimento condiviso con allocation.morning/afternoon/evening).
-  applyEnergyHint(allocation, input.profile.bestTimeWindows);
+  // 6c step 4.5: applyTrimming.
+  const taskMetaById: Record<string, TaskMeta> = {};
+  for (const c of input.candidateTasks) {
+    taskMetaById[c.taskId] = { deadline: c.deadline, priorityScore: c.priorityScore };
+  }
 
-  const usedMin = sumDurationMinutes(allocation);
-  const capacityMin =
+  const rawCapacityMinutes =
     bounds.morning.minutes + bounds.afternoon.minutes + bounds.evening.minutes;
-  const percentage = capacityMin > 0 ? (usedMin / capacityMin) * 100 : 0;
+  const effectiveCapacityMinutes =
+    effectiveBounds.morning.minutes +
+    effectiveBounds.afternoon.minutes +
+    effectiveBounds.evening.minutes;
+  const ceilingCapacityMinutes = Math.round(rawCapacityMinutes * FILL_RATIO_CEILING);
+
+  const trimmingResult = applyTrimming({
+    allocation,
+    pinnedTaskIds: input.pinnedTaskIds ?? [],
+    now: input.now ?? new Date(),
+    rawCapacityMinutes,
+    effectiveCapacityMinutes,
+    ceilingCapacityMinutes,
+    taskMetaById,
+  });
+
+  // EnergyHint 4.3.1: muta in-place l'AllocatedTask vincente nei 3 slot post-trimming.
+  // I task in cut[] non ricevono energyHint (resta null da makeAllocatedTask).
+  applyEnergyHint(trimmingResult, input.profile.bestTimeWindows);
+
+  const usedMin = sumDurationMinutes(trimmingResult);
+  const percentage =
+    effectiveCapacityMinutes > 0 ? (usedMin / effectiveCapacityMinutes) * 100 : 0;
+
+  // 6c: combina warnings da allocation (forced_slot_blocked da 6b) + trimming
+  // (pinned_exceeds_ceiling, day_exceeds_capacity_due_to_immune_tasks).
+  const combinedWarnings = [...allocation.warnings, ...trimmingResult.warnings];
 
   return {
-    morning: allocation.morning,
-    afternoon: allocation.afternoon,
-    evening: allocation.evening,
-    cut: [],
+    morning: trimmingResult.morning,
+    afternoon: trimmingResult.afternoon,
+    evening: trimmingResult.evening,
+    cut: trimmingResult.cut,
     fillEstimate: {
       used: formatHours(usedMin),
-      capacity: formatHours(capacityMin),
+      capacity: formatHours(effectiveCapacityMinutes),
       state: mapPercentageToFillState(percentage),
       percentage,
     },
     appointmentAware: false,
-    warnings: [],
+    warnings: combinedWarnings,
   };
 }
 
@@ -162,6 +214,26 @@ export function formatPlanPreviewForPrompt(preview: DailyPlanPreview): string {
       }
     }
   }
+
+  // 6c: cut[] e warnings[] esposti al modello quando presenti.
+  // cutReason esplicito (low_priority | exceeds_ceiling) -> il prompt 6c usa
+  // il reason per scegliere il pattern di prosa (B.5.1 normale vs B.5.2 6.2).
+  if (preview.cut.length > 0) {
+    lines.push('');
+    lines.push('TASK_TAGLIATI:');
+    for (const t of preview.cut) {
+      lines.push(`- [id=${t.taskId}] ${t.title} (${t.durationLabel}, reason=${t.cutReason})`);
+    }
+  }
+
+  if (preview.warnings.length > 0) {
+    lines.push('');
+    lines.push('WARNINGS:');
+    for (const w of preview.warnings) {
+      lines.push(`- ${w}`);
+    }
+  }
+
   lines.push('');
   lines.push(
     `FILL_ESTIMATE: used=${preview.fillEstimate.used}, capacity=${preview.fillEstimate.capacity}, state=${preview.fillEstimate.state}`,

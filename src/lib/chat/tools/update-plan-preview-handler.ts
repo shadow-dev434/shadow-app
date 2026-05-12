@@ -37,7 +37,7 @@ import {
   type DailyPlanPreview,
 } from '@/lib/evening-review/plan-preview';
 import {
-  computeEffectiveList,
+  isPreviewPhaseActive,
   type TriageState,
 } from '@/lib/evening-review/triage';
 
@@ -124,13 +124,6 @@ export async function handleUpdatePlanPreview(
 }
 
 // ---- helpers privati ----
-
-function isPreviewPhaseActive(triageState: TriageState): boolean {
-  const effectiveList = computeEffectiveList(triageState);
-  if (effectiveList.length === 0) return false;
-  const outcomes = triageState.outcomes ?? {};
-  return effectiveList.every((id) => outcomes[id] !== undefined);
-}
 
 function collectAllTaskIds(args: UpdatePlanPreviewArgs): string[] {
   const ids: string[] = [];

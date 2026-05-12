@@ -612,6 +612,12 @@ V1.3 + V1.3.1 + V1.3.2 SET/CLEAR/predicate orchestrator-side NON coperti da unit
 
 Refactor candidato future slice: estrarre helper `shouldForceToolChoice(triageState, mode)` + `shouldSetTextOnlyFlag(toolsExecuted, effectivePhase)` + `shouldClearAtRiskFlags(triageState)` come pure functions in nuovo `src/lib/chat/at-risk-detection.ts`, testabili isolate, lasciando orchestrator thin wiring layer. Stima: ~30min refactor + 10-15 test.
 
+### Tech debt #19 — Helper esportato `reconstructEveningReviewPreview`
+
+Single source of truth tra orchestrator e tooling esterno (script di debug, future test E2E, route di diagnostica). Estrarre `orchestrator.ts:153-228` (loadAllNonTerminalTasks fetch + previewProfile/previewSettings construction + candidateTasks via computeEffectiveList + localBaseInput build + applyPreviewOverrides + buildDailyPlanPreview) in modulo dedicato `src/lib/evening-review/preview-reconstruction.ts`.
+
+Scope: non urgente, valutare pre-Slice 8 quando emergerà pressione concreta (es. debug route per ispezione preview live, regression test orchestrator). Decisione presa durante audit retest 6c (Antonio + Claude.ai chat strategico) per non introdurre scope creep nel retest 6c stesso.
+
 ### Tech debt — date convention split (Rome triage vs UTC DailyPlan/Review)
 
 Discrepancy emerso durante implementazione del seed script V1.3 Edit 6/9:

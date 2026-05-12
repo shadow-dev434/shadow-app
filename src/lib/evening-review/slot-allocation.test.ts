@@ -205,7 +205,7 @@ describe('allocateTasks', () => {
     });
     expect(result.morning).toEqual([]);
     expect(result.evening.map((t) => t.taskId)).toEqual(['a']);
-    expect(result.warnings).toContain('forced slot blocked, allocating to fallback');
+    expect(result.warnings).toContain('forced_slot_blocked');
     expect(result.warnings.length).toBe(1);
   });
 

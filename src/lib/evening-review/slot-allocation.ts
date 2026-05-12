@@ -10,7 +10,7 @@
  * - cut[] resta sempre vuoto (overflow virtuale -> max residual con
  *   residual negativo accettato; vedi doc-string allocateTasks)
  * - warnings[] resta vuoto in 6a; in 6b puo' contenere
- *   "forced slot blocked, allocating to fallback" (edge case G.10).
+ *   'forced_slot_blocked' (edge case G.10).
  *
  * Rif: docs/tasks/05-slice-6-decisions.md Area 4.2 +
  *      docs/tasks/05-slice-6a-plan.md sezioni A.2 + D.3 + D.4.
@@ -72,7 +72,7 @@ const DEFAULT_WAKE = '07:00';
 const DEFAULT_SLEEP = '23:00';
 const KNOWN_SLOTS: ReadonlySet<SlotName> = new Set<SlotName>(['morning', 'afternoon', 'evening']);
 const SLOT_TIEBREAK_ORDER: SlotName[] = ['morning', 'afternoon', 'evening'];
-const WARN_FORCED_SLOT_BLOCKED = 'forced slot blocked, allocating to fallback';
+const WARN_FORCED_SLOT_BLOCKED = 'forced_slot_blocked';
 
 export function getSlotBounds(settings: { wakeTime: string; sleepTime: string }): SlotBounds {
   let wake = settings.wakeTime;
@@ -115,8 +115,8 @@ export function getSlotBounds(settings: { wakeTime: string; sleepTime: string })
  * overhead se blockedSlots e' undefined o []: il path 6a paga zero.
  * Step 1.5 (Slice 6b): per ogni task con forcedSlot != null, allochiamo
  * direttamente a quello slot. Se forcedSlot e' in blockedSlots, emette
- * warning "forced slot blocked, allocating to fallback" e cade nella
- * logica residual standard (decisione G.10: warning interno, prosa esterna).
+ * warning 'forced_slot_blocked' e cade nella logica residual standard
+ * (decisione G.10: warning interno, prosa esterna).
  * 1. Per ogni task in input.tasks (ordine preservato):
  *    a) se task.size >= 4 e bestTimeWindows non vuoto:
  *       prova le bestTimeWindows in ordine; assegna alla prima con

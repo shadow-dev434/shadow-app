@@ -39,6 +39,10 @@ export const FILL_RATIO_FOR_HIGH_SENSITIVITY = 0.5;
 export const FILL_RATIO_FLOOR = 0.3;
 export const FILL_RATIO_CEILING = 0.85;
 
+// Plan sizing - trimming (Area 4.4)
+
+export const DEADLINE_IMMUNITY_HOURS = 48;
+
 // AdaptiveProfile sensitivity bands (Area 4.5, 6.1)
 
 export const SENSITIVITY_HIGH_THRESHOLD = 4; // shameFrustrationSensitivity >= 4
