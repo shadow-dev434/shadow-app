@@ -604,6 +604,8 @@ Future fix candidato: aggiungere predicate `&& isFirstTurn === false` o equivale
 - **V1.3.1** (6 edit): tools.ts clear handler-side rimosso, tools.test.ts 2 test V1.3 aggiornati a "preserves" + 1 regression test, orchestrator.ts clear pre-callLLM (V1.3.1-C), triage.ts JSDoc lifecycle, orchestrator.ts telemetria [V1.3.1 clear] (V1.3.1-F).
 - **V1.3.2** (4 edit): triage.ts campo lastTurnWasTextOnly, orchestrator.ts B1 predicate + B2 telemetria + B3 clear, orchestrator.ts SET post for-loop pre-commit (V1.3.2-C). D skip per assenza suite orchestrator test.
 
+Il seed script V1.3 setta `createdAt = NOW - 1h` sui task creati per evitare che `selectCandidates` filtri task troppo recenti. 1h di age e' sufficiente per evitare il filtro ma marca i task come "in inbox da poco". Pattern utilizzabile per future seed E2E che richiedono task "in inbox da almeno qualche tempo".
+
 ### Tech debt #18 — zero unit test orchestrator (inalterato)
 
 V1.3 + V1.3.1 + V1.3.2 SET/CLEAR/predicate orchestrator-side NON coperti da unit test. Verificati solo via:
@@ -633,6 +635,112 @@ Status: out-of-scope V1.x. Non triggera bug funzionale nella fascia 20:00-23:00 
 - (b) unificare a Europe/Rome tutto (richiede `Settings.timezone`, Slice 9 candidata).
 - (c) documentare convention split + fix solo edge case 00:00-02:00.
 
-### Annotazione operativa
+### Sessione 2 — Retest regressione 6a/6b (13 maggio 2026)
 
-Il seed script V1.3 setta `createdAt = NOW - 1h` sui task creati per evitare che `selectCandidates` filtri task troppo recenti. 1h di age e' sufficiente per evitare il filtro ma marca i task come "in inbox da poco". Pattern utilizzabile per future seed E2E che richiedono task "in inbox da almeno qualche tempo".
+Sessione 2 retest manuale 13 maggio 2026, ~20:00-20:45 ora Roma.
+Validation retrospettiva che commit aad2bfd (Slice 6c) non rompa
+funzionalita Slice 6a/6b esistenti.
+
+Setup:
+- Account Alberto `cmp1flw1g005oibvckzsenuqm`, VIRGIN OK 12/12.
+- 8 task overflow-controllato (riusato setup Sessione 1, NON 6 task
+  come da piano 6b Sezione G originale).
+- Settings: wakeTime=07:00, sleepTime=23:00, finestra serale standard.
+- AdaptiveProfile: sensitivity=4, optimalSessionLength=25.
+- Thread `cmp4dla8v0001ibu4g1vuh8lt`, scenario "Override classici" 12 turni.
+
+Risultati verifica prompt 6b (target 6/6):
+- Punto 1 (chiama `update_plan_preview` su override esplicito): PASS netto
+  su 3 turni (turno 9 combinato, 10 blockSlot, 11 pin).
+- Punto 2 (combina parametri in chiamata unica): PASS netto, turno 9
+  input verbatim `{"removes":[...], "moves":[...]}` singola chiamata.
+- Punto 3 (blockSlot da paraphrase): PASS NETTO + robustezza
+  paraphrase. Frase test adattata da "sto male" a "non avro tempo"
+  per realismo utente ADHD. Modello generalizza correttamente lo slot
+  block oltre il pattern letterale del prompt few-shot.
+- Punto 4 (preview ricalcolato in prosa coerente): PASS-CON-RISERVA.
+  Risposte sintetiche ("Mattina libera.", "Bozza presentazione pinnata.",
+  "Piano bloccato. A domani."). NON ripresentano il preview esteso in
+  prosa. Pattern noto, tech debt #20 confermato (vedi sotto).
+- Punto 5 (NO tool su conferma generica): OBSOLETO post-6c. La voce
+  era basata su mondo pre-`confirm_plan_preview`. Comportamento osservato
+  ("ok per me" -> `confirm_plan_preview`) e la transizione phase a
+  `closing` corretta in mondo post-6c. NOT a fail.
+- Punto 6 (chiede chiarimento su ambiguita "piu corta"): NON TESTATO
+  in questa sessione. Scenario letterale 6b Sezione G non lo richiedeva.
+  Deferred a retest unificato post-prompt-hardening future.
+
+Risultato Slice 6a regressione: PASS IMPLICITO. Scenario 6b ha
+attraversato turni 1-8 (presentazione preview senza override) senza
+errori. Preview generato correttamente, fasce qualitative coerenti
+("Domani mattina X, pomeriggio Y, sera Z"). Cut[] popolato come atteso
+("Sono troppe per domani. Tengo queste sei, le altre due dopodomani").
+Determinismo server-side confermato: preview Sessione 2 quasi-identico
+a Sessione 1 stesso setup, differenze minime ("la bolletta" vs
+"bolletta", "preparazione" vs "preparare").
+
+Anomalie ambientali Sessione 2 (NON imputabili a commit 6c):
+- Errore TLS `UNABLE_TO_VERIFY_LEAF_SIGNATURE` alla prima chiamata
+  `callLLM`. Curl conferma persistenza (SCHANNEL `CRYPT_E_NO_REVOCATION_CHECK`).
+  Workaround dev-only applicato: `NODE_TLS_REJECT_UNAUTHORIZED=0` in
+  shell environment scope (NON in `.env.local`). Causa non diagnosticata:
+  probabile AV/firewall TLS scanning attivato durante giornata, oppure
+  rotazione cert Anthropic. Tech debt: indagine TLS reale (opzioni A/B/D
+  dalla diagnostica originale) prima di sessioni di coding pesanti future.
+
+Adattamenti R3 durante retest (annotati per audit future):
+- Setup 8 task invece di 6 (riuso configurazione Sessione 1 invece di
+  re-seed con setup specifico 6b). Nessun impatto sui risultati: i
+  meccanismi testati (override classici, blockSlot, pin) sono
+  ortogonali al numero totale di task.
+- Task scelti per moves+removes turno 9: T3 Preparare riunione +
+  T7 Telefonata commercialista (entrambi non-immune, no deadline).
+  La frase originale "togli la mail e sposta lo studio" non si
+  mappava al setup 8-task (T5 Studio e T1 Mail erano in cut[],
+  fuori dal piano).
+
+Decisione strategica:
+- Commit aad2bfd validato due volte: scenario H 6c (ieri) +
+  regressione 6b/6a (oggi). Production-ready dal punto di vista
+  funzionale.
+- Push su `origin/main` deferred a sessione futura: indagine TLS
+  ambientale prerequisita per evitare rischio fallimento push.
+- Niente fix prompt 6b necessario. Tech debt #20 (risposta sintetica
+  modello) registrato per slice future di prompt-hardening, NON
+  blocker per beta.
+
+### Tech debt #20 — Risposta sintetica modello su update_plan_preview
+
+Pattern osservato durante retest Slice 6c Sessione 1 (12 maggio) e
+riconfermato in Sessione 2 (13 maggio). Quando il modello chiama
+update_plan_preview con override semplici, risponde con frasi
+stringate ("Studio libro pinnato.", "Mattina libera.", "Bozza
+presentazione pinnata.", "Riunione via, commercialista di sera.")
+invece di ripresentare il preview aggiornato in prosa estesa con
+fasce/durate/cut. Funzionalmente OK (tool eseguito + state aggiornato
+in DB), ma UX subottimale per utente reale che non vede subito
+l'effetto dell'override sul piano completo.
+
+Possibile fix in slice future di prompt-hardening: rinforzo few-shot
+in EVENING_REVIEW_PROMPT sezione plan_preview con esempi positivi di
+ripresentazione preview post-override. Non blocker per beta. Valutare
+costo (tokens aggiunti al prompt) vs benefit (chiarezza UX) prima di
+fix.
+
+### Tech debt #21 — Tool update_plan_preview manca parametro unpin esplicito
+
+Pattern osservato durante retest Slice 6c Sessione 1. Il tool
+update_plan_preview ha 6 parametri: moves, removes, adds, blockSlot,
+durationOverride, pin. Manca un parametro unpin per togliere
+esplicitamente un task dal pinnedTaskIds senza rimuoverlo dal piano.
+
+Comportamento attuale: utente dice "togli X dai pinnati", modello
+chiama update_plan_preview({removes: [{taskId: X}]}). Server-side,
+applyPreviewOverrides cleanup automatico rimuove X anche da
+pinnedTaskIds come side effect (semantica "remove from plan" piu
+forte di "unpin").
+
+Funzionalmente l'utente ottiene un comportamento ragionevole, ma
+semanticamente ambiguo. Slice future potrebbero voler distinguere
+"sposta dal piano" da "togli pin ma resta nel piano". Non blocker
+per beta.
