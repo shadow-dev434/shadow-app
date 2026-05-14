@@ -85,26 +85,70 @@ const MAX_TOOL_ITERATIONS = 8;
 // typically trailing). Captures the inner content.
 const QR_REGEX = /\[\[QR:\s*([^\]]+?)\s*\]\]/;
 
+/**
+ * Slice 7 BUG #C: stati terminali del ChatThread. Un turno su un thread in
+ * uno di questi stati triggera l'auto-creazione di un nuovo thread
+ * mode='general' in Section 1, indipendentemente dal mode che il client
+ * invia. Allineato a normalize.ts (entrambi 'already_terminal') e a
+ * active-thread/route.ts filter (entrambi scartati al rehydrate al mount).
+ *
+ * - completed: chiusura esplicita via Slice 7 closeReview.
+ * - archived: chiusura passiva da normalize.ts (outside_window /
+ *   stale_orphan).
+ *
+ * Export per leggibilita' nei test e per coerenza simbolica con i siti
+ * che fanno gia' il check (active-thread filter, normalize.ts).
+ */
+export const TERMINAL_THREAD_STATES: ReadonlySet<string> = new Set([
+  'completed',
+  'archived',
+]);
+
 export async function orchestrate(
   input: OrchestratorInput,
 ): Promise<OrchestratorOutput> {
   // ── 1. Get or create thread ──────────────────────────────────────────
-  let thread = input.threadId
+  // Slice 7 BUG #C: lookup esplicito + check stato terminale. Se il thread
+  // recuperato e' completed/archived (vedi TERMINAL_THREAD_STATES), lo
+  // scartiamo e creiamo un nuovo thread mode='general'. Il contextJson,
+  // relatedTaskId e relatedSessionId del thread terminato NON vengono
+  // ereditati (sono context di una review chiusa). Trasparente al client:
+  // response include il nuovo threadId; turni successivi useranno il
+  // nuovo id automaticamente.
+  const existingThread = input.threadId
     ? await db.chatThread.findFirst({
         where: { id: input.threadId, userId: input.userId },
       })
     : null;
 
-  if (!thread) {
-    thread = await db.chatThread.create({
-      data: {
-        userId: input.userId,
-        mode: input.mode,
-        state: 'active',
-        relatedTaskId: input.relatedTaskId ?? null,
-      },
-    });
+  const previousThreadWasTerminal =
+    existingThread !== null && TERMINAL_THREAD_STATES.has(existingThread.state);
+
+  if (previousThreadWasTerminal && existingThread !== null) {
+    console.warn(
+      `[orchestrator BUG #C] received turn on terminal thread ` +
+      `${existingThread.id} (state=${existingThread.state}, ` +
+      `mode=${existingThread.mode}); creating fresh general thread`,
+    );
   }
+
+  // Mode effettivo: override forzato a 'general' su thread terminale.
+  // Usato in tutti i siti downstream invece di input.mode.
+  const mode: ChatMode = previousThreadWasTerminal ? 'general' : input.mode;
+
+  let thread =
+    existingThread !== null && !previousThreadWasTerminal
+      ? existingThread
+      : await db.chatThread.create({
+          data: {
+            userId: input.userId,
+            mode,
+            state: 'active',
+            relatedTaskId: previousThreadWasTerminal
+              ? null
+              : input.relatedTaskId ?? null,
+          },
+        });
 
   // ── 2. Load history ──────────────────────────────────────────────────
   const previousMessages = await db.chatMessage.findMany({
@@ -126,7 +170,7 @@ export async function orchestrate(
   let modeContext = '';
   let isFirstTurn = false;
 
-  if (input.mode === 'evening_review') {
+  if (mode === 'evening_review') {
     const loaded = loadTriageStateFromContext(thread.contextJson);
     // Valore iniziale per pendingPreviewState; mutato dal multi-iteration loop
     // in 3g.7 quando il modello chiama update_plan_preview.
@@ -264,10 +308,10 @@ export async function orchestrate(
   });
 
   // ── 5. Determine model tier ──────────────────────────────────────────
-  const isStructuredMode = input.mode !== 'general';
+  const isStructuredMode = mode !== 'general';
   const modelTier = isStructuredMode ? 'smart' : 'fast';
 
-  const systemPrompt = buildSystemPrompt(input.mode, userContext, modeContext, voiceProfile);
+  const systemPrompt = buildSystemPrompt(mode, userContext, modeContext, voiceProfile);
 
   let totalCost = 0;
   let totalTokensIn = 0;
@@ -291,7 +335,7 @@ export async function orchestrate(
   //
   // Vedi triage.ts JSDoc selfCorrectedInPreviousTurn per il razionale completo.
   const isAtRiskTurn =
-    input.mode === 'evening_review' &&
+    mode === 'evening_review' &&
     triageState !== null &&
     (triageState.firstTurnAfterResume === true ||
       triageState.selfCorrectedInPreviousTurn === true ||
@@ -360,7 +404,7 @@ export async function orchestrate(
     tier: modelTier,
     systemPrompt,
     messages: llmMessages,
-    tools: getToolsForMode(input.mode, currentPhase),
+    tools: getToolsForMode(mode, currentPhase),
     maxTokens: 500,
     temperature: 0.5,
     toolChoice: forcedToolChoice,
@@ -403,7 +447,7 @@ export async function orchestrate(
       result: ToolExecutionResult;
     }> = [];
 
-    if (input.mode === 'evening_review') {
+    if (mode === 'evening_review') {
       // Sequential: chain triage mutations through pendingTriageState.
       // Multiple tool calls in the same turn (e.g., remove A then add B) must see
       // each other's effects, so they cannot run in parallel.
@@ -507,7 +551,7 @@ export async function orchestrate(
       tier: modelTier,
       systemPrompt,
       messages: llmMessages,
-      tools: getToolsForMode(input.mode, pendingPhase ?? currentPhase),
+      tools: getToolsForMode(mode, pendingPhase ?? currentPhase),
       maxTokens: 500,
       temperature: 0.5,
     });
@@ -530,7 +574,7 @@ export async function orchestrate(
   ) {
     console.error(
       `[orchestrator] tool_use loop hit cap MAX_TOOL_ITERATIONS=${MAX_TOOL_ITERATIONS}: ` +
-      `threadId=${thread.id}, mode=${input.mode}, lastToolCalls=${currentResponse.toolCalls.map(tc => tc.name).join(',')}`,
+      `threadId=${thread.id}, mode=${mode}, lastToolCalls=${currentResponse.toolCalls.map(tc => tc.name).join(',')}`,
     );
     finalAssistantMessage = 'Mi sono inceppato un attimo, riprova';
   }
@@ -601,7 +645,7 @@ export async function orchestrate(
   //
   // Vedi triage.ts JSDoc lastTurnWasTextOnly per il lifecycle V1.3.2 completo.
   if (
-    input.mode === 'evening_review' &&
+    mode === 'evening_review' &&
     pendingTriageState !== null &&
     effectivePhase === 'per_entry' &&
     toolsExecuted.length === 0 &&
