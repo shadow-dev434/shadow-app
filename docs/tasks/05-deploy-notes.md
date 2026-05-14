@@ -820,3 +820,118 @@ per beta.
   test puri firstTurnAfterResume lifecycle in triage.test.ts
   coprono l'80% del rischio. Automation possibile in Slice 9 o
   post-beta quando E2E infra arriva (stima ~150 righe per scenario).
+
+## Decisioni tecniche emerse durante retest Slice 7 V1.1 (14 maggio 2026)
+
+Retest E2E manuale su virgin account, 5 scenari ridotti dai 9 originali per
+coprire i flow critici post-Slice 7 senza re-eseguire smoke gia' verde in
+Slice 5/6.
+
+- **Esito retest E2E (5 scenari).** Scenario 1 PASS netto (BUG #A phase-gated
+  tools, #B DailyPlanTask populate, #C auto-new-thread tutti validati). Scenario
+  2 PASS netto (idempotenza closeReview, 11/11 indicatori, validato via
+  `scripts/replay-close-review.ts` non committato in .gitignore). Scenario 3
+  PASS sostanziale (bug #1 mood default derubricato a cosmetico, bug #8
+  confermato in flight). Scenario 4 coperto naturalmente dentro Scenario 2
+  (path whatBlocked validato quando postponedCount=4 + deadline <=48h
+  coincidono). Scenario 6 PASS sostanziale (resume paused->active funziona UX
+  ma bug #12 normalize isolato).
+
+- **Suite Vitest stabile.** 364/364 verdi su 19 file, inalterata dall'inizio
+  retest. Nessuna regressione introdotta dai 4 commit di fix (BUG #A/B/C +
+  E2E orchestrator regression test STEP 4).
+
+- **Pattern replay E2E manuale via script.** Per validare idempotenza
+  closeReview senza E2E infra (rimandata, vedi sezione Slice 7), introdotto
+  pattern `scripts/replay-<scenario>.ts` con seed DB + invocazione diretta
+  closeReview() + verifica indicatori post-condition. Pattern non committato
+  (gitignore `scripts/replay-*.ts`) per evitare scripts ad-hoc inquinanti nel
+  repo. Riusabile per debug bug futuri toccando closeReview o triage.
+
+- **Inventario bug noti V1.x aggiornato post-retest.** Numerazione: #10 non
+  assegnato (saltato durante retest, non riassegnare per traccia storica).
+  Stati validati o aperti, prioritizzati per fix imminente.
+
+  - **#1 -- Mood intake default 3 al primo turno.** DERUBRICATO a cosmetico
+    in Scenario 3: overwrite via contextJson funziona, valore finale corretto.
+    Priorita' bassa, fix opzionale pre-beta.
+  - **#2 -- UI leakage tool name sotto bubble assistant.** Confermato in tutti
+    gli scenari. "ok <tool_name>" reso sotto ogni bubble post-tool-call.
+    Cosmetico ma visibile, priorita' bassa.
+  - **#3 -- "domani" incoerente con scadenza odierna.** Non riscontrato in
+    retest. Priorita' bassa, candidato a chiusura se non ricompare in Slice 8.
+  - **#4 -- Race W1 morning planner vs W2 closeReview su DailyPlan.** Non
+    testato in retest (richiede setup multi-window). Aperto, priorita' media,
+    da affrontare con scenario dedicato.
+  - **#5 -- `loadPreviewStateFromContext` no shape validation.** Non testato.
+    Aperto, priorita' media, hardening di robustezza non blocker.
+  - **#6 -- Wake-up "Inizia review" richiede userMessage per partire.**
+    Confermato. Gap di scoping noto da Slice 4 (vedi sezione Slice 4),
+    priorita' media, target V1.2.
+  - **#7 -- `update_plan_preview` non chiamato dal modello (prosa libera).**
+    Confermato in 3/3 scenari E2E. Gap di Slice 6 incompleto, priorita' media,
+    da affrontare in slice dedicata di prompt-hardening (forced tool_choice
+    o esempi few-shot positivi), non tattico.
+  - **#8 -- `record_mood_intake {value}` singolo replicato su mood+energyEnd.**
+    Confermato Scenario 3 via contextJson `{mood:5, energyEnd:5}`. Design
+    issue dello schema tool (mood != energia ma stesso input). Priorita' media,
+    cardinale aperta: split in due tool separati `record_mood` + `record_energy`
+    vs single tool con `{mood, energy}` esplicito.
+  - **#9 NEW -- `DailyPlan.top3Ids` non riflette `DailyPlanTask` quando piano
+    >3 task.** Emerso Scenario 2. Possibile semantica legacy del campo
+    `top3Ids` (esistente da prima di Slice 5-7) come "top 3 prioritari" e non
+    "tutti i task del piano". Priorita' media, indagine richiesta in
+    `src/lib/evening-review/close-review.ts` prima di decidere se bug o
+    invariante voluto.
+  - **#11 NEW -- `mark_what_blocked_asked` non-deterministico per
+    `postponedCount>=3`.** Scattato in Scenario 2, NON scattato in Scenario 3
+    e 6 per task con stato DB equivalente. Priorita' media, indagine richiesta
+    in `EVENING_REVIEW_PROMPT` (rinforzo trigger) o tool description.
+  - **#12 NEW (CRITICO) -- `normalizeThreadState paused->active` non scatta
+    mai durante flow.** Emerso Scenario 6: thread paused riceve turn via
+    `POST /api/chat/turn`, lastTurnAt e contextJson aggiornati, ma `state`
+    resta `paused`. `GET /api/chat/active-thread` non chiama `normalize` come
+    previsto dal briefing Slice 3 (ramo `inside_window_active`). closeReview
+    funziona comunque perche' $transaction scrive state=`completed` diretto
+    indipendentemente da paused/active. Priorita' media-alta, prossimo fix.
+
+- **Diagnosi pre-fatte per fix imminenti (da validare).**
+
+  - **#12.** File da indagare: route handler `GET /api/chat/active-thread`
+    (path completo da verificare via grep), modulo `normalizeThreadState` se
+    esiste separato. Ipotesi: la call al normalize e' stata rimossa o non
+    montata sul ramo `inside_window_active`. Conferma sperimentale gia'
+    raccolta in retest: thread paused con `lastTurnAt` recente persiste come
+    inconsistenza semantica osservabile in DB.
+
+  - **#9.** File da indagare: `src/lib/evening-review/close-review.ts` per
+    popolamento `top3Ids`. Ipotesi: hardcoded slice(0, 3) su lista pinned
+    ordinata, semantica "top 3 prioritari" non "tutti". Da confermare leggendo
+    il codice prima di proporre fix.
+
+  - **#2.** File da indagare: `src/features/chat/ChatView.tsx` per render
+    `payloadJson.toolName`, oppure `EVENING_REVIEW_PROMPT` se "ok <toolname>"
+    e' richiesto esplicitamente al modello come ack post-tool. Ipotesi:
+    leakage UI side, non prompt side (i prompt non hanno reference noti a
+    "ok <tool>").
+
+  - **#11.** File da indagare: `src/lib/chat/prompts.ts` `EVENING_REVIEW_PROMPT`
+    sezione DECOMPOSITION_PROPOSED + WHAT_BLOCKED_ASKED_FOR per coerenza
+    trigger, e tool description di `mark_what_blocked_asked` per chiarezza
+    condizioni. Ipotesi: trigger semantico soft, non-determinismo LLM su
+    contesto equivalente. Mitigazione strutturale possibile (esempi few-shot
+    positivi) ma non garantita.
+
+  - **#8.** File da indagare: `src/lib/chat/tools.ts` per schema
+    `record_mood_intake` + dispatcher in orchestrator. Ipotesi: schema
+    `{value: number}` ambiguo, dispatcher applica value a entrambi i campi
+    `moodIntake.mood` e `moodIntake.energyEnd` per semplicita'. Fix strutturale
+    cardinale aperta (vedi #8 sopra).
+
+- **Cleanup artefatti retest deferito.** Test user `cmp1flw1g005oibvckzsenuqm`
+  conserva ChatThread/Review/DailyPlan dell'ultimo Scenario 6
+  (`cmp5uw7tu003libbodpo0t0qj`, `cmp5v3t9z004libbolp96zkxm`,
+  `cmp5v3tma004nibboxzbc8pdd`). Non bloccante per fix futuri, cleanup in fase
+  test successiva. Settings ripristinate a default Slice 1
+  (`eveningWindowStart='20:00'`, `eveningWindowEnd='23:00'`).
+
