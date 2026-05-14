@@ -1,0 +1,219 @@
+/**
+ * closeReview (Slice 7).
+ *
+ * Helper transazionale che materializza la chiusura della review serale:
+ * upsert Review + upsert DailyPlan (con originalPlanJson immutabile) +
+ * update ChatThread.state='completed'. Tutto in singolo prisma.$transaction.
+ *
+ * Pre-check idempotenza: se ChatThread.state === 'completed' ritorna
+ * gli artefatti gia' presenti senza side-effect (alreadyClosed=true). Il
+ * caso doppio-click sul confirm_close_review e' coperto qui.
+ *
+ * D3 preview vuoto: procede comunque. Liste serializzate come '[]', niente
+ * blocco. Caso d'uso: giorno libero, niente task selezionati per domani.
+ *
+ * D5 originalPlanJson immutability: alla seconda chiusura per la stessa
+ * planDate (raro), aggiorniamo liste live e threadId ma NON sovrascriviamo
+ * originalPlanJson — preserviamo il record originario. Implementato leggendo
+ * il valore esistente PRIMA della $transaction e omettendo il campo
+ * dall'update branch se gia' presente.
+ *
+ * D7 mood == energyEnd v1: il caller passa lo stesso valore in entrambi i
+ * campi. La separazione semantica arrivera' in slice futura.
+ *
+ * Caller atteso: confirm-close-review-handler.ts (Slice 7 STEP 2.4).
+ */
+
+import { db as defaultDb } from '@/lib/db';
+import type { DailyPlanPreview } from './plan-preview';
+import type { OriginalPlanSnapshot } from '@/lib/types/evening-review-snapshot';
+import { selectLearningSignalsForDate } from './learning-signals-today';
+
+export type CloseReviewInput = {
+  userId: string;
+  threadId: string;
+  // YYYY-MM-DD giorno solare locale della review (Europe/Rome).
+  reviewDate: string;
+  // YYYY-MM-DD = reviewDate + 1 giorno solare locale.
+  planDate: string;
+  // 1-5. v1: mood == energyEnd.
+  mood: number;
+  energyEnd: number;
+  // Stringa pre-aggregata dall'orchestrator (append-style D2).
+  whatBlocked: string;
+  preview: DailyPlanPreview;
+  pinnedTaskIds: string[];
+};
+
+export type CloseReviewResult =
+  | { ok: true; reviewId: string; dailyPlanId: string; alreadyClosed: false }
+  | { ok: true; reviewId: string; dailyPlanId: string; alreadyClosed: true }
+  | {
+      ok: false;
+      error: 'thread_missing' | 'validation_failed';
+      detail?: string;
+    };
+
+export async function closeReview(
+  input: CloseReviewInput,
+  db: typeof defaultDb = defaultDb,
+): Promise<CloseReviewResult> {
+  // Pre-check 1: thread esiste e appartiene all'utente.
+  const thread = await db.chatThread.findUnique({
+    where: { id: input.threadId },
+    select: { id: true, userId: true, state: true },
+  });
+  if (!thread) {
+    return { ok: false, error: 'thread_missing' };
+  }
+  if (thread.userId !== input.userId) {
+    return {
+      ok: false,
+      error: 'validation_failed',
+      detail: 'thread userId mismatch',
+    };
+  }
+
+  // Pre-check 2: idempotenza. Thread gia' completed -> recupera artefatti e ritorna.
+  if (thread.state === 'completed') {
+    const [existingReview, existingPlan] = await Promise.all([
+      db.review.findUnique({
+        where: {
+          userId_date: { userId: input.userId, date: input.reviewDate },
+        },
+        select: { id: true },
+      }),
+      db.dailyPlan.findUnique({
+        where: {
+          userId_date: { userId: input.userId, date: input.planDate },
+        },
+        select: { id: true },
+      }),
+    ]);
+    if (existingReview && existingPlan) {
+      return {
+        ok: true,
+        reviewId: existingReview.id,
+        dailyPlanId: existingPlan.id,
+        alreadyClosed: true,
+      };
+    }
+    return {
+      ok: false,
+      error: 'validation_failed',
+      detail: 'thread completed but artifacts missing',
+    };
+  }
+
+  // Step pre-transazione: leggi LearningSignal del giorno (read-only, finestra
+  // chiusa a Review.date in Europe/Rome -> nessuna race con la transazione).
+  const signals = await selectLearningSignalsForDate(
+    input.userId,
+    input.reviewDate,
+    db,
+  );
+
+  // Serializzazione liste piano. doNowIds = tutti i task allocati (morning + afternoon + evening).
+  // top3Ids = primi 3 della mattina (slot di solito a piu' alta priorita').
+  const morningIds = input.preview.morning.map((t) => t.taskId);
+  const afternoonIds = input.preview.afternoon.map((t) => t.taskId);
+  const eveningIds = input.preview.evening.map((t) => t.taskId);
+  const doNowIds = [...morningIds, ...afternoonIds, ...eveningIds];
+  const top3Ids = doNowIds.slice(0, 3);
+
+  const snapshot: OriginalPlanSnapshot = {
+    version: 1,
+    capturedAt: new Date().toISOString(),
+    preview: input.preview,
+    pinnedIds: input.pinnedTaskIds,
+  };
+  const snapshotJson = JSON.stringify(snapshot);
+
+  const result = await db.$transaction(async (tx) => {
+    const review = await tx.review.upsert({
+      where: {
+        userId_date: { userId: input.userId, date: input.reviewDate },
+      },
+      create: {
+        userId: input.userId,
+        date: input.reviewDate,
+        mood: input.mood,
+        energyEnd: input.energyEnd,
+        whatBlocked: input.whatBlocked,
+        whatDone: signals.done.join('\n'),
+        whatAvoided: signals.avoided.join('\n'),
+        threadId: input.threadId,
+      },
+      update: {
+        mood: input.mood,
+        energyEnd: input.energyEnd,
+        whatBlocked: input.whatBlocked,
+        whatDone: signals.done.join('\n'),
+        whatAvoided: signals.avoided.join('\n'),
+        threadId: input.threadId,
+      },
+    });
+
+    // D5: leggi originalPlanJson dentro la transazione per evitare race con
+    // un'altra chiusura in volo sulla stessa planDate. Se gia' presente, omettiamo
+    // il campo dall'update branch (Prisma non lo tocca).
+    const existingPlanForSnapshot = await tx.dailyPlan.findUnique({
+      where: {
+        userId_date: { userId: input.userId, date: input.planDate },
+      },
+      select: { originalPlanJson: true },
+    });
+    const preserveOriginalPlanJson =
+      existingPlanForSnapshot?.originalPlanJson != null &&
+      existingPlanForSnapshot.originalPlanJson !== '';
+
+    const planUpdateData: {
+      top3Ids: string;
+      doNowIds: string;
+      pinnedIds: string;
+      threadId: string;
+      originalPlanJson?: string;
+    } = {
+      top3Ids: JSON.stringify(top3Ids),
+      doNowIds: JSON.stringify(doNowIds),
+      pinnedIds: JSON.stringify(input.pinnedTaskIds),
+      threadId: input.threadId,
+    };
+    if (!preserveOriginalPlanJson) {
+      planUpdateData.originalPlanJson = snapshotJson;
+    }
+
+    const plan = await tx.dailyPlan.upsert({
+      where: {
+        userId_date: { userId: input.userId, date: input.planDate },
+      },
+      create: {
+        userId: input.userId,
+        date: input.planDate,
+        top3Ids: JSON.stringify(top3Ids),
+        doNowIds: JSON.stringify(doNowIds),
+        pinnedIds: JSON.stringify(input.pinnedTaskIds),
+        originalPlanJson: snapshotJson,
+        threadId: input.threadId,
+      },
+      update: planUpdateData,
+    });
+
+    await tx.chatThread.update({
+      where: { id: input.threadId },
+      data: {
+        state: 'completed',
+        endedAt: new Date(),
+      },
+    });
+
+    return { reviewId: review.id, dailyPlanId: plan.id };
+  });
+
+  return {
+    ok: true,
+    reviewId: result.reviewId,
+    dailyPlanId: result.dailyPlanId,
+    alreadyClosed: false,
+  };
+}

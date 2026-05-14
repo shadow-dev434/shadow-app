@@ -113,3 +113,11 @@ export const MAX_MICRO_STEPS = 5;
 // Review chat thread mode (matches ChatThread.mode)
 
 export const EVENING_REVIEW_MODE = 'evening_review' as const;
+
+// Mood intake apertura (Slice 7, D1)
+// Fallback applicato quando l'utente skippa o risponde fuori scala dopo
+// l'unica insistenza prevista dal prompt MOOD_INTAKE_OPENING. Valore "medio"
+// neutro: scelto a 3 per non distorcere analytics future verso un estremo.
+// D7: stesso valore applicato sia a Review.mood sia a Review.energyEnd.
+
+export const MOOD_INTAKE_FALLBACK_VALUE = 3 as const;

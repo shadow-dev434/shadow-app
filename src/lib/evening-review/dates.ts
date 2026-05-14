@@ -15,6 +15,42 @@ export function addDaysIso(yyyymmdd: string, days: number): string {
 }
 
 /**
+ * Returns the UTC instant corresponding to 00:00:00.000 wall-clock in the given IANA
+ * timezone. Default zone is 'Europe/Rome'. Mirror simmetrico di endOfDayInZone:
+ * stesso pattern Intl.DateTimeFormat, gestione DST analoga.
+ *
+ * Used by Slice 7 close-review per definire la finestra "giorno solare locale" della
+ * Review.date quando si interrogano LearningSignal in selectLearningSignalsForDate.
+ */
+export function startOfDayInZone(yyyymmdd: string, zone: string = 'Europe/Rome'): Date {
+  const probe = new Date(`${yyyymmdd}T00:00:00.000Z`);
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const parts = Object.fromEntries(
+    fmt.formatToParts(probe).map((p) => [p.type, p.value]),
+  );
+  const zoneWallTimeAsUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+    0,
+  );
+  const offsetMs = zoneWallTimeAsUtc - probe.getTime();
+  return new Date(probe.getTime() - offsetMs);
+}
+
+/**
  * Returns the UTC instant corresponding to 23:59:59.999 wall-clock in the given IANA
  * timezone. Default zone is 'Europe/Rome'. Handles DST transitions automatically via
  * Intl.DateTimeFormat (CET <-> CEST, fall-back ambiguity, spring-forward gap).

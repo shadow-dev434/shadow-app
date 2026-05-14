@@ -214,6 +214,46 @@ export type TriageState = {
   decomposition?: DecompositionWorkspace | null;
 
   /**
+   * Slice 7: mood/energy 1-5 catturato al primo turno della review serale
+   * (mood intake opening). Settato dal tool record_mood_intake. D7: v1 -> stesso
+   * valore per mood ed energyEnd; separazione semantica arriva in slice futura.
+   * undefined finche' l'utente non risponde o non viene applicato il fallback D1.
+   */
+  moodIntake?: { mood: number; energyEnd: number };
+
+  /**
+   * Slice 7: whatBlocked aggregato in formato append-style D2
+   * ("\n\n— {taskTitle}: {reason}"), popolato server-side dall'orchestrator
+   * sui turni dove l'entry corrente ha postponedCount >= POSTPONE_PATTERN_THRESHOLD.
+   * Letto da confirm_close_review handler e passato a closeReview() verbatim.
+   * Stringa, gia' formattata: l'handler non la riformatta.
+   */
+  whatBlocked?: string;
+
+  /**
+   * Slice 7: flag pausa-conferma whatBlocked detection. Settato dal tool
+   * mark_what_blocked_asked NELLO STESSO TURNO in cui il modello pone la
+   * domanda whatBlocked all'utente. L'orchestrator legge questo campo al
+   * turno successivo per captare l'input.userMessage come reason e
+   * accodarla a whatBlocked nel formato D2.
+   *
+   * Lifecycle:
+   * - SET: handler mark_what_blocked_asked (single source).
+   * - CLEAR: orchestrator-side dopo cattura del next user message. Anche
+   *   su transizione entry / abbandono review (orchestrator-side logic
+   *   in STEP 3.3, NON handler-side, per evitare touch ai tool esistenti).
+   *
+   * Parente semantico di triageState.decomposition (V1.1): entrambi sono
+   * "pausa di conferma" per_entry. Differenza: decomposition aspetta
+   * tool call utente-confermato (approve_decomposition); whatBlocked
+   * aspetta solo input.userMessage testo libero, captato server-side.
+   *
+   * Esposto al prompt come WHAT_BLOCKED_ASKED_FOR=<taskId|none> nel
+   * builder modeContext, parallelo a DECOMPOSITION_PROPOSED.
+   */
+  pendingWhatBlockedForTaskId?: string;
+
+  /**
    * Slice 5 V1.2.2 (2026-05-06): true sse il thread evening_review ha
    * appena transitato da 'paused' a 'active' (resume di review interrotta).
    * Settato da active-thread/route.ts al momento del state-change paused

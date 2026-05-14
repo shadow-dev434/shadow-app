@@ -57,6 +57,12 @@ import {
 import { handleUpdatePlanPreview } from './tools/update-plan-preview-handler';
 import { CONFIRM_PLAN_PREVIEW_TOOL } from './tools/confirm-plan-preview-tool';
 import { handleConfirmPlanPreview } from './tools/confirm-plan-preview-handler';
+import { RECORD_MOOD_INTAKE_TOOL } from './tools/record-mood-intake-tool';
+import { handleRecordMoodIntake } from './tools/record-mood-intake-handler';
+import { CONFIRM_CLOSE_REVIEW_TOOL } from './tools/confirm-close-review-tool';
+import { handleConfirmCloseReview } from './tools/confirm-close-review-handler';
+import { MARK_WHAT_BLOCKED_ASKED_TOOL } from './tools/mark-what-blocked-asked-tool';
+import { handleMarkWhatBlockedAsked } from './tools/mark-what-blocked-asked-handler';
 import type { PreviewState } from '@/lib/evening-review/apply-overrides';
 import type { BuildDailyPlanPreviewInput } from '@/lib/evening-review/plan-preview';
 
@@ -216,9 +222,14 @@ export function getToolsForMode(mode: string): LLMTool[] {
   if (mode === 'evening_review') {
     return [
       ...CHAT_TOOLS,
+      RECORD_MOOD_INTAKE_TOOL,
       ...EVENING_REVIEW_TOOLS,
+      // Slice 7: per_entry tool, vive fuori da EVENING_REVIEW_TOOLS per coerenza
+      // con pattern Slice 6+ (tool nuovi non vengono splattati in array pre-esistenti).
+      MARK_WHAT_BLOCKED_ASKED_TOOL,
       UPDATE_PLAN_PREVIEW_TOOL,
       CONFIRM_PLAN_PREVIEW_TOOL,
+      CONFIRM_CLOSE_REVIEW_TOOL,
     ];
   }
   return CHAT_TOOLS;
@@ -256,6 +267,23 @@ export type ToolExecutionResult =
       success: true;
       data?: unknown;
       newPhase: EveningReviewPhase;
+    }
+  | {
+      /**
+       * Slice 7: terminal-state kind. Emesso da executeConfirmCloseReview
+       * dopo che closeReview() ha materializzato la review (Review +
+       * DailyPlan + ChatThread.state='completed', tutto in $transaction).
+       * reviewId/dailyPlanId disponibili per logging/telemetria orchestrator-
+       * side. alreadyClosed=true segnala idempotenza (double-click sul
+       * confirm_close_review): nessun side-effect aggiuntivo emesso, ma il
+       * tool result e' comunque success.
+       */
+      kind: 'closeReview';
+      success: true;
+      data?: unknown;
+      reviewId: string;
+      dailyPlanId: string;
+      alreadyClosed: boolean;
     };
 
 export interface ToolExecutionContext {
@@ -263,6 +291,14 @@ export interface ToolExecutionContext {
   previewState?: PreviewState;
   baseInput?: BuildDailyPlanPreviewInput;
   currentPhase?: EveningReviewPhase;
+  /**
+   * Slice 7: id del ChatThread corrente, propagato dall'orchestrator.
+   * Richiesto da executeConfirmCloseReview per passarlo a closeReview()
+   * che lo usa per pre-check idempotenza + FK su Review/DailyPlan +
+   * update ChatThread.state='completed'. undefined per chiamate fuori
+   * evening_review (gli altri tool non lo leggono).
+   */
+  threadId?: string;
 }
 
 /**
@@ -296,6 +332,8 @@ export async function executeTool(
         return await executeGetTodayTasks(userId);
       case 'set_user_energy':
         return await executeSetUserEnergy(input, userId);
+      case 'record_mood_intake':
+        return executeRecordMoodIntake(input, context);
       case 'add_candidate_to_review':
         return await executeAddCandidateToReview(input, userId, context?.triageState);
       case 'remove_candidate_from_review':
@@ -304,6 +342,8 @@ export async function executeTool(
         return await executeSetCurrentEntry(input, userId, context?.triageState);
       case 'mark_entry_discussed':
         return await executeMarkEntryDiscussed(input, userId, context?.triageState);
+      case 'mark_what_blocked_asked':
+        return executeMarkWhatBlockedAsked(input, context);
       case 'propose_decomposition':
         return await executeProposeDecomposition(input, userId, context?.triageState);
       case 'approve_decomposition':
@@ -312,6 +352,8 @@ export async function executeTool(
         return await executeUpdatePlanPreview(input, userId, context);
       case 'confirm_plan_preview':
         return executeConfirmPlanPreview(context);
+      case 'confirm_close_review':
+        return await executeConfirmCloseReview(userId, context);
       default:
         return { kind: 'sideEffect', success: false, error: `Unknown tool: ${toolName}` };
     }
@@ -1111,5 +1153,127 @@ function executeConfirmPlanPreview(
     success: true,
     data: { ok: true },
     newPhase: result.newPhase,
+  };
+}
+
+// ── Slice 7 executors ─────────────────────────────────────────────────────
+
+function executeRecordMoodIntake(
+  input: Record<string, unknown>,
+  context: ToolExecutionContext | undefined,
+): ToolExecutionResult {
+  // Guard: orchestrator deve passare triageState. Se manca, non siamo in
+  // evening_review oppure wiring sbagliato. Messaggio model-friendly: il
+  // modello vede questo se per errore chiama il tool fuori contesto.
+  if (!context?.triageState) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'record_mood_intake is only available during the evening review',
+    };
+  }
+
+  const result = handleRecordMoodIntake({
+    args: input,
+    triageState: context.triageState,
+    currentPhase: context.currentPhase,
+  });
+
+  if (!result.ok) {
+    return { kind: 'sideEffect', success: false, error: result.error };
+  }
+
+  // Echo del value nel data: pattern speculare a executeSetUserEnergy
+  // (data: { level }). Il modello vede "ok ho registrato N" come tool_result.
+  return {
+    kind: 'mutator',
+    success: true,
+    data: { value: result.value },
+    newTriageState: result.newTriageState,
+  };
+}
+
+async function executeConfirmCloseReview(
+  userId: string,
+  context: ToolExecutionContext | undefined,
+): Promise<ToolExecutionResult> {
+  // Guard: orchestrator deve passare triageState + previewState + baseInput
+  // + threadId. Se manca uno, non siamo in evening_review closing oppure
+  // wiring sbagliato. Messaggio model-friendly.
+  if (
+    !context?.triageState ||
+    !context.previewState ||
+    !context.baseInput ||
+    !context.threadId
+  ) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'confirm_close_review is only available during the evening review closing phase',
+    };
+  }
+
+  const result = await handleConfirmCloseReview({
+    userId,
+    threadId: context.threadId,
+    currentPhase: context.currentPhase,
+    triageState: context.triageState,
+    previewState: context.previewState,
+    baseInput: context.baseInput,
+    clientDate: context.triageState.clientDate,
+  });
+
+  if (!result.ok) {
+    return { kind: 'sideEffect', success: false, error: result.error };
+  }
+
+  // Terminal kind: la review e' materializzata (Review + DailyPlan + thread
+  // completed). L'orchestrator (STEP 3.3) leggera' alreadyClosed per
+  // eventuale propagazione metadata.reviewClosed nel payload assistant
+  // (STEP 4.1, se necessario).
+  return {
+    kind: 'closeReview',
+    success: true,
+    data: { ok: true, alreadyClosed: result.alreadyClosed },
+    reviewId: result.reviewId,
+    dailyPlanId: result.dailyPlanId,
+    alreadyClosed: result.alreadyClosed,
+  };
+}
+
+function executeMarkWhatBlockedAsked(
+  input: Record<string, unknown>,
+  context: ToolExecutionContext | undefined,
+): ToolExecutionResult {
+  // Guard: orchestrator deve passare triageState. Se manca, non siamo in
+  // evening_review oppure wiring sbagliato. Messaggio model-friendly.
+  if (!context?.triageState) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'mark_what_blocked_asked is only available during the evening review',
+    };
+  }
+
+  const result = handleMarkWhatBlockedAsked({
+    args: input,
+    triageState: context.triageState,
+    currentPhase: context.currentPhase,
+  });
+
+  if (!result.ok) {
+    return { kind: 'sideEffect', success: false, error: result.error };
+  }
+
+  // Echo del taskId nel data: pattern speculare a executeAddCandidateToReview
+  // (data: { taskId, taskTitle, action }). Qui il modello vede solo conferma
+  // della registrazione del flag. Niente taskTitle perche' l'handler non
+  // fa lookup DB (sarebbe inutile: il modello ha gia' il titolo nel
+  // CURRENT_ENTRY_DETAIL del modeContext del turno).
+  return {
+    kind: 'mutator',
+    success: true,
+    data: { taskId: result.taskId, action: 'what_blocked_asked' },
+    newTriageState: result.newTriageState,
   };
 }

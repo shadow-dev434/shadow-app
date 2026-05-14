@@ -42,6 +42,7 @@ import {
   loadPreviewStateFromContext,
   type PreviewState,
 } from '@/lib/evening-review/apply-overrides';
+import { captureWhatBlocked } from '@/lib/evening-review/what-blocked-capture';
 
 export type ChatMode =
   | 'morning_checkin'
@@ -162,6 +163,10 @@ export async function orchestrate(
     triageState = triageResult.triageState;
     allTasks = triageResult.allTasks;
     isFirstTurn = triageResult.isFirstTurn;
+
+    // Slice 7: WhatBlocked capture. Helper puro estratto per testabilita',
+    // vedi what-blocked-capture.ts per semantica completa.
+    triageState = captureWhatBlocked(triageState, allTasks, input.userMessage);
 
     // Slice 6a: defensive defaults inline (piano B.2).
     const previewProfile = {
@@ -369,6 +374,17 @@ export async function orchestrate(
   // pendingTriageState !== null is the signal that we're in evening_review
   // AND have a state to persist in chunk H's transaction commit.
   let pendingTriageState: TriageState | null = triageState;
+  // Slice 7: reviewClosed accumulator. Settato dal for-loop tool execution
+  // su result.kind === 'closeReview'. Letto dal flush finale per decidere
+  // semantica thread.update (vedi commento Slice 7 in ── 9. Atomic commit).
+  // null = flow normale (niente chiusura review in questo turno).
+  // alreadyClosed=true = double-click idempotente, skip thread update.
+  // alreadyClosed=false = chiusura nuova, thread.update parziale (lastTurnAt only).
+  let reviewClosed: {
+    reviewId: string;
+    dailyPlanId: string;
+    alreadyClosed: boolean;
+  } | null = null;
 
   // ── 7. Tool-use loop (multi-iteration with cap) ─────────────────────
   let iteration = 0;
@@ -394,6 +410,7 @@ export async function orchestrate(
           previewState: pendingPreviewState ?? undefined,
           baseInput: baseInput ?? undefined,
           currentPhase: pendingPhase ?? currentPhase,
+          threadId: thread.id,
         });
         toolsExecuted.push({ name: tc.name, input: tc.input, result: result.data });
         toolResults.push({ toolCall: tc, result });
@@ -405,6 +422,18 @@ export async function orchestrate(
         }
         if (result.kind === 'phaseMutator') {
           pendingPhase = result.newPhase;
+        }
+        if (result.kind === 'closeReview') {
+          // Slice 7: closeReview() ha gia' committed Review + DailyPlan +
+          // thread.state='completed' in $transaction separata (vedi
+          // confirm-close-review-handler.ts). Accumuliamo l'esito per gestire
+          // il flush finale: skip thread.update su alreadyClosed, parziale
+          // (lastTurnAt only) altrimenti.
+          reviewClosed = {
+            reviewId: result.reviewId,
+            dailyPlanId: result.dailyPlanId,
+            alreadyClosed: result.alreadyClosed,
+          };
         }
         // V1.3: detection self-correction guard failure -> set
         // selfCorrectedInPreviousTurn=true in pendingTriageState. Pattern split
@@ -578,41 +607,71 @@ export async function orchestrate(
     pendingTriageState = { ...pendingTriageState, lastTurnWasTextOnly: true };
   }
 
-  if (pendingTriageState !== null || pendingPreviewState !== null) {
-    // 6b: serializza entrambi i namespace via spread condizionale.
-    // Backward compatible: thread 6a (solo 'triage') letto correttamente da
-    // loadTriageStateFromContext (narrow su parsed.triage), e 6b previewState
-    // idem da loadPreviewStateFromContext. Pattern '...(cond && obj)' produce
-    // {} quando cond=false (ECMAScript object spread on false = no-op).
-    threadUpdateData.contextJson = JSON.stringify({
-      ...(pendingTriageState !== null && { triage: pendingTriageState }),
-      ...(pendingPreviewState !== null && { previewState: pendingPreviewState }),
-      ...(effectivePhase !== undefined && { phase: effectivePhase }),
-    });
-  }
+  // chatMessage.create factor-out: PrismaPromise lazy (non esegue finche'
+  // non passata a $transaction), riutilizzabile come riferimento nelle
+  // 3 branch sotto. Una sola branch eseguira'.
+  const chatMessageCreate = db.chatMessage.create({
+    data: {
+      threadId: thread.id,
+      role: 'assistant',
+      content: finalAssistantMessage,
+      payloadJson: quickReplies.length > 0
+        ? JSON.stringify({ quickReplies, toolsExecuted })
+        : toolsExecuted.length > 0
+          ? JSON.stringify({ toolsExecuted })
+          : null,
+      modelUsed: lastModel,
+      tokensIn: totalTokensIn,
+      tokensOut: totalTokensOut,
+      latencyMs: totalLatencyMs,
+    },
+  });
 
-  await db.$transaction([
-    db.chatMessage.create({
-      data: {
-        threadId: thread.id,
-        role: 'assistant',
-        content: finalAssistantMessage,
-        payloadJson: quickReplies.length > 0
-          ? JSON.stringify({ quickReplies, toolsExecuted })
-          : toolsExecuted.length > 0
-            ? JSON.stringify({ toolsExecuted })
-            : null,
-        modelUsed: lastModel,
-        tokensIn: totalTokensIn,
-        tokensOut: totalTokensOut,
-        latencyMs: totalLatencyMs,
-      },
-    }),
-    db.chatThread.update({
-      where: { id: thread.id },
-      data: threadUpdateData,
-    }),
-  ]);
+  if (reviewClosed === null) {
+    // Flow normale (pre-Slice 7 + Slice 7 non-closing turn): contextJson update
+    // + lastTurnAt in $transaction atomica.
+    if (pendingTriageState !== null || pendingPreviewState !== null) {
+      // 6b: serializza entrambi i namespace via spread condizionale.
+      // Backward compatible: thread 6a (solo 'triage') letto correttamente da
+      // loadTriageStateFromContext (narrow su parsed.triage), e 6b previewState
+      // idem da loadPreviewStateFromContext. Pattern '...(cond && obj)' produce
+      // {} quando cond=false (ECMAScript object spread on false = no-op).
+      threadUpdateData.contextJson = JSON.stringify({
+        ...(pendingTriageState !== null && { triage: pendingTriageState }),
+        ...(pendingPreviewState !== null && { previewState: pendingPreviewState }),
+        ...(effectivePhase !== undefined && { phase: effectivePhase }),
+      });
+    }
+    await db.$transaction([
+      chatMessageCreate,
+      db.chatThread.update({
+        where: { id: thread.id },
+        data: threadUpdateData,
+      }),
+    ]);
+  } else if (reviewClosed.alreadyClosed) {
+    // Slice 7 idempotenza: closeReview() ha rilevato thread.state==='completed'
+    // in pre-check (double-click utente). Niente side-effect aggiuntivo lato
+    // close-review.ts, e qui skippiamo TOTALMENTE il thread update — non c'e'
+    // nulla di legittimo da aggiornare su un thread terminato (lastTurnAt e'
+    // gia' al valore corretto del turno di chiusura originario).
+    await db.$transaction([chatMessageCreate]);
+  } else {
+    // Slice 7 closeReview committed in questo turno: review materializzata da
+    // closeReview() (state=completed + endedAt + FK Review/DailyPlan settati in
+    // transazione separata). Update parziale qui evita conflitto semantico di
+    // sovrascrivere contextJson su thread chiuso; lastTurnAt resta utile per
+    // ordering cronologico del messaggio finale.
+    // Riuso threadUpdateData.lastTurnAt (riga 579) per coerenza temporale fra
+    // branch — un solo new Date() per turno, indipendentemente dalla branch.
+    await db.$transaction([
+      chatMessageCreate,
+      db.chatThread.update({
+        where: { id: thread.id },
+        data: { lastTurnAt: threadUpdateData.lastTurnAt },
+      }),
+    ]);
+  }
 
   return {
     threadId: thread.id,
@@ -768,6 +827,11 @@ function buildEveningReviewModeContext(
 
   const lines: string[] = ['TRIAGE CORRENTE'];
   lines.push(`IS_FIRST_TURN=${isFirstTurn}`);
+  // Slice 7: MOOD_INTAKE expose triageState.moodIntake stato. 'pending' default
+  // se non ancora chiesto/risposto; valore numerico se record_mood_intake committed.
+  // Letto dal prompt APERTURA E STATO DEL TURNO per scegliere CASO A vs CASO B.
+  const moodIntakeValue = triageState.moodIntake?.mood;
+  lines.push(`MOOD_INTAKE=${moodIntakeValue !== undefined ? moodIntakeValue : 'pending'}`);
   lines.push(`N=${candidateLines.length} candidate, M=${outOfTriage.length} task in inbox fuori dal triage.`);
   lines.push('');
   lines.push('Candidate (in ordine):');
@@ -825,6 +889,13 @@ function buildEveningReviewModeContext(
   } else {
     lines.push('DECOMPOSITION_PROPOSED=none');
   }
+  // Slice 7: WHAT_BLOCKED_ASKED_FOR expose triageState.pendingWhatBlockedForTaskId.
+  // Settato dal tool mark_what_blocked_asked nel turno della domanda whatBlocked.
+  // Clearato orchestrator-side dopo cattura del next user message. Letto dal prompt
+  // WHAT BLOCKED DETECTION per evitare ri-domanda sulla stessa entry. Parente
+  // semantico di DECOMPOSITION_PROPOSED (entrambi pausa-conferma per_entry).
+  const pendingWB = triageState.pendingWhatBlockedForTaskId;
+  lines.push(`WHAT_BLOCKED_ASKED_FOR=${pendingWB ?? 'none'}`);
 
   lines.push('');
   const outcomes = triageState.outcomes ?? {};
