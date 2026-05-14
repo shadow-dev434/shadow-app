@@ -16,4 +16,5 @@ tsconfig.tsbuildinfo
 
 scripts/debug-*.ts
 scripts/cleanup-blocker-*.ts
-scripts/temp-fake-review.ts
+scripts/temp-*.ts
+scripts/replay-*.ts
