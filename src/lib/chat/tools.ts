@@ -215,24 +215,72 @@ export const EVENING_REVIEW_TOOLS: LLMTool[] = [
 
 /**
  * Returns the tools available to the model for a given chat mode.
- * For evening_review, augments CHAT_TOOLS with the mutator tools that operate on
- * ChatThread.contextJson.triage state.
+ *
+ * For evening_review, the result is phase-gated (Slice 7 BUG #A fix): solo i
+ * tool legittimi per la fase corrente sono esposti al modello. Pattern
+ * defense-in-depth oltre ai guard handler: i guard restano per safety
+ * server-side, il tool gating elimina la possibilita' che il modello chiami
+ * il tool sbagliato in primo luogo (eliminato il bundling
+ * confirm_close_review + confirm_plan_preview in ordine inverso osservato
+ * nello scenario E2E 2026-05-14).
+ *
+ * Mapping fase -> tool set:
+ * - per_entry: CHAT_TOOLS + record_mood_intake + EVENING_REVIEW_TOOLS +
+ *   mark_what_blocked_asked. NO confirm_*, NO update_plan_preview.
+ * - plan_preview: CHAT_TOOLS + update_plan_preview + confirm_plan_preview.
+ *   NO confirm_close_review, NO tool di triage/intake.
+ * - closing: CHAT_TOOLS + confirm_close_review. NO confirm_plan_preview,
+ *   NO update_plan_preview, NO tool di triage/intake.
+ * - undefined (thread pre-6c senza phase in contextJson): set completo,
+ *   fallback per backward compat. I guard handler continuano a rifiutare
+ *   chiamate fuori-fase per i thread legacy.
+ *
+ * CHAT_TOOLS (create_task / get_today_tasks / set_user_energy) restano in
+ * tutte le fasi: edge case ammissibili come "aggiungi questa in inbox"
+ * mentre l'utente sta gia' in plan_preview.
  */
-export function getToolsForMode(mode: string): LLMTool[] {
-  if (mode === 'evening_review') {
+export function getToolsForMode(
+  mode: string,
+  phase?: EveningReviewPhase,
+): LLMTool[] {
+  if (mode !== 'evening_review') {
+    return CHAT_TOOLS;
+  }
+
+  if (phase === 'per_entry') {
     return [
       ...CHAT_TOOLS,
       RECORD_MOOD_INTAKE_TOOL,
       ...EVENING_REVIEW_TOOLS,
-      // Slice 7: per_entry tool, vive fuori da EVENING_REVIEW_TOOLS per coerenza
-      // con pattern Slice 6+ (tool nuovi non vengono splattati in array pre-esistenti).
       MARK_WHAT_BLOCKED_ASKED_TOOL,
+    ];
+  }
+
+  if (phase === 'plan_preview') {
+    return [
+      ...CHAT_TOOLS,
       UPDATE_PLAN_PREVIEW_TOOL,
       CONFIRM_PLAN_PREVIEW_TOOL,
+    ];
+  }
+
+  if (phase === 'closing') {
+    return [
+      ...CHAT_TOOLS,
       CONFIRM_CLOSE_REVIEW_TOOL,
     ];
   }
-  return CHAT_TOOLS;
+
+  // phase === undefined: thread pre-6c senza marker phase in contextJson.
+  return [
+    ...CHAT_TOOLS,
+    RECORD_MOOD_INTAKE_TOOL,
+    ...EVENING_REVIEW_TOOLS,
+    MARK_WHAT_BLOCKED_ASKED_TOOL,
+    UPDATE_PLAN_PREVIEW_TOOL,
+    CONFIRM_PLAN_PREVIEW_TOOL,
+    CONFIRM_CLOSE_REVIEW_TOOL,
+  ];
 }
 
 // ── Tool Executors ─────────────────────────────────────────────────────────

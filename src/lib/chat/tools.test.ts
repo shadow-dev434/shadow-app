@@ -16,7 +16,7 @@ vi.mock('@/lib/db', () => ({
 }));
 
 import { db } from '@/lib/db';
-import { executeTool } from './tools';
+import { executeTool, getToolsForMode } from './tools';
 import type { TriageState } from '@/lib/evening-review/triage';
 
 beforeEach(() => {
@@ -1195,5 +1195,86 @@ describe('executeTool: sequenza propose_decomposition -> approve_decomposition',
     expect(approveResult.newTriageState.decomposition).toBeNull();
     // DB scritto una sola volta (al turno approve).
     expect(db.task.update).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── getToolsForMode (Slice 7 BUG #A: phase gating) ──────────────────────────
+// Verifica defense-in-depth tool exposure: il modello vede SOLO i tool
+// legittimi per la fase corrente di evening_review. I guard handler restano
+// per backward compat (thread pre-6c con phase=undefined).
+
+describe('getToolsForMode: phase gating', () => {
+  function names(tools: ReturnType<typeof getToolsForMode>): string[] {
+    return tools.map((t) => t.name);
+  }
+
+  it('non-evening_review mode ignora la phase, ritorna CHAT_TOOLS', () => {
+    const t = getToolsForMode('morning_checkin', 'closing');
+    const ns = names(t);
+    expect(ns).toContain('create_task');
+    expect(ns).toContain('get_today_tasks');
+    expect(ns).toContain('set_user_energy');
+    expect(ns).not.toContain('confirm_close_review');
+    expect(ns).not.toContain('confirm_plan_preview');
+    expect(ns).not.toContain('record_mood_intake');
+  });
+
+  it('evening_review + phase=undefined: set completo (legacy thread pre-6c)', () => {
+    const ns = names(getToolsForMode('evening_review'));
+    expect(ns).toContain('record_mood_intake');
+    expect(ns).toContain('mark_what_blocked_asked');
+    expect(ns).toContain('set_current_entry');
+    expect(ns).toContain('update_plan_preview');
+    expect(ns).toContain('confirm_plan_preview');
+    expect(ns).toContain('confirm_close_review');
+  });
+
+  it("evening_review + phase='per_entry': intake/triage, NO confirm_*, NO update_plan_preview", () => {
+    const ns = names(getToolsForMode('evening_review', 'per_entry'));
+    expect(ns).toContain('record_mood_intake');
+    expect(ns).toContain('mark_what_blocked_asked');
+    expect(ns).toContain('set_current_entry');
+    expect(ns).toContain('mark_entry_discussed');
+    expect(ns).toContain('propose_decomposition');
+    expect(ns).toContain('approve_decomposition');
+    expect(ns).not.toContain('update_plan_preview');
+    expect(ns).not.toContain('confirm_plan_preview');
+    expect(ns).not.toContain('confirm_close_review');
+  });
+
+  it("evening_review + phase='plan_preview': update + confirm_plan_preview, NO confirm_close_review, NO triage/intake", () => {
+    const ns = names(getToolsForMode('evening_review', 'plan_preview'));
+    expect(ns).toContain('update_plan_preview');
+    expect(ns).toContain('confirm_plan_preview');
+    expect(ns).not.toContain('confirm_close_review');
+    expect(ns).not.toContain('record_mood_intake');
+    expect(ns).not.toContain('mark_what_blocked_asked');
+    expect(ns).not.toContain('set_current_entry');
+    expect(ns).not.toContain('mark_entry_discussed');
+  });
+
+  it("evening_review + phase='closing': SOLO confirm_close_review, NO confirm_plan_preview, NO update_plan_preview", () => {
+    const ns = names(getToolsForMode('evening_review', 'closing'));
+    expect(ns).toContain('confirm_close_review');
+    expect(ns).not.toContain('confirm_plan_preview');
+    expect(ns).not.toContain('update_plan_preview');
+    expect(ns).not.toContain('record_mood_intake');
+    expect(ns).not.toContain('mark_what_blocked_asked');
+    expect(ns).not.toContain('set_current_entry');
+  });
+
+  it('CHAT_TOOLS (create_task/get_today_tasks/set_user_energy) presenti in tutte le fasi evening_review', () => {
+    const phases: Array<undefined | 'per_entry' | 'plan_preview' | 'closing'> = [
+      undefined,
+      'per_entry',
+      'plan_preview',
+      'closing',
+    ];
+    for (const ph of phases) {
+      const ns = names(getToolsForMode('evening_review', ph));
+      expect(ns).toContain('create_task');
+      expect(ns).toContain('get_today_tasks');
+      expect(ns).toContain('set_user_energy');
+    }
   });
 });

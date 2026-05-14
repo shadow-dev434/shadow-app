@@ -353,11 +353,14 @@ export async function orchestrate(
   }
 
   // ── 6. First LLM call ────────────────────────────────────────────────
+  // Slice 7 BUG #A: tools filtrati per fase corrente in evening_review.
+  // currentPhase letto da contextJson (riga 136); undefined per mode non
+  // evening_review o thread pre-6c, getToolsForMode degrada al set completo.
   let currentResponse = await callLLM({
     tier: modelTier,
     systemPrompt,
     messages: llmMessages,
-    tools: getToolsForMode(input.mode),
+    tools: getToolsForMode(input.mode, currentPhase),
     maxTokens: 500,
     temperature: 0.5,
     toolChoice: forcedToolChoice,
@@ -496,11 +499,15 @@ export async function orchestrate(
     });
 
     // V1.3: NO toolChoice on multi-iteration loop (already auto-driven by tool_results)
+    // Slice 7 BUG #A: pendingPhase wins on currentPhase perche' un
+    // confirm_plan_preview eseguito in iter precedente (stesso turno) puo'
+    // aver mutato la phase a 'closing'; l'iter successiva deve vedere i
+    // tool di closing, non quelli di plan_preview.
     const nextResponse = await callLLM({
       tier: modelTier,
       systemPrompt,
       messages: llmMessages,
-      tools: getToolsForMode(input.mode),
+      tools: getToolsForMode(input.mode, pendingPhase ?? currentPhase),
       maxTokens: 500,
       temperature: 0.5,
     });
