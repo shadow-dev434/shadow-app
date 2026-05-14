@@ -873,11 +873,12 @@ Slice 5/6.
     Confermato in 3/3 scenari E2E. Gap di Slice 6 incompleto, priorita' media,
     da affrontare in slice dedicata di prompt-hardening (forced tool_choice
     o esempi few-shot positivi), non tattico.
-  - **#8 -- `record_mood_intake {value}` singolo replicato su mood+energyEnd.**
-    Confermato Scenario 3 via contextJson `{mood:5, energyEnd:5}`. Design
-    issue dello schema tool (mood != energia ma stesso input). Priorita' media,
-    cardinale aperta: split in due tool separati `record_mood` + `record_energy`
-    vs single tool con `{mood, energy}` esplicito.
+  - **#8 [FIXED 14 maggio 2026] -- `record_mood_intake {value}` singolo
+    replicato su mood+energyEnd.** Confermato Scenario 3 via contextJson
+    `{mood:5, energyEnd:5}`. Design issue dello schema tool (mood != energia
+    ma stesso input). Priorita' media, cardinale aperta: split in due tool
+    separati `record_mood` + `record_energy` vs single tool con `{mood, energy}`
+    esplicito.
   - **#9 NEW -- `DailyPlan.top3Ids` non riflette `DailyPlanTask` quando piano
     >3 task.** Emerso Scenario 2. Possibile semantica legacy del campo
     `top3Ids` (esistente da prima di Slice 5-7) come "top 3 prioritari" e non

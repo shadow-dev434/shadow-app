@@ -214,12 +214,13 @@ export type TriageState = {
   decomposition?: DecompositionWorkspace | null;
 
   /**
-   * Slice 7: mood/energy 1-5 catturato al primo turno della review serale
-   * (mood intake opening). Settato dal tool record_mood_intake. D7: v1 -> stesso
-   * valore per mood ed energyEnd; separazione semantica arriva in slice futura.
-   * undefined finche' l'utente non risponde o non viene applicato il fallback D1.
+   * Slice 7 V1.x (Bug #8 fix): mood/energy 1-5 catturati separatamente nei
+   * primi turni della review serale (Q1 mood + Q2 energy). Campi indipendenti,
+   * settati da record_mood (mood) e record_energy (energyEnd). undefined finche'
+   * l'utente non risponde o non viene applicato il fallback D1
+   * (MOOD_INTAKE_FALLBACK_VALUE per-field in confirm-close-review-handler).
    */
-  moodIntake?: { mood: number; energyEnd: number };
+  moodIntake?: { mood?: number; energyEnd?: number };
 
   /**
    * Slice 7: whatBlocked aggregato in formato append-style D2

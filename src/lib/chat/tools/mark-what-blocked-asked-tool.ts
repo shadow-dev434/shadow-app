@@ -4,7 +4,7 @@
  * Tool conversazionale chiamato dal modello NELLO STESSO TURNO in cui pone
  * la domanda whatBlocked all'utente (sezione WHAT BLOCKED DETECTION del
  * prompt, trigger CURRENT_ENTRY_DETAIL.recentlyPostponed=true). Pattern:
- * tool + prosa nello stesso turno assistant, mirror di record_mood_intake
+ * tool + prosa nello stesso turno assistant, mirror di record_mood
  * / confirm_close_review.
  *
  * Side-effect: setta triageState.pendingWhatBlockedForTaskId=<taskId>.

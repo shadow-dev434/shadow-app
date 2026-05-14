@@ -18,8 +18,9 @@
  * il valore esistente PRIMA della $transaction e omettendo il campo
  * dall'update branch se gia' presente.
  *
- * D7 mood == energyEnd v1: il caller passa lo stesso valore in entrambi i
- * campi. La separazione semantica arrivera' in slice futura.
+ * Slice 7 V1.x split (Bug #8 fix): mood ed energyEnd sono campi indipendenti,
+ * popolati per-field dal caller leggendo triageState.moodIntake.{mood,energyEnd}.
+ * Fallback per-field MOOD_INTAKE_FALLBACK_VALUE applicato in confirm-close-review-handler.
  *
  * Caller atteso: confirm-close-review-handler.ts (Slice 7 STEP 2.4).
  */
@@ -36,7 +37,7 @@ export type CloseReviewInput = {
   reviewDate: string;
   // YYYY-MM-DD = reviewDate + 1 giorno solare locale.
   planDate: string;
-  // 1-5. v1: mood == energyEnd.
+  // 1-5. Slice 7 V1.x split: campi indipendenti, popolati per-field dal caller.
   mood: number;
   energyEnd: number;
   // Stringa pre-aggregata dall'orchestrator (append-style D2).

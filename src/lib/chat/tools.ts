@@ -57,8 +57,10 @@ import {
 import { handleUpdatePlanPreview } from './tools/update-plan-preview-handler';
 import { CONFIRM_PLAN_PREVIEW_TOOL } from './tools/confirm-plan-preview-tool';
 import { handleConfirmPlanPreview } from './tools/confirm-plan-preview-handler';
-import { RECORD_MOOD_INTAKE_TOOL } from './tools/record-mood-intake-tool';
-import { handleRecordMoodIntake } from './tools/record-mood-intake-handler';
+import { RECORD_MOOD_TOOL } from './tools/record-mood-tool';
+import { handleRecordMood } from './tools/record-mood-handler';
+import { RECORD_ENERGY_TOOL } from './tools/record-energy-tool';
+import { handleRecordEnergy } from './tools/record-energy-handler';
 import { CONFIRM_CLOSE_REVIEW_TOOL } from './tools/confirm-close-review-tool';
 import { handleConfirmCloseReview } from './tools/confirm-close-review-handler';
 import { MARK_WHAT_BLOCKED_ASKED_TOOL } from './tools/mark-what-blocked-asked-tool';
@@ -225,7 +227,7 @@ export const EVENING_REVIEW_TOOLS: LLMTool[] = [
  * nello scenario E2E 2026-05-14).
  *
  * Mapping fase -> tool set:
- * - per_entry: CHAT_TOOLS + record_mood_intake + EVENING_REVIEW_TOOLS +
+ * - per_entry: CHAT_TOOLS + record_mood + record_energy + EVENING_REVIEW_TOOLS +
  *   mark_what_blocked_asked. NO confirm_*, NO update_plan_preview.
  * - plan_preview: CHAT_TOOLS + update_plan_preview + confirm_plan_preview.
  *   NO confirm_close_review, NO tool di triage/intake.
@@ -250,7 +252,8 @@ export function getToolsForMode(
   if (phase === 'per_entry') {
     return [
       ...CHAT_TOOLS,
-      RECORD_MOOD_INTAKE_TOOL,
+      RECORD_MOOD_TOOL,
+      RECORD_ENERGY_TOOL,
       ...EVENING_REVIEW_TOOLS,
       MARK_WHAT_BLOCKED_ASKED_TOOL,
     ];
@@ -274,7 +277,8 @@ export function getToolsForMode(
   // phase === undefined: thread pre-6c senza marker phase in contextJson.
   return [
     ...CHAT_TOOLS,
-    RECORD_MOOD_INTAKE_TOOL,
+    RECORD_MOOD_TOOL,
+    RECORD_ENERGY_TOOL,
     ...EVENING_REVIEW_TOOLS,
     MARK_WHAT_BLOCKED_ASKED_TOOL,
     UPDATE_PLAN_PREVIEW_TOOL,
@@ -380,8 +384,10 @@ export async function executeTool(
         return await executeGetTodayTasks(userId);
       case 'set_user_energy':
         return await executeSetUserEnergy(input, userId);
-      case 'record_mood_intake':
-        return executeRecordMoodIntake(input, context);
+      case 'record_mood':
+        return executeRecordMood(input, context);
+      case 'record_energy':
+        return executeRecordEnergy(input, context);
       case 'add_candidate_to_review':
         return await executeAddCandidateToReview(input, userId, context?.triageState);
       case 'remove_candidate_from_review':
@@ -1206,22 +1212,19 @@ function executeConfirmPlanPreview(
 
 // ── Slice 7 executors ─────────────────────────────────────────────────────
 
-function executeRecordMoodIntake(
+function executeRecordMood(
   input: Record<string, unknown>,
   context: ToolExecutionContext | undefined,
 ): ToolExecutionResult {
-  // Guard: orchestrator deve passare triageState. Se manca, non siamo in
-  // evening_review oppure wiring sbagliato. Messaggio model-friendly: il
-  // modello vede questo se per errore chiama il tool fuori contesto.
   if (!context?.triageState) {
     return {
       kind: 'sideEffect',
       success: false,
-      error: 'record_mood_intake is only available during the evening review',
+      error: 'record_mood is only available during the evening review',
     };
   }
 
-  const result = handleRecordMoodIntake({
+  const result = handleRecordMood({
     args: input,
     triageState: context.triageState,
     currentPhase: context.currentPhase,
@@ -1231,8 +1234,36 @@ function executeRecordMoodIntake(
     return { kind: 'sideEffect', success: false, error: result.error };
   }
 
-  // Echo del value nel data: pattern speculare a executeSetUserEnergy
-  // (data: { level }). Il modello vede "ok ho registrato N" come tool_result.
+  return {
+    kind: 'mutator',
+    success: true,
+    data: { value: result.value },
+    newTriageState: result.newTriageState,
+  };
+}
+
+function executeRecordEnergy(
+  input: Record<string, unknown>,
+  context: ToolExecutionContext | undefined,
+): ToolExecutionResult {
+  if (!context?.triageState) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'record_energy is only available during the evening review',
+    };
+  }
+
+  const result = handleRecordEnergy({
+    args: input,
+    triageState: context.triageState,
+    currentPhase: context.currentPhase,
+  });
+
+  if (!result.ok) {
+    return { kind: 'sideEffect', success: false, error: result.error };
+  }
+
   return {
     kind: 'mutator',
     success: true,

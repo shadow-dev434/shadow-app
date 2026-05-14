@@ -1216,12 +1216,14 @@ describe('getToolsForMode: phase gating', () => {
     expect(ns).toContain('set_user_energy');
     expect(ns).not.toContain('confirm_close_review');
     expect(ns).not.toContain('confirm_plan_preview');
-    expect(ns).not.toContain('record_mood_intake');
+    expect(ns).not.toContain('record_mood');
+    expect(ns).not.toContain('record_energy');
   });
 
   it('evening_review + phase=undefined: set completo (legacy thread pre-6c)', () => {
     const ns = names(getToolsForMode('evening_review'));
-    expect(ns).toContain('record_mood_intake');
+    expect(ns).toContain('record_mood');
+    expect(ns).toContain('record_energy');
     expect(ns).toContain('mark_what_blocked_asked');
     expect(ns).toContain('set_current_entry');
     expect(ns).toContain('update_plan_preview');
@@ -1231,7 +1233,8 @@ describe('getToolsForMode: phase gating', () => {
 
   it("evening_review + phase='per_entry': intake/triage, NO confirm_*, NO update_plan_preview", () => {
     const ns = names(getToolsForMode('evening_review', 'per_entry'));
-    expect(ns).toContain('record_mood_intake');
+    expect(ns).toContain('record_mood');
+    expect(ns).toContain('record_energy');
     expect(ns).toContain('mark_what_blocked_asked');
     expect(ns).toContain('set_current_entry');
     expect(ns).toContain('mark_entry_discussed');
@@ -1247,7 +1250,8 @@ describe('getToolsForMode: phase gating', () => {
     expect(ns).toContain('update_plan_preview');
     expect(ns).toContain('confirm_plan_preview');
     expect(ns).not.toContain('confirm_close_review');
-    expect(ns).not.toContain('record_mood_intake');
+    expect(ns).not.toContain('record_mood');
+    expect(ns).not.toContain('record_energy');
     expect(ns).not.toContain('mark_what_blocked_asked');
     expect(ns).not.toContain('set_current_entry');
     expect(ns).not.toContain('mark_entry_discussed');
@@ -1258,7 +1262,8 @@ describe('getToolsForMode: phase gating', () => {
     expect(ns).toContain('confirm_close_review');
     expect(ns).not.toContain('confirm_plan_preview');
     expect(ns).not.toContain('update_plan_preview');
-    expect(ns).not.toContain('record_mood_intake');
+    expect(ns).not.toContain('record_mood');
+    expect(ns).not.toContain('record_energy');
     expect(ns).not.toContain('mark_what_blocked_asked');
     expect(ns).not.toContain('set_current_entry');
   });

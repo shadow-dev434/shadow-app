@@ -474,7 +474,8 @@ describe('orchestrate: E2E multi-turn (BUG #A + #C regression)', () => {
     expect(turn1Tools).toContain('confirm_plan_preview');
     expect(turn1Tools).toContain('update_plan_preview');
     expect(turn1Tools).not.toContain('confirm_close_review');
-    expect(turn1Tools).not.toContain('record_mood_intake');
+    expect(turn1Tools).not.toContain('record_mood');
+    expect(turn1Tools).not.toContain('record_energy');
     expect(turn1Tools).not.toContain('set_current_entry');
 
     // Tool eseguito: solo confirm_plan_preview.
@@ -516,7 +517,8 @@ describe('orchestrate: E2E multi-turn (BUG #A + #C regression)', () => {
     expect(turn2Tools).toContain('confirm_close_review');
     expect(turn2Tools).not.toContain('confirm_plan_preview');
     expect(turn2Tools).not.toContain('update_plan_preview');
-    expect(turn2Tools).not.toContain('record_mood_intake');
+    expect(turn2Tools).not.toContain('record_mood');
+    expect(turn2Tools).not.toContain('record_energy');
 
     // Tool eseguito: solo confirm_close_review.
     expect(result2.toolsExecuted.map((t) => t.name)).toEqual([
@@ -564,7 +566,8 @@ describe('orchestrate: E2E multi-turn (BUG #A + #C regression)', () => {
     expect(turn3Tools).toContain('set_user_energy');
     expect(turn3Tools).not.toContain('confirm_close_review');
     expect(turn3Tools).not.toContain('confirm_plan_preview');
-    expect(turn3Tools).not.toContain('record_mood_intake');
+    expect(turn3Tools).not.toContain('record_mood');
+    expect(turn3Tools).not.toContain('record_energy');
     expect(turn3Tools).not.toContain('set_current_entry');
 
     expect(result3.assistantMessage).toBe('Ti ascolto.');

@@ -163,6 +163,19 @@ describe('handleConfirmCloseReview — scenario 3 brief: fallback mood D1', () =
     expect(call.mood).toBe(2);
     expect(call.energyEnd).toBe(2);
   });
+
+  it('Bug #8 split: triageState.moodIntake = {mood:4, energyEnd:2} -> closeReview riceve mood=4, energyEnd=2 (valori distinti)', async () => {
+    await handleConfirmCloseReview(
+      makeInput({
+        triageState: makeTriageState({
+          moodIntake: { mood: 4, energyEnd: 2 },
+        }),
+      }),
+    );
+    const call = vi.mocked(closeReview).mock.calls[0][0];
+    expect(call.mood).toBe(4);
+    expect(call.energyEnd).toBe(2);
+  });
 });
 
 describe('handleConfirmCloseReview — whatBlocked pass-through', () => {

@@ -878,11 +878,15 @@ function buildEveningReviewModeContext(
 
   const lines: string[] = ['TRIAGE CORRENTE'];
   lines.push(`IS_FIRST_TURN=${isFirstTurn}`);
-  // Slice 7: MOOD_INTAKE expose triageState.moodIntake stato. 'pending' default
-  // se non ancora chiesto/risposto; valore numerico se record_mood_intake committed.
-  // Letto dal prompt APERTURA E STATO DEL TURNO per scegliere CASO A vs CASO B.
-  const moodIntakeValue = triageState.moodIntake?.mood;
-  lines.push(`MOOD_INTAKE=${moodIntakeValue !== undefined ? moodIntakeValue : 'pending'}`);
+  // Slice 7 V1.x (Bug #8 split): due righe simmetriche MOOD_INTAKE +
+  // ENERGY_INTAKE esposte separatamente. 'pending' default se non ancora
+  // chiesto/risposto sul rispettivo campo; valore numerico se record_mood /
+  // record_energy committed. Letto dal prompt APERTURA E STATO DEL TURNO per
+  // scegliere CASO A (Q1 mood) vs CASO A2 (Q2 energy) vs CASO B (apri candidate).
+  const moodValue = triageState.moodIntake?.mood;
+  const energyValue = triageState.moodIntake?.energyEnd;
+  lines.push(`MOOD_INTAKE=${moodValue !== undefined ? moodValue : 'pending'}`);
+  lines.push(`ENERGY_INTAKE=${energyValue !== undefined ? energyValue : 'pending'}`);
   lines.push(`N=${candidateLines.length} candidate, M=${outOfTriage.length} task in inbox fuori dal triage.`);
   lines.push('');
   lines.push('Candidate (in ordine):');
