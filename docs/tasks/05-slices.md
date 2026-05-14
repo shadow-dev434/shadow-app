@@ -120,6 +120,8 @@
 
 ## Slice 7 — Mood intake + chiusura atomica
 
+**Stato:** ✅ chiuso (commit `419acfd`, 14 maggio 2026).
+
 **Scope:**
 - Mossa apertura mood/energy 1-5 (sotto-decisione consuntiva di Area 5, posizionata all'inizio della review).
 - Chiusura atomica con transazione: `Review` + `DailyPlan` + `originalPlanJson` snapshot + thread `completed` + FK `threadId` su entrambi gli artefatti.

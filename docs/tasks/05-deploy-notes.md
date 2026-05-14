@@ -744,3 +744,79 @@ Funzionalmente l'utente ottiene un comportamento ragionevole, ma
 semanticamente ambiguo. Slice future potrebbero voler distinguere
 "sposta dal piano" da "togli pin ma resta nel piano". Non blocker
 per beta.
+
+## Decisioni tecniche emerse durante Slice 7
+
+- **Convenzione validation: NO Zod, validator manuale stile clampInt.**
+  Decisione cardinale Antonio ratificata in STEP 2. Codebase non aveva
+  import Zod precedenti; pattern allineato a executeAddCandidateToReview /
+  executeCreateTask: cast + type check + range check, ritorno
+  {ok:false, error} su input invalido. NON coercive per record_mood_intake
+  e mark_what_blocked_asked (value invalido -> errore visibile al modello
+  via tool_result, non clamp silenzioso). clampInt coercive resta per
+  set_user_energy (pre-esistente, contesto morning_checkin meno critico).
+  Persistito come feedback Claude Code per slice future
+  (feedback_no_zod_use_manual_validator).
+
+- **Back-track WhatBlocked detection: tool dedicato vs pattern matching.**
+  Decisione iniziale STEP 3.2 D-D ("NIENTE tool dedicato + cattura
+  server-side via anchor") rivista in STEP 3.3 esplorazione. Motivazione:
+  le 3 anchor phrase nel prompt EVENING_REVIEW WHAT BLOCKED DETECTION
+  sono soft (variazione per preferredPromptStyle, modello produce
+  parafrasi naturali in produzione). Pattern matching substring
+  case-insensitive su anchor letterali avrebbe avuto false-negative
+  alto (50%+ entry recentlyPostponed perse). Adottato pattern speculare
+  a DECOMPOSITION_PROPOSED: nuovo tool zero-side-effect
+  mark_what_blocked_asked(taskId) setta flag pendingWhatBlockedForTaskId
+  in triageState, orchestrator capta next user message come reason e
+  appende a whatBlocked in formato D2 con clear automatico. Costo:
+  +1 tool nel catalog (~50 token context). Beneficio: determinismo +
+  coerenza pattern con resto codebase + idempotenza esposta via flag
+  WHAT_BLOCKED_ASKED_FOR nel modeContext.
+
+- **Skip STEP 4 metadata.reviewClosed nel payload assistant.**
+  OPZIONE Y ratificata via esplorazione empirica route.ts (72 righe,
+  pass-through verbatim di OrchestratorOutput, nessun campo metadata
+  schema-flessibile) e ChatView.tsx (518 righe, message-appender
+  generico, zero logica condizionale su review state). YAGNI
+  applicato: aggiungere reviewClosed a OrchestratorOutput sarebbe
+  3 righe per zero consumer attivi. Optionality preservata: se
+  UX futura (banner "Review chiusa" o disable input post-close)
+  emerge in slice futura, estensione triviale, nessun debito
+  architetturale accumulato. Backend gestisce gracefully turni
+  post-close via prompt FASE CLOSING ("rispondi minimale e neutro").
+
+- **WhatBlocked capture refactor: helper esportato per testabilita'.**
+  Inline block EDIT 3 in orchestrator.ts (33 righe) estratto in
+  src/lib/evening-review/what-blocked-capture.ts come funzione pura
+  captureWhatBlocked(triageState, allTasks, userMessage) -> TriageState.
+  Motivazione: STEP 5 B/C copertura scenario 4 brief (whatBlocked
+  multipli) richiedeva test isolato. Helper accetta tipo strutturale
+  minimale Array<{id, title}> invece di TaskProjection completo per
+  test puri senza dipendenze dal dominio orchestrator.
+
+- **Flush parziale su closeReview kind nel single-writer pattern.**
+  EDIT 6 orchestrator.ts ha esteso il blocco $transaction finale con
+  3 branch (reviewClosed === null / alreadyClosed=true / alreadyClosed=false).
+  Branch alreadyClosed skippa thread.update completamente (double-click
+  idempotente, niente da aggiornare su thread terminato). Branch
+  !alreadyClosed esegue update parziale con SOLO lastTurnAt (no
+  contextJson sovrascritto su thread chiuso). Opzione B ratificata
+  per riuso threadUpdateData.lastTurnAt invece di nuovo new Date():
+  un solo timestamp per turno indipendentemente dalla branch,
+  coerenza temporale + testing futuro piu' predicibile.
+
+- **TriageState retro-compatibilita' preservata.** 3 nuovi campi
+  opzionali (moodIntake, whatBlocked, pendingWhatBlockedForTaskId)
+  aggiunti senza mutare/rimuovere campi V1.x. Thread Slice 6c
+  pre-deploy continuano a funzionare via ?? undefined defaults.
+  Zero migration richiesta.
+
+- **Scenario 6 E2E (paused/resumed/closed) rimandato a test manuale.**
+  docs/tasks/05-slice-7-manual-test-plan.md scrive il plan
+  pre-beta. Full E2E orchestrate() con LLM mock richiederebbe
+  infrastruttura nuova (~700 righe setup) non presente nel codebase
+  (zero precedenti E2E orchestrate). Hardening V1.2.2 in Slice 5 +
+  test puri firstTurnAfterResume lifecycle in triage.test.ts
+  coprono l'80% del rischio. Automation possibile in Slice 9 o
+  post-beta quando E2E infra arriva (stima ~150 righe per scenario).
