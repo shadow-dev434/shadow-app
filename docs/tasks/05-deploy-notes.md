@@ -887,7 +887,8 @@ Slice 5/6.
     `postponedCount>=3`.** Scattato in Scenario 2, NON scattato in Scenario 3
     e 6 per task con stato DB equivalente. Priorita' media, indagine richiesta
     in `EVENING_REVIEW_PROMPT` (rinforzo trigger) o tool description.
-  - **#12 NEW (CRITICO) -- `normalizeThreadState paused->active` non scatta
+  - **#12 NEW (CRITICO) [CHIUSO 14 maggio 2026 — vedi bullet di
+    chiusura sotto] -- `normalizeThreadState paused->active` non scatta
     mai durante flow.** Emerso Scenario 6: thread paused riceve turn via
     `POST /api/chat/turn`, lastTurnAt e contextJson aggiornati, ma `state`
     resta `paused`. `GET /api/chat/active-thread` non chiama `normalize` come
@@ -934,4 +935,27 @@ Slice 5/6.
   `cmp5v3tma004nibboxzbc8pdd`). Non bloccante per fix futuri, cleanup in fase
   test successiva. Settings ripristinate a default Slice 1
   (`eveningWindowStart='20:00'`, `eveningWindowEnd='23:00'`).
+
+- **Bug #12 chiuso come non-bug (14 maggio 2026).** Diagnostica statica su
+  `src/app/api/chat/active-thread/route.ts` ha confermato che la call a
+  `normalizeThreadState` e' correttamente montata al ramo `evening_review`
+  (riga 208-214) e il write su `state` e' correttamente gated su
+  `shouldPersist` (riga 248-257). L'osservazione di Scenario 6 (thread
+  `paused` riceve turn, `lastTurnAt` aggiornato, `state` resta `paused`)
+  descrive l'invariante Slice 3 in azione, non una sua violazione:
+  l'orchestrator non tocca `state` per design, e `ChatView` chiama
+  `GET /api/chat/active-thread` solo al mount (riga 86), quindi tra un
+  turn e l'altro durante una review live `normalize` non gira. La
+  transizione `paused -> active` avviene al successivo passaggio per
+  `active-thread` (mount/refetch), coerentemente con l'invariante
+  Slice 3 documentata in deploy-notes:34 (`normalizeThreadState` unico
+  meccanismo di resume `paused -> active`). Lacuna scoperta in parallelo:
+  il test C11 citato come copertura ufficiale dell'invariante non
+  esisteva nel repo (i commenti C8/C10/C11 in `normalize.ts` puntano a
+  `scripts/test-normalize.ts`, file non presente -- possibile script di
+  sviluppo non committato in passato). Aggiunto unit test puro
+  `src/lib/evening-review/normalize.test.ts` per il ramo
+  `inside_window_active` (paused + elapsed < `inactivityPauseMinutes`
+  -> active, `shouldPersist=true`) a blindare il modulo in vista di
+  Slice 8.
 
