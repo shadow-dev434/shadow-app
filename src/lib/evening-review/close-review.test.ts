@@ -26,6 +26,13 @@ function makeMockDb() {
       upsert: vi.fn(),
       findUnique: vi.fn(),
     },
+    // Slice 7 BUG #B: spies per la join table popolata dal sub-step 3.5
+    // della $transaction. deleteMany + createMany seguono il pattern
+    // idempotente di close-review.ts.
+    dailyPlanTask: {
+      deleteMany: vi.fn(),
+      createMany: vi.fn(),
+    },
     learningSignal: {
       findMany: vi.fn(),
     },
@@ -116,6 +123,8 @@ beforeEach(() => {
   mockDb.dailyPlan.upsert.mockResolvedValue({ id: 'plan1' });
   mockDb.dailyPlan.findUnique.mockResolvedValue(null);
   mockDb.chatThread.update.mockResolvedValue({});
+  mockDb.dailyPlanTask.deleteMany.mockResolvedValue({ count: 0 });
+  mockDb.dailyPlanTask.createMany.mockResolvedValue({ count: 0 });
   mockDb.learningSignal.findMany.mockResolvedValue([]);
   mockDb.task.findMany.mockResolvedValue([]);
 });
@@ -204,6 +213,19 @@ describe('closeReview', () => {
     expect(threadCall.where).toEqual({ id: 't1' });
     expect(threadCall.data.state).toBe('completed');
     expect(threadCall.data.endedAt).toBeInstanceOf(Date);
+
+    // Slice 7 BUG #B: DailyPlanTask populated. deleteMany sul dailyPlanId
+    // (idempotenza), poi createMany con 2 rows (1 morning 'a' + 1 afternoon 'b').
+    expect(mockDb.dailyPlanTask.deleteMany).toHaveBeenCalledOnce();
+    expect(mockDb.dailyPlanTask.deleteMany.mock.calls[0][0]).toEqual({
+      where: { dailyPlanId: 'plan1' },
+    });
+    expect(mockDb.dailyPlanTask.createMany).toHaveBeenCalledOnce();
+    const createCall = mockDb.dailyPlanTask.createMany.mock.calls[0][0];
+    expect(createCall.data).toEqual([
+      { dailyPlanId: 'plan1', taskId: 'a', slot: 'morning' },
+      { dailyPlanId: 'plan1', taskId: 'b', slot: 'afternoon' },
+    ]);
   });
 
   it('top3Ids = primi 3 del flat doNow quando preview ha >3 task', async () => {
@@ -221,6 +243,18 @@ describe('closeReview', () => {
     const planCall = mockDb.dailyPlan.upsert.mock.calls[0][0];
     expect(JSON.parse(planCall.create.doNowIds)).toEqual(['m1', 'm2', 'a1', 'a2', 'e1']);
     expect(JSON.parse(planCall.create.top3Ids)).toEqual(['m1', 'm2', 'a1']);
+
+    // Slice 7 BUG #B: DailyPlanTask popolato con 5 rows, slot temporale
+    // per ciascuna fascia. Ordering: morning prima, poi afternoon, poi evening
+    // (spread composition deterministico).
+    const createCall = mockDb.dailyPlanTask.createMany.mock.calls[0][0];
+    expect(createCall.data).toEqual([
+      { dailyPlanId: 'plan1', taskId: 'm1', slot: 'morning' },
+      { dailyPlanId: 'plan1', taskId: 'm2', slot: 'morning' },
+      { dailyPlanId: 'plan1', taskId: 'a1', slot: 'afternoon' },
+      { dailyPlanId: 'plan1', taskId: 'a2', slot: 'afternoon' },
+      { dailyPlanId: 'plan1', taskId: 'e1', slot: 'evening' },
+    ]);
   });
 
   it('D3 preview vuoto -> chiusura procede, liste []', async () => {
@@ -241,6 +275,13 @@ describe('closeReview', () => {
     expect(snapshot.preview.morning).toEqual([]);
     expect(snapshot.preview.afternoon).toEqual([]);
     expect(snapshot.preview.evening).toEqual([]);
+
+    // Slice 7 BUG #B: preview vuoto -> deleteMany+createMany invocati comunque
+    // (uniformita' code path). createMany.data=[] e' Prisma no-op (count:0).
+    expect(mockDb.dailyPlanTask.deleteMany).toHaveBeenCalledOnce();
+    expect(mockDb.dailyPlanTask.createMany).toHaveBeenCalledOnce();
+    const createCall = mockDb.dailyPlanTask.createMany.mock.calls[0][0];
+    expect(createCall.data).toEqual([]);
   });
 
   it('D5 originalPlanJson immutability: se esiste gia, update branch omette il campo', async () => {
@@ -263,6 +304,15 @@ describe('closeReview', () => {
     // Le altre liste devono comunque essere aggiornate.
     expect(JSON.parse(planCall.update.doNowIds)).toEqual(['new']);
     expect(planCall.update.threadId).toBe('t1');
+
+    // Slice 7 BUG #B: anche su update branch (seconda chiusura), DailyPlanTask
+    // viene riscritta. deleteMany clean + createMany con 1 row 'new'.
+    expect(mockDb.dailyPlanTask.deleteMany).toHaveBeenCalledOnce();
+    expect(mockDb.dailyPlanTask.createMany).toHaveBeenCalledOnce();
+    const createCall = mockDb.dailyPlanTask.createMany.mock.calls[0][0];
+    expect(createCall.data).toEqual([
+      { dailyPlanId: 'plan1', taskId: 'new', slot: 'morning' },
+    ]);
   });
 
   it('D5 originalPlanJson null/vuoto in DB -> update scrive nuovo snapshot', async () => {
@@ -402,5 +452,69 @@ describe('closeReview', () => {
     // schema definition; un cascade-delete reale richiederebbe DB live
     // (fuori scope unit test). Il manual test plan (SLICE_7_MANUAL_TEST_PLAN.md)
     // copre il flow end-to-end con DB live.
+  });
+
+  // ─── Slice 7 BUG #B: DailyPlanTask population focused tests ─────────────
+
+  it('BUG #B: slot temporali alpha — 3 task in fasce distinte mappano slot=morning|afternoon|evening', async () => {
+    const preview = makePreview([
+      { id: 't-morning', title: 'mattina', slot: 'morning' },
+      { id: 't-afternoon', title: 'pomeriggio', slot: 'afternoon' },
+      { id: 't-evening', title: 'sera', slot: 'evening' },
+    ]);
+    await closeReview(
+      makeInput({ preview }),
+      mockDb as unknown as Parameters<typeof closeReview>[1],
+    );
+    const createCall = mockDb.dailyPlanTask.createMany.mock.calls[0][0];
+    expect(createCall.data).toHaveLength(3);
+    // Slot temporale alpha verificato per ciascun task. NO valori legacy
+    // ('top3'/'doNow'/...), il che e' invariante cardinale STEP 3.
+    expect(createCall.data).toEqual([
+      { dailyPlanId: 'plan1', taskId: 't-morning', slot: 'morning' },
+      { dailyPlanId: 'plan1', taskId: 't-afternoon', slot: 'afternoon' },
+      { dailyPlanId: 'plan1', taskId: 't-evening', slot: 'evening' },
+    ]);
+  });
+
+  it('BUG #B: deleteMany invocato PRIMA di createMany (ordering atomico per idempotenza)', async () => {
+    const preview = makePreview([{ id: 'x', title: 'x', slot: 'morning' }]);
+    await closeReview(
+      makeInput({ preview }),
+      mockDb as unknown as Parameters<typeof closeReview>[1],
+    );
+    expect(mockDb.dailyPlanTask.deleteMany).toHaveBeenCalledOnce();
+    expect(mockDb.dailyPlanTask.createMany).toHaveBeenCalledOnce();
+    // invocationCallOrder e' un counter monotonico globale fra tutti gli spy.
+    // deleteMany deve avere un id strettamente minore di createMany.
+    const deleteOrder = mockDb.dailyPlanTask.deleteMany.mock.invocationCallOrder[0];
+    const createOrder = mockDb.dailyPlanTask.createMany.mock.invocationCallOrder[0];
+    expect(deleteOrder).toBeLessThan(createOrder);
+    // Anche dailyPlan.upsert (Step 3) deve precedere il deleteMany (Step 3.5):
+    // serve plan.id come dailyPlanId.
+    const upsertOrder = mockDb.dailyPlan.upsert.mock.invocationCallOrder[0];
+    expect(upsertOrder).toBeLessThan(deleteOrder);
+  });
+
+  it('BUG #B: seconda chiusura su stessa planDate riscrive DailyPlanTask (idempotenza riscrittura)', async () => {
+    // Simuliamo update branch (riga DailyPlan esistente). dailyPlan.upsert
+    // ritorna lo stesso id 'plan1' di una chiusura precedente.
+    mockDb.dailyPlan.findUnique.mockResolvedValue({ originalPlanJson: 'pre-existing-snapshot' });
+    const preview = makePreview([
+      { id: 'updated', title: 'updated task', slot: 'afternoon' },
+    ]);
+    await closeReview(
+      makeInput({ preview }),
+      mockDb as unknown as Parameters<typeof closeReview>[1],
+    );
+    // deleteMany sul dailyPlanId esistente -> tutte le rows della precedente
+    // chiusura vengono rimosse, poi createMany con il nuovo set.
+    expect(mockDb.dailyPlanTask.deleteMany.mock.calls[0][0]).toEqual({
+      where: { dailyPlanId: 'plan1' },
+    });
+    const createCall = mockDb.dailyPlanTask.createMany.mock.calls[0][0];
+    expect(createCall.data).toEqual([
+      { dailyPlanId: 'plan1', taskId: 'updated', slot: 'afternoon' },
+    ]);
   });
 });

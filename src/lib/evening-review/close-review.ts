@@ -199,6 +199,41 @@ export async function closeReview(
       update: planUpdateData,
     });
 
+    // Step 3.5 (Slice 7 BUG #B): popolare la join table DailyPlanTask con
+    // slot temporale alpha ('morning'|'afternoon'|'evening' da
+    // AllocatedTask.allocatedSlot, source of truth Slice 6a).
+    //
+    // Pattern deleteMany + createMany per idempotenza: una seconda chiusura
+    // sulla stessa planDate (D5 path) sostituisce le rows esistenti coerentemente
+    // con l'ultimo preview, senza orphan rows da iterazioni precedenti.
+    //
+    // createMany con data:[] e' Prisma no-op (count:0): chiamato anche su
+    // preview vuoto (D3 path) per uniformita' di code path -- semplifica
+    // asserzioni test e mantiene il behavior prevedibile.
+    //
+    // Slot value: t.allocatedSlot invece di literal hard-coded. Se Slice 6
+    // estende SlotName in futuro (es. 'night'), qui non serve fix: la
+    // mappatura segue il contratto pure di slot-allocation.ts.
+    await tx.dailyPlanTask.deleteMany({ where: { dailyPlanId: plan.id } });
+    const dailyPlanTaskRows = [
+      ...input.preview.morning.map((t) => ({
+        dailyPlanId: plan.id,
+        taskId: t.taskId,
+        slot: t.allocatedSlot,
+      })),
+      ...input.preview.afternoon.map((t) => ({
+        dailyPlanId: plan.id,
+        taskId: t.taskId,
+        slot: t.allocatedSlot,
+      })),
+      ...input.preview.evening.map((t) => ({
+        dailyPlanId: plan.id,
+        taskId: t.taskId,
+        slot: t.allocatedSlot,
+      })),
+    ];
+    await tx.dailyPlanTask.createMany({ data: dailyPlanTaskRows });
+
     await tx.chatThread.update({
       where: { id: input.threadId },
       data: {
