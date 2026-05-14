@@ -515,5 +515,5 @@ function ToolExecutionCard({ tool }: { tool: ToolExecution }) {
     );
   }
 
-  return <div className="text-xs text-zinc-500 pl-1">ok {tool.name}</div>;
+  return null;
 }

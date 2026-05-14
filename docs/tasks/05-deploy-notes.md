@@ -855,9 +855,10 @@ Slice 5/6.
   - **#1 -- Mood intake default 3 al primo turno.** DERUBRICATO a cosmetico
     in Scenario 3: overwrite via contextJson funziona, valore finale corretto.
     Priorita' bassa, fix opzionale pre-beta.
-  - **#2 -- UI leakage tool name sotto bubble assistant.** Confermato in tutti
-    gli scenari. "ok <tool_name>" reso sotto ogni bubble post-tool-call.
-    Cosmetico ma visibile, priorita' bassa.
+  - **#2 [FIXED 14 maggio 2026] -- UI leakage tool name sotto bubble
+    assistant.** Confermato in tutti gli scenari. "ok <tool_name>" reso
+    sotto ogni bubble post-tool-call. Cosmetico ma visibile, priorita'
+    bassa.
   - **#3 -- "domani" incoerente con scadenza odierna.** Non riscontrato in
     retest. Priorita' bassa, candidato a chiusura se non ricompare in Slice 8.
   - **#4 -- Race W1 morning planner vs W2 closeReview su DailyPlan.** Non
