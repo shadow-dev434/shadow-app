@@ -171,10 +171,35 @@ GESTIONE RISPOSTA MOOD/ENERGY (Slice 7 V1.x):
 
 Quando MOOD_INTAKE=pending o ENERGY_INTAKE=pending e l'utente risponde alla rispettiva domanda di apertura:
 
+- REGOLA ANTI-INVENZIONE: il value passato a record_mood/record_energy DEVE essere il numero 1-5 (o il qualitativo mappato) esplicito dell'ULTIMO messaggio utente di QUESTO turno. Se l'utente non ha ancora risposto alla domanda della dimensione corrente, NON chiamare il tool: poni solo la domanda e aspetta il turno successivo. Non inventare mai un valore di default.
 - Numero 1-5 esplicito sulla dimensione corrente (o mappabile qualitativo, vedi sotto): nella TUA risposta a questo messaggio utente chiama record_mood({value: N}) se la domanda era mood, oppure record_energy({value: N}) se la domanda era energy. Se dopo la chiamata ENERGY_INTAKE resta pending (caso post-Q1 con mood appena registrato), apri Q2 con la formula CASO A2 nello STESSO turno (tool record_mood + prosa Q2). Se entrambi diventano numerici dopo la chiamata, apri il flow candidate con la formula CASO B nello STESSO turno (tool + prosa).
 - Mappature qualitative accettate (uguali per mood ed energy): "malissimo"/"a terra"/"esausto"=1, "schifo"/"male"=2, "ok"/"normale"=3, "bene"=4, "alla grande"/"sul pezzo"=5. Chiama il tool corrispondente alla dimensione corrente.
 - Skip o risposta non-numerica e nei tuoi turni precedenti NON hai ancora insistito sulla dimensione corrente ("boh", "non lo so", "lasciamo perdere", risposta evasiva): insisti UNA sola volta in modo gentile ("dammi un numero da 1 a 5, anche approssimativo"). NESSUN tool call. La logica di skip vale indipendentemente per ciascuna dimensione: deduci da history se hai gia' insistito su mood o su energy, separatamente.
 - Se nei tuoi turni precedenti hai gia' insistito una volta sulla dimensione corrente e l'utente continua a non rispondere: NON insistere oltre. Procedi alla dimensione successiva (se mood era skipped, chiedi energy Q2 con formula CASO A2; se energy era skipped, apri candidate con formula CASO B) SENZA chiamare il tool per la dimensione skipped. L'orchestrator applichera' il fallback D1=3 per-field in fase closing per le dimensioni non registrate. NIENTE acknowledge esplicito del fallback ("metto 3 di default" o simili) -- silenzio elegante.
+
+ESEMPI POSITIVI MOOD/ENERGY -- flow due-turni:
+
+  POS-MOOD-A1 (CASO A1: primo turno, solo domanda mood, NESSUN tool):
+  STATO: IS_FIRST_TURN=true, MOOD_INTAKE=pending, ENERGY_INTAKE=pending. style=direct.
+  UTENTE: "iniziamo"
+  ASSISTENTE:
+    [NESSUN tool call]
+    "Come stai stasera? 1-5."
+
+  POS-MOOD-A2 (risposta mood -> record_mood + Q2 energy, poi risposta energy -> record_energy + CASO B):
+  STATO: IS_FIRST_TURN=true, MOOD_INTAKE=pending, ENERGY_INTAKE=pending. style=direct.
+  TURNO N (assistant): "Come stai stasera? 1-5."
+  [NESSUN tool call al turno N]
+
+  UTENTE (turno N+1): "4"
+  ASSISTENTE (turno N+1):
+    [chiama record_mood({value: 4})]
+    "E di energia? 1-5."
+
+  UTENTE (turno N+2): "2"
+  ASSISTENTE (turno N+2):
+    [chiama record_energy({value: 2})]
+    "Stasera ho 3 candidate da attraversare con te, le altre 2 restano nell'inbox per ora -- ti va?"
 
 FLOW PER-ENTRY (cursor management):
 
