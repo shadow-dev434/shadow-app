@@ -855,8 +855,8 @@ Slice 5/6.
   - **#1 -- Mood intake default 3 al primo turno.** DERUBRICATO a cosmetico
     in Scenario 3: overwrite via contextJson funziona, valore finale corretto.
     Priorita' bassa, fix opzionale pre-beta.
-  - **#2 [FIXED 14 maggio 2026] -- UI leakage tool name sotto bubble
-    assistant.** Confermato in tutti gli scenari. "ok <tool_name>" reso
+  - **#2 [FIXED 15 maggio 2026, commit 9dcb80e] -- UI leakage tool name
+    sotto bubble assistant.** Confermato in tutti gli scenari. "ok <tool_name>" reso
     sotto ogni bubble post-tool-call. Cosmetico ma visibile, priorita'
     bassa.
   - **#3 -- "domani" incoerente con scadenza odierna.** Non riscontrato in
@@ -873,8 +873,10 @@ Slice 5/6.
     Confermato in 3/3 scenari E2E. Gap di Slice 6 incompleto, priorita' media,
     da affrontare in slice dedicata di prompt-hardening (forced tool_choice
     o esempi few-shot positivi), non tattico.
-  - **#8 [FIXED 14 maggio 2026] -- `record_mood_intake {value}` singolo
-    replicato su mood+energyEnd.** Confermato Scenario 3 via contextJson
+  - **#8 [FIXED 15 maggio 2026 commit 26cf9f4, REGRESSO E RIAPERTO COME
+    Bug #8.1 il 15 maggio 2026 - vedi sezione dedicata sotto, FIXED
+    definitivo 15 maggio 2026 commit 2a40a7c] -- `record_mood_intake {value}`
+    singolo replicato su mood+energyEnd.** Confermato Scenario 3 via contextJson
     `{mood:5, energyEnd:5}`. Design issue dello schema tool (mood != energia
     ma stesso input). Priorita' media, cardinale aperta: split in due tool
     separati `record_mood` + `record_energy` vs single tool con `{mood, energy}`
@@ -889,8 +891,8 @@ Slice 5/6.
     `postponedCount>=3`.** Scattato in Scenario 2, NON scattato in Scenario 3
     e 6 per task con stato DB equivalente. Priorita' media, indagine richiesta
     in `EVENING_REVIEW_PROMPT` (rinforzo trigger) o tool description.
-  - **#12 NEW (CRITICO) [CHIUSO 14 maggio 2026 — vedi bullet di
-    chiusura sotto] -- `normalizeThreadState paused->active` non scatta
+  - **#12 NEW (CRITICO) [CHIUSO 15 maggio 2026, commit 0b52c40 - vedi
+    bullet di chiusura sotto] -- `normalizeThreadState paused->active` non scatta
     mai durante flow.** Emerso Scenario 6: thread paused riceve turn via
     `POST /api/chat/turn`, lastTurnAt e contextJson aggiornati, ma `state`
     resta `paused`. `GET /api/chat/active-thread` non chiama `normalize` come
@@ -938,7 +940,7 @@ Slice 5/6.
   test successiva. Settings ripristinate a default Slice 1
   (`eveningWindowStart='20:00'`, `eveningWindowEnd='23:00'`).
 
-- **Bug #12 chiuso come non-bug (14 maggio 2026).** Diagnostica statica su
+- **Bug #12 chiuso come non-bug (15 maggio 2026).** Diagnostica statica su
   `src/app/api/chat/active-thread/route.ts` ha confermato che la call a
   `normalizeThreadState` e' correttamente montata al ramo `evening_review`
   (riga 208-214) e il write su `state` e' correttamente gated su
@@ -956,8 +958,99 @@ Slice 5/6.
   esisteva nel repo (i commenti C8/C10/C11 in `normalize.ts` puntano a
   `scripts/test-normalize.ts`, file non presente -- possibile script di
   sviluppo non committato in passato). Aggiunto unit test puro
-  `src/lib/evening-review/normalize.test.ts` per il ramo
+  `src/lib/evening-review/normalize.test.ts` (commit 0b52c40) per il ramo
   `inside_window_active` (paused + elapsed < `inactivityPauseMinutes`
   -> active, `shouldPersist=true`) a blindare il modulo in vista di
   Slice 8.
+
+## Decisioni tecniche emerse durante chiusura batch bug residui V1.x (15 maggio 2026)
+
+Batch di 4 commit (0b52c40 Bug #12 C11, 9dcb80e Bug #2, 26cf9f4 Bug #8,
+2a40a7c Bug #8.1) che chiude bug residui post-retest Slice 7 V1.1. Bug #12,
+#2, #8 documentati via marker inline nell'inventario sopra; Bug #8.1
+(regressione di #8) dettagliato qui per rilevanza diagnostica.
+
+### Bug #8.1 -- Regressione di Bug #8: tool call con value inventati (15 maggio 2026)
+
+Verifica visiva post-fix il 15 maggio 2026 ha rivelato che il commit 26cf9f4
+(split `record_mood_intake` in `record_mood` + `record_energy`) non risolveva
+il problema originale del conflate mood/energy: lo mascherava sotto una shape
+diversa.
+
+Timeline runtime osservata su thread `cmp6mkhj00001ibqknsnud8b9`:
+- T1 assistant: "Come stai stasera? 1-5." + tool `record_mood({value: 3})`
+  chiamato PRIMA che l'utente rispondesse, value=3 inventato dal modello.
+- T2 utente: "3".
+- T3 assistant: "Stasera ho 3 candidate..." + tool `record_energy({value: 3})`
+  chiamato SENZA aver mai chiesto energy all'utente.
+
+contextJson finale: `triageState.moodIntake = { mood: 3, energyEnd: 3 }`.
+Entrambi i valori inventati dal modello (mediano default), coincidenza che
+l'utente avesse poi risposto "3" a Q1.
+
+Causa identificata in diagnosi prompt-only (Fase 1, 15 maggio):
+`EVENING_REVIEW_PROMPT` aveva solo regole declarative-negative sul flow
+mood/energy, nessun few-shot positivo del flow due-turni. Pattern noto
+(deploy-notes Slice 4): divieti declarativi meno efficaci di esempi positivi.
+Il modello collassava il flow Q1 -> record_mood -> Q2 -> record_energy ->
+CASO B in un singolo turno con value inventati, oppure chiamava il tool al
+turno sbagliato per soddisfare il forced tool_choice di Slice 5 V1.3.
+
+Discrepanza R3 emersa in diagnosi: il commit message di 26cf9f4 parlava di
+"transizione mood_intake -> per_entry" come fosse una phase machine, ma a
+livello orchestrator non esiste alcuna phase `mood_intake`. Il sub-stato e'
+interamente prompt-driven dentro `per_entry`. Implicazione: il fix di split
+tool era concettualmente fragile, non c'era nessun guard server-side a
+proteggere il flow.
+
+Fix applicato (commit 2a40a7c, prompt-only, scope narrow):
+- Fix 1: blocco `ESEMPI POSITIVI MOOD/ENERGY` (POS-MOOD-A1 + POS-MOOD-A2) in
+  `src/lib/chat/prompts.ts`, modellato sui POS-1/POS-2 di FASE CLOSING gia'
+  presenti. Mostra la sequenza corretta T1 (domanda mood, no tool) -> T2
+  utente -> T3 (record_mood con value reale + Q2 energy) -> T4 utente -> T5
+  (record_energy con value reale + CASO B apertura candidate). Value distinti
+  4 e 2 negli esempi, per esplicitare che il value coincide con la risposta
+  utente, non con un default mediano.
+- Fix 2: bullet `REGOLA ANTI-INVENZIONE` prima del bullet condizionale
+  esistente: il value passato a `record_mood`/`record_energy` DEVE essere il
+  numero 1-5 (o il qualitativo mappato) esplicito dell'ultimo messaggio utente
+  del turno corrente; se l'utente non ha ancora risposto alla domanda della
+  dimensione corrente, NON chiamare il tool.
+
+Diff: +25 righe in `src/lib/chat/prompts.ts`, 0 modificate. Suite 368/368
+verde post-edit (i test esistenti coprono il contratto dei tool in
+isolamento, non il flow prompt-driven, quindi la modifica del prompt non li
+impatta).
+
+Retest 15 maggio 2026 sera, thread `cmp6tve860001ibqw50qgphx6`, finestra
+serale allargata 00:00-23:00 via SQL. Esito: caso felice.
+- T1 utente "iniziamo" -> T1 assistant "Come stai stasera? 1-5." (no tool).
+- T2 utente "4" -> T2 assistant `record_mood({value: 4})` + "E di energia?
+  1-5." (Q2 in turno separato).
+- T3 utente "2" -> T3 assistant `record_energy({value: 2})` + apertura CASO B
+  "Stasera ho 3 candidate...".
+- contextJson finale: `triageState.moodIntake = { mood: 4, energyEnd: 2 }`.
+
+Confidence: 1 run su 1 e' un sample size ridicolo per behavior LLM, ma e'
+un'inversione netta rispetto al runtime mattutino dove era 1/1 fallito.
+Accettato per il push; il residuo eventuale si osservera' nei prossimi E2E
+naturali (Slice 8a/8b future).
+
+Fix 3 (gate server-side `getToolsForMode`) era stato considerato in diagnosi
+ma escluso da scope narrow, riservato come backstop se il retest mostrasse
+residuo >15%. Resta in coda come opzione futura se il pattern ricompare.
+
+Lezione operativa: una suite test 100% verde non protegge da regressioni nel
+flow conversazionale prompt-driven. I test esistenti coprono il contratto dei
+tool in isolamento, non il fatto che il modello sia sollecitato a usarli al
+turno giusto. Rinforza la priorita' del tech debt #18 (zero unit test
+coverage per orchestrator) per le sessioni future.
+
+Side observation: l'indagine ha rivelato il DailyPlan orfano
+`cmp5v3tma004nibboxzbc8pdd` del 14 maggio (Scenario 6 retest V1.1) come
+indizio di un rollback parziale Slice 7 (DailyPlan creato senza Review
+accoppiata, asimmetria nella transazione atomica). Probabilmente risolto dal
+commit c5dddc3 (fix BUG #B "popolare DailyPlanTask in closeReview", 14 maggio
+sera), ma vale la pena indagare se la transazione e' davvero atomica o se ci
+sono cammini parziali. NON affrontato oggi, candidato a sessione separata.
 
