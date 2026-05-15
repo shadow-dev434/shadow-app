@@ -1054,3 +1054,58 @@ commit c5dddc3 (fix BUG #B "popolare DailyPlanTask in closeReview", 14 maggio
 sera), ma vale la pena indagare se la transazione e' davvero atomica o se ci
 sono cammini parziali. NON affrontato oggi, candidato a sessione separata.
 
+## Slice 7 V1.x -- retest residui Bug #1 + Bug #3 (2026-05-15)
+
+Retest E2E su account virgin (`alberto@esempio`, `cmp1flw1g005oibvckzsenuqm`,
+thread `cmp7875940007ibagcz4ur1ln`) per la chiusura formale di due bug
+residui V1.x candidati a non-riscontro. Esito: entrambi FALLITI a runtime.
+
+### Bug #1 -- record_mood con value inventato (FAIL)
+
+- T1 assistant "Come stai stasera? 1-5." (no tool, corretto).
+- T2 utente "dimmi" (non un numero, non un qualitativo mappabile).
+- T3 assistant "E di energia? 1-5." + tool `record_mood({value: 3})`.
+
+`value=3` e' la mediana esatta = `MOOD_INTAKE_FALLBACK_VALUE`: il modello ha
+front-loaded il fallback D1 (previsto solo in fase closing) in un tool call
+reale al turno 1, senza alcun turno di insistenza. `contextJson` finale:
+`moodIntake={mood:3,energyEnd:4}` (energyEnd:4 legittimo, l'utente aveva
+risposto "4"). L'hardening #8.1 (commit 2a40a7c) e' falsificato: la regola
+anti-invenzione e' nel prompt ma il modello non la applica sulla risposta
+evasiva. Codice/handler/validator puliti: difetto puramente prompt-side.
+
+### Bug #3 -- few-shot GMAIL non today-aware (FAIL)
+
+Sonda: "Bolletta gas", source=gmail, deadline 2026-05-15 (oggi). Citazioni
+testuali (testo generato dal modello, non template server-side):
+- Apertura per_entry: "Bolletta gas, scadenza domani - la chiudi?".
+- Post "dimmi di piu'": "Bolletta gas scade il 15 maggio, domani."
+
+La seconda e' la smoking gun: il modello cita la data corretta ("15 maggio" =
+oggi) e nello stesso respiro la etichetta "domani". Il dato era disponibile --
+`buildEveningReviewModeContext` espone `deadline=2026-05-15` nella riga
+candidate e `clientDate=2026-05-15` nel prompt. Diagnosi: replica testuale del
+few-shot GMAIL-normale direct in `prompts.ts:268-276` ("Bolletta luce,
+scadenza il 30 - domani la chiudi?"), non today-aware: nessuna regola
+condiziona "domani" sul confronto deadline-vs-clientDate.
+
+### Classificazione e processo
+
+Bug #1 e #3 sono della stessa famiglia di Bug #8.1: una regola/few-shot
+prompt-side fallisce sull'edge case dove il modello non la applica. Conferma
+la lezione gia' annotata: una suite test 100% verde non protegge dal flow
+conversazionale prompt-driven. Fix differiti a sessione dedicata (decisione
+R6): ordine e raggruppamento da decidere a mente fresca, fuori dallo scope
+"verifica" della sessione corrente.
+
+Lezione di processo: durante la sessione uno scope creep cosmetico (proposta
+di sostituire un em-dash UTF-8 valido con "--" in un commento sorgente) ha
+innescato come reazione un secondo scope creep operativo (proposta di `rm` di
+un file di memory). Entrambi fuori procedura, entrambi bloccati dal
+coordinatore. La reazione operativa (`rm`) era meglio-intenzionata (eliminare
+la causa-radice della deviazione cosmetica precedente), ma comunque fuori
+scope. Pattern: auto-correzione zelante che cerca di pulire un proprio errore
+precedente espandendo lo scope di mutazione. Disciplina-antidoto: ogni azione
+di pulizia di un errore precedente passa per esplicito OK del coordinatore,
+non per iniziativa unilaterale.
+
