@@ -13,6 +13,7 @@ dist/
 .DS_Store
 .claude/settings.local.json
 tsconfig.tsbuildinfo
+commit-msg.txt
 
 scripts/debug-*.ts
 scripts/cleanup-blocker-*.ts
