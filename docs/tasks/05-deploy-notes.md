@@ -1109,3 +1109,51 @@ precedente espandendo lo scope di mutazione. Disciplina-antidoto: ogni azione
 di pulizia di un errore precedente passa per esplicito OK del coordinatore,
 non per iniziativa unilaterale.
 
+## Slice 7 V1.x -- sessione 2026-05-16 Bug #1 + Bug #3 (chiusa senza fix, diagnosi consolidata)
+
+**Esito sessione:** FAIL fix #8.1-style + FAIL fix V1.3.2 gating per Bug #1. Bug #3 NON toccato. Working tree pulito al termine. Sessione interrotta prematuramente per crash PC; cleanup post-crash eseguito manualmente in PowerShell.
+
+### Bug #1 -- diagnosi consolidata in 2 failure mode indipendenti
+
+**(a) FORCED PATH:** V1.3.2 SET su turno intake text-only + force tool_choice al turno successivo -> `record_mood({value:3})` emesso. Causa: trigger `lastTurnWasTextOnly` mis-scoped (Known Issue 2 di Slice 5, deploy-notes:588-596 originaria). Slice 7 ha trasformato "innocuo" in dannoso. Smoking gun verificato 2026-05-16 13:09 thread `cmp8d52mv`: log `[V1.3 forced tool_choice] ... lastTurnWasTextOnly=true -> tool_choice={type:'any'}`.
+
+**(b) SPONTANEOUS PATH:** il modello chiama `record_mood({value:3})` inline al T1 senza force tool_choice. Smoking gun verificato 2026-05-16 13:44 thread `cmp8ee8pi`: T1 `assistantMessage="Come stai stasera? 1-5."` + `payloadJson.toolsExecuted=[{name:"record_mood", input:{value:3}}]`. Zero righe `[V1.3 forced tool_choice]` nel log per quel thread. Causa: prompt-side regole declarative + few-shot positivi non sufficienti per il T1 quando `MOOD_INTAKE=pending`; modello free a emettere tool call inline.
+
+### Non-determinismo
+
+Temperatura 0.5 -> stesso seed produce sia percorso (a) che (b) ~50/50. Suite 100% verde non protegge perche' il bug e' nel flow conversazionale prompt+API-driven (lezione gia' documentata Slice 5 V1.x).
+
+### Fix tentati e FAIL
+
+**Pattern #8.1** (POS-MOOD-A3 few-shot positivo + rinforzo regola riga 174 "nessun valore mediano da passare a tool call"): non blocca (a) (force scavalca prompt) ne' (b) (modello ignora il marker `[NESSUN tool call]`).
+
+**Strada A** (V1.3.2 gating con const `perEntryWalkStarted` in `orchestrator.ts` SET, gate aggiuntivo `perEntryWalkStarted = currentEntryId !== null || outcomes !== empty`): chiude (a) per costruzione (verificato byte-level + tsc + vitest 368/368). NON esercitato pulito in retest D1 perche' run 13:44 ha pescato (b) (T1 inline tool call) invece di (a) (T1 text-only). Fix tecnicamente valido + Known Issue 2 chiusa-by-construction, ma non sufficiente da solo per Bug #1.
+
+### Bug #1 aggravato
+
+`record_mood({value:3})` viene accettato come definitivo (no rollback/auto-correction). Al turno successivo, se l'utente digita un numero, viene dirottato su energy (`MOOD_INTAKE` gia' registrato). Integrita' dato `Review` compromessa: `Review.mood=3` inventato finisce in DB su data odierna. Verificato empiricamente: sessione precedente sul thread `cmp8d52mv`, utente "4" -> `record_energy({value:4})`.
+
+### Decisione architettonica per prossima sessione
+
+Strada B (server-side guard) come fix completo. Due varianti possibili:
+
+**B1 (raccomandata):** gating dei tool `record_mood`/`record_energy` in `getToolsForMode` (tools.ts:244-288) quando `MOOD_INTAKE=pending` OR `ENERGY_INTAKE=pending` -> il modello non puo' chiamarli, neanche spontaneamente. Modifica isolata, no plumbing nuovo.
+
+**B2 (alternativa):** backstop validator in `record-mood-tool.ts` (`validateRecordMoodArgs`) con cross-check value vs ultimo userMessage. Richiede plumbing `userMessage` nel context di `executeTool` (orchestrator.ts:455-461 oggi non c'e').
+
+Strada A (V1.3.2 gating) e B1 sono complementari per difesa in profondita'.
+
+### Correzione diagnosi sessione 2026-05-15
+
+La sezione "Slice 7 V1.x -- retest residui Bug #1 + Bug #3 (2026-05-15)" affermava "codice/handler/validator puliti" e "prompt-side puro" per Bug #1. La diagnosi 2026-05-16 ha rivelato:
+
+- **Bug #1 (a)** e' causato da Slice 5 V1.3.2 trigger mis-scoped (non prompt puro, e' configurazione API `tool_choice`). Known Issue 2 di Slice 5 era documentata ma classificata "innocuo" pre-Slice 7.
+- Per **Bug #3** la sessione 2026-05-15 affermava "il dato e' disponibile in modeContext, il modello lo vede, ma replica il framing del few-shot". Verificato 2026-05-16 in plan iniziale Claude Code: `clientDate` NON e' renderizzato nel prompt (ne' in `buildEveningReviewModeContext`, ne' in `buildContextAndVoice`, ne' in `CORE_IDENTITY`). Il modello replica il framing perche' il dato di riferimento non esiste nel prompt. Fix prompt-only non praticabile, serve label relativo server-side.
+
+### Lezione operativa
+
+"Prompt-side puro" e' una classificazione da verificare con lettura codice (R3), non assumere. Verifica del codice del meccanismo coinvolto (orchestrator config API, tool gating, context construction) prima di classificare la natura del bug.
+
+### Stato repo al termine
+
+Working tree clean. Nessun commit Bug #1 o Bug #3 prodotto. Alberto in stato di partenza sano per nuova sessione: storia legittima preservata (Review 2026-05-14, 1 thread evening_review completed + 4 archived inclusi i 2 falliti di oggi), 2 task gmail residui da seed precedenti, 0 thread evening_review active/paused, 0 Review oggi. Finestra serale alberto ripristinata a 20:00-23:00.
