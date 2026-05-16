@@ -43,6 +43,7 @@ import {
   type PreviewState,
 } from '@/lib/evening-review/apply-overrides';
 import { captureWhatBlocked } from '@/lib/evening-review/what-blocked-capture';
+import { formatDeadlineLabel } from '@/lib/evening-review/dates';
 
 export type ChatMode =
   | 'morning_checkin'
@@ -178,6 +179,11 @@ export async function orchestrate(
     // 6c (G.D7): phase esplicito da contextJson. undefined = thread pre-6c
     // (migration lazy via fallback derivato isPreviewPhaseActive).
     currentPhase = loadPhaseFromContext(thread.contextJson);
+    // Slice 7 V1.x Bug #3: clientDate live, single source of truth.
+    // Usato sia dall'init triage (sotto, via closure dell'IIFE) sia da
+    // buildEveningReviewModeContext (formatDeadlineLabel). Hoist a const per
+    // evitare di ricalcolare/divergere fra i due punti d'uso.
+    const validatedClientDate = input.clientDate ?? formatTodayInRome();
     // Triage init/load + profile + settings in parallelo (Slice 6a).
     // Bundle in 1 round-trip DB invece di 2 sequenziali.
     const triageWork = (async (): Promise<{
@@ -191,7 +197,7 @@ export async function orchestrate(
         }
         const result = await initEveningReview(
           input.userId,
-          input.clientDate ?? formatTodayInRome(),
+          validatedClientDate,
         );
         return { triageState: result.triageState, allTasks: result.allTasks, isFirstTurn: true };
       }
@@ -277,7 +283,7 @@ export async function orchestrate(
     const preview = buildDailyPlanPreview(modifiedInput);
 
     modeContext =
-      buildEveningReviewModeContext(triageState, isFirstTurn, allTasks, Date.now()) +
+      buildEveningReviewModeContext(triageState, isFirstTurn, allTasks, Date.now(), validatedClientDate) +
       '\n\n' +
       formatPlanPreviewForPrompt(preview);
 
@@ -852,6 +858,7 @@ function buildEveningReviewModeContext(
   isFirstTurn: boolean,
   allTasks: TaskProjection[],
   nowMs: number,
+  clientDate: string,
 ): string {
   const taskMap = new Map(allTasks.map((t) => [t.id, t]));
 
@@ -861,7 +868,10 @@ function buildEveningReviewModeContext(
     const task = taskMap.get(id);
     if (!task) return;
     const isOriginal = triageState.candidateTaskIds.includes(id);
-    const dl = task.deadline ? task.deadline.toISOString().split('T')[0] : 'nessuna';
+    // Slice 7 V1.x Bug #3: label deadline relativo a clientDate (oggi/domani/
+    // tra N giorni/scaduta). 'nessuna' su deadline assente, comportamento
+    // pre-fix preservato. Letto da entrambe le usages sotto (originali e added).
+    const dl = formatDeadlineLabel(task.deadline?.toISOString() ?? null, clientDate);
     if (isOriginal) {
       const reason = triageState.reasonsByTaskId[id] ?? 'unknown';
       candidateLines.push(

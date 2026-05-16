@@ -89,3 +89,61 @@ export function endOfDayInZone(yyyymmdd: string, zone: string = 'Europe/Rome'): 
   const offsetMs = zoneWallTimeAsUtc - probe.getTime();
   return new Date(probe.getTime() - offsetMs);
 }
+
+/**
+ * Slice 7 V1.x Bug #3: formatta la deadline di un task come label relativo al
+ * giorno corrente del client, per la riga candidate del modeContext della
+ * review serale.
+ *
+ * Il modello non vede clientDate nel prompt: una deadline assoluta
+ * (deadline=2026-05-16) non gli dice se e' "oggi" o "domani", e ricadeva sul
+ * framing del few-shot ("domani la chiudi"). Questo helper risolve il framing
+ * server-side.
+ *
+ * Ritorni:
+ * - taskDeadlineISO null            -> 'nessuna' (comportamento pre-fix preservato)
+ * - delta 0                         -> 'YYYY-MM-DD (oggi)'
+ * - delta 1                         -> 'YYYY-MM-DD (domani)'
+ * - delta > 1                       -> 'YYYY-MM-DD (tra N giorni)'
+ * - delta -1                        -> 'YYYY-MM-DD (scaduta da 1 giorno)'
+ * - delta < -1                      -> 'YYYY-MM-DD (scaduta da N giorni)'
+ *
+ * Caveat timezone: il YMD della deadline e' estratto in Europe/Rome (pattern
+ * simmetrico a formatTodayInRome in orchestrator.ts), NON via
+ * toISOString().split('T')[0] che sarebbe UTC e sbaglierebbe near-midnight per
+ * utenti italiani. Il YYYY-MM-DD nel ritorno e' quindi la data Rome-locale,
+ * che puo' differire dal giorno nell'ISO string.
+ *
+ * Funzione pura: nessun Date.now(), stesso input -> stesso output.
+ */
+export function formatDeadlineLabel(
+  taskDeadlineISO: string | null,
+  clientDateYMD: string,
+): string {
+  if (taskDeadlineISO === null) return 'nessuna';
+  const deadlineDate = new Date(taskDeadlineISO);
+  // YMD wall-clock in Europe/Rome (en-CA -> formato YYYY-MM-DD).
+  const deadlineYMD = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Rome',
+  }).format(deadlineDate);
+  const delta = ymdDeltaDays(clientDateYMD, deadlineYMD);
+  if (delta === 0) return `${deadlineYMD} (oggi)`;
+  if (delta === 1) return `${deadlineYMD} (domani)`;
+  if (delta > 1) return `${deadlineYMD} (tra ${delta} giorni)`;
+  if (delta === -1) return `${deadlineYMD} (scaduta da 1 giorno)`;
+  return `${deadlineYMD} (scaduta da ${Math.abs(delta)} giorni)`;
+}
+
+/**
+ * Delta in giorni-calendario fra due date YYYY-MM-DD (toYMD - fromYMD).
+ * Date.UTC su mezzanotte UTC -> differenza esatta in giorni interi, immune da
+ * DST (entrambi gli operandi sono date pure, nessuna ora coinvolta).
+ * Helper privato di formatDeadlineLabel.
+ */
+function ymdDeltaDays(fromYMD: string, toYMD: string): number {
+  const ms = (ymd: string): number => {
+    const [y, m, d] = ymd.split('-').map(Number);
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((ms(toYMD) - ms(fromYMD)) / 86_400_000);
+}

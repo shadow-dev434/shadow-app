@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addDaysIso, endOfDayInZone } from './dates';
+import { addDaysIso, endOfDayInZone, formatDeadlineLabel } from './dates';
 
 describe('addDaysIso', () => {
   it('base case adds days to a mid-month date', () => {
@@ -58,5 +58,61 @@ describe('endOfDayInZone (Europe/Rome)', () => {
     const a = endOfDayInZone('2026-04-27', 'Europe/Rome').getTime();
     const b = endOfDayInZone('2026-04-28', 'Europe/Rome').getTime();
     expect(a).toBeLessThan(b);
+  });
+});
+
+// Slice 7 V1.x Bug #3: label deadline relativo al clientDate. Caveat
+// timezone: il YMD della deadline e' Rome-locale, non UTC.
+describe('formatDeadlineLabel', () => {
+  it('1. deadline null -> nessuna', () => {
+    expect(formatDeadlineLabel(null, '2026-05-16')).toBe('nessuna');
+  });
+
+  it('2. stesso giorno -> oggi', () => {
+    expect(formatDeadlineLabel('2026-05-16T18:00:00Z', '2026-05-16')).toBe(
+      '2026-05-16 (oggi)',
+    );
+  });
+
+  it('3. giorno dopo -> domani', () => {
+    expect(formatDeadlineLabel('2026-05-17T18:00:00Z', '2026-05-16')).toBe(
+      '2026-05-17 (domani)',
+    );
+  });
+
+  it('4. delta 3 -> tra 3 giorni', () => {
+    expect(formatDeadlineLabel('2026-05-19T18:00:00Z', '2026-05-16')).toBe(
+      '2026-05-19 (tra 3 giorni)',
+    );
+  });
+
+  it('5. delta -1 -> scaduta da 1 giorno', () => {
+    expect(formatDeadlineLabel('2026-05-15T18:00:00Z', '2026-05-16')).toBe(
+      '2026-05-15 (scaduta da 1 giorno)',
+    );
+  });
+
+  it('6. stress TZ: UTC 01:00 = Rome 03:00, stesso giorno -> oggi', () => {
+    expect(formatDeadlineLabel('2026-05-16T01:00:00Z', '2026-05-16')).toBe(
+      '2026-05-16 (oggi)',
+    );
+  });
+
+  it('7. stress TZ: UTC 23:00 = Rome 01:00 del giorno dopo -> domani', () => {
+    expect(formatDeadlineLabel('2026-05-16T23:00:00Z', '2026-05-16')).toBe(
+      '2026-05-17 (domani)',
+    );
+  });
+
+  it('8. delta < -1 -> scaduta da N giorni', () => {
+    expect(formatDeadlineLabel('2026-05-12T18:00:00Z', '2026-05-16')).toBe(
+      '2026-05-12 (scaduta da 4 giorni)',
+    );
+  });
+
+  it('9. delta grande (10) -> tra 10 giorni', () => {
+    expect(formatDeadlineLabel('2026-05-26T18:00:00Z', '2026-05-16')).toBe(
+      '2026-05-26 (tra 10 giorni)',
+    );
   });
 });

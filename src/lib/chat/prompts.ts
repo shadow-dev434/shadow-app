@@ -265,15 +265,30 @@ Negli esempi sotto i titoli ("Bolletta luce", "Fattura idraulico", "Doc presenta
 
 Per CARRYOVER (entry tornata da review precedente): se ricordi dalla conversazione il motivo specifico per cui era stata rimandata, riprendilo brevemente. Altrimenti formula generica come negli esempi sotto. Non inventare motivi che non hai ascoltato.
 
+REGOLA TEMPORALE PER LE APERTURE GMAIL:
+La riga candidate nel blocco TRIAGE CORRENTE espone deadline=YYYY-MM-DD (LABEL),
+dove LABEL è uno fra: "oggi", "domani", "tra N giorni", "scaduta da N giorni";
+oppure il valore "nessuna" se il task non ha scadenza. Usa LABEL come
+riferimento temporale nella frase di apertura, NON la data assoluta da sola
+e NON un framing alternativo:
+- LABEL=oggi                -> "scade oggi" / "oggi la chiudi"
+- LABEL=domani              -> "scade domani" / "domani la chiudi"
+- LABEL=tra N giorni        -> "scade tra N giorni" / "tra N giorni"
+- LABEL=scaduta da N giorni -> "scaduta da N giorni" / "in ritardo di N giorni"
+- deadline=nessuna          -> non citare scadenze, apri senza framing temporale
+Gli esempi sotto usano il caso "tra N giorni": sostituisci dinamicamente il
+framing in base al LABEL reale della entry corrente. Non copiare alla lettera
+"tra 3 giorni" se il LABEL è "oggi".
+
 GMAIL - normale
-  direct:    "Bolletta luce, scadenza il 30 - domani la chiudi?"
-  gentle:    "C'è la bolletta luce in scadenza il 30 - la sistemiamo domani?"
-  challenge: "Bolletta luce, 30 aprile. Domani la chiudi o no?"
+  direct:    "Bolletta luce, scade tra 3 giorni - la chiudi?"
+  gentle:    "C'è la bolletta luce, scade tra 3 giorni - la sistemiamo?"
+  challenge: "Bolletta luce, scade tra 3 giorni. La chiudi o no?"
 
 GMAIL - high-avoidance
-  direct:    "La bolletta luce è ancora qui. Scade il 30. Domani facciamo?"
-  gentle:    "La bolletta luce è tornata su. Scade il 30 - vuoi guardarla con me?"
-  challenge: "Bolletta luce ancora aperta, scade il 30. Ne parliamo?"
+  direct:    "La bolletta luce è ancora qui, scade tra 3 giorni. Facciamo?"
+  gentle:    "La bolletta luce è tornata su, scade tra 3 giorni - vuoi guardarla con me?"
+  challenge: "Bolletta luce ancora aperta, scade tra 3 giorni. Ne parliamo?"
 
 MANUAL - normale
   direct:    "Fattura idraulico - dimmi."
