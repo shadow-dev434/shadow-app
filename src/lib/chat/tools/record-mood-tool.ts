@@ -19,6 +19,7 @@
  */
 
 import type { LLMTool } from '@/lib/llm/client';
+import { extractMoodEnergyValue } from './mood-energy-parse';
 
 export type RecordMoodArgs = { value: number };
 
@@ -43,8 +44,15 @@ export const RECORD_MOOD_TOOL: LLMTool = {
   },
 };
 
+/**
+ * Slice 7 V1.x Bug #1 (B2 backstop): userMessage opzionale. Se fornito, il
+ * value DEVE corrispondere al numero/qualitativo espresso dall'utente
+ * nell'ultimo messaggio (cross-check anti-invenzione). Assente -> skip del
+ * cross-check, backward compat con unit test e caller non-orchestrator.
+ */
 export function validateRecordMoodArgs(
   args: unknown,
+  userMessage?: string,
 ): { ok: true; value: number } | { ok: false; error: string } {
   if (args === null || typeof args !== 'object') {
     return { ok: false, error: 'args deve essere un oggetto' };
@@ -55,6 +63,16 @@ export function validateRecordMoodArgs(
   }
   if (raw < 1 || raw > 5) {
     return { ok: false, error: 'value deve essere tra 1 e 5' };
+  }
+  if (userMessage !== undefined && extractMoodEnergyValue(userMessage) !== raw) {
+    return {
+      ok: false,
+      error:
+        `value=${raw} non corrisponde a un numero 1-5 o qualitativo mappabile ` +
+        `nell'ultimo messaggio utente. L'ultimo messaggio era: '${userMessage}'. ` +
+        `Non chiamare record_mood/record_energy se l'utente non ha risposto con ` +
+        `un valore numerico o qualitativo riconoscibile sulla dimensione corrente.`,
+    };
   }
   return { ok: true, value: raw };
 }

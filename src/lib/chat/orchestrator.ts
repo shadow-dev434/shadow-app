@@ -404,7 +404,7 @@ export async function orchestrate(
     tier: modelTier,
     systemPrompt,
     messages: llmMessages,
-    tools: getToolsForMode(mode, currentPhase),
+    tools: getToolsForMode(mode, currentPhase, triageState ?? undefined),
     maxTokens: 500,
     temperature: 0.5,
     toolChoice: forcedToolChoice,
@@ -458,6 +458,7 @@ export async function orchestrate(
           baseInput: baseInput ?? undefined,
           currentPhase: pendingPhase ?? currentPhase,
           threadId: thread.id,
+          userMessage: input.userMessage,
         });
         toolsExecuted.push({ name: tc.name, input: tc.input, result: result.data });
         toolResults.push({ toolCall: tc, result });
@@ -551,7 +552,7 @@ export async function orchestrate(
       tier: modelTier,
       systemPrompt,
       messages: llmMessages,
-      tools: getToolsForMode(mode, pendingPhase ?? currentPhase),
+      tools: getToolsForMode(mode, pendingPhase ?? currentPhase, pendingTriageState ?? undefined),
       maxTokens: 500,
       temperature: 0.5,
     });

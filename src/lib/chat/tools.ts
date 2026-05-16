@@ -227,15 +227,26 @@ export const EVENING_REVIEW_TOOLS: LLMTool[] = [
  * nello scenario E2E 2026-05-14).
  *
  * Mapping fase -> tool set:
- * - per_entry: CHAT_TOOLS + record_mood + record_energy + EVENING_REVIEW_TOOLS +
- *   mark_what_blocked_asked. NO confirm_*, NO update_plan_preview.
+ * - per_entry: CHAT_TOOLS + EVENING_REVIEW_TOOLS + mark_what_blocked_asked,
+ *   piu' record_mood / record_energy gated per dimensione pending (Slice 7
+ *   V1.x Bug #1, B1): record_mood esposto SOLO se triageState.moodIntake.mood
+ *   e' ancora undefined, record_energy SOLO se moodIntake.energyEnd e'
+ *   undefined. Una dimensione gia' numerica -> il tool sparisce dal set, cosi'
+ *   un eventuale force tool_choice non puo' ricadere su una ri-registrazione.
+ *   NO confirm_*, NO update_plan_preview.
  * - plan_preview: CHAT_TOOLS + update_plan_preview + confirm_plan_preview.
  *   NO confirm_close_review, NO tool di triage/intake.
  * - closing: CHAT_TOOLS + confirm_close_review. NO confirm_plan_preview,
  *   NO update_plan_preview, NO tool di triage/intake.
- * - undefined (thread pre-6c senza phase in contextJson): set completo,
- *   fallback per backward compat. I guard handler continuano a rifiutare
- *   chiamate fuori-fase per i thread legacy.
+ * - undefined (thread pre-6c senza phase in contextJson): set completo con
+ *   lo STESSO gating mood/energy del per_entry, fallback per backward compat.
+ *   I guard handler continuano a rifiutare chiamate fuori-fase per i thread
+ *   legacy.
+ *
+ * triageState (Slice 7 V1.x Bug #1): opzionale. Caller non-evening_review e
+ * thread legacy senza state passano undefined; il gating mood/energy degrada
+ * a "entrambi pending" (undefined === undefined) -> entrambi i tool esposti,
+ * comportamento pre-B1 preservato.
  *
  * CHAT_TOOLS (create_task / get_today_tasks / set_user_energy) restano in
  * tutte le fasi: edge case ammissibili come "aggiungi questa in inbox"
@@ -244,19 +255,26 @@ export const EVENING_REVIEW_TOOLS: LLMTool[] = [
 export function getToolsForMode(
   mode: string,
   phase?: EveningReviewPhase,
+  triageState?: TriageState,
 ): LLMTool[] {
   if (mode !== 'evening_review') {
     return CHAT_TOOLS;
   }
 
+  // Slice 7 V1.x Bug #1 (B1): gating mood/energy per dimensione pending.
+  // undefined === undefined quando triageState/moodIntake mancano -> pending.
+  const moodPending = triageState?.moodIntake?.mood === undefined;
+  const energyPending = triageState?.moodIntake?.energyEnd === undefined;
+
   if (phase === 'per_entry') {
-    return [
+    const tools: LLMTool[] = [
       ...CHAT_TOOLS,
-      RECORD_MOOD_TOOL,
-      RECORD_ENERGY_TOOL,
       ...EVENING_REVIEW_TOOLS,
       MARK_WHAT_BLOCKED_ASKED_TOOL,
     ];
+    if (moodPending) tools.push(RECORD_MOOD_TOOL);
+    if (energyPending) tools.push(RECORD_ENERGY_TOOL);
+    return tools;
   }
 
   if (phase === 'plan_preview') {
@@ -275,16 +293,18 @@ export function getToolsForMode(
   }
 
   // phase === undefined: thread pre-6c senza marker phase in contextJson.
-  return [
+  // Stesso gating mood/energy del per_entry (Slice 7 V1.x Bug #1, B1).
+  const tools: LLMTool[] = [
     ...CHAT_TOOLS,
-    RECORD_MOOD_TOOL,
-    RECORD_ENERGY_TOOL,
     ...EVENING_REVIEW_TOOLS,
     MARK_WHAT_BLOCKED_ASKED_TOOL,
     UPDATE_PLAN_PREVIEW_TOOL,
     CONFIRM_PLAN_PREVIEW_TOOL,
     CONFIRM_CLOSE_REVIEW_TOOL,
   ];
+  if (moodPending) tools.push(RECORD_MOOD_TOOL);
+  if (energyPending) tools.push(RECORD_ENERGY_TOOL);
+  return tools;
 }
 
 // ── Tool Executors ─────────────────────────────────────────────────────────
@@ -343,6 +363,14 @@ export interface ToolExecutionContext {
   previewState?: PreviewState;
   baseInput?: BuildDailyPlanPreviewInput;
   currentPhase?: EveningReviewPhase;
+  /**
+   * Slice 7 V1.x Bug #1 (B2 backstop): ultimo messaggio utente del turno,
+   * propagato dall'orchestrator. Passato ai validator record_mood/record_energy
+   * per il cross-check anti-invenzione. Opzionale: i caller fuori
+   * evening_review (e gli unit test che costruiscono context parziali) lo
+   * omettono; in quel caso il cross-check e' saltato (backward compat).
+   */
+  userMessage?: string;
   /**
    * Slice 7: id del ChatThread corrente, propagato dall'orchestrator.
    * Richiesto da executeConfirmCloseReview per passarlo a closeReview()
@@ -1228,6 +1256,7 @@ function executeRecordMood(
     args: input,
     triageState: context.triageState,
     currentPhase: context.currentPhase,
+    userMessage: context.userMessage,
   });
 
   if (!result.ok) {
@@ -1258,6 +1287,7 @@ function executeRecordEnergy(
     args: input,
     triageState: context.triageState,
     currentPhase: context.currentPhase,
+    userMessage: context.userMessage,
   });
 
   if (!result.ok) {

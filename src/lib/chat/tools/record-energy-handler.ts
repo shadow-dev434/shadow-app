@@ -15,6 +15,12 @@ export type HandleRecordEnergyInput = {
   args: unknown;
   triageState: TriageState;
   currentPhase: EveningReviewPhase | undefined;
+  /**
+   * Slice 7 V1.x Bug #1 (B2 backstop): ultimo messaggio utente del turno.
+   * Inoltrato a validateRecordEnergyArgs per il cross-check anti-invenzione.
+   * Opzionale: assente -> cross-check saltato (backward compat).
+   */
+  userMessage?: string;
 };
 
 export type HandleRecordEnergyResult =
@@ -31,7 +37,7 @@ export function handleRecordEnergy(
     };
   }
 
-  const validation = validateRecordEnergyArgs(input.args);
+  const validation = validateRecordEnergyArgs(input.args, input.userMessage);
   if (!validation.ok) {
     return { ok: false, error: validation.error };
   }

@@ -1283,3 +1283,54 @@ describe('getToolsForMode: phase gating', () => {
     }
   });
 });
+
+// ── getToolsForMode (Slice 7 V1.x Bug #1: mood/energy intake gating) ─────────
+// B1: record_mood esposto SOLO se moodIntake.mood pending (undefined),
+// record_energy SOLO se moodIntake.energyEnd pending. Una dimensione gia'
+// numerica -> il tool sparisce dal set. triageState undefined -> entrambi
+// pending (backward compat caller non-evening_review / thread legacy).
+
+describe('getToolsForMode: mood/energy intake gating', () => {
+  function has(tools: ReturnType<typeof getToolsForMode>, name: string): boolean {
+    return tools.some((t) => t.name === name);
+  }
+  const ts = (moodIntake: { mood?: number; energyEnd?: number }): TriageState =>
+    ({ moodIntake }) as unknown as TriageState;
+
+  it('1. general + phase/triageState undefined -> CHAT_TOOLS, nessun intake tool', () => {
+    const tools = getToolsForMode('general', undefined, undefined);
+    expect(has(tools, 'create_task')).toBe(true);
+    expect(has(tools, 'record_mood')).toBe(false);
+    expect(has(tools, 'record_energy')).toBe(false);
+  });
+
+  it('2. per_entry + moodIntake={} -> espone record_mood E record_energy', () => {
+    const tools = getToolsForMode('evening_review', 'per_entry', ts({}));
+    expect(has(tools, 'record_mood')).toBe(true);
+    expect(has(tools, 'record_energy')).toBe(true);
+  });
+
+  it('3. per_entry + moodIntake={mood:4} -> solo record_energy', () => {
+    const tools = getToolsForMode('evening_review', 'per_entry', ts({ mood: 4 }));
+    expect(has(tools, 'record_mood')).toBe(false);
+    expect(has(tools, 'record_energy')).toBe(true);
+  });
+
+  it('4. per_entry + moodIntake={mood:4,energyEnd:2} -> nessun intake tool', () => {
+    const tools = getToolsForMode('evening_review', 'per_entry', ts({ mood: 4, energyEnd: 2 }));
+    expect(has(tools, 'record_mood')).toBe(false);
+    expect(has(tools, 'record_energy')).toBe(false);
+  });
+
+  it('5. plan_preview + moodIntake={} -> nessun intake tool (fase esclude intake)', () => {
+    const tools = getToolsForMode('evening_review', 'plan_preview', ts({}));
+    expect(has(tools, 'record_mood')).toBe(false);
+    expect(has(tools, 'record_energy')).toBe(false);
+  });
+
+  it('6. phase=undefined (thread pre-6c) + moodIntake={mood:4} -> solo record_energy', () => {
+    const tools = getToolsForMode('evening_review', undefined, ts({ mood: 4 }));
+    expect(has(tools, 'record_mood')).toBe(false);
+    expect(has(tools, 'record_energy')).toBe(true);
+  });
+});
