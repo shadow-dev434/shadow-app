@@ -38,6 +38,11 @@ import {
   type PreviewState,
 } from '@/lib/evening-review/apply-overrides';
 import { reconstructEveningReviewPreview } from '@/lib/evening-review/preview-reconstruction';
+import {
+  shouldForceToolChoice,
+  clearConsumedAtRiskFlags,
+  shouldSetTextOnlyFlag,
+} from './at-risk-detection';
 import { captureWhatBlocked } from '@/lib/evening-review/what-blocked-capture';
 import { formatDeadlineLabel } from '@/lib/evening-review/dates';
 
@@ -274,26 +279,11 @@ export async function orchestrate(
   let lastModel = '';
 
   // ── 5.5. V1.3 forced tool_choice condizionato ───────────────────────
-  // Bug "tool-call avoidance post-self-correction su history lunga" emerso
-  // nel retest E2E 2026-05-07: il modello a volte risponde in TEXT invece
-  // di tool_use anche dopo che il handler ha emesso self-correction signal
-  // (V1.2 alreadyClosed o V1.2.2 alreadyOpen + suggestedNextEntryId). La
-  // SELF-CORRECTION HANDLING istruzione argomentativa nel prompt viene
-  // ignorata per inerzia history.
-  //
-  // Fix: in turni a rischio (firstTurnAfterResume V1.2.2 OR
-  // selfCorrectedInPreviousTurn V1.3 settato dal turno precedente),
-  // forzare tool_choice='any' sul first callLLM. Single-shot: NON applicato
-  // al multi-iteration loop iter >=1 (le iter successive sono guidate dai
-  // tool_results del first call, no force needed).
-  //
-  // Vedi triage.ts JSDoc selfCorrectedInPreviousTurn per il razionale completo.
-  const isAtRiskTurn =
-    mode === 'evening_review' &&
-    triageState !== null &&
-    (triageState.firstTurnAfterResume === true ||
-      triageState.selfCorrectedInPreviousTurn === true ||
-      triageState.lastTurnWasTextOnly === true);
+  // Tech debt #18: i 3 predicate (force / clear / set) sono estratti in
+  // src/lib/chat/at-risk-detection.ts come pure functions con unit
+  // coverage; razionale storico V1.3/V1.3.1/V1.3.2 vive nei JSDoc del
+  // modulo. Qui orchestrator e' thin wiring layer: calc + log + apply.
+  const isAtRiskTurn = shouldForceToolChoice(triageState, mode);
   const forcedToolChoice: ToolChoiceParam | undefined = isAtRiskTurn
     ? { type: 'any' }
     : undefined;
@@ -307,48 +297,25 @@ export async function orchestrate(
     );
   }
 
-  // V1.3.1 (refactor V1.3 lifecycle): clear selfCorrectedInPreviousTurn DOPO
-  // averlo letto per isAtRiskTurn (riga 288-292), PRIMA del first callLLM
-  // (riga 306). Il flag e' consumato dal turno corrente che lo ha usato per
-  // decidere il tool_choice; al turno N+1 di nuovo guard fire (raro ma
-  // possibile), il for-loop Blocco C ri-setta il flag su pendingTriageState.
-  //
-  // Lifecycle distinto da firstTurnAfterResume (clear handler-side perche'
-  // SET esterno via active-thread/route.ts su paused -> active). Per
-  // selfCorrectedInPreviousTurn, sia SET che CLEAR sono orchestrator-side.
-  //
-  // Single-point clear su triageState: pendingTriageState e' inizializzato
-  // da triageState a riga 326 (post-callLLM), quindi propaga il clear
-  // naturalmente. NO doppio clear necessario.
-  //
-  // Bug V1.3 originale: clear handler-side eseguiva CLEAR nello stesso turno
-  // del SET, perche' self-correction loop avviene via multi-iteration nel
-  // medesimo turno utente (non al turno N+1). Quando turno N+1 partiva,
-  // flag era gia' false, isAtRiskTurn falso, force non applicato.
-  //
-  // Vedi triage.ts JSDoc selfCorrectedInPreviousTurn per il lifecycle V1.3.1.
-  if (triageState !== null && triageState.selfCorrectedInPreviousTurn === true) {
+  // V1.3.1-C + V1.3.2-C: clear consumed at-risk flags DOPO read per
+  // isAtRiskTurn, PRIMA del first callLLM (cicatrice del bug V1.3
+  // "clear handler-side troppo presto"). Logica nel modulo
+  // clearConsumedAtRiskFlags; ordine log (selfCorrected -> lastTurnText)
+  // preservato.
+  const clearResult = clearConsumedAtRiskFlags(triageState);
+  if (clearResult.clearedSelfCorrected) {
     console.warn(
       `[V1.3.1 clear] orchestrator clear selfCorrectedInPreviousTurn=false ` +
       `(consumed by at-risk turn pre-callLLM)`,
     );
-    triageState = { ...triageState, selfCorrectedInPreviousTurn: false };
   }
-
-  // V1.3.2: clear lastTurnWasTextOnly DOPO averlo letto per isAtRiskTurn,
-  // PRIMA del first callLLM. Pattern simmetrico a V1.3.1-C clear di
-  // selfCorrectedInPreviousTurn. Lifecycle full orchestrator-side: SET
-  // post for-loop pre-commit (vedi V1.3.2-C), CLEAR qui pre-callLLM.
-  // Edge case turno N+1 forced ma modello ANCORA text-only: clear consume
-  // flag turno N, post for-loop SET ri-scatta per turno N+2. Force loop
-  // finche' modello chiama tool. Vedi triage.ts JSDoc lastTurnWasTextOnly.
-  if (triageState !== null && triageState.lastTurnWasTextOnly === true) {
+  if (clearResult.clearedLastTurnText) {
     console.warn(
       `[V1.3.2 clear] orchestrator clear lastTurnWasTextOnly=false ` +
       `(consumed by at-risk turn pre-callLLM)`,
     );
-    triageState = { ...triageState, lastTurnWasTextOnly: false };
   }
+  triageState = clearResult.next;
 
   // ── 6. First LLM call ────────────────────────────────────────────────
   // Slice 7 BUG #A: tools filtrati per fase corrente in evening_review.
@@ -572,45 +539,24 @@ export async function orchestrate(
     return currentPhase;
   })();
 
-  // V1.3.2: SET lastTurnWasTextOnly=true se il turno corrente (mode
-  // evening_review, fase per_entry) e' terminato senza alcun tool call dal
-  // modello. Predicato 5-componenti:
-  // 1. mode === 'evening_review' (scope ristretto, altre mode hanno
-  //    semantica diversa).
-  // 2. pendingTriageState !== null (TS narrow + safety; in evening_review
-  //    e' sempre non-null in flow normale).
-  // 3. effectivePhase === 'per_entry' (esclude plan_preview e closing
-  //    dove text-only puo' essere legittimo - apertura piano in prosa,
-  //    frase chiusura unica).
-  // 4. toolsExecuted.length === 0 (modello non ha chiamato alcun tool
-  //    in NESSUNA iter del multi-iteration loop = pure text-only response).
-  // 5. lastTurnWasTextOnly !== true (idempotenza: evita re-set su turni
-  //    text-only consecutivi e spread waste; '=== true' handle undefined
-  //    + false implicit).
-  //
-  // Posizione: DOPO effectivePhase calcolato, PRIMA del block che serializza
-  // pendingTriageState a contextJson. Mutation immutable via spread; il
-  // commit successivo include automaticamente il flag.
-  //
-  // Bug V1.3.1 originale: V1.3 + V1.3.1 detectano solo "modello chiama tool
-  // sbagliato" via guard handler-side. Bug residuo retest E2E 2026-05-09:
-  // turni 13-18 payloadJson === null (text-only puro), nessun guard fired,
-  // V1.3 detection inerte. Fix V1.3.2: terzo trigger isAtRiskTurn settato
-  // post-turno text-only, force al turno successivo.
-  //
-  // Vedi triage.ts JSDoc lastTurnWasTextOnly per il lifecycle V1.3.2 completo.
+  // V1.3.2 SET lastTurnWasTextOnly: predicate 5-componenti in
+  // shouldSetTextOnlyFlag (vedi JSDoc per descrizione e Known Issue 2).
+  // Posizione: DOPO effectivePhase calcolato, PRIMA del block che
+  // serializza pendingTriageState a contextJson.
   if (
-    mode === 'evening_review' &&
-    pendingTriageState !== null &&
-    effectivePhase === 'per_entry' &&
-    toolsExecuted.length === 0 &&
-    pendingTriageState.lastTurnWasTextOnly !== true
+    shouldSetTextOnlyFlag({
+      mode,
+      pendingTriageState,
+      effectivePhase,
+      toolsExecutedCount: toolsExecuted.length,
+    })
   ) {
     console.warn(
       `[V1.3.2 set] orchestrator set lastTurnWasTextOnly=true ` +
       `(turno text-only in fase per_entry)`,
     );
-    pendingTriageState = { ...pendingTriageState, lastTurnWasTextOnly: true };
+    // Non-null assertion sicura: il predicate include pendingTriageState !== null.
+    pendingTriageState = { ...pendingTriageState!, lastTurnWasTextOnly: true };
   }
 
   // chatMessage.create factor-out: PrismaPromise lazy (non esegue finche'
