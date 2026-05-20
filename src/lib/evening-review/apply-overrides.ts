@@ -89,25 +89,119 @@ export function applyPreviewOverrides(
 
 /**
  * Parses PreviewState da ChatThread.contextJson. Pattern coerente con
- * loadTriageStateFromContext (in triage.ts). Errore di parse o assenza
- * del namespace 'previewState' -> fallback silenzioso a EMPTY_PREVIEW_STATE
- * (orchestrator non deve crashare per contextJson malformato).
+ * loadTriageStateFromContext (in triage.ts). Errore di parse, assenza
+ * del namespace 'previewState' o shape invalida -> fallback a
+ * EMPTY_PREVIEW_STATE (orchestrator non deve crashare per contextJson
+ * malformato o corrotto).
  *
  * Convenzione namespace: contextJson = { triage?, previewState? }.
  * I due namespace sono fratelli top-level, mai annidati. Backward compatible
  * con thread 6a (solo 'triage') e thread 6b vergini (entrambi assenti).
+ *
+ * Bug #5 V1.x hardening: parse error e shape-invalid emettono
+ * console.warn server-side per osservabilita' della corruzione, mentre il
+ * fallback resta silent verso l'utente (la review serale prosegue con state
+ * vuoto invece di crashare). L'assenza del namespace previewState NON e'
+ * un errore (thread pre-6b o vergine), quindi non logga.
  */
 export function loadPreviewStateFromContext(
   contextJson: string | null,
 ): PreviewState {
   if (!contextJson) return EMPTY_PREVIEW_STATE;
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(contextJson) as { previewState?: PreviewState };
-    if (parsed && typeof parsed === 'object' && parsed.previewState) {
-      return parsed.previewState;
-    }
-    return EMPTY_PREVIEW_STATE;
+    parsed = JSON.parse(contextJson);
   } catch {
+    console.warn(
+      '[evening-review] loadPreviewStateFromContext: contextJson JSON.parse failed, falling back to EMPTY_PREVIEW_STATE',
+    );
     return EMPTY_PREVIEW_STATE;
   }
+  if (parsed === null || typeof parsed !== 'object') {
+    return EMPTY_PREVIEW_STATE;
+  }
+  const previewStateRaw = (parsed as { previewState?: unknown }).previewState;
+  if (previewStateRaw === undefined) {
+    // Namespace assente: thread pre-6b o vergine, comportamento atteso, no warn.
+    return EMPTY_PREVIEW_STATE;
+  }
+  if (!isValidPreviewState(previewStateRaw)) {
+    console.warn(
+      '[evening-review] loadPreviewStateFromContext: previewState shape invalid, falling back to EMPTY_PREVIEW_STATE',
+    );
+    return EMPTY_PREVIEW_STATE;
+  }
+  return previewStateRaw;
+}
+
+/** SlotName validi runtime. Pattern simmetrico a slot-allocation.ts:194. */
+const VALID_SLOT_NAMES: ReadonlySet<string> = new Set([
+  'morning',
+  'afternoon',
+  'evening',
+]);
+
+/**
+ * Type guard runtime per PreviewState. Bug #5 V1.x: previene la propagazione
+ * di uno stato corrotto a valle (es. .removedTaskIds.includes su non-array
+ * crasherebbe in applyPreviewOverrides, hazard documentato nei commenti dei
+ * test pre-fix).
+ *
+ * Profondita' validazione: livello sufficiente a prevenire crash a valle.
+ * SlotName enumerato (3 valori stabili). durationLabel validato come string
+ * generica (evita churn se in futuro si aggiungono label).
+ */
+function isValidPreviewState(value: unknown): value is PreviewState {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const v = value as Record<string, unknown>;
+
+  // 3 array di string id obbligatori.
+  for (const field of ['pinnedTaskIds', 'removedTaskIds', 'addedTaskIds'] as const) {
+    const arr = v[field];
+    if (!Array.isArray(arr)) return false;
+    if (!arr.every((x) => typeof x === 'string')) return false;
+  }
+
+  // blockedSlots: array di SlotName.
+  if (!Array.isArray(v.blockedSlots)) return false;
+  if (
+    !v.blockedSlots.every(
+      (s) => typeof s === 'string' && VALID_SLOT_NAMES.has(s),
+    )
+  ) {
+    return false;
+  }
+
+  // perTaskOverrides: plain object con valori PerTaskOverride-like.
+  const overrides = v.perTaskOverrides;
+  if (
+    overrides === null ||
+    typeof overrides !== 'object' ||
+    Array.isArray(overrides)
+  ) {
+    return false;
+  }
+  for (const override of Object.values(overrides as Record<string, unknown>)) {
+    if (
+      override === null ||
+      typeof override !== 'object' ||
+      Array.isArray(override)
+    ) {
+      return false;
+    }
+    const o = override as Record<string, unknown>;
+    if (o.durationLabel !== undefined && typeof o.durationLabel !== 'string') {
+      return false;
+    }
+    if (
+      o.forcedSlot !== undefined &&
+      !(typeof o.forcedSlot === 'string' && VALID_SLOT_NAMES.has(o.forcedSlot))
+    ) {
+      return false;
+    }
+  }
+
+  return true;
 }

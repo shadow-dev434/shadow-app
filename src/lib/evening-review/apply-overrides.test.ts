@@ -274,3 +274,93 @@ describe('loadPreviewStateFromContext', () => {
     );
   });
 });
+
+describe('loadPreviewStateFromContext shape validation (Bug #5)', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  it('caso 18 - previewState non-oggetto (number) -> EMPTY + warn con prefisso [evening-review]', () => {
+    const json = JSON.stringify({ previewState: 42 });
+    expect(loadPreviewStateFromContext(json)).toEqual(EMPTY_PREVIEW_STATE);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toContain('[evening-review]');
+  });
+
+  it('caso 19 - previewState con campo obbligatorio mancante (removedTaskIds) -> EMPTY + warn', () => {
+    const json = JSON.stringify({
+      previewState: {
+        pinnedTaskIds: [],
+        // removedTaskIds mancante
+        addedTaskIds: [],
+        blockedSlots: [],
+        perTaskOverrides: {},
+      },
+    });
+    expect(loadPreviewStateFromContext(json)).toEqual(EMPTY_PREVIEW_STATE);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toContain('[evening-review]');
+  });
+
+  it('caso 20 - removedTaskIds tipo errato (number) -> EMPTY + warn', () => {
+    const json = JSON.stringify({
+      previewState: {
+        pinnedTaskIds: [],
+        removedTaskIds: 42,
+        addedTaskIds: [],
+        blockedSlots: [],
+        perTaskOverrides: {},
+      },
+    });
+    expect(loadPreviewStateFromContext(json)).toEqual(EMPTY_PREVIEW_STATE);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('caso 21 - blockedSlots con SlotName invalido -> EMPTY + warn', () => {
+    const json = JSON.stringify({
+      previewState: {
+        pinnedTaskIds: [],
+        removedTaskIds: [],
+        addedTaskIds: [],
+        blockedSlots: ['xyz'],
+        perTaskOverrides: {},
+      },
+    });
+    expect(loadPreviewStateFromContext(json)).toEqual(EMPTY_PREVIEW_STATE);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('caso 22 - perTaskOverrides non-oggetto (array) -> EMPTY + warn', () => {
+    const json = JSON.stringify({
+      previewState: {
+        pinnedTaskIds: [],
+        removedTaskIds: [],
+        addedTaskIds: [],
+        blockedSlots: [],
+        perTaskOverrides: [],
+      },
+    });
+    expect(loadPreviewStateFromContext(json)).toEqual(EMPTY_PREVIEW_STATE);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('caso 23 - perTaskOverrides[k].forcedSlot non-SlotName -> EMPTY + warn', () => {
+    const json = JSON.stringify({
+      previewState: {
+        pinnedTaskIds: [],
+        removedTaskIds: [],
+        addedTaskIds: [],
+        blockedSlots: [],
+        perTaskOverrides: { taskA: { forcedSlot: 'lunchtime' } },
+      },
+    });
+    expect(loadPreviewStateFromContext(json)).toEqual(EMPTY_PREVIEW_STATE);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+});
