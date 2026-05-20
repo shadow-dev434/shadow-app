@@ -29,19 +29,15 @@ import {
   MAX_PARKED_ENTRIES,
   POSTPONE_PATTERN_THRESHOLD,
 } from '@/lib/evening-review/config';
-import { parseBestTimeWindows } from '@/lib/evening-review/slot-allocation';
 import {
-  buildDailyPlanPreview,
   formatPlanPreviewForPrompt,
   type BuildDailyPlanPreviewInput,
-  type CandidateTaskInput,
 } from '@/lib/evening-review/plan-preview';
 import {
-  applyPreviewOverrides,
-  EMPTY_PREVIEW_STATE,
   loadPreviewStateFromContext,
   type PreviewState,
 } from '@/lib/evening-review/apply-overrides';
+import { reconstructEveningReviewPreview } from '@/lib/evening-review/preview-reconstruction';
 import { captureWhatBlocked } from '@/lib/evening-review/what-blocked-capture';
 import { formatDeadlineLabel } from '@/lib/evening-review/dates';
 
@@ -218,69 +214,21 @@ export async function orchestrate(
     // vedi what-blocked-capture.ts per semantica completa.
     triageState = captureWhatBlocked(triageState, allTasks, input.userMessage);
 
-    // Slice 6a: defensive defaults inline (piano B.2).
-    const previewProfile = {
-      optimalSessionLength: profileRow?.optimalSessionLength ?? 25,
-      shameFrustrationSensitivity: profileRow?.shameFrustrationSensitivity ?? 3,
-      bestTimeWindows: parseBestTimeWindows(profileRow?.bestTimeWindows ?? '[]'),
-    };
-    const previewSettings = {
-      wakeTime: settingsRow?.wakeTime ?? '07:00',
-      sleepTime: settingsRow?.sleepTime ?? '23:00',
-    };
-
-    // candidateTasks dalla effective list (originali - excluded + added),
-    // mappata via taskMap a CandidateTaskInput.
-    const taskMap = new Map(allTasks.map((t) => [t.id, t]));
-    const candidateTasks: CandidateTaskInput[] = computeEffectiveList(triageState)
-      .map((id) => taskMap.get(id))
-      .filter((t): t is TaskProjection => t !== undefined)
-      .map((t) => ({
-        taskId: t.id,
-        title: t.title,
-        size: t.size,
-        priorityScore: t.priorityScore,
-        deadline: t.deadline,
-      }));
-
-    // 6b: composizione end-to-end. baseInput contiene anche allUserTasks
-    // filtrato a 'inbox' (decisione 3g.1) come pool per `adds` in
-    // applyPreviewOverrides. Status non-inbox skippati silenziosamente
-    // (decisione documentata in 05-deploy-notes.md, sezione 6b).
-    const localBaseInput: BuildDailyPlanPreviewInput = {
-      candidateTasks,
-      profile: previewProfile,
-      settings: previewSettings,
-      // Filter+map: TaskProjection -> CandidateTaskInput (proiezione id->taskId).
-      allUserTasks: allTasks
-        .filter((t) => t.status === 'inbox')
-        .map((t) => ({
-          taskId: t.id,
-          title: t.title,
-          size: t.size,
-          priorityScore: t.priorityScore,
-          deadline: t.deadline,
-        })),
-      // 6c: now esplicito al call site (G.D3) per immunita' deadline trimming.
+    // Tech debt #19: ricostruzione preview estratta in modulo dedicato
+    // (preview-reconstruction.ts) come funzione pura, single source of
+    // truth per orchestrator + tooling esterno.
+    const { preview, baseInput: localBaseInput } = reconstructEveningReviewPreview({
+      triageState,
+      allTasks,
+      profileRow,
+      settingsRow,
+      pendingPreviewState,
       now: new Date(),
-    };
+    });
     // Espone baseInput al fuori-branch per uso in 3g.7 (multi-iteration loop
     // dispatching tool). Local const evita TS narrowing perso su `let` dichiarato
     // fuori dal branch.
     baseInput = localBaseInput;
-    // applyPreviewOverrides chiamato sempre in evening_review (G.2):
-    // turno 1 con state EMPTY -> no-op deterministico (test 3d caso 1).
-    // pendingPreviewState ?? EMPTY: il narrowing del tipo non sopravvive
-    // all'await sopra, TS lo vede come PreviewState | null. EMPTY come
-    // fallback teorico (in pratica e' sempre stato assegnato a riga 123)
-    // e' anche difensivo: applyPreviewOverrides con state EMPTY e' no-op,
-    // quindi se domani qualcuno accidentalmente cancellasse l'assignment,
-    // il preview funziona comunque con state vuoto.
-    const modifiedInput = applyPreviewOverrides(
-      localBaseInput,
-      pendingPreviewState ?? EMPTY_PREVIEW_STATE,
-    );
-    const preview = buildDailyPlanPreview(modifiedInput);
 
     modeContext =
       buildEveningReviewModeContext(triageState, isFirstTurn, allTasks, Date.now(), validatedClientDate) +
