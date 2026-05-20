@@ -211,3 +211,36 @@ discussione PRIMA del cambio (non solo conferma del diff):
 
 Se proponi di modificarli, fermati e spiega cosa vuoi cambiare e perché,
 prima di proporre il diff.
+
+---
+
+## Troubleshooting Windows
+
+### `bun run build`: EPERM su `query_engine` Prisma
+
+**Sintomo.** `bun run build` fallisce allo step `prisma generate` con
+`EPERM: operation not permitted` su
+`node_modules/.prisma/client/query_engine-windows.dll.node`.
+
+**Causa.** File locking dell'engine Prisma su Windows. Quando `bun run dev`
+o `bunx prisma studio` girano in un altro terminale, tengono un handle
+aperto sulla DLL dell'engine; `prisma generate` non può sovrascriverla.
+Windows-specific: non si manifesta su Linux/Vercel.
+
+**Workaround.**
+
+1. Chiudere `bun run dev` in tutti i terminali aperti.
+2. Chiudere `bunx prisma studio` in tutti i terminali aperti.
+3. Rilanciare `bun run build`.
+
+**Check facoltativo** (PowerShell, per identificare processi sospetti):
+
+```powershell
+Get-Process node, bun -ErrorAction SilentlyContinue |
+  Select-Object Id, ProcessName, StartTime
+```
+
+Un processo `node` o `bun` con `StartTime` recente è tipicamente un dev
+server o uno Studio attivo. I sub-process `node` zombie post-typecheck
+(vedi `docs/tasks/05-deploy-notes.md:346`) possono comparire qui ma si
+auto-puliscono in 30-60s e non sono la causa dell'EPERM.
