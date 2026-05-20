@@ -1168,3 +1168,13 @@ La sezione "Slice 7 V1.x -- retest residui Bug #1 + Bug #3 (2026-05-15)" afferma
 ### Stato repo al termine
 
 Working tree clean. Nessun commit Bug #1 o Bug #3 prodotto. Alberto in stato di partenza sano per nuova sessione: storia legittima preservata (Review 2026-05-14, 1 thread evening_review completed + 4 archived inclusi i 2 falliti di oggi), 2 task gmail residui da seed precedenti, 0 thread evening_review active/paused, 0 Review oggi. Finestra serale alberto ripristinata a 20:00-23:00.
+
+## Backlog pulizia documentale -- post-sessione autonomia 2026-05-19/20
+
+Emerso durante la PRIMA SESSIONE autonomia (2026-05-19/20), 5 commit chiusi `7e0d15a..339f799` (seed-bug13 today-aware, CLAUDE.md Troubleshooting Windows, extract preview reconstruction, validate previewState shape, declass Bug #9). Le 3 voci sotto sono **debito cosmetico/documentale a bassa priorita', NON blocker pre-Slice 8** (a differenza dell'inventario bug V1.x). Affrontabili in una futura sessione di pulizia documentale, non urgenti.
+
+- **Cruft heading `# Snippet per CLAUDE.md` in `CLAUDE.md`.** Residuo di paste durante l'integrazione della sezione `.claude` (scoperto voce 2 sessione, commit `665d4d3`). Il file contiene un heading `# Snippet per CLAUDE.md` seguito dalla meta-istruzione "Aggiungi questa sezione al CLAUDE.md esistente, in coda..." -- non e' contenuto del documento ma un commento di processo finito per errore in `CLAUDE.md`. Da rimuovere o trasformare in nota storica esplicita. Localizzazione stabile via grep sul testo dell'heading.
+
+- **Commento obsoleto in `orchestrator.test.ts` (riga ~297-299 al 2026-05-20).** Documenta `loadPreviewStateFromContext` come hazard attuale con il testo letterale: "loadPreviewStateFromContext non valida i campi del previewState parsed e li ritorna as-is; se passassimo un literal {} crasheremmo in applyPreviewOverrides su state.removedTaskIds". Post-commit `5fddc6d` (voce 4 sessione, Bug #5 chiuso) la shape e' validata da `isValidPreviewState` in `apply-overrides.ts`: il commento descrive una vulnerabilita' FIXED. Da aggiornare a "FIXED Bug #5, validation added in apply-overrides.ts" oppure rimuovere. Localizzazione stabile via grep sul testo del commento (le righe possono driftare; il riferimento di riga e' un hint approssimativo datato).
+
+- **Nota di processo: `bun test` vs `bun run test`.** Lezione operativa emersa voce 1 sessione. Il comando `bun test` (presente in briefing voce 1) invoca il runner nativo Bun, privo delle API `vi.*` di vitest: produce falsi-fail `vi.mocked is not a function` su tutta la suite. Comando corretto per vitest e' `bun run test` (script `test` in `package.json` = `vitest run`). Pro-memoria per future sessioni, agenti, briefing.
