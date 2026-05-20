@@ -115,7 +115,7 @@ export async function closeReview(
   );
 
   // Serializzazione liste piano. doNowIds = tutti i task allocati (morning + afternoon + evening).
-  // top3Ids = primi 3 della mattina (slot di solito a piu' alta priorita').
+  // top3Ids = primi 3 del flat doNow (morning + afternoon + evening concatenati).
   const morningIds = input.preview.morning.map((t) => t.taskId);
   const afternoonIds = input.preview.afternoon.map((t) => t.taskId);
   const eveningIds = input.preview.evening.map((t) => t.taskId);

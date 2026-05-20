@@ -881,12 +881,23 @@ Slice 5/6.
     ma stesso input). Priorita' media, cardinale aperta: split in due tool
     separati `record_mood` + `record_energy` vs single tool con `{mood, energy}`
     esplicito.
-  - **#9 NEW -- `DailyPlan.top3Ids` non riflette `DailyPlanTask` quando piano
-    >3 task.** Emerso Scenario 2. Possibile semantica legacy del campo
-    `top3Ids` (esistente da prima di Slice 5-7) come "top 3 prioritari" e non
-    "tutti i task del piano". Priorita' media, indagine richiesta in
-    `src/lib/evening-review/close-review.ts` prima di decidere se bug o
-    invariante voluto.
+  - **#9 NEW [CHIUSO 2026-05-20 come non-bug -- invariante voluto] --
+    `DailyPlan.top3Ids` non riflette `DailyPlanTask` quando piano >3 task.**
+    Emerso Scenario 2. Indagine `close-review.ts` conclusa: `top3Ids` e' un
+    campo "subset highlight" by design, NON "tutti i task del piano".
+    Razionale: (1) commento autoritativo in `close-review.ts` sopra il
+    calcolo dichiara la semantica intesa; (2) spec test
+    `'top3Ids = primi 3 del flat doNow quando preview ha >3 task'` in
+    `close-review.test.ts` codifica l'invariante; (3) consumer UI in
+    `tasks/page.tsx` dipende dalla semantica subset (sezione evidenza max-3
+    + dedup `doNow MINUS top3`, che se invariante violato renderebbe la
+    sezione "Da fare ora" vuota); (4) pattern dei fratelli quadrant nel
+    modello `DailyPlan` (`top3Ids`, `doNowIds`, `scheduleIds`,
+    `delegateIds`, `postponeIds`, `pinnedIds`) -- tutti sottoinsiemi-
+    categoria, nessuno e' "tutti"; (5) `DailyPlanTask` esiste apposta per
+    "tutti i task con slot temporale" (Slice 7 BUG #B). Bug #9 era
+    un'aspettativa errata dell'osservatore Scenario 2 sulla semantica del
+    campo.
   - **#11 NEW -- `mark_what_blocked_asked` non-deterministico per
     `postponedCount>=3`.** Scattato in Scenario 2, NON scattato in Scenario 3
     e 6 per task con stato DB equivalente. Priorita' media, indagine richiesta
@@ -909,10 +920,10 @@ Slice 5/6.
     raccolta in retest: thread paused con `lastTurnAt` recente persiste come
     inconsistenza semantica osservabile in DB.
 
-  - **#9.** File da indagare: `src/lib/evening-review/close-review.ts` per
-    popolamento `top3Ids`. Ipotesi: hardcoded slice(0, 3) su lista pinned
-    ordinata, semantica "top 3 prioritari" non "tutti". Da confermare leggendo
-    il codice prima di proporre fix.
+  - **#9.** [RISOLTO 2026-05-20: indagine completata, conclusione invariante
+    voluto -- vedi bullet #9 in inventario per il razionale.] Ipotesi
+    originale "hardcoded slice(0, 3)" confermata come fatto (vero), errata
+    come bug: e' la semantica intesa del campo, non un residuo legacy.
 
   - **#2.** File da indagare: `src/features/chat/ChatView.tsx` per render
     `payloadJson.toolName`, oppure `EVENING_REVIEW_PROMPT` se "ok <toolname>"
