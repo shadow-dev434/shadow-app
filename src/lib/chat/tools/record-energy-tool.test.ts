@@ -36,4 +36,17 @@ describe('validateRecordEnergyArgs', () => {
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value).toBe(3);
   });
+
+  it("args con 'level' invece di 'value' -> reject con messaggio istruttivo (Anomalia A)", () => {
+    // Caratterizza il branch istruttivo aggiunto in Anomalia A V1.x: se il
+    // modello chiama record_energy con il param di set_user_energy ('level'),
+    // l'errore guida il self-recovery citando esplicitamente i due tool.
+    const r = validateRecordEnergyArgs({ level: 2 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error).toContain("'value'");
+      expect(r.error).toContain("'level'");
+      expect(r.error).toContain('set_user_energy');
+    }
+  });
 });

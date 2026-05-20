@@ -103,7 +103,10 @@ export const CHAT_TOOLS: LLMTool[] = [
   {
     name: 'set_user_energy',
     description:
-      'Registra il livello di energia dichiarato dall\'utente per oggi (1-5). Usa durante il morning checkin quando l\'utente dichiara la sua energia.',
+      "Registra il livello di energia dichiarato dall'utente per oggi (1-5). " +
+      "PARAMETRO: 'level' (NON 'value'). Esempio: { level: 3 }. Usa SOLO " +
+      "durante il morning checkin. Non confondere con record_energy della " +
+      "review serale (che usa 'value').",
     input_schema: {
       type: 'object',
       properties: {

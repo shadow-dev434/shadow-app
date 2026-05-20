@@ -27,11 +27,10 @@ export const RECORD_ENERGY_TOOL: LLMTool = {
   name: 'record_energy',
   description:
     "Registra il livello di energia 1-5 che l'utente dichiara al secondo " +
-    "turno della review serale (Q2, dopo Q1 sull'umore). Chiamare SOLO " +
-    "quando l'utente fornisce un numero (o un valore qualitativo che mappi " +
-    "univocamente a 1-5) in risposta alla domanda di energia. Il valore " +
-    "viene salvato come energyEnd della Review. Non confondere con " +
-    "record_mood (Q1 sull'umore) ne' con set_user_energy (morning checkin).",
+    "turno della review serale (Q2, dopo Q1 sull'umore). PARAMETRO: 'value' " +
+    "(NON 'level'). Esempio: { value: 3 }. Il valore viene salvato come " +
+    "energyEnd della Review. Non confondere con record_mood (Q1 sull'umore) " +
+    "ne' con set_user_energy del morning checkin (che usa 'level').",
   input_schema: {
     type: 'object',
     properties: {
@@ -57,7 +56,24 @@ export function validateRecordEnergyArgs(
   if (args === null || typeof args !== 'object') {
     return { ok: false, error: 'args deve essere un oggetto' };
   }
-  const raw = (args as Record<string, unknown>).value;
+  const argsObj = args as Record<string, unknown>;
+  const raw = argsObj.value;
+  // Slice 7 V1.x Anomalia A: detection esplicita confusione 'level'/'value'.
+  // set_user_energy (morning_checkin) usa { level }, record_energy (review
+  // serale) usa { value }: la co-presenza strutturale dei due tool durante
+  // evening_review per_entry energyPending genera la confusione (vedi
+  // smoking gun thread cmp8sdgk4). Branch istruttivo PRIMA del check generico
+  // su typeof, per guidare il self-recovery anziche' "value deve essere un
+  // intero" che non e' diagnostico.
+  if (raw === undefined && 'level' in argsObj) {
+    return {
+      ok: false,
+      error:
+        "il parametro si chiama 'value', NON 'level'. " +
+        "Possibile confusione con set_user_energy (morning checkin). " +
+        "Riprovare con { value: N } dove N e' 1-5.",
+    };
+  }
   if (typeof raw !== 'number' || !Number.isFinite(raw) || !Number.isInteger(raw)) {
     return { ok: false, error: 'value deve essere un intero' };
   }
