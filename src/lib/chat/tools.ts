@@ -67,6 +67,7 @@ import { MARK_WHAT_BLOCKED_ASKED_TOOL } from './tools/mark-what-blocked-asked-to
 import { handleMarkWhatBlockedAsked } from './tools/mark-what-blocked-asked-handler';
 import type { PreviewState } from '@/lib/evening-review/apply-overrides';
 import type { BuildDailyPlanPreviewInput } from '@/lib/evening-review/plan-preview';
+import { formatDateInRome } from '@/lib/evening-review/dates';
 
 export const CHAT_TOOLS: LLMTool[] = [
   {
@@ -513,7 +514,7 @@ async function executeGetTodayTasks(userId: string): Promise<ToolExecutionResult
       importance: t.importance,
       category: t.category,
       status: t.status,
-      deadline: t.deadline?.toISOString().split('T')[0] ?? null,
+      deadline: t.deadline ? formatDateInRome(t.deadline) : null,
     })),
   };
 }

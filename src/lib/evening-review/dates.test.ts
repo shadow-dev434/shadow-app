@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { addDaysIso, endOfDayInZone, formatDeadlineLabel } from './dates';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  addDaysIso,
+  endOfDayInZone,
+  formatDateInRome,
+  formatDeadlineLabel,
+  formatTodayInRome,
+} from './dates';
 
 describe('addDaysIso', () => {
   it('base case adds days to a mid-month date', () => {
@@ -114,5 +120,69 @@ describe('formatDeadlineLabel', () => {
     expect(formatDeadlineLabel('2026-05-26T18:00:00Z', '2026-05-16')).toBe(
       '2026-05-26 (tra 10 giorni)',
     );
+  });
+});
+
+describe('formatTodayInRome / formatDateInRome', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('near-midnight serale: 23:30 Rome CEST (21:30 UTC) -> data Rome odierna', () => {
+    vi.setSystemTime(new Date('2026-05-20T21:30:00Z'));
+    expect(formatTodayInRome()).toBe('2026-05-20');
+  });
+
+  it('near-midnight mattutino BUG TARGET: 01:30 Rome CEST (23:30 UTC giorno prima) -> data Rome, NON data UTC', () => {
+    // Bug target del refactor b-lite: 01:30 Rome del 2026-05-21 corrisponde
+    // a 2026-05-20T23:30Z. La vecchia convention UTC avrebbe restituito
+    // '2026-05-20' (giorno prima). La nuova convention Rome restituisce
+    // '2026-05-21' coerente con il calendario dell'utente italiano.
+    vi.setSystemTime(new Date('2026-05-20T23:30:00Z'));
+    expect(formatTodayInRome()).toBe('2026-05-21');
+  });
+
+  it('DST spring-forward (ultima domenica marzo 2026): data Rome corretta post-transition', () => {
+    // 2026-03-29T01:30Z = 03:30 CEST Rome (post-transition: l'ora 02:00-03:00
+    // wall-clock e' saltata localmente). Intl gestisce la transizione.
+    vi.setSystemTime(new Date('2026-03-29T01:30:00Z'));
+    expect(formatTodayInRome()).toBe('2026-03-29');
+  });
+
+  it('DST fall-back (ultima domenica ottobre 2026): data Rome corretta nella zona ambigua', () => {
+    // 2026-10-25T01:30Z cade nell'ora ambigua wall-clock (02:30 ripetuto).
+    // Intl resolve a uno dei due offset, ma la data resta 2026-10-25.
+    vi.setSystemTime(new Date('2026-10-25T01:30:00Z'));
+    expect(formatTodayInRome()).toBe('2026-10-25');
+  });
+
+  it("caratterizzazione DST-immunita': addDaysIso(formatTodayInRome(), -1) corretto su confini DST", () => {
+    // Il vecchio pattern (Date.now() - 86400000 ms) era UTC end-to-end, quindi
+    // tecnicamente DST-corretto in UTC ma Rome-sbagliato near-midnight. Il nuovo
+    // pattern addDaysIso opera su date pure YYYY-MM-DD via Date.UTC: e'
+    // DST-immune by construction (nessuna aritmetica su istanti, nessun rischio
+    // di skip/repeat su giorni 23h/25h locali).
+    //
+    // Giorno DOPO spring-forward (Mon 2026-03-30): yesterday Rome = 2026-03-29
+    // (giorno spring-forward, 23 wall-clock hours in Rome).
+    vi.setSystemTime(new Date('2026-03-30T10:00:00Z'));
+    expect(addDaysIso(formatTodayInRome(), -1)).toBe('2026-03-29');
+
+    // Giorno DOPO fall-back (Mon 2026-10-26): yesterday Rome = 2026-10-25
+    // (giorno fall-back, 25 wall-clock hours in Rome).
+    vi.setSystemTime(new Date('2026-10-26T10:00:00Z'));
+    expect(addDaysIso(formatTodayInRome(), -1)).toBe('2026-10-25');
+  });
+
+  it("formatDateInRome accetta una Date arbitraria e restituisce la data Rome (purezza)", () => {
+    // 2026-05-20T23:30Z = 01:30 CEST 2026-05-21 in Rome.
+    const d = new Date('2026-05-20T23:30:00Z');
+    expect(formatDateInRome(d)).toBe('2026-05-21');
+    // Determinismo: chiamate ripetute sullo stesso istante -> stesso output.
+    expect(formatDateInRome(d)).toBe('2026-05-21');
   });
 });

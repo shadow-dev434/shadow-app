@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { addDaysIso, formatTodayInRome } from '@/lib/evening-review/dates';
 
 // POST /api/review — save a daily review
 export async function POST(req: NextRequest) {
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { whatDone, whatAvoided, whatBlocked, restartFrom, mood, energyEnd, taskReviews } = body;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = formatTodayInRome();
 
     const review = await db.review.upsert({
       where: { userId_date: { userId, date: today } },
@@ -132,9 +133,11 @@ async function updatePatternsFromReview(
     const completedCount = taskReviews?.filter((tr) => tr.status === 'completed').length ?? 0;
     const avoidedCount = taskReviews?.filter((tr) => tr.status === 'avoided').length ?? 0;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = formatTodayInRome();
     const lastActive = patterns.lastActiveDate;
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    // DST-immune: addDaysIso opera su date pure YYYY-MM-DD (Date.UTC arithmetic),
+    // nessun rischio di skip/repeat su giorni 23h/25h locali Rome.
+    const yesterday = addDaysIso(today, -1);
     let streak = patterns.streakDays;
     if (lastActive === yesterday || lastActive === today) {
       if (lastActive !== today) streak += 1;

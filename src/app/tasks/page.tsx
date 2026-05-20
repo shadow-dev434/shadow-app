@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useShadowStore, type ViewMode, type ShadowTask, type MicroStep, type UserProfileData, type AIClassifyResult } from '@/store/shadow-store';
 import { STRICT_EXIT_STEPS, type ExitFrictionStep, type AdaptiveProfileData, type LearningSignalData, type AIInsight, type ProactiveTrigger, type NudgeMessage, type TaskRecommendation, type ProactiveChatbotResponse } from '@/lib/types/shadow';
+import { formatDateInRome } from '@/lib/evening-review/dates';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -2597,7 +2598,7 @@ function TaskDetailView() {
       });
       if (selectedTask.reminderAt) {
         const d = new Date(selectedTask.reminderAt);
-        setReminderDate(d.toISOString().split('T')[0]);
+        setReminderDate(formatDateInRome(d));
         setReminderTime(d.toTimeString().substring(0, 5));
       }
     }

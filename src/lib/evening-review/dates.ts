@@ -147,3 +147,34 @@ function ymdDeltaDays(fromYMD: string, toYMD: string): number {
   };
   return Math.round((ms(toYMD) - ms(fromYMD)) / 86_400_000);
 }
+
+/**
+ * Formatta un Date arbitrario come YYYY-MM-DD nel timezone Europe/Rome.
+ *
+ * Pattern simmetrico al blocco gia' presente in formatDeadlineLabel
+ * (Intl.DateTimeFormat en-CA timeZone Europe/Rome). Funzione pura:
+ * stesso input -> stesso output. Gestione DST (CET <-> CEST) delegata a
+ * Intl.DateTimeFormat.
+ *
+ * Use case: convertire una Date persistita (es. task.deadline, reminderAt,
+ * un iteratore di backfill streaks) nella data Rome-locale, per confronti
+ * con formatTodayInRome() o per render UI in Rome.
+ */
+export function formatDateInRome(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(date);
+}
+
+/**
+ * Restituisce YYYY-MM-DD per "oggi" in Europe/Rome.
+ *
+ * Convenience wrapper su formatDateInRome(new Date()). Impuro per
+ * costruzione (legge clock), ma deterministico dato l'istante corrente.
+ *
+ * Use case: convention Rome unificata per DailyPlan.date / Review.date /
+ * Streak.date (tech debt "date convention split", chiuso via b-lite).
+ * Defer Settings.timezone a Slice 9 quando arrivera' il primo utente
+ * non-Rome (regola di tre).
+ */
+export function formatTodayInRome(): string {
+  return formatDateInRome(new Date());
+}

@@ -7,6 +7,7 @@ import {
 import { buildDailyPlan, getCurrentTimeSlot } from '@/lib/engines/execution-engine';
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses, type ExecutionContext, type TaskRecord } from '@/lib/types/shadow';
+import { formatTodayInRome } from '@/lib/evening-review/dates';
 
 function toTaskRecord(t: Awaited<ReturnType<typeof db.task.findMany>>[0]): TaskRecord {
   return {
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = formatTodayInRome();
     const existingPlan = await db.dailyPlan.findUnique({
       where: { userId_date: { userId, date: today } },
     });
@@ -194,7 +195,7 @@ export async function GET(req: NextRequest) {
   if (error) return error;
 
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = formatTodayInRome();
     const plan = await db.dailyPlan.findUnique({
       where: { userId_date: { userId, date: today } },
       include: {

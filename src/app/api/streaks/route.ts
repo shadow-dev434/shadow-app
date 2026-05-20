@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { addDaysIso, formatDateInRome, formatTodayInRome } from '@/lib/evening-review/dates';
 
 // GET /api/streaks — Get streak data for visualization
 export async function GET(req: NextRequest) {
@@ -44,7 +45,7 @@ export async function GET(req: NextRequest) {
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = formatDateInRome(d);
       result.push({
         date: dateStr,
         ...(streakMap[dateStr] || { completed: 0, planned: 0, rate: 0 }),
@@ -99,10 +100,10 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Update user pattern streak
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    // Update user pattern streak.
+    // DST-immune: addDaysIso opera su date pure YYYY-MM-DD (Date.UTC arithmetic),
+    // nessun rischio di skip/repeat su giorni 23h/25h locali Rome.
+    const yesterdayStr = addDaysIso(formatTodayInRome(), -1);
 
     const yesterdayStreak = await db.streak.findUnique({
       where: { userId_date: { userId, date: yesterdayStr } },

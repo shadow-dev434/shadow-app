@@ -12,6 +12,7 @@ import { db } from '@/lib/db';
 import { orchestrate } from '@/lib/chat/orchestrator';
 import { isInsideEveningWindow } from '@/lib/evening-review/window';
 import { eveningReviewHasPriority } from '@/lib/evening-review/priority';
+import { formatTodayInRome } from '@/lib/evening-review/dates';
 
 export async function POST(req: NextRequest) {
   const { error, userId } = await requireSession(req);
@@ -175,10 +176,6 @@ async function shouldTriggerMorningCheckin(userId: string): Promise<boolean> {
  * regex TIME_PATTERN/DATE_PATTERN dei consumer (vedi window.ts e
  * active-thread/route.ts).
  *
- * formatTodayInRome e' duplicato locale di orchestrator.ts:514. La
- * duplicazione (3 righe) e' voluta in questo commit per non toccare
- * orchestrator.ts e mantenere il rollback semplice. Estrazione futura
- * in dates.ts come mini-task di pulizia separato.
  */
 function nowHHMMInRome(): string {
   const fmt = new Intl.DateTimeFormat('en-GB', {
@@ -193,6 +190,3 @@ function nowHHMMInRome(): string {
   return `${parts.hour}:${parts.minute}`;
 }
 
-function formatTodayInRome(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
-}

@@ -44,7 +44,7 @@ import {
   shouldSetTextOnlyFlag,
 } from './at-risk-detection';
 import { captureWhatBlocked } from '@/lib/evening-review/what-blocked-capture';
-import { formatDeadlineLabel } from '@/lib/evening-review/dates';
+import { formatDeadlineLabel, formatTodayInRome } from '@/lib/evening-review/dates';
 
 export type ChatMode =
   | 'morning_checkin'
@@ -890,6 +890,3 @@ function buildEveningReviewModeContext(
   return lines.join('\n');
 }
 
-function formatTodayInRome(): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date());
-}
