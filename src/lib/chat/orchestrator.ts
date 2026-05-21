@@ -37,7 +37,11 @@ import {
   loadPreviewStateFromContext,
   type PreviewState,
 } from '@/lib/evening-review/apply-overrides';
-import { reconstructEveningReviewPreview } from '@/lib/evening-review/preview-reconstruction';
+import {
+  reconstructEveningReviewPreview,
+  type ProfileRowForPreview,
+  type SettingsRowForPreview,
+} from '@/lib/evening-review/preview-reconstruction';
 import {
   shouldForceToolChoice,
   clearConsumedAtRiskFlags,
@@ -171,6 +175,24 @@ export async function orchestrate(
   let baseInput: BuildDailyPlanPreviewInput | null = null;
   let modeContext = '';
   let isFirstTurn = false;
+  // Hoist meccanico (Anomalia B Punto 1) per riuso nel rebuild mid-loop.
+  // Lette SOLO dentro l'if (mode === 'evening_review') del pre-call e dentro
+  // il wrapper mid-loop gated dallo stesso predicate -- mai lette in path
+  // non-evening_review. validatedClientDate inizializzato a stringa vuota:
+  // sentinella safe per TS (string non nullable richiesto da initEveningReview);
+  // riassegnata prima di qualunque uso dentro l'if.
+  let profileRow: ProfileRowForPreview | null = null;
+  let settingsRow: SettingsRowForPreview | null = null;
+  let validatedClientDate = '';
+
+  // Coerenza temporale dentro il turno (Anomalia B Punto 4): un unico Date
+  // catturato e riusato sia dal pre-call (reconstructEveningReviewPreview +
+  // buildEveningReviewModeContext) sia da un eventuale rebuild systemPrompt
+  // mid-loop. Evita drift a cavallo mezzanotte e divergenza dell'immunita'
+  // deadline (<=48h da now) tra pre-call e rebuild dello stesso turno.
+  // Scope come sopra: mai letti in path non-evening_review.
+  const turnNow = new Date();
+  const turnNowMs = turnNow.getTime();
 
   if (mode === 'evening_review') {
     const loaded = loadTriageStateFromContext(thread.contextJson);
@@ -184,7 +206,7 @@ export async function orchestrate(
     // Usato sia dall'init triage (sotto, via closure dell'IIFE) sia da
     // buildEveningReviewModeContext (formatDeadlineLabel). Hoist a const per
     // evitare di ricalcolare/divergere fra i due punti d'uso.
-    const validatedClientDate = input.clientDate ?? formatTodayInRome();
+    validatedClientDate = input.clientDate ?? formatTodayInRome();
     // Triage init/load + profile + settings in parallelo (Slice 6a).
     // Bundle in 1 round-trip DB invece di 2 sequenziali.
     const triageWork = (async (): Promise<{
@@ -206,11 +228,13 @@ export async function orchestrate(
       return { triageState: loaded, allTasks: tasks, isFirstTurn: false };
     })();
 
-    const [triageResult, profileRow, settingsRow] = await Promise.all([
+    const [triageResult, fetchedProfileRow, fetchedSettingsRow] = await Promise.all([
       triageWork,
       db.adaptiveProfile.findUnique({ where: { userId: input.userId } }).catch(() => null),
       db.settings.findFirst({ where: { userId: input.userId } }).catch(() => null),
     ]);
+    profileRow = fetchedProfileRow;
+    settingsRow = fetchedSettingsRow;
     triageState = triageResult.triageState;
     allTasks = triageResult.allTasks;
     isFirstTurn = triageResult.isFirstTurn;
@@ -228,17 +252,25 @@ export async function orchestrate(
       profileRow,
       settingsRow,
       pendingPreviewState,
-      now: new Date(),
+      now: turnNow,
     });
     // Espone baseInput al fuori-branch per uso in 3g.7 (multi-iteration loop
     // dispatching tool). Local const evita TS narrowing perso su `let` dichiarato
     // fuori dal branch.
     baseInput = localBaseInput;
 
-    modeContext =
-      buildEveningReviewModeContext(triageState, isFirstTurn, allTasks, Date.now(), validatedClientDate) +
-      '\n\n' +
-      formatPlanPreviewForPrompt(preview);
+    // Anomalia B (gate pre-call): in fase per_entry il preview NON viene
+    // appeso al modeContext. La presenza del blocco PIANO_DI_DOMANI_PREVIEW
+    // durante il walk delle entry e' l'attrattore che faceva saltare il walk
+    // in ~1/3 dei turni. derivePhase qui collassa a sticky/currentPhase ->
+    // isPreviewPhaseActive(triageState): pendingPhase e' ancora null pre-loop.
+    const effectivePhasePre = derivePhase(pendingPhase, triageState, currentPhase);
+    modeContext = buildEveningReviewModeContext(
+      triageState, isFirstTurn, allTasks, turnNowMs, validatedClientDate,
+    );
+    if (effectivePhasePre !== 'per_entry') {
+      modeContext += '\n\n' + formatPlanPreviewForPrompt(preview);
+    }
 
     // 6c (G.D7): PHASE_MARKER esposto al modello come trigger autoritativo
     // per FASE CLOSING dei turni successivi. Solo 'closing' viene marker-ato:
@@ -270,7 +302,9 @@ export async function orchestrate(
   const isStructuredMode = mode !== 'general';
   const modelTier = isStructuredMode ? 'smart' : 'fast';
 
-  const systemPrompt = buildSystemPrompt(mode, userContext, modeContext, voiceProfile);
+  // `let` (non `const`) per consentire il rebuild mid-loop su transizione di
+  // fase evening_review (Anomalia B Blocco 3). Vedi wrapper nel while-loop.
+  let systemPrompt = buildSystemPrompt(mode, userContext, modeContext, voiceProfile);
 
   let totalCost = 0;
   let totalTokensIn = 0;
@@ -353,6 +387,16 @@ export async function orchestrate(
     dailyPlanId: string;
     alreadyClosed: boolean;
   } | null = null;
+
+  // Anomalia B Blocco 3: traccia la phase all'inizio di ogni iter per rilevare
+  // transizione per_entry -> !per_entry (rebuild systemPrompt con preview) o
+  // !closing -> closing senza passare da per_entry (append PHASE_MARKER puro).
+  // Calcolata SOLO in evening_review; nei modes diversi resta undefined e il
+  // wrapper interno al while-loop e' gated da `mode === 'evening_review'`.
+  let phasePrev: EveningReviewPhase | undefined =
+    mode === 'evening_review'
+      ? derivePhase(pendingPhase, pendingTriageState, currentPhase)
+      : undefined;
 
   // ── 7. Tool-use loop (multi-iteration with cap) ─────────────────────
   let iteration = 0;
@@ -464,6 +508,52 @@ export async function orchestrate(
       })),
     });
 
+    // Anomalia B Blocco 3: rebuild systemPrompt mid-loop su transizione di
+    // fase evening_review dentro l'iter tool.
+    //   2(i)  per_entry -> !per_entry: ricostruisci preview con triageState
+    //         post-tool (turnNow/turnNowMs catturati una volta a inizio turno,
+    //         Punto 4) e ricostruisci systemPrompt. Preview ricompare same-turn
+    //         -> il modello presenta il piano nello stesso turno della
+    //         last-mark, preservando UX di chiusura a mossa singola.
+    //   2(ii) closing entry mid-loop SENZA passare da per_entry (cioe' 2(i)
+    //         non e' scattato): append PURO di PHASE_MARKER al systemPrompt
+    //         esistente. NIENTE reconstructEveningReviewPreview: il preview
+    //         era gia' visibile dal pre-call gate. Evita doppia ricostruzione
+    //         e divergenza preview pre-call vs rebuild (immunita' deadline).
+    //   phasePrev = phasePost ULTIMA ISTRUZIONE INCONDIZIONATA del wrapper:
+    //         su OGNI path l'aggiornamento avviene, garantendo che 2(ii) sia
+    //         idempotente (iter successive vedono phasePrev='closing' e
+    //         skippano).
+    if (mode === 'evening_review') {
+      const phasePost = derivePhase(pendingPhase, pendingTriageState, currentPhase);
+      if (phasePrev === 'per_entry' && phasePost !== 'per_entry' && pendingTriageState !== null && allTasks !== null) {
+        const { preview: previewPost } = reconstructEveningReviewPreview({
+          triageState: pendingTriageState,
+          allTasks,
+          profileRow,
+          settingsRow,
+          pendingPreviewState,
+          now: turnNow,
+        });
+        let modeContextPost =
+          buildEveningReviewModeContext(
+            pendingTriageState, false, allTasks, turnNowMs, validatedClientDate,
+          ) + '\n\n' + formatPlanPreviewForPrompt(previewPost);
+        if (phasePost === 'closing') {
+          modeContextPost += '\n\nPHASE_MARKER: closing';
+        }
+        systemPrompt = buildSystemPrompt(mode, userContext, modeContextPost, voiceProfile);
+      }
+      if (
+        phasePost === 'closing' &&
+        phasePrev !== 'closing' &&
+        phasePrev !== 'per_entry'
+      ) {
+        systemPrompt += '\n\nPHASE_MARKER: closing';
+      }
+      phasePrev = phasePost;
+    }
+
     // V1.3: NO toolChoice on multi-iteration loop (already auto-driven by tool_results)
     // Slice 7 BUG #A: pendingPhase wins on currentPhase perche' un
     // confirm_plan_preview eseguito in iter precedente (stesso turno) puo'
@@ -528,16 +618,9 @@ export async function orchestrate(
   // da confirm_plan_preview) wins. 'closing' e 'plan_preview' espliciti sono
   // sticky: una volta entrati, drift via tool triage out-of-scope non degrada
   // per derivazione. Altrimenti deriviamo live da pendingTriageState per
-  // migration in graduale dei thread pre-6c.
-  const effectivePhase: EveningReviewPhase | undefined = (() => {
-    if (pendingPhase !== null) return pendingPhase;
-    if (currentPhase === 'closing') return 'closing';
-    if (currentPhase === 'plan_preview') return 'plan_preview';
-    if (pendingTriageState !== null) {
-      return isPreviewPhaseActive(pendingTriageState) ? 'plan_preview' : 'per_entry';
-    }
-    return currentPhase;
-  })();
+  // migration in graduale dei thread pre-6c. Logica estratta in derivePhase
+  // (file-locale) per dedup con il rebuild systemPrompt mid-loop (Anomalia B).
+  const effectivePhase = derivePhase(pendingPhase, pendingTriageState, currentPhase);
 
   // V1.3.2 SET lastTurnWasTextOnly: predicate 5-componenti in
   // shouldSetTextOnlyFlag (vedi JSDoc per descrizione e Known Issue 2).
@@ -747,6 +830,32 @@ async function initEveningReview(
  * proporli o ignorarli. Se vorremo congelare anche l'inbox, salvare
  * allTaskIds in triageState al primo turno.
  */
+/**
+ * Deriva la phase effettiva del turno evening_review.
+ *
+ * Estratto da una IIFE inline post-loop per consentire la stessa logica anche
+ * pre-call (gate Anomalia B) e mid-loop (rebuild systemPrompt su transizione
+ * per_entry -> !per_entry). Logica identica all'IIFE originaria; nessuna
+ * variazione di comportamento.
+ *
+ * Priorita': pendingPhase esplicito -> currentPhase sticky ('closing' o
+ * 'plan_preview') -> derivazione live da pendingTriageState via
+ * isPreviewPhaseActive -> fallback currentPhase.
+ */
+function derivePhase(
+  pendingPhase: EveningReviewPhase | null,
+  pendingTriageState: TriageState | null,
+  currentPhase: EveningReviewPhase | undefined,
+): EveningReviewPhase | undefined {
+  if (pendingPhase !== null) return pendingPhase;
+  if (currentPhase === 'closing') return 'closing';
+  if (currentPhase === 'plan_preview') return 'plan_preview';
+  if (pendingTriageState !== null) {
+    return isPreviewPhaseActive(pendingTriageState) ? 'plan_preview' : 'per_entry';
+  }
+  return currentPhase;
+}
+
 function buildEveningReviewModeContext(
   triageState: TriageState,
   isFirstTurn: boolean,

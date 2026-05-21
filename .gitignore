@@ -19,4 +19,5 @@ scripts/debug-*.ts
 scripts/cleanup-blocker-*.ts
 scripts/temp-*.ts
 scripts/replay-*.ts
+scripts/dump-*.ts
 scripts/cleanup-evening-review-failed-bug13.ts

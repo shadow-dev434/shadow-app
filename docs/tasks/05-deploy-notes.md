@@ -1169,6 +1169,57 @@ La sezione "Slice 7 V1.x -- retest residui Bug #1 + Bug #3 (2026-05-15)" afferma
 
 Working tree clean. Nessun commit Bug #1 o Bug #3 prodotto. Alberto in stato di partenza sano per nuova sessione: storia legittima preservata (Review 2026-05-14, 1 thread evening_review completed + 4 archived inclusi i 2 falliti di oggi), 2 task gmail residui da seed precedenti, 0 thread evening_review active/paused, 0 Review oggi. Finestra serale alberto ripristinata a 20:00-23:00.
 
+## Anomalia B -- hardening strutturale C-contenuta (2026-05-21)
+
+**Esito sessione:** fix C-contenuta committato come hardening strutturale (non come fix di bug riprodotto, baseline 0/6 FAIL). Suite 438 verde, typecheck pulito (solo TS2739 pre-esistente in scripts/replay-close-review intoccato). Stash A3 non poppato, candidato hardening prompt separato.
+
+### Causa strutturale (diagnosi Fase 0 chiusa)
+
+In fase per_entry il blocco PIANO_DI_DOMANI_PREVIEW veniva appeso al modeContext a ogni turno del branch evening_review, anche durante il walk delle candidate. Il prompt sezione FASE PIANO_PREVIEW istruisce il modello a presentare il piano quando vede il blocco -- istruzione legittima in fase plan_preview, segnale falso in per_entry. La contraddizione era latente in ogni turno per_entry e si attivava sotto condizioni disorganizzanti della history. Diagnosi consolidata fine sessione precedente, non riaperta.
+
+### Fix C-contenuta (modulo orchestrator)
+
+- **Gate pre-call:** il preview non viene appeso quando la fase effettiva calcolata e' per_entry. derivePhase estratto in helper file-locale per riusarlo pre-call e mid-loop senza duplicare la IIFE post-loop esistente.
+- **Rebuild systemPrompt mid-loop:** su transizione per_entry -> non-per_entry dentro l'iter tool (es. mark_entry_discussed sull'ultima entry), il systemPrompt viene ricostruito con preview visibile. Preserva la presentazione same-turn -- comportamento misurato 3/3 su thread reali della Fase 0 -- evita la regressione UX di un turno aggiuntivo al confine chiusura.
+- **Append PHASE_MARKER closing mid-loop puro** (caso plan_preview -> closing dentro l'iter): solo append della stringa marker al systemPrompt esistente, NIENTE reconstructEveningReviewPreview. Evita doppia computazione e divergenza di immunita' deadline tra pre-call e rebuild.
+- **Coerenza temporale:** un unico Date catturato a inizio turno (turnNow + turnNowMs) riusato sia dal pre-call sia dal rebuild mid-loop, neutralizza drift mezzanotte e divergenza dell'immunita' deadline <=48h.
+- **Idempotenza:** phasePrev tracciato pre-loop e aggiornato come ultima istruzione incondizionata del wrapper. Su transizione per_entry -> closing same-turn, il rebuild 2(i) include gia' il marker; il branch 2(ii) e' protetto da predicate phasePrev !== per_entry. No doppio marker.
+
+Modifiche: src/lib/chat/orchestrator.ts (35 righe codice nuovo, ~70 righe commento esplicativo) + nuovo test src/lib/chat/orchestrator-phase-rebuild test ts (2 test caratterizzazione: preview assente in per_entry, preview presente dopo transizione mid-loop). Asserzione ancorata alla stringa di header del blocco preview piu' il primo slot a inizio riga -- discrimina il preview reale dall'esempio formattato del prompt statico (indentato 2 spazi). Commento ANCORA STRUTTURALE nel file di test documenta la fragilita': se in futuro si ri-indenta la sezione descrittiva del prompt, la discriminazione salta in silenzio.
+
+### Trigger noti chiusi da commit precedenti
+
+- **Anomalia A in a96906e** (fix chat disambiguate record_energy param): la shape ambigua di record_energy disambiguata via description tool + validator istruttivo. Il dump cmp8sdgk4 mostra doppia chiamata record_energy con shape {level} e shape {value} accompagnata al salto al piano: trigger oggettivo del caso storico.
+- **Bug #1 in 246a338** (fix slice-7 gating tool + validator mood/energy intake): B1 + B2. B1 espone record_mood e record_energy solo se la dimensione corrispondente e' undefined (gia' registrata = tool gated out). B2 cross-check del value con l'ultimo userMessage via extractMoodEnergyValue. Chiude la registrazione inventata al T1 sotto force tool_choice (failure mode a/b della diagnosi 2026-05-16).
+
+### Baseline E2E pre-fix
+
+Pre-registrazione congelata in docs/tasks/05-anomalia-b-prereg dot md (scenario V2 = sequenza esatta dal dump cmp8sdgk4: iniziamo, dimmi, 4, 2 -- turno-osservazione al 4o turno bot, dopo la risposta energy). 6 run su a96906e -- 0 FAIL / 6 PASS. record_energy shape pulita in tutti, nessuna doppia chiamata, nessun salto al piano. La soglia di procedibilita' (>=2/6 FAIL ancorata alla frequenza stimata ~1/3) NON raggiunta -- evento di sospensione pre-reg attivato.
+
+### Lettura del dato (criterio di interpretazione 0/6)
+
+La pre-reg includeva un criterio dedicato all'ambiguita' dello 0/6: due letture opposte sono entrambe coerenti col dato. Lettura (i) scenario non sporca abbastanza, ridisegno piu' evasivo. Lettura (ii) i trigger noti erano la condizione scatenante, B e' inerte una volta chiusi -- C-contenuta ridondante per lo scenario testato. I 6 run mostrano pattern (ii): walk PULITO (set_current_entry presente al turno-osservazione in tutti, no confusione mood/energy intermedia, no doppia record_energy). Quindi lo scenario V2 specifico non riproduce B su a96906e.
+
+### Decisione R6: hardening strutturale
+
+C-contenuta tenuta NON come fix di bug riprodotto, ma come HARDENING. Razionale documentato:
+
+- La contraddizione di prompt resta oggettiva nel codice indipendentemente dal trigger -- e' una proprieta' strutturale del modeContext in per_entry, non una conseguenza di Anomalia A o Bug #1.
+- Trigger plausibili documentati-aperti che potrebbero attivare la stessa contraddizione: Known Issue 2 di Slice 5 V1.3.2 (predicate text-only mis-scoped sul turno 1 opening, ma anche su walk interrotto mid-flow patologico), firstTurnAfterResume in scenari con preview gia' visibile e walk in corso, decomposition workspace pending. Nessuno di questi e' coperto dai fix dei trigger noti (Anomalia A, Bug #1) che agiscono sull'intake mood/energy.
+- Cost di tenere il fix: 35 righe codice + 2 test, suite verde 438/438. Cost di rimuoverlo dopo averlo scritto: stessa storia git per un fix corretto in re-apply futuro se un nuovo FAIL emerge.
+
+Decisione assunta sui dati osservati, non come autorita' di "pulizia preventiva".
+
+### Stato repo al termine
+
+- Working tree con commit (vedi git log -1) post-pop dello stash etichettato C-contenuta.
+- Stash residuo: stash@{0} = "On main: Anomalia B A3 baseline test", candidato hardening prompt few-shot POS-MOOD-A3 archiviato per sessione dedicata. NON applicato.
+- Niente push (decisione Giulio separata).
+
+### Lezione operativa
+
+"Suite verde non chiude la voce" e' valido anche per fix prompt-side / comportamento LLM EVANESCENTE rispetto a un trigger gia' chiuso: la baseline empirica scopre che il bug non si riproduce, ma questo non e' uguale a "fix inutile". Una contraddizione strutturale del prompt resta tale a prescindere dalla riproducibilita' di un singolo trigger. R6 Giulio: la decisione "tenere/rimuovere" un fix che non chiude un bug riprodotto e' R6, non automatica. La pre-reg in retrospettiva e' servita anche a discriminare la lettura del dato (criterio di interpretazione 0/6 aggiunto a freddo prima dei run, non costruito ex-post): senza quel criterio lo 0/6 sarebbe stato ambiguo fra (i) e (ii), e la decisione finale sarebbe stata piu' fragile.
+
 ## Backlog pulizia documentale -- post-sessione autonomia 2026-05-19/20
 
 Emerso durante la PRIMA SESSIONE autonomia (2026-05-19/20), 5 commit chiusi `7e0d15a..339f799` (seed-bug13 today-aware, CLAUDE.md Troubleshooting Windows, extract preview reconstruction, validate previewState shape, declass Bug #9). Le 3 voci sotto sono **debito cosmetico/documentale a bassa priorita', NON blocker pre-Slice 8** (a differenza dell'inventario bug V1.x). Affrontabili in una futura sessione di pulizia documentale, non urgenti.
