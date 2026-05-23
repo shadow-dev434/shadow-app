@@ -1228,4 +1228,62 @@ Emerso durante la PRIMA SESSIONE autonomia (2026-05-19/20), 5 commit chiusi `7e0
 
 - **Commento obsoleto in `orchestrator.test.ts` (riga ~297-299 al 2026-05-20).** Documenta `loadPreviewStateFromContext` come hazard attuale con il testo letterale: "loadPreviewStateFromContext non valida i campi del previewState parsed e li ritorna as-is; se passassimo un literal {} crasheremmo in applyPreviewOverrides su state.removedTaskIds". Post-commit `5fddc6d` (voce 4 sessione, Bug #5 chiuso) la shape e' validata da `isValidPreviewState` in `apply-overrides.ts`: il commento descrive una vulnerabilita' FIXED. Da aggiornare a "FIXED Bug #5, validation added in apply-overrides.ts" oppure rimuovere. Localizzazione stabile via grep sul testo del commento (le righe possono driftare; il riferimento di riga e' un hint approssimativo datato).
 
+## Cicatrici ambientali E2E -- sessione walk-state-loss 2026-05-23 (V1.2.3, commit `db88679`)
+
+Emerse durante baseline 5 + retest 5 del fix V1.2.3 walk-state-loss (pre-reg
+`docs/tasks/06-walk-state-loss-prereg.md`). Pattern operativi ricorrenti che NON
+sono codice Shadow ma toolchain Windows + Bun + Neon. Da consultare prima di
+prossime E2E manuali con dev server + DB.
+
+- **`cmd /c "bun run dev"` + Ctrl+C su Windows non sempre propaga SIGINT al child
+  bun/node.** Il processo bun resta orfano: file log `dev-*.log` lock-ato (`mv`
+  fallisce con `Device or resource busy`) + porta 3000 ancora `LISTENING`.
+  Workaround: dopo Ctrl+C verificare `netstat -ano | findstr :3000`; se ancora
+  `LISTENING`, identificare il PID e `Stop-Process -Id <PID> -Force` (o
+  `taskkill /PID <PID> /F /T`). Stato `TIME_WAIT` invece e' socket residua in
+  chiusura automatica, niente da killare. Osservato ricorrentemente: dopo ogni
+  run dei 10 totali e' stato necessario verificare il rilascio prima di
+  archiviare il log.
+
+- **Neon serverless autosospende il branch dopo idle.** Prima query DB
+  post-pausa lunga (es. dopo pranzo, dopo riavvio PC, dopo dev fermato per
+  >5 min) puo' restituire `Can't reach database server at <host>:5432` oppure
+  Prisma `P2028 Transaction not found. Transaction ID is invalid, refers to an
+  old closed transaction`. Workaround: retry semplice della stessa query dopo
+  ~5s di attesa, il wake-up del compute Neon e' automatico. Osservato 2 volte
+  nella sessione: una con connection-error, una con P2028 mid-transaction
+  (transazione rollback-ata completamente, sicuro retry).
+
+- **PowerShell `*>` redirect produce file UTF-16 LE con BOM** (default encoding
+  PS 5.1 per i redirect cmdlet-side). Grep ASCII su quel file restituisce ZERO
+  match anche su pattern presenti (i caratteri sono "byte spaziati" per il
+  parser ASCII). Workaround vincolante per i log dev che vanno parsati con
+  grep/Get-Content -Pattern: avviare dev con
+  `cmd /c "bun run dev > log 2>&1"` invece di `bun run dev *> log`. `cmd /c`
+  redirige byte-raw a livello file descriptor del processo nativo, output
+  UTF-8 native come il dev `console.warn`/`console.log` lo produce, leggibile
+  da grep direttamente. Confermato funzionante per 9 dei 10 retest+baseline
+  log (l'unico UTF-16 e' il baseline run 1 da prima del fix, letto manualmente
+  decodificando). Alternativa `2>&1 | Out-File -Encoding utf8` e' anti-pattern
+  PS 5.1 (NativeCommandError wrapping su native exe stderr).
+
+### Domanda aperta backlog: `firstTurnAfterResume` clear nel path entryId-nuovo
+
+Scoperto durante la stesura test V1.2.3, scenario (iv) in `tools.test.ts`
+(`V1.2.3 escape hatch: firstTurnAfterResume skips guard`). Il clear di
+`firstTurnAfterResume` nel `set_current_entry` esiste solo nel fast-path
+stesso-entryId ([tools.ts:720-722]) e in `mark_entry_discussed`
+([tools.ts:922-924]). Nel path "entryId nuovo + `setCurrentEntry` helper" il
+clear non c'e' mai stato. V1.2.3 preserva la semantica esistente, NON aggiunge
+clear in path nuovo.
+
+**Domanda aperta** (formulazione verbatim da non riscrivere come "fix da
+fare"): *Verificare se `firstTurnAfterResume` non-clearato nel path
+entryId-nuovo lascia il guard V1.2.3 bypassabile alla SECONDA mossa post-resume
+(escape hatch che ri-scatta quando non sei piu' first-turn). La riga di fix e'
+facile; il lavoro e' capire se serve. Da ridiscutere a freddo.*
+
+Riferimento: scoperta durante test V1.2.3 commit `db88679`, scenario (iv)
+`tools.test.ts`.
+
 - **Nota di processo: `bun test` vs `bun run test`.** Lezione operativa emersa voce 1 sessione. Il comando `bun test` (presente in briefing voce 1) invoca il runner nativo Bun, privo delle API `vi.*` di vitest: produce falsi-fail `vi.mocked is not a function` su tutta la suite. Comando corretto per vitest e' `bun run test` (script `test` in `package.json` = `vitest run`). Pro-memoria per future sessioni, agenti, briefing.

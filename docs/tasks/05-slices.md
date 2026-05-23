@@ -224,3 +224,50 @@ Replicato da Slice 1 perché ha funzionato:
 ---
 
 *Documento di pianificazione. Aggiornare quando una slice si chiude (segnando ✅ + commit hash) o quando emerge una decisione che cambia l'ordine.*
+
+---
+
+## Voci sospese — aggiornamenti stato 2026-05-23 (post walk-state-loss V1.2.3, commit `db88679`)
+
+Le due voci sotto erano bloccate a valle del bug walk-state-loss. Il fix V1.2.3
+(retest 5/5 PASS pieno, walk completo a `plan_preview`) le sblocca con un ordine
+specifico.
+
+### Bug #7 (in `plan_preview`, override conversazionale non chiama `update_plan_preview`) — SBLOCCATO
+
+**Stato precedente:** BLOCCATO. Il walk non arrivava a `plan_preview` quando il
+modello saltava il `mark_entry_discussed` mid-walk: senza `plan_preview` non si
+poteva esercitare il bug #7 (che vive in quella fase). Pre-reg
+`docs/tasks/05-bug7-prereg.md` congelata ma con scenario a 8 entry calibrato
+sul walk lungo (vedi sezione "Sequenza utente").
+
+**Stato attuale:** SBLOCCATO. Retest V1.2.3 dimostra 5/5 walk completo fino a
+`plan_preview` (sentinella R6 cancelled+archived). Bug #7 ora riproducibile
+con walk corto 2-3 entry come Giulio aveva deciso a freddo nella sessione
+walk-state-loss (3 entry sono sufficienti a portare il modello in
+`plan_preview` con il fix V1.2.3 attivo) — il setup a 8 entry originale e'
+non piu' necessario, riduce rumore.
+
+Pre-reg `docs/tasks/05-bug7-prereg.md` resta untracked, intatta nello scope.
+Da rivedere prima della riapertura: lo scenario va riformulato a 3 entry
+oppure documentato come "scenario v1 a 8 entry resta valido ma costoso, v2
+proposto a 3 entry".
+
+### Caching prompt — ordine vincolato dopo Bolletta
+
+**Stato precedente:** voce rinviata "su prompt stabilizzato".
+
+**Stato attuale:** vincolo d'ordine esplicitato. Il prompt SELF-CORRECTION
+HANDLING (parte del fix V1.2.3 commit `db88679`) NON e' ancora stabilizzato:
+il known issue Bolletta outcome non-deterministico (postponed/parked/kept su
+stesso stimolo, vedi `docs/tasks/06-walk-state-loss-prereg.md` sezione "R6
+prodotto Bolletta") richiede una ricalibrazione del CASO `previousEntryOpen`
+(anti-kept-passivo da rendere meno aggressivo su entry non-menzionata).
+
+**Ordine finale:** ricalibrazione Bolletta → caching prompt. NON caching
+diretto. Caching su prompt che cambiera' invalida la cache al primo deploy
+del fix-Bolletta.
+
+Ticket Bolletta vive nel backlog prodotto di Giulio (NON in repo), evidenza
+in `docs/tasks/06-walk-state-loss-prereg.md`. Caching prompt resta voce
+documentale qui finche' Bolletta non e' chiusa.
