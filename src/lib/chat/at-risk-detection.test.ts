@@ -3,6 +3,7 @@ import {
   shouldForceToolChoice,
   clearConsumedAtRiskFlags,
   shouldSetTextOnlyFlag,
+  extractSelfCorrectionTrigger,
 } from './at-risk-detection';
 import type { TriageState } from '@/lib/evening-review/triage';
 import type { ChatMode } from './orchestrator';
@@ -223,4 +224,66 @@ describe('shouldSetTextOnlyFlag', () => {
       expect(result).toBe(true);
     },
   );
+});
+
+describe('extractSelfCorrectionTrigger', () => {
+  it('identifica i 3 trigger (alreadyClosed | alreadyOpen | previousEntryOpen), null altrimenti, priority order, input non-object', () => {
+    // V1.2 mark guard
+    expect(
+      extractSelfCorrectionTrigger({ alreadyClosed: true, entryId: 'x' }),
+    ).toEqual({ trigger: 'alreadyClosed', entryId: 'x' });
+
+    // V1.2.2 set guard
+    expect(
+      extractSelfCorrectionTrigger({ alreadyOpen: true, entryId: 'y' }),
+    ).toEqual({ trigger: 'alreadyOpen', entryId: 'y' });
+
+    // V1.2.3 set guard (nuovo)
+    expect(
+      extractSelfCorrectionTrigger({ previousEntryOpen: true, entryId: 'z' }),
+    ).toEqual({ trigger: 'previousEntryOpen', entryId: 'z' });
+
+    // entryId opzionale: assente -> undefined nel return
+    expect(
+      extractSelfCorrectionTrigger({ previousEntryOpen: true }),
+    ).toEqual({ trigger: 'previousEntryOpen', entryId: undefined });
+
+    // Nessun discriminator true -> null
+    expect(extractSelfCorrectionTrigger({})).toBeNull();
+    expect(
+      extractSelfCorrectionTrigger({
+        alreadyClosed: false,
+        alreadyOpen: false,
+        previousEntryOpen: false,
+      }),
+    ).toBeNull();
+
+    // Triple === true: undefined / falsy != true non triggera (cicatrice Tech debt #18)
+    expect(
+      extractSelfCorrectionTrigger({ alreadyClosed: undefined, alreadyOpen: 1 }),
+    ).toBeNull();
+
+    // Input non-object / null
+    expect(extractSelfCorrectionTrigger(null)).toBeNull();
+    expect(extractSelfCorrectionTrigger(undefined)).toBeNull();
+    expect(extractSelfCorrectionTrigger('string')).toBeNull();
+    expect(extractSelfCorrectionTrigger(42)).toBeNull();
+
+    // Priority order: alreadyClosed > alreadyOpen > previousEntryOpen (primo match vince)
+    expect(
+      extractSelfCorrectionTrigger({
+        alreadyClosed: true,
+        alreadyOpen: true,
+        previousEntryOpen: true,
+        entryId: 'p',
+      }),
+    ).toEqual({ trigger: 'alreadyClosed', entryId: 'p' });
+    expect(
+      extractSelfCorrectionTrigger({
+        alreadyOpen: true,
+        previousEntryOpen: true,
+        entryId: 'q',
+      }),
+    ).toEqual({ trigger: 'alreadyOpen', entryId: 'q' });
+  });
 });

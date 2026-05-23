@@ -46,6 +46,7 @@ import {
   shouldForceToolChoice,
   clearConsumedAtRiskFlags,
   shouldSetTextOnlyFlag,
+  extractSelfCorrectionTrigger,
 } from './at-risk-detection';
 import { captureWhatBlocked } from '@/lib/evening-review/what-blocked-capture';
 import { formatDeadlineLabel, formatTodayInRome } from '@/lib/evening-review/dates';
@@ -450,26 +451,19 @@ export async function orchestrate(
         }
         // V1.3: detection self-correction guard failure -> set
         // selfCorrectedInPreviousTurn=true in pendingTriageState. Pattern split
-        // beta: handler V1.2/V1.2.2 ritornano sideEffect failure con data
-        // strutturato (alreadyClosed=true OR alreadyOpen=true), orchestrator
-        // detecta e setta il flag che triggera forced tool_choice nel turno
-        // successivo. Vincolo lessicale "alreadyClosed"/"alreadyOpen"
-        // triangolato con tools.ts (V1.2 mark guard, V1.2.2 set guard) e
-        // tools.test.ts (data assertion exact via toEqual). Refactor a
-        // interface nominale e' tech debt fuori scope V1.3.
+        // beta: handler V1.2/V1.2.2/V1.2.3 ritornano sideEffect failure con data
+        // strutturato (alreadyClosed | alreadyOpen | previousEntryOpen).
+        // Detection estratta in at-risk-detection.ts (Tech debt #18) come pure
+        // function extractSelfCorrectionTrigger. Log format preservato per
+        // continuita' grep telemetria [V1.3 forced tool_choice].
         // Counterpart: clear in handler success path (mark/set Path 1) - vedi tools.ts.
-        if (result.kind === 'sideEffect' && result.data && typeof result.data === 'object') {
-          const data = result.data as {
-            alreadyClosed?: boolean;
-            alreadyOpen?: boolean;
-            entryId?: string;
-          };
-          if ((data.alreadyClosed === true || data.alreadyOpen === true) && pendingTriageState !== null) {
-            const trigger = data.alreadyClosed === true ? 'alreadyClosed' : 'alreadyOpen';
+        if (result.kind === 'sideEffect' && pendingTriageState !== null) {
+          const trig = extractSelfCorrectionTrigger(result.data);
+          if (trig !== null) {
             pendingTriageState = { ...pendingTriageState, selfCorrectedInPreviousTurn: true };
             console.warn(
               `[V1.3 forced tool_choice] orchestrator set selfCorrectedInPreviousTurn=true ` +
-              `(trigger: ${trigger} on entryId=${data.entryId ?? 'unknown'})`,
+              `(trigger: ${trig.trigger} on entryId=${trig.entryId ?? 'unknown'})`,
             );
           }
         }

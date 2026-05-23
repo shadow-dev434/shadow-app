@@ -655,6 +655,53 @@ async function executeSetCurrentEntry(
     return { kind: 'sideEffect', success: false, error: `Task ${entryId} not found or not owned by user` };
   }
 
+  // V1.2.3 skipped-mark detection: se esiste una entry corrente APERTA
+  // (outcomes[currentEntryId] === undefined) e il modello chiama
+  // set_current_entry su una entry DIVERSA, il modello sta saltando la
+  // chiusura del task corrente prima di passare al prossimo. Pattern reale
+  // osservato (thread cmpgoa9f5001jib6stjfys72r): turno N apre bolletta,
+  // turno N+1 apre bozza senza marcare bolletta. Famiglia V1.2/V1.2.2 ma
+  // ortogonale: V1.2.2 protegge currentEntryId === entryId (ri-apertura),
+  // V1.2.3 protegge currentEntryId !== entryId (salto-mark).
+  //
+  // Disgiunzione strutturale: precondition `currentEntryId !== entryId`
+  // separa V1.2.3 dal ramo V1.2.2. Ordine fisico: V1.2.3 PRIMA per
+  // leggibilita' (check sul ramo nuovo prima di quello stesso-entry).
+  //
+  // parked e' un outcome valido (re-attach legittimo): precondition
+  // `outcomes[currentEntryId] === undefined` esclude parked (parked !==
+  // undefined). Coerente con la semantica "parked = entry chiusa
+  // semanticamente, attende re-attach esplicito utente".
+  //
+  // Escape hatch firstTurnAfterResume: simmetrico a V1.2.2. Dopo resume di
+  // review interrotta, l'utente potrebbe legittimamente saltare al prossimo
+  // task senza chiudere quello in cui era interrotto.
+  //
+  // Payload data: { previousEntryOpen: true, previousEntryId, entryId }.
+  // Discriminator nominale `previousEntryOpen` distinto da `alreadyOpen`
+  // (semantica diversa). Orchestrator V1.3 detecta via
+  // extractSelfCorrectionTrigger() e setta selfCorrectedInPreviousTurn=true.
+  if (
+    triageState.currentEntryId != null &&
+    triageState.currentEntryId !== entryId &&
+    triageState.outcomes?.[triageState.currentEntryId] === undefined &&
+    !triageState.firstTurnAfterResume
+  ) {
+    const previousEntryId = triageState.currentEntryId;
+    console.warn(
+      `[V1.2.3 skipped-mark detection] set_current_entry rejected: ` +
+      `entryId=${entryId} previousEntryId=${previousEntryId} ` +
+      `(previousEntry open, outcome undefined) ` +
+      `(setting selfCorrectedInPreviousTurn=true)`,
+    );
+    return {
+      kind: 'sideEffect',
+      success: false,
+      data: { entryId, previousEntryId, previousEntryOpen: true },
+      error: `Cannot move cursor to ${entryId}: previous entry ${previousEntryId} has no outcome assigned. Required next actions: (1) call mark_entry_discussed({entryId: '${previousEntryId}', outcome: ...}) based on user's response (kept/postponed/cancelled/parked/emotional_skip), then (2) call set_current_entry({entryId: '${entryId}'}).`,
+    };
+  }
+
   // V1.2.2 alreadyOpen detection (skipped-close): se l'entry e' gia'
   // currentEntryId AND outcomes[entryId] e' undefined, il modello sta
   // aprendo entry che era stata aperta nel turno precedente ma non chiusa.

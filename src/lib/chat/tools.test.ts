@@ -440,6 +440,171 @@ describe('executeTool: set_current_entry', () => {
     expect(warnArgs).not.toMatch(/\[V1\.2\.2 skipped-close detection\]/);
     warnSpy.mockRestore();
   });
+
+  // V1.2.3 skipped-mark guard (set_current_entry su entry NUOVA mentre la
+  // current e' ancora aperta): 7 scenari sotto. Vedi tools.ts
+  // executeSetCurrentEntry per il razionale del guard. Disgiunto da V1.2.2
+  // per precondition `currentEntryId !== entryId`.
+  it('V1.2.3 skipped-mark: scenario (i) previousEntry open, set su entry diversa rilevato', async () => {
+    mockTaskOwned('c', 'Task C');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b', 'c'],
+      currentEntryId: 'b',
+      outcomes: { a: 'kept' },
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'c' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    const data = result.data as {
+      previousEntryOpen: boolean;
+      previousEntryId: string;
+      entryId: string;
+    };
+    expect(data.previousEntryOpen).toBe(true);
+    expect(data.previousEntryId).toBe('b');
+    expect(data.entryId).toBe('c');
+    expect(result.error).toMatch(/mark_entry_discussed.*'b'/);
+    expect(result.error).toMatch(/set_current_entry.*'c'/);
+  });
+
+  it('V1.2.3 skipped-mark: scenario (ii) legit cursor change, previous closed, no fire', async () => {
+    mockTaskOwned('c', 'Task C');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b', 'c'],
+      currentEntryId: 'b',
+      outcomes: { a: 'kept', b: 'kept' },
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'c' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutator');
+    if (result.kind !== 'mutator') return;
+    expect(result.success).toBe(true);
+    expect((result.data as { action: string }).action).toBe('cursor_set');
+  });
+
+  it('V1.2.3 skipped-mark: scenario (iii) first entry, no currentEntryId, no fire', async () => {
+    mockTaskOwned('a', 'Task A');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b'],
+      currentEntryId: null,
+      outcomes: {},
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'a' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutator');
+    if (result.kind !== 'mutator') return;
+    expect(result.success).toBe(true);
+    expect((result.data as { action: string }).action).toBe('cursor_set');
+  });
+
+  it('V1.2.3 escape hatch: scenario (iv) firstTurnAfterResume skips guard', async () => {
+    mockTaskOwned('c', 'Task C');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b', 'c'],
+      currentEntryId: 'b',
+      outcomes: { a: 'kept' },
+      firstTurnAfterResume: true,
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'c' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutator');
+    if (result.kind !== 'mutator') return;
+    expect(result.success).toBe(true);
+    expect((result.data as { action: string }).action).toBe('cursor_set');
+    // Nota: il clear di firstTurnAfterResume in questo path (entryId nuovo,
+    // setCurrentEntry helper) NON e' fornito dal V1.2.3 guard (precondition
+    // skippa). Il clear esistente vive nel fast-path V1.2.2 (stesso entryId)
+    // e in mark_entry_discussed. Fuori scope V1.2.3; documentato qui per
+    // simmetria col commento V1.2.2 scenario (v).
+  });
+
+  it('V1.2.3 skipped-mark: scenario (v) parked is outcome (not undefined), no fire', async () => {
+    mockTaskOwned('c', 'Task C');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b', 'c'],
+      currentEntryId: 'b',
+      outcomes: { b: 'parked' },
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'c' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutator');
+    if (result.kind !== 'mutator') return;
+    expect(result.success).toBe(true);
+    expect((result.data as { action: string }).action).toBe('cursor_set');
+  });
+
+  it('V1.2.3 lifecycle: selfCorrectedInPreviousTurn preserved (no handler-side clear)', async () => {
+    mockTaskOwned('c', 'Task C');
+    const state = makeState({
+      candidateTaskIds: ['a', 'b', 'c'],
+      currentEntryId: 'b',
+      outcomes: { a: 'kept' },
+      selfCorrectedInPreviousTurn: true,
+    });
+    const result = await executeTool(
+      'set_current_entry',
+      { entryId: 'c' },
+      'user1',
+      { triageState: state },
+    );
+    // Guard fira (precondition tripla soddisfatta), ma il flag
+    // selfCorrectedInPreviousTurn NON e' clearato handler-side. Il SET avviene
+    // in orchestrator.ts (extractSelfCorrectionTrigger), il CLEAR in
+    // clearConsumedAtRiskFlags pre-callLLM. Simmetria V1.3.1.
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    // Il handler ritorna sideEffect (no newTriageState esposto); il check
+    // di non-clear vive a livello di flow orchestrator. Qui asseriamo che
+    // il payload contiene previousEntryOpen=true cosi' orchestrator setta
+    // selfCorrectedInPreviousTurn (idempotente con true preesistente).
+    const data = result.data as { previousEntryOpen: boolean };
+    expect(data.previousEntryOpen).toBe(true);
+  });
+
+  it('V1.2.3 telemetry: warn log include prefisso e suffisso lessicale', async () => {
+    mockTaskOwned('c', 'Task C');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const state = makeState({
+      candidateTaskIds: ['a', 'b', 'c'],
+      currentEntryId: 'b',
+      outcomes: { a: 'kept' },
+    });
+    await executeTool(
+      'set_current_entry',
+      { entryId: 'c' },
+      'user1',
+      { triageState: state },
+    );
+    expect(warnSpy).toHaveBeenCalled();
+    const warnArgs = warnSpy.mock.calls.map((call) => call.join(' ')).join(' | ');
+    expect(warnArgs).toMatch(/\[V1\.2\.3 skipped-mark detection\]/);
+    expect(warnArgs).toMatch(/setting selfCorrectedInPreviousTurn=true/);
+    expect(warnArgs).toMatch(/previousEntryId=b/);
+    warnSpy.mockRestore();
+  });
 });
 
 // ── mark_entry_discussed ──────────────────────────────────────────────────

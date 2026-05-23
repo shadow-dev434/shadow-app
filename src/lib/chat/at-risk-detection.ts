@@ -13,6 +13,11 @@
  *   - shouldSetTextOnlyFlag: se il turno corrente (post for-loop) e' terminato
  *     text-only in fase per_entry e va settato lastTurnWasTextOnly=true sul
  *     pendingTriageState per triggerare force al turno successivo. (V1.3.2.)
+ *   - extractSelfCorrectionTrigger: identifica il discriminator V1.2/V1.2.2/V1.2.3
+ *     nel `data` di un tool_result fallito (alreadyClosed | alreadyOpen |
+ *     previousEntryOpen). Continuazione Tech debt #18: estrae la detection
+ *     inline che orchestrator.ts usava nel for-loop tool execution per settare
+ *     selfCorrectedInPreviousTurn=true sul pendingTriageState.
  *
  * Naming: clearConsumedAtRiskFlags diverge dal nome shouldClearAtRiskFlags
  * proposto in deploy-notes Tech debt #18. La funzione e' una transformation
@@ -142,4 +147,62 @@ export function shouldSetTextOnlyFlag(args: {
     args.toolsExecutedCount === 0 &&
     args.pendingTriageState.lastTurnWasTextOnly !== true
   );
+}
+
+/**
+ * Slice 5 V1.3 (continuazione Tech debt #18): identifica il discriminator
+ * V1.2/V1.2.2/V1.2.3 nel `data` di un tool_result fallito.
+ *
+ * Pattern split-beta V1.3: i guard self-correction (V1.2 mark replica,
+ * V1.2.2 set alreadyOpen, V1.2.3 set skipped-mark) ritornano un sideEffect
+ * failure con `data` strutturato che contiene uno dei tre discriminator
+ * boolean (alreadyClosed | alreadyOpen | previousEntryOpen). L'orchestrator
+ * detecta nel for-loop tool execution, setta selfCorrectedInPreviousTurn=true
+ * sul pendingTriageState, e questo triggera forced tool_choice='any' al turno
+ * successivo via shouldForceToolChoice.
+ *
+ * Ritorna `null` se nessun discriminator e' settato a true, oppure
+ * `{ trigger, entryId }` dove trigger e' il nome lessicale del flag (riusato
+ * nel log [V1.3 forced tool_choice] come `trigger: <nome>`) ed entryId e' il
+ * valore di `data.entryId` se presente (utile per telemetria, opzionale).
+ *
+ * Triple `=== true` deliberato (coerente con shouldForceToolChoice): handle
+ * esplicito di undefined; NON rilassare a truthy check. Priority order:
+ * alreadyClosed > alreadyOpen > previousEntryOpen (primo match vince): nei
+ * casi limite di payload malformato con piu' flag settati a true, il guard
+ * piu' "antico" prevale -- semantica conservativa simmetrica all'ordine di
+ * introduzione storica V1.2 -> V1.2.2 -> V1.2.3.
+ *
+ * Vincolo lessicale "alreadyClosed"/"alreadyOpen"/"previousEntryOpen"
+ * triangolato con tools.ts (V1.2 mark guard, V1.2.2 set guard, V1.2.3 set
+ * guard) e tools.test.ts (data assertion exact via toEqual). Refactor a
+ * interface nominale e' tech debt fuori scope.
+ */
+export type SelfCorrectionTrigger =
+  | 'alreadyClosed'
+  | 'alreadyOpen'
+  | 'previousEntryOpen';
+
+export function extractSelfCorrectionTrigger(
+  resultData: unknown,
+): { trigger: SelfCorrectionTrigger; entryId: string | undefined } | null {
+  if (resultData === null || typeof resultData !== 'object') {
+    return null;
+  }
+  const data = resultData as {
+    alreadyClosed?: boolean;
+    alreadyOpen?: boolean;
+    previousEntryOpen?: boolean;
+    entryId?: string;
+  };
+  if (data.alreadyClosed === true) {
+    return { trigger: 'alreadyClosed', entryId: data.entryId };
+  }
+  if (data.alreadyOpen === true) {
+    return { trigger: 'alreadyOpen', entryId: data.entryId };
+  }
+  if (data.previousEntryOpen === true) {
+    return { trigger: 'previousEntryOpen', entryId: data.entryId };
+  }
+  return null;
 }
