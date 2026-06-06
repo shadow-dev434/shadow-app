@@ -352,6 +352,62 @@ export async function orchestrate(
   }
   triageState = clearResult.next;
 
+  // ── 5.6. HARNESS recovery forcing (test-only, MAI in produzione) ─────
+  // Strumento di test per esercitare il CASO previousEntryOpen
+  // (prompts.ts:1130, fix V1.2.4) sul lato esplicito/con-sostanza del
+  // confine, che per via naturale NON raggiunge il recovery: l'esplicitezza
+  // dell'utterance e' la stessa proprieta' che spinge il modello a fare
+  // mark+set pulito, NON facendo scattare la guard previousEntryOpen
+  // (tools.ts:684). Vedi docs/tasks/08-handoff-harness-recovery.md.
+  //
+  // Quando attivo, forza la prima callLLM a tool_choice=set_current_entry:
+  // il modello puo' emettere SOLO il set (niente mark same-turn) -> con
+  // l'entry corrente ancora aperta la guard previousEntryOpen scatta come
+  // in un fire naturale (il classifier DB la legge identica). Il recovery
+  // (iter 2+) resta vergine: il loop NON passa toolChoice (riga ~551).
+  //
+  // Tripla barriera anti-prod: (1) NODE_ENV !== 'production' (Vercel forza
+  // production -> inerte anche se l'env trapelasse); (2) env var dedicata
+  // SHADOW_HARNESS_FORCE_SET_FROM assente di default; (3) match esatto sul
+  // title dell'entry corrente. set_current_entry e' garantito nel toolset
+  // per_entry (EVENING_REVIEW_TOOLS, tools.ts:120/146) -> il force non da' 400.
+  //
+  // title risolto da allTasks (gia' in memoria, TaskProjection.title) via
+  // currentEntryId: nessuna nuova query DB.
+  const harnessTarget = process.env.SHADOW_HARNESS_FORCE_SET_FROM?.trim() ?? '';
+  const harnessCurrentTitle =
+    mode === 'evening_review'
+      ? allTasks?.find((t) => t.id === triageState?.currentEntryId)?.title
+      : undefined;
+  const harnessActive =
+    process.env.NODE_ENV !== 'production' &&
+    harnessTarget !== '' &&
+    mode === 'evening_review' &&
+    currentPhase === 'per_entry' &&
+    harnessCurrentTitle != null &&
+    harnessCurrentTitle.trim() === harnessTarget;
+  if (harnessActive) {
+    console.warn(
+      `[HARNESS force previousEntryOpen] ACTIVE (test-only, NODE_ENV=${process.env.NODE_ENV}): ` +
+      `currentEntryTitle="${harnessCurrentTitle}" === target="${harnessTarget}" ` +
+      `(currentEntryId=${triageState?.currentEntryId ?? '(none)'}, phase=${currentPhase ?? '(undefined)'}) ` +
+      `-> tool_choice={type:'tool',name:'set_current_entry'} on first callLLM (harness wins over at-risk)`,
+    );
+  } else if (harnessTarget !== '' && process.env.NODE_ENV !== 'production') {
+    // env var set ma nessun match: rende visibile subito un mismatch title/target.
+    console.warn(
+      `[HARNESS force previousEntryOpen] INACTIVE (env set, no match): ` +
+      `target="${harnessTarget}" vs currentEntryTitle=${harnessCurrentTitle != null ? `"${harnessCurrentTitle}"` : '(none)'} ` +
+      `(mode=${mode}, phase=${currentPhase ?? '(undefined)'}, currentEntryId=${triageState?.currentEntryId ?? '(none)'})`,
+    );
+  }
+
+  // toolChoice effettivo per la prima callLLM: l'harness VINCE su un
+  // eventuale {type:'any'} at-risk dello stesso turno (precedenza esplicita).
+  const effectiveToolChoice: ToolChoiceParam | undefined = harnessActive
+    ? { type: 'tool', name: 'set_current_entry' }
+    : forcedToolChoice;
+
   // ── 6. First LLM call ────────────────────────────────────────────────
   // Slice 7 BUG #A: tools filtrati per fase corrente in evening_review.
   // currentPhase letto da contextJson (riga 136); undefined per mode non
@@ -363,7 +419,7 @@ export async function orchestrate(
     tools: getToolsForMode(mode, currentPhase, triageState ?? undefined),
     maxTokens: 500,
     temperature: 0.5,
-    toolChoice: forcedToolChoice,
+    toolChoice: effectiveToolChoice,
   });
 
   totalCost += currentResponse.costUsd;
