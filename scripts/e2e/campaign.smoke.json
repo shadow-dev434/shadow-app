@@ -1,0 +1,7 @@
+{
+  "userId": "cmp1flw1g005oibvckzsenuqm",
+  "baseUrl": "http://localhost:3000",
+  "cells": ["K-primario"],
+  "runsPerCell": 2,
+  "maxConsecutiveInvalid": 3
+}

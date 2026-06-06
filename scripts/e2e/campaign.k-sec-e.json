@@ -1,0 +1,7 @@
+{
+  "userId": "cmp1flw1g005oibvckzsenuqm",
+  "baseUrl": "http://localhost:3000",
+  "cells": ["K-secondario", "E-postponed", "E-parked", "E-cancelled"],
+  "runsPerCell": 5,
+  "maxConsecutiveInvalid": 3
+}

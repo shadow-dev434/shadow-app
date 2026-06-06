@@ -1127,7 +1127,42 @@ CASO alreadyClosed (mark_entry_discussed su entry gia' chiusa): hai replicato me
 
 CASO alreadyOpen (set_current_entry su entry gia' aperta nel turno precedente): hai saltato la chiusura del task corrente. Chiama mark_entry_discussed({entryId: <data.entryId>, outcome: ...}) basandoti sul user message (kept/postponed/cancelled/parked/emotional_skip), poi (se data.suggestedNextEntryId non null) chiama set_current_entry con quel valore. Se data.suggestedNextEntryId e' null, dopo il mark transita a plan_preview senza set_current_entry.
 
-CASO previousEntryOpen (set_current_entry su nuova entry senza aver marcato la corrente): hai saltato la chiusura del task corrente prima di passare al prossimo. Due step obbligati: (1) chiama mark_entry_discussed({entryId: <data.previousEntryId>, outcome: ...}) basandoti su cosa ha detto l'utente sul task <data.previousEntryId>; (2) chiama set_current_entry({entryId: <data.entryId>}). NON usare kept di default: rileggi l'utterance dell'utente sul task <data.previousEntryId> e classifica correttamente (kept / postponed / cancelled / parked / emotional_skip). Se l'utente ha detto "cancellalo" / "non lo faccio piu'" / "lascia stare": outcome=cancelled. Se ha detto "rimandiamo" / "non oggi": outcome=postponed. Se ha detto "non ce la faccio" / "lascia perdere stasera": outcome=emotional_skip. Se ha detto "sospendiamo" / "metto in pausa": outcome=parked. Solo se ha confermato di tenerlo come e' (es. "va bene" / "pianificala" / "ok lo faccio"): outcome=kept.
+CASO previousEntryOpen (set_current_entry su nuova entry senza aver marcato la corrente): hai saltato la chiusura del task corrente prima di passare al prossimo. Due step obbligati: (1) chiama mark_entry_discussed({entryId: <data.previousEntryId>, outcome: ...}) basandoti su cosa ha detto l'utente sul task <data.previousEntryId>; (2) chiama set_current_entry({entryId: <data.entryId>}).
+
+Classificazione dell'outcome -- esempi appaiati:
+
+postponed / parked / cancelled / emotional_skip richiedono un verbo ESPLICITO di rimando / sospensione / abbandono / cedimento riferito alla previousEntry. In tutti gli altri casi (silenzio sulla entry, utterance che salta al prossimo task, esitazione, menzione vaga, espressione emotiva sola): outcome=kept. kept e' l'unico outcome a zero side-effect DB. Nel dubbio: kept.
+
+KEPT vs POSTPONED:
+  UTENTE (su bolletta): "ok pianificala" -> kept
+  UTENTE (su bolletta): "vai sull'abbonamento" -> kept (salta al prossimo, niente sulla bolletta)
+  UTENTE (su bolletta): "boh, vediamo" -> kept (esitazione, niente rimando)
+  UTENTE (su bolletta): "uhm... prossima" -> kept (vago, niente rimando)
+  UTENTE (su bolletta): "la rimandiamo" -> postponed
+  UTENTE (su bolletta): "non oggi" -> postponed
+  UTENTE (su bolletta): "spostiamola a domani" -> postponed
+
+KEPT vs PARKED:
+  UTENTE (su bolletta): "lasciamo stare per ora" -> kept (disimpegno transitorio, nessun verbo di sospensione)
+  UTENTE (su bolletta): "vabbe per stasera basta" -> kept (disimpegno transitorio sulla sessione, non sulla entry)
+  UTENTE (su bolletta): "lasciala in sospeso" -> parked
+  UTENTE (su bolletta): "sospendiamola" -> parked
+  UTENTE (su bolletta): "mettila in pausa" -> parked
+
+KEPT vs CANCELLED:
+  UTENTE (su bolletta): "vabbe lasciamo stare" -> kept (disimpegno transitorio, nessuna cancellazione esplicita)
+  UTENTE (su bolletta): "cancellala" -> cancelled
+  UTENTE (su bolletta): "non la faccio piu'" -> cancelled
+  UTENTE (su bolletta): "togliamola del tutto" -> cancelled
+
+KEPT vs EMOTIONAL_SKIP:
+  UTENTE (su bolletta): "uffa che palle" -> kept (espressione emotiva sola, niente cedimento)
+  UTENTE (su bolletta): "boh non so" -> kept (esitazione, niente cedimento)
+  UTENTE (su bolletta): "stasera non ce la faccio" -> emotional_skip
+  UTENTE (su bolletta): "non ce la faccio davvero" -> emotional_skip
+  UTENTE (su bolletta): "lascia perdere stasera" -> emotional_skip (verbo "lascia perdere" + cornice "stasera" = cedimento esplicito)
+
+Non inferire mai postponed / parked / cancelled / emotional_skip da silenzio o esitazione: scrivono stato reale (postponedCount alimenta soglia 2.2/3.2, parked occupa slot 2/2, cancelled rimuove dalla inbox). kept e' inerte.
 
 In tutti e tre i casi: il messaggio finale all'utente e' la conversazione sulla nuova entry (o l'apertura del piano se suggestedNextEntryId === null) - l'utente non vede traccia dell'errore.
 
