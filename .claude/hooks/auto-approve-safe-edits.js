@@ -42,6 +42,7 @@ const WHITELIST = [
 const BLACKLIST = [
   { pattern: /^src\/lib\/chat\/orchestrator\.ts$/, label: 'chat-orchestrator' },
   { pattern: /^src\/lib\/chat\/prompts\.ts$/, label: 'chat-prompts' },
+  { pattern: /^src\/lib\/chat\/tools\.ts$/, label: 'chat-tools' },
   { pattern: /^src\/lib\/chat\/tools\/.*-handler\.ts$/, label: 'chat-handler' },
   { pattern: /^prisma\//, label: 'prisma' },
   { pattern: /\.config\.(ts|js|mjs|cjs)$/, label: 'config-file' },
