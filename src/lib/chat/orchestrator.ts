@@ -4,7 +4,7 @@
 
 import { db } from '@/lib/db';
 import { callLLM, type LLMMessage, type ToolChoiceParam } from '@/lib/llm/client';
-import { buildSystemPrompt, buildVoiceProfile } from './prompts';
+import { buildSystemPromptParts, buildVoiceProfile } from './prompts';
 import { executeTool, getToolsForMode, type ToolExecutionResult } from './tools';
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses } from '@/lib/types/shadow';
@@ -303,9 +303,13 @@ export async function orchestrate(
   const isStructuredMode = mode !== 'general';
   const modelTier = isStructuredMode ? 'smart' : 'fast';
 
-  // `let` (non `const`) per consentire il rebuild mid-loop su transizione di
+  // V2b prompt caching: split statico/dinamico. staticPrefix (CORE_IDENTITY + voice
+  // + userContext + modePrompt) e' stabile per tutto il turno -> cache_control.
+  // dynamicSuffix (modeContext) e' `let`: ricostruito mid-loop su transizione di
   // fase evening_review (Anomalia B Blocco 3). Vedi wrapper nel while-loop.
-  let systemPrompt = buildSystemPrompt(mode, userContext, modeContext, voiceProfile);
+  const systemParts = buildSystemPromptParts(mode, userContext, modeContext, voiceProfile);
+  const staticPrefix = systemParts.staticPrefix;
+  let dynamicSuffix = systemParts.dynamicSuffix;
 
   let totalCost = 0;
   let totalTokensIn = 0;
@@ -414,7 +418,7 @@ export async function orchestrate(
   // evening_review o thread pre-6c, getToolsForMode degrada al set completo.
   let currentResponse = await callLLM({
     tier: modelTier,
-    systemPrompt,
+    systemPrompt: { static: staticPrefix, dynamic: dynamicSuffix },
     messages: llmMessages,
     tools: getToolsForMode(mode, currentPhase, triageState ?? undefined),
     maxTokens: 500,
@@ -592,14 +596,14 @@ export async function orchestrate(
         if (phasePost === 'closing') {
           modeContextPost += '\n\nPHASE_MARKER: closing';
         }
-        systemPrompt = buildSystemPrompt(mode, userContext, modeContextPost, voiceProfile);
+        dynamicSuffix = buildSystemPromptParts(mode, userContext, modeContextPost, voiceProfile).dynamicSuffix;
       }
       if (
         phasePost === 'closing' &&
         phasePrev !== 'closing' &&
         phasePrev !== 'per_entry'
       ) {
-        systemPrompt += '\n\nPHASE_MARKER: closing';
+        dynamicSuffix += '\n\nPHASE_MARKER: closing';
       }
       phasePrev = phasePost;
     }
@@ -611,7 +615,7 @@ export async function orchestrate(
     // tool di closing, non quelli di plan_preview.
     const nextResponse = await callLLM({
       tier: modelTier,
-      systemPrompt,
+      systemPrompt: { static: staticPrefix, dynamic: dynamicSuffix },
       messages: llmMessages,
       tools: getToolsForMode(mode, pendingPhase ?? currentPhase, pendingTriageState ?? undefined),
       maxTokens: 500,

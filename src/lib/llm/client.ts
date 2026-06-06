@@ -16,6 +16,7 @@ import type {
   Tool,
   ToolUseBlock,
   TextBlock,
+  TextBlockParam,
 } from '@anthropic-ai/sdk/resources/messages';
 
 // ── Supported models ──────────────────────────────────────────────────────
@@ -24,18 +25,26 @@ export type ModelTier = 'fast' | 'smart';
 
 export type ModelName =
   | 'claude-haiku-4-5'
-  | 'claude-sonnet-4-5';
+  | 'claude-sonnet-4-6';
 
 export const MODELS: Record<ModelTier, ModelName> = {
   fast: 'claude-haiku-4-5',    // routine chat, classification, quick replies
-  smart: 'claude-sonnet-4-5',  // unblock, complex reasoning, body doubling
+  smart: 'claude-sonnet-4-6',  // unblock, complex reasoning, body doubling
 };
 
 // Pricing reference (USD per 1M tokens, as of April 2026 — update if changes)
 export const PRICING: Record<ModelName, { input: number; output: number }> = {
   'claude-haiku-4-5': { input: 1.00, output: 5.00 },
-  'claude-sonnet-4-5': { input: 3.00, output: 15.00 },
+  'claude-sonnet-4-6': { input: 3.00, output: 15.00 },
 };
+
+// V2c: moltiplicatori standard Anthropic sul prezzo input del modello (uguali per
+// tutti i modelli -> fattori nella formula, NON righe di PRICING). Fonte: docs
+// "Prompt caching > Pricing". Validi per cache ephemeral 5m (default usato in 2b:
+// cache_control senza ttl). NB: cache 1h costerebbe 2x in write -> servirebbe
+// splittare via usage.cache_creation.ephemeral_1h_input_tokens. Non usata oggi.
+const CACHE_WRITE_MULTIPLIER = 1.25;  // write su cache 5m = 1.25x input
+const CACHE_READ_MULTIPLIER = 0.10;   // read da cache     = 0.10x input
 
 // ── Request/Response types ────────────────────────────────────────────────
 
@@ -85,7 +94,13 @@ export type ToolChoiceParam =
 export interface LLMCallParams {
   tier?: ModelTier;        // 'fast' | 'smart' — default 'fast'
   model?: ModelName;        // override tier with specific model
-  systemPrompt: string;
+  /**
+   * V2b prompt caching: stringa = prompt unico SENZA cache_control (retro-compat
+   * completeText / engine one-shot). Oggetto = prefisso statico con cache_control
+   * ephemeral + coda dinamica senza cache. static+dynamic resta byte-identico al
+   * prompt che il modello vede (il caching cambia solo la fatturazione).
+   */
+  systemPrompt: string | { static: string; dynamic?: string };
   messages: LLMMessage[];
   tools?: LLMTool[];
   maxTokens?: number;
@@ -106,8 +121,10 @@ export interface LLMResponse {
   }>;
   stopReason: string;        // 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence'
   model: ModelName;
-  tokensIn: number;
+  tokensIn: number;              // V2c: input "freschi" non-cachati (usage.input_tokens)
   tokensOut: number;
+  cacheReadTokens?: number;      // V2c: input letti da cache (0.10x). Assente nei mock pre-2c.
+  cacheCreationTokens?: number;  // V2c: input scritti in cache (1.25x su 5m). Assente nei mock pre-2c.
   costUsd: number;
   latencyMs: number;
 }
@@ -188,6 +205,26 @@ export async function callLLM(params: LLMCallParams): Promise<LLMResponse> {
     input_schema: t.input_schema,
   }));
 
+  // V2b prompt caching: stringa -> system piano (no cache). Oggetto {static,dynamic}
+  // -> due text block, cache_control ephemeral SOLO sul prefisso statico. Il blocco
+  // dinamico e' omesso se vuoto (l'API rifiuta text block vuoti).
+  let system: string | TextBlockParam[];
+  if (typeof params.systemPrompt === 'string') {
+    system = params.systemPrompt;
+  } else {
+    const blocks: TextBlockParam[] = [
+      {
+        type: 'text',
+        text: params.systemPrompt.static,
+        cache_control: { type: 'ephemeral' },
+      },
+    ];
+    if (params.systemPrompt.dynamic) {
+      blocks.push({ type: 'text', text: params.systemPrompt.dynamic });
+    }
+    system = blocks;
+  }
+
   const start = Date.now();
 
   const response: Message = await callWithRetry(() =>
@@ -195,7 +232,7 @@ export async function callLLM(params: LLMCallParams): Promise<LLMResponse> {
       model,
       max_tokens: maxTokens,
       temperature,
-      system: params.systemPrompt,
+      system,
       messages: anthropicMessages,
       tools: anthropicTools,
       // V1.3: forwarda tool_choice solo se definito. Undefined = SDK default 'auto'.
@@ -222,8 +259,27 @@ export async function callLLM(params: LLMCallParams): Promise<LLMResponse> {
 
   const tokensIn = response.usage.input_tokens;
   const tokensOut = response.usage.output_tokens;
+  // V2c: i 3 bucket di input sono DISGIUNTI (input_tokens GIA' al netto dei cache
+  // token; docs: "input tokens which were not read from or used to create a cache").
+  // Costo input = freschi 1x + cache-write 1.25x + cache-read 0.1x.
+  const cacheCreationTokens = response.usage.cache_creation_input_tokens ?? 0;
+  const cacheReadTokens = response.usage.cache_read_input_tokens ?? 0;
   const pricing = PRICING[model];
-  const costUsd = (tokensIn / 1_000_000) * pricing.input + (tokensOut / 1_000_000) * pricing.output;
+  const inputCost =
+    (tokensIn / 1_000_000) * pricing.input +
+    (cacheCreationTokens / 1_000_000) * pricing.input * CACHE_WRITE_MULTIPLIER +
+    (cacheReadTokens / 1_000_000) * pricing.input * CACHE_READ_MULTIPLIER;
+  const outputCost = (tokensOut / 1_000_000) * pricing.output;
+  const costUsd = inputCost + outputCost;
+
+  // V2c (opzionale, droppabile): telemetria cache per il walk. Logga solo se c'e'
+  // attivita' cache. fresh = input non-cachati, read/creation = bucket cache.
+  if (cacheCreationTokens > 0 || cacheReadTokens > 0) {
+    console.log(
+      `[cache] model=${model} read=${cacheReadTokens} creation=${cacheCreationTokens} ` +
+      `fresh=${tokensIn} out=${tokensOut} cost=$${costUsd.toFixed(6)}`,
+    );
+  }
 
   return {
     text,
@@ -232,6 +288,8 @@ export async function callLLM(params: LLMCallParams): Promise<LLMResponse> {
     model,
     tokensIn,
     tokensOut,
+    cacheReadTokens,
+    cacheCreationTokens,
     costUsd,
     latencyMs,
   };

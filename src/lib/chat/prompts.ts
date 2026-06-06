@@ -1242,22 +1242,47 @@ Sessione ottimale: ${input.optimalSessionLength} minuti.
 Profilo motivazionale: reward ${m('reward')}, identity ${m('identity')}, accountability ${m('accountability')}, urgency ${m('urgency')}, relief ${m('relief')}, curiosity ${m('curiosity')}.`;
 }
 
+/** V2b: confine statico/dinamico per prompt caching. */
+export interface SystemPromptParts {
+  /** Prefisso stabile per-walk (CORE_IDENTITY + voice + userContext + modePrompt): cache_control va qui. */
+  staticPrefix: string;
+  /** Coda volatile (modeContext): senza cache_control. '' se assente. */
+  dynamicSuffix: string;
+}
+
+/**
+ * V2b: come buildSystemPrompt, ma espone il confine static/dynamic per il caching.
+ * staticPrefix + dynamicSuffix e' BYTE-IDENTICO all'output di buildSystemPrompt.
+ */
+export function buildSystemPromptParts(
+  mode: string,
+  userContext: string,
+  modeContext: string = '',
+  voiceProfile: string = '',
+): SystemPromptParts {
+  const modePrompt = getModePrompt(mode);
+  const voice = voiceProfile ? `\n\nVOICE PROFILE:\n${voiceProfile}` : '';
+  const staticPrefix = `${CORE_IDENTITY}${voice}
+
+CONTESTO UTENTE:
+${userContext}
+
+MODALITÀ CORRENTE: ${mode}
+${modePrompt}`;
+  const dynamicSuffix = modeContext ? `\n\n${modeContext}` : '';
+  return { staticPrefix, dynamicSuffix };
+}
+
 export function buildSystemPrompt(
   mode: string,
   userContext: string,
   modeContext: string = '',
   voiceProfile: string = '',
 ): string {
-  const modePrompt = getModePrompt(mode);
-  const ctx = modeContext ? `\n\n${modeContext}` : '';
-  const voice = voiceProfile ? `\n\nVOICE PROFILE:\n${voiceProfile}` : '';
-  return `${CORE_IDENTITY}${voice}
-
-CONTESTO UTENTE:
-${userContext}
-
-MODALITÀ CORRENTE: ${mode}
-${modePrompt}${ctx}`;
+  const { staticPrefix, dynamicSuffix } = buildSystemPromptParts(
+    mode, userContext, modeContext, voiceProfile,
+  );
+  return staticPrefix + dynamicSuffix;
 }
 
 function getModePrompt(mode: string): string {
