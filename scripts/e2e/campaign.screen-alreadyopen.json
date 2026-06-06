@@ -1,0 +1,7 @@
+{
+  "userId": "cmp1flw1g005oibvckzsenuqm",
+  "baseUrl": "http://localhost:3000",
+  "cells": ["E-postponed", "E-parked", "E-cancelled"],
+  "runsPerCell": 4,
+  "maxConsecutiveInvalid": 3
+}

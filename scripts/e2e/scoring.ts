@@ -16,12 +16,17 @@
 
 import type { EntryOutcome } from '../../src/lib/evening-review/triage';
 
+/** Direzione del path-gate: quale guard di self-correction conta come path valido. */
+export type GuardGate = 'previousEntryOpen' | 'alreadyOpen';
+
 export interface Cell {
   id: string;
   /** UNICO turno variabile: il T5 forzato dal flag su "Bolletta luce". */
   utteranceT5: string;
   expectedOutcome: EntryOutcome;
   expectedPostponedCount: number;
+  /** Guard di self-correction attesa per questa cella (default 'previousEntryOpen'). */
+  expectedGuard?: GuardGate;
 }
 
 export const CELL_K: Cell = {
@@ -44,25 +49,28 @@ export const CELLS: Record<string, Cell> = {
     utteranceT5: "vai sull'abbonamento, la bolletta rimandiamola a domani",
     expectedOutcome: 'postponed',
     expectedPostponedCount: 1,
+    expectedGuard: 'alreadyOpen',
   },
   'E-parked': {
     id: 'E-parked',
     utteranceT5: "vai sull'abbonamento, la bolletta mettiamola in pausa",
     expectedOutcome: 'parked',
     expectedPostponedCount: 0,
+    expectedGuard: 'alreadyOpen',
   },
   'E-cancelled': {
     id: 'E-cancelled',
     utteranceT5: "vai sull'abbonamento, la bolletta cancellala, non mi serve più",
     expectedOutcome: 'cancelled',
     expectedPostponedCount: 0,
+    expectedGuard: 'alreadyOpen',
   },
 };
 
 /** Proiezione minima del RAW di walk-reader, lente Bolletta. */
 export interface RunRaw {
   bolId: string | null; // taskState(Bolletta).id
-  fires: Array<{ previousEntryId?: string; target?: string }>; // findGuardFires(byMessage)
+  fires: Array<{ previousEntryId?: string; target?: string; alreadyOpen?: boolean; entryId?: string }>; // findGuardFires(byMessage)
   bolMark: { outcome: string | null } | null; // findMarkOutcome(byMessage, bolId)
   bolPostponedCount: number | null; // taskState(Bolletta).count
   phase: string | undefined; // parsePhase(thread.contextJson)
@@ -88,7 +96,12 @@ export interface ScoreResult {
 const PLAN_PREVIEW = 'plan_preview';
 
 export function scoreRun(raw: RunRaw, cell: Cell): ScoreResult {
-  const recovery = raw.bolId != null && raw.fires.some((f) => f.previousEntryId === raw.bolId);
+  const gate: GuardGate = cell.expectedGuard ?? 'previousEntryOpen';
+  const recovery =
+    raw.bolId != null &&
+    (gate === 'alreadyOpen'
+      ? raw.fires.some((f) => f.alreadyOpen === true && f.entryId === raw.bolId)
+      : raw.fires.some((f) => f.previousEntryId === raw.bolId));
   const outcome = raw.bolMark?.outcome ?? null;
   const postponedCount = raw.bolPostponedCount;
   const phase = raw.phase;
@@ -105,8 +118,11 @@ export function scoreRun(raw: RunRaw, cell: Cell): ScoreResult {
       phaseOk: null,
       observed,
       reasons: [
-        'path-gate: previousEntryOpen@T5 non scattato con previousEntryId=Bolletta ' +
-          '(run da scartare e ri-tirare)',
+        `path-gate[${gate}]@T5 non scattato su Bolletta` +
+          (gate === 'alreadyOpen' && raw.fires.some((f) => f.previousEntryId === raw.bolId)
+            ? ' (instradato su previousEntryOpen: path sbagliato per lo screen)'
+            : '') +
+          ' (run da scartare e ri-tirare)',
       ],
     };
   }

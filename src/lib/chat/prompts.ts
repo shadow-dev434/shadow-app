@@ -1131,11 +1131,11 @@ CASO previousEntryOpen (set_current_entry su nuova entry senza aver marcato la c
 
 Classificazione dell'outcome -- esempi appaiati:
 
-postponed / parked / cancelled / emotional_skip richiedono un verbo ESPLICITO di rimando / sospensione / abbandono / cedimento riferito alla previousEntry. In tutti gli altri casi (silenzio sulla entry, utterance che salta al prossimo task, esitazione, menzione vaga, espressione emotiva sola): outcome=kept. kept e' l'unico outcome a zero side-effect DB. Nel dubbio: kept.
+postponed / parked / cancelled / emotional_skip richiedono un verbo ESPLICITO di rimando / sospensione / abbandono / cedimento riferito all'entry che stai chiudendo (la corrente lasciata aperta o la precedente non marcata). In tutti gli altri casi (silenzio sulla entry, utterance che non nomina un'azione sull'entry, esitazione, menzione vaga, espressione emotiva sola): outcome=kept. kept e' l'unico outcome a zero side-effect DB. Nel dubbio: kept.
 
 KEPT vs POSTPONED:
   UTENTE (su bolletta): "ok pianificala" -> kept
-  UTENTE (su bolletta): "vai sull'abbonamento" -> kept (salta al prossimo, niente sulla bolletta)
+  UTENTE (su bolletta): "vai sull'abbonamento" -> kept (nessuna azione di rimando/sospensione/abbandono sulla bolletta)
   UTENTE (su bolletta): "boh, vediamo" -> kept (esitazione, niente rimando)
   UTENTE (su bolletta): "uhm... prossima" -> kept (vago, niente rimando)
   UTENTE (su bolletta): "la rimandiamo" -> postponed

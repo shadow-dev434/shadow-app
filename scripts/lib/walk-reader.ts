@@ -23,7 +23,13 @@ export const TITLES = {
 export type ToolExec = {
   name?: string;
   input?: { entryId?: string; outcome?: string };
-  result?: { entryId?: string; previousEntryId?: string; previousEntryOpen?: boolean };
+  result?: {
+    entryId?: string;
+    previousEntryId?: string;
+    previousEntryOpen?: boolean;
+    alreadyOpen?: boolean;
+    suggestedNextEntryId?: string;
+  };
 };
 
 export async function assistantTools(threadId: string): Promise<{ tools: ToolExec[]; createdAt: Date }[]> {
@@ -56,12 +62,15 @@ export function findMarkOutcome(
 
 export function findGuardFires(
   byMessage: { tools: ToolExec[]; createdAt: Date }[],
-): { previousEntryId?: string; target?: string }[] {
-  const fires: { previousEntryId?: string; target?: string }[] = [];
+): { previousEntryId?: string; target?: string; alreadyOpen?: boolean; entryId?: string }[] {
+  const fires: { previousEntryId?: string; target?: string; alreadyOpen?: boolean; entryId?: string }[] = [];
   for (const { tools } of byMessage) {
     for (const t of tools) {
       if (t.name === 'set_current_entry' && t.result?.previousEntryOpen === true) {
         fires.push({ previousEntryId: t.result.previousEntryId, target: t.result.entryId });
+      } else if (t.name === 'set_current_entry' && t.result?.alreadyOpen === true) {
+        // alreadyOpen: l'entry da marcare e' entryId stesso (non previousEntryId).
+        fires.push({ alreadyOpen: true, entryId: t.result.entryId, target: t.result.entryId });
       }
     }
   }
