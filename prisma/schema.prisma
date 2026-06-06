@@ -570,13 +570,13 @@ model ChatMessage {
   content String @db.Text
 
   // Optional structured payload:
-  // - for role='assistant' with tool calls: { toolName, toolInput }
-  // - for role='tool' (result): { toolName, result, error? }
+  // - for role='assistant' with tool calls: { toolsExecuted: [{ name, input, result }] }
+  // - for role='tool' (result): { name, input, result }
   // - for quick options shown to user: { options: [{value, label}] }
   payloadJson String? @db.Text
 
   // Metadata for observability & cost tracking
-  modelUsed String? // 'claude-haiku-4-5' | 'claude-sonnet-4-5' | etc.
+  modelUsed String? // 'claude-haiku-4-5' | 'claude-sonnet-4-6' | etc.
   tokensIn  Int?
   tokensOut Int?
   latencyMs Int?
