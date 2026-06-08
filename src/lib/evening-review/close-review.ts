@@ -253,3 +253,117 @@ export async function closeReview(
     alreadyClosed: false,
   };
 }
+
+// ── Slice 8a Default A: chiusura-burnout (Review-leggero, NO DailyPlan) ──────
+
+export type CloseReviewBurnoutInput = {
+  userId: string;
+  threadId: string;
+  // YYYY-MM-DD giorno solare locale della review (Europe/Rome).
+  reviewDate: string;
+  mood: number;
+  energyEnd: number;
+  whatBlocked: string;
+};
+
+export type CloseReviewBurnoutResult =
+  | { ok: true; reviewId: string; alreadyClosed: boolean }
+  | { ok: false; error: 'thread_missing' | 'validation_failed'; detail?: string };
+
+/**
+ * Chiusura-burnout: materializza un Review record-leggero (SENZA DailyPlan) e
+ * porta il thread a state='archived'. Funzione sorella di closeReview, che
+ * resta invariata. Differenze chiave:
+ *  - NESSUN DailyPlan (no preview/planDate/pinnedTaskIds in firma).
+ *  - state terminale 'archived' (NON 'completed'): il ramo idempotenza di
+ *    closeReview (=== 'completed', che pretende anche existingPlan e fallisce
+ *    'artifacts missing' senza DailyPlan) NON e' mai coinvolto.
+ *  - Idempotenza propria: se il thread e' gia' 'archived', ritorna la Review
+ *    esistente (alreadyClosed=true) senza richiedere un DailyPlan.
+ *
+ * whatDone/whatAvoided derivati dai LearningSignal del giorno (come
+ * closeReview): un burnout dopo walk parziale conserva i segnali emersi.
+ *
+ * Pre-reg E2E (a freddo, dopo il codice): cella di NON-REGRESSIONE BLOCCANTE
+ * (non osservativa) -- una cue-burnout ("stasera non ce la faccio") sparata
+ * DENTRO il walk (CURRENT_ENTRY=<id>) deve produrre emotional_skip, NON la
+ * chiusura-burnout. E' il contraltare empirico del confine di fase del prompt.
+ *
+ * Caller atteso: close-review-burnout-handler.ts (Slice 8a).
+ */
+export async function closeReviewBurnout(
+  input: CloseReviewBurnoutInput,
+  db: typeof defaultDb = defaultDb,
+): Promise<CloseReviewBurnoutResult> {
+  // Pre-check: thread esiste e appartiene all'utente (mirror closeReview).
+  const thread = await db.chatThread.findUnique({
+    where: { id: input.threadId },
+    select: { id: true, userId: true, state: true },
+  });
+  if (!thread) {
+    return { ok: false, error: 'thread_missing' };
+  }
+  if (thread.userId !== input.userId) {
+    return { ok: false, error: 'validation_failed', detail: 'thread userId mismatch' };
+  }
+
+  // Idempotenza burnout: gia' archiviato -> ritorna la Review esistente.
+  // NON richiede existingPlan (a differenza del ramo === 'completed' di
+  // closeReview): la chiusura-burnout non produce DailyPlan per definizione.
+  if (thread.state === 'archived') {
+    const existing = await db.review.findUnique({
+      where: { userId_date: { userId: input.userId, date: input.reviewDate } },
+      select: { id: true },
+    });
+    if (existing) {
+      return { ok: true, reviewId: existing.id, alreadyClosed: true };
+    }
+    // 'archived' senza Review (es. archiviazione lazy precedente): procedi a
+    // materializzare il record-leggero comunque.
+  }
+
+  // Signal del giorno (read-only, finestra a reviewDate) -> whatDone/whatAvoided.
+  const signals = await selectLearningSignalsForDate(
+    input.userId,
+    input.reviewDate,
+    db,
+  );
+
+  const result = await db.$transaction(async (tx) => {
+    const review = await tx.review.upsert({
+      where: {
+        userId_date: { userId: input.userId, date: input.reviewDate },
+      },
+      create: {
+        userId: input.userId,
+        date: input.reviewDate,
+        mood: input.mood,
+        energyEnd: input.energyEnd,
+        whatBlocked: input.whatBlocked,
+        whatDone: signals.done.join('\n'),
+        whatAvoided: signals.avoided.join('\n'),
+        threadId: input.threadId,
+      },
+      update: {
+        mood: input.mood,
+        energyEnd: input.energyEnd,
+        whatBlocked: input.whatBlocked,
+        whatDone: signals.done.join('\n'),
+        whatAvoided: signals.avoided.join('\n'),
+        threadId: input.threadId,
+      },
+    });
+
+    await tx.chatThread.update({
+      where: { id: input.threadId },
+      data: {
+        state: 'archived',
+        endedAt: new Date(),
+      },
+    });
+
+    return { reviewId: review.id };
+  });
+
+  return { ok: true, reviewId: result.reviewId, alreadyClosed: false };
+}

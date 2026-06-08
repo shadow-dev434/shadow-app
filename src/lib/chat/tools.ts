@@ -63,6 +63,8 @@ import { RECORD_ENERGY_TOOL } from './tools/record-energy-tool';
 import { handleRecordEnergy } from './tools/record-energy-handler';
 import { CONFIRM_CLOSE_REVIEW_TOOL } from './tools/confirm-close-review-tool';
 import { handleConfirmCloseReview } from './tools/confirm-close-review-handler';
+import { CLOSE_REVIEW_BURNOUT_TOOL } from './tools/close-review-burnout-tool';
+import { handleCloseReviewBurnout } from './tools/close-review-burnout-handler';
 import { MARK_WHAT_BLOCKED_ASKED_TOOL } from './tools/mark-what-blocked-asked-tool';
 import { handleMarkWhatBlockedAsked } from './tools/mark-what-blocked-asked-handler';
 import type { PreviewState } from '@/lib/evening-review/apply-overrides';
@@ -269,6 +271,11 @@ export function getToolsForMode(
   // undefined === undefined quando triageState/moodIntake mancano -> pending.
   const moodPending = triageState?.moodIntake?.mood === undefined;
   const energyPending = triageState?.moodIntake?.energyEnd === undefined;
+  // Slice 8a Strada A: apertura = nessuna entry aperta. close_review_burnout
+  // esposto SOLO qui; currentEntryId set = walk -> soppresso (anti-collisione C3,
+  // vedi run#6 cmq4ckmqn). Loose == null cattura null|undefined|triageState-assente
+  // (stesso idioma di triage.ts:501).
+  const noEntryOpen = triageState?.currentEntryId == null;
 
   if (phase === 'per_entry') {
     const tools: LLMTool[] = [
@@ -278,6 +285,8 @@ export function getToolsForMode(
     ];
     if (moodPending) tools.push(RECORD_MOOD_TOOL);
     if (energyPending) tools.push(RECORD_ENERGY_TOOL);
+    // Slice 8a Strada A: esposto solo in apertura (no entry aperta).
+    if (noEntryOpen) tools.push(CLOSE_REVIEW_BURNOUT_TOOL);
     return tools;
   }
 
@@ -308,6 +317,9 @@ export function getToolsForMode(
   ];
   if (moodPending) tools.push(RECORD_MOOD_TOOL);
   if (energyPending) tools.push(RECORD_ENERGY_TOOL);
+  // Slice 8a Strada A: come ramo per_entry. Su turno-1 fresh la phase e'
+  // undefined (contextJson null) -> e' QUI che l'apertura espone il tool.
+  if (noEntryOpen) tools.push(CLOSE_REVIEW_BURNOUT_TOOL);
   return tools;
 }
 
@@ -440,6 +452,8 @@ export async function executeTool(
         return executeConfirmPlanPreview(context);
       case 'confirm_close_review':
         return await executeConfirmCloseReview(userId, context);
+      case 'close_review_burnout':
+        return await executeCloseReviewBurnout(userId, context);
       default:
         return { kind: 'sideEffect', success: false, error: `Unknown tool: ${toolName}` };
     }
@@ -1397,6 +1411,47 @@ async function executeConfirmCloseReview(
     data: { ok: true, alreadyClosed: result.alreadyClosed },
     reviewId: result.reviewId,
     dailyPlanId: result.dailyPlanId,
+    alreadyClosed: result.alreadyClosed,
+  };
+}
+
+async function executeCloseReviewBurnout(
+  userId: string,
+  context: ToolExecutionContext | undefined,
+): Promise<ToolExecutionResult> {
+  // Guard: serve triageState (moodIntake/clientDate/whatBlocked) + threadId, e
+  // NESSUNA entry aperta. currentEntryId set = walk -> rigetta (backstop
+  // dell'esposizione getToolsForMode; rende finalmente vera la stringa sotto).
+  // Slice 8a Strada A. Short-circuit: se triageState manca, il primo clause
+  // ritorna prima di leggere currentEntryId. Loose != null come triage.ts:501.
+  if (!context?.triageState || !context.threadId || context.triageState.currentEntryId != null) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'close_review_burnout is only available during the evening review opening',
+    };
+  }
+
+  const result = await handleCloseReviewBurnout({
+    userId,
+    threadId: context.threadId,
+    triageState: context.triageState,
+  });
+
+  if (!result.ok) {
+    return { kind: 'sideEffect', success: false, error: result.error };
+  }
+
+  // Riuso del kind terminale 'closeReview' (Via 1): l'orchestrator ramifica
+  // solo su alreadyClosed (orchestrator.ts:500-511 / :719-763) e non legge
+  // dailyPlanId a valle. Sentinella '' perche' il path burnout non produce
+  // DailyPlan. NESSUNA modifica alla union ToolExecutionResult.
+  return {
+    kind: 'closeReview',
+    success: true,
+    data: { ok: true, alreadyClosed: result.alreadyClosed, burnout: true },
+    reviewId: result.reviewId,
+    dailyPlanId: '',
     alreadyClosed: result.alreadyClosed,
   };
 }

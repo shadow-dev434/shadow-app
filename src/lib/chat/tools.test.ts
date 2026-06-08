@@ -15,8 +15,15 @@ vi.mock('@/lib/db', () => ({
   },
 }));
 
+// Backstop test (Slice 8a Strada A): isola executeCloseReviewBurnout dal DB
+// mockando il handler. vi.mock e' hoisted -> sopra gli import come @/lib/db.
+vi.mock('./tools/close-review-burnout-handler', () => ({
+  handleCloseReviewBurnout: vi.fn(),
+}));
+
 import { db } from '@/lib/db';
 import { executeTool, getToolsForMode } from './tools';
+import { handleCloseReviewBurnout } from './tools/close-review-burnout-handler';
 import type { TriageState } from '@/lib/evening-review/triage';
 
 beforeEach(() => {
@@ -1497,5 +1504,69 @@ describe('getToolsForMode: mood/energy intake gating', () => {
     const tools = getToolsForMode('evening_review', undefined, ts({ mood: 4 }));
     expect(has(tools, 'record_mood')).toBe(false);
     expect(has(tools, 'record_energy')).toBe(true);
+  });
+});
+
+// ── getToolsForMode (Slice 8a Strada A: close_review_burnout currentEntryId
+// gating) ───────────────────────────────────────────────────────────────────
+// Anti-collisione C3 (run#6 cmq4ckmqn): close_review_burnout esposto SOLO in
+// apertura (nessuna entry aperta, currentEntryId null). currentEntryId set =
+// walk -> tool soppresso in entrambi i rami (per_entry e undefined legacy).
+// triageState assente -> fail-open all'esposizione (handler rigetta a valle).
+
+describe('getToolsForMode: close_review_burnout currentEntryId gating (Slice 8a Strada A)', () => {
+  const names = (tools: ReturnType<typeof getToolsForMode>) => tools.map((t) => t.name);
+  const CUID = 'cmq4ckhuj0003ibdoadhigoqa'; // entry aperta (run#6)
+
+  it('per_entry + currentEntryId=null -> close_review_burnout ESPOSTO (apertura multi-turno)', () => {
+    const ns = names(getToolsForMode('evening_review', 'per_entry', makeState({ currentEntryId: null })));
+    expect(ns).toContain('close_review_burnout');
+  });
+  it('per_entry + currentEntryId=<cuid> -> close_review_burnout ASSENTE (walk)', () => {
+    const ns = names(getToolsForMode('evening_review', 'per_entry', makeState({ currentEntryId: CUID })));
+    expect(ns).not.toContain('close_review_burnout');
+  });
+  it('undefined + currentEntryId=null -> close_review_burnout ESPOSTO (apertura turno 1, contextJson null)', () => {
+    const ns = names(getToolsForMode('evening_review', undefined, makeState({ currentEntryId: null })));
+    expect(ns).toContain('close_review_burnout');
+  });
+  it('undefined + currentEntryId=<cuid> -> close_review_burnout ASSENTE (walk legacy pre-6c)', () => {
+    const ns = names(getToolsForMode('evening_review', undefined, makeState({ currentEntryId: CUID })));
+    expect(ns).not.toContain('close_review_burnout');
+  });
+  it('per_entry + triageState assente -> close_review_burnout ESPOSTO (apertura per default; handler rigetta a valle)', () => {
+    const ns = names(getToolsForMode('evening_review', 'per_entry', undefined));
+    expect(ns).toContain('close_review_burnout');
+  });
+});
+
+describe('executeTool: close_review_burnout backstop (currentEntryId guard, Slice 8a Strada A)', () => {
+  const CUID = 'cmq4ckhuj0003ibdoadhigoqa';
+
+  it('currentEntryId != null -> rigetta al guard, NON delega al handler (anti-collisione walk)', async () => {
+    const result = await executeTool('close_review_burnout', {}, 'user1', {
+      triageState: makeState({ currentEntryId: CUID }),
+      threadId: 'thread1',
+    });
+    expect(result.kind).toBe('sideEffect');
+    expect(result.success).toBe(false);
+    expect((result as { error?: string }).error).toContain('only available during the evening review opening');
+    expect(handleCloseReviewBurnout).not.toHaveBeenCalled();
+  });
+
+  it('currentEntryId == null -> supera il guard, delega al handler (apertura)', async () => {
+    vi.mocked(handleCloseReviewBurnout).mockResolvedValue({ ok: true, reviewId: 'r1', alreadyClosed: false });
+    const result = await executeTool('close_review_burnout', {}, 'user1', {
+      triageState: makeState({ currentEntryId: null }),
+      threadId: 'thread1',
+    });
+    expect(handleCloseReviewBurnout).toHaveBeenCalledOnce();
+    expect(result.kind).toBe('closeReview');
+  });
+
+  it('triageState assente -> rigetta al guard (manca triageState), NON delega', async () => {
+    const result = await executeTool('close_review_burnout', {}, 'user1', { threadId: 'thread1' });
+    expect(result.success).toBe(false);
+    expect(handleCloseReviewBurnout).not.toHaveBeenCalled();
   });
 });
