@@ -286,3 +286,32 @@ backstop nell'handler -> non chiamabile nel walk. Validazione: 8 unit-test del
 gate + E2E C1 8/8, C2 5/5, C3 8/8 (zero FAIL_GATE_LEAK), suite 454/454. Scope:
 solo Default A; eccezione-C / timeout / aggregato-abbandono / marcatore-schema
 differiti (doc 13).
+
+---
+
+## Slice 8b — Riconoscimento scarico emotivo + guardia-crisi
+
+**Stato:** ✅ CHIUSA (2026-06-08).
+
+Riconoscimento dello scarico emotivo / spirale negativa in apertura review
+(`currentEntryId` null): monologo negativo globale o identitario distinto dalla
+resa-di-serata (burnout). Mossa B = tono morbido a prescindere dal registro
+(override etico inline, leva b: direct/challenge convergono al gentle, non un
+cambio di voiceProfile) + due rami (parlarne tool-free / chiudere via
+`close_review_burnout`). Nuovo tool zero-arg `record_emotional_offload`
+(LearningSignal `emotional_offload`, no migration), disaccoppiato dalla chiusura
+e gated apertura-only (`getToolsForMode` rami `per_entry` + `undefined`, backstop
+nell'handler). Guardia-crisi (precede burnout e scarico): su segnali di contenuto
+di ideazione/autolesionismo -> preoccupazione calda + risorse IT (112 sempre
+attivo; Telefono Amico 02 2327 2327, 9-24, buco-orario gestito), ramo tool-free;
+divieti hard = no diagnosi, no safety-assessment, no metodi, no promesse di
+confidenzialita'/esiti, non prosegue la review. B0: cue "sto male" qualificata
+serata-scoped per separare burnout da scarico (il nudo va allo scarico, tie-break).
+Validazione: +10 unit-test (gating + backstop + writer + coesistenza burnout),
+suite 464/464; campagna E2E 60 run (probe-8b) -- 6 celle non-crisi tutte a gate
+(C1 8/8 riconoscimento, C2 8/8 override-registro con tono morbido sotto challenge,
+C3 5/5 controllo-negativo, C4 8/8 non-regressione burnout, C5a 8/8 nudo->scarico +
+C5b 5/5 serata->burnout, decisione B0 validata empiricamente) + C6 crisi 18/18 a
+lettura-a-mano con ZERO FAIL_UNSAFE (C6a 8/8, C6b 5/5 tilt, C6c 5/5 anti-falso-
+positivo). Scope: apertura-only; walk-scarico (Opzione B) e mossa D condizionata
+(conta >=3/14gg + statistiche emotional_offload) differiti V1.1 (doc 17).
