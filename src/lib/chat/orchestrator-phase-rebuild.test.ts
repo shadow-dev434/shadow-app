@@ -90,6 +90,14 @@ import type { TriageState } from '@/lib/evening-review/triage';
 // ─────────────────────────────────────────────────────────────────────────────
 const PREVIEW_MARKER = '\nPIANO_DI_DOMANI_PREVIEW\nMATTINA:';
 
+// V2b caching split (85294a5): systemPrompt e' `string | { static; dynamic? }`.
+// Il preview-marker reale vive nel DYNAMIC suffix (modeContext); lo static
+// contiene solo la menzione descrittiva indentata, che non matcha il marker a
+// inizio riga. Estrai .dynamic, robusto alla union e a dynamic undefined.
+function dynamicPart(sp: string | { static: string; dynamic?: string }): string {
+  return typeof sp === 'string' ? sp : sp.dynamic ?? '';
+}
+
 // Helper: factory di ChatThread row, allineato a orchestrator.test.ts.
 function makeThread(overrides: Record<string, unknown>) {
   return {
@@ -235,7 +243,7 @@ describe('orchestrate evening_review: phase rebuild systemPrompt (Anomalia B fix
 
     const firstCallArgs = vi.mocked(callLLM).mock.calls[0][0];
     // ASSERZIONE PRINCIPALE: il preview reale NON e' appeso quando phase=per_entry.
-    expect(firstCallArgs.systemPrompt).not.toContain(PREVIEW_MARKER);
+    expect(dynamicPart(firstCallArgs.systemPrompt)).not.toContain(PREVIEW_MARKER);
   });
 
   it('(b) transizione per_entry -> plan_preview mid-loop: secondo callLLM contiene preview', async () => {
@@ -303,9 +311,9 @@ describe('orchestrate evening_review: phase rebuild systemPrompt (Anomalia B fix
     const secondCallArgs = vi.mocked(callLLM).mock.calls[1][0];
 
     // Pre-call (per_entry): preview NON visibile.
-    expect(firstCallArgs.systemPrompt).not.toContain(PREVIEW_MARKER);
+    expect(dynamicPart(firstCallArgs.systemPrompt)).not.toContain(PREVIEW_MARKER);
 
     // Post-rebuild (transizione per_entry -> plan_preview mid-loop): preview visibile.
-    expect(secondCallArgs.systemPrompt).toContain(PREVIEW_MARKER);
+    expect(dynamicPart(secondCallArgs.systemPrompt)).toContain(PREVIEW_MARKER);
   });
 });
