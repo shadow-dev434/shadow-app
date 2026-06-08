@@ -83,7 +83,7 @@ interface TurnResponse {
   toolsExecuted?: unknown;
 }
 
-async function postTurn(opts: {
+export async function postTurn(opts: {
   baseUrl: string;
   cookie: string;
   threadId: string | null;

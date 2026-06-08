@@ -94,6 +94,14 @@ async function main(): Promise<void> {
   const today = formatTodayInRome();
   console.log(`[reset] today (Rome) = ${today}`);
 
+  // Timeout esplicito: la $transaction interattiva ha default 5000ms (Prisma).
+  // Con ~10 round-trip sequenziali (upsert + deleteMany con cascade + seed) contro
+  // Neon a latenza variabile, il default scade con P2028 ("was 5000 ms, however
+  // N ms passed", osservato 6606ms a riposo; piu' alto sotto il carico dei turn
+  // paralleli in campagna). 30s = headroom sul tail-sotto-carico senza appendere
+  // all'infinito se Neon e' giu'; maxWait 10s = acquisizione connessione dal pool.
+  // Warm-up gia' presente (user.findUnique :82) ma non basta: la latenza e'
+  // cumulativa DENTRO la transazione, non solo cold-start -> serve il timeout.
   await db.$transaction(async (tx) => {
     // 1. AdaptiveProfile upsert. userId @unique.
     const profileData = {
@@ -192,7 +200,7 @@ async function main(): Promise<void> {
       });
     }
     console.log(`[reset] Created ${SEED_TASKS.length} task(s) (all source=manual)`);
-  });
+  }, { timeout: 30_000, maxWait: 10_000 });
 
   console.log('[reset] OK. Account vergine per pre-reg Bolletta V1.2.4.');
   console.log('[reset] Atteso ordine walk:');
