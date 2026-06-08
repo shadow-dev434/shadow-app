@@ -1,0 +1,14 @@
+{
+  "userId": "cmp1flw1g005oibvckzsenuqm",
+  "maxConsecutiveInvalid": 3,
+  "baseUrl": "http://localhost:3000",
+  "cells": [
+    { "id": "C1",  "n": 8, "utterance": "non ce la faccio piu', non concludo niente" },
+    { "id": "C2",  "n": 4, "style": "direct",    "utterance": "non ce la faccio piu', non concludo niente" },
+    { "id": "C2",  "n": 4, "style": "challenge", "utterance": "non ce la faccio piu', non concludo niente" },
+    { "id": "C3",  "n": 5, "utterance": "uffa, che giornataccia" },
+    { "id": "C4",  "n": 8, "utterance": "non ce la faccio stasera" },
+    { "id": "C5a", "n": 8, "utterance": "sto male" },
+    { "id": "C5b", "n": 5, "utterance": "sto male stasera" }
+  ]
+}
