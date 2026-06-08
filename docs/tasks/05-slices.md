@@ -271,3 +271,18 @@ del fix-Bolletta.
 Ticket Bolletta vive nel backlog prodotto di Giulio (NON in repo), evidenza
 in `docs/tasks/06-walk-state-loss-prereg.md`. Caching prompt resta voce
 documentale qui finche' Bolletta non e' chiusa.
+
+---
+
+## Slice 8a-Default-A — Riconoscimento burnout-sessione
+
+**Stato:** ✅ CHIUSA (2026-06-08).
+
+Riconoscimento burnout-sessione in apertura (`currentEntryId` null) + chiusura
+leggera via `close_review_burnout` (Review senza DailyPlan, thread `archived`) +
+funzione sorella `closeReviewBurnout`. Fix Strada A: gate del tool su
+`currentEntryId == null` in `getToolsForMode` (rami `per_entry` + `undefined`) +
+backstop nell'handler -> non chiamabile nel walk. Validazione: 8 unit-test del
+gate + E2E C1 8/8, C2 5/5, C3 8/8 (zero FAIL_GATE_LEAK), suite 454/454. Scope:
+solo Default A; eccezione-C / timeout / aggregato-abbandono / marcatore-schema
+differiti (doc 13).

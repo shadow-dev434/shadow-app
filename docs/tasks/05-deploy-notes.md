@@ -1287,3 +1287,28 @@ Riferimento: scoperta durante test V1.2.3 commit `db88679`, scenario (iv)
 `tools.test.ts`.
 
 - **Nota di processo: `bun test` vs `bun run test`.** Lezione operativa emersa voce 1 sessione. Il comando `bun test` (presente in briefing voce 1) invoca il runner nativo Bun, privo delle API `vi.*` di vitest: produce falsi-fail `vi.mocked is not a function` su tutta la suite. Comando corretto per vitest e' `bun run test` (script `test` in `package.json` = `vitest run`). Pro-memoria per future sessioni, agenti, briefing.
+
+## Note tecniche emerse durante Slice 8a-Default-A (2026-06-08)
+
+- **Caching-2b test staleness (`orchestrator-phase-rebuild.test.ts`).** Rosso dal
+  commit `85294a5` (systemPrompt da `string` a `{static,dynamic?}`): l'assert
+  leggeva l'oggetto (coerciato a `[]` da Vitest) invece di `.dynamic`. Risolto col
+  fix-assert (helper `dynamicPart`). Anomalia-B (preview-rebuild mid-loop)
+  confermata intatta. Baseline reale = 454/454. Lezione: dopo un refactor della
+  shape di un parametro condiviso, girare la suite intera, non solo il typecheck.
+- **Hook-blacklist `tools.ts` (#3).** Gli edit 8a a `tools.ts` (giugno: PASSTHROUGH
+  07-06 e 08-06) e `prompts.ts` (sempre blacklistato, 0 auto-approve) caddero DOPO
+  `46d7505` (blacklist tools.ts, 2026-06-06) -> ratificati, nessuna edit 8a
+  auto-approvata senza diff-as-text. Debito storico: `tools.ts` era
+  auto-approvabile (whitelist `lib-other`) dal 2026-05-04 al 2026-06-06 (ultimo
+  AUTO_APPROVE 05-16); chiuso da `46d7505`.
+- **Gap test `closeReviewBurnout`.** La funzione sorella non ha unit-test dedicato:
+  coperta indiretto dai gate-test (`tools.test.ts`) + E2E C1 8/8. Debito:
+  aggiungere un test diretto (DB mockato, mirror `closeReview`).
+- **Debiti infra residui (DA VERIFICARE).** Ipotesi, non ancora confermata a
+  sorgente: `reset-walk-state-loss.ts` e `seed-virgin-test-6c.ts` potrebbero avere
+  la stessa `$transaction` senza timeout gia' irrobustita in
+  `reset-walk-bolletta-s2` (timeout 30s / maxWait 10s) -> potenziale P2028 sotto
+  carico. Da accertare leggendo le due `$transaction` prima di applicare il fix.
+  Separato: valutare `pgbouncer=true&connection_limit=1` su `DATABASE_URL`
+  (Neon+Prisma).
