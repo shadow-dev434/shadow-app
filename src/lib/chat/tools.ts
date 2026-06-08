@@ -65,6 +65,8 @@ import { CONFIRM_CLOSE_REVIEW_TOOL } from './tools/confirm-close-review-tool';
 import { handleConfirmCloseReview } from './tools/confirm-close-review-handler';
 import { CLOSE_REVIEW_BURNOUT_TOOL } from './tools/close-review-burnout-tool';
 import { handleCloseReviewBurnout } from './tools/close-review-burnout-handler';
+import { RECORD_EMOTIONAL_OFFLOAD_TOOL } from './tools/record-emotional-offload-tool';
+import { handleRecordEmotionalOffload } from './tools/record-emotional-offload-handler';
 import { MARK_WHAT_BLOCKED_ASKED_TOOL } from './tools/mark-what-blocked-asked-tool';
 import { handleMarkWhatBlockedAsked } from './tools/mark-what-blocked-asked-handler';
 import type { PreviewState } from '@/lib/evening-review/apply-overrides';
@@ -287,6 +289,7 @@ export function getToolsForMode(
     if (energyPending) tools.push(RECORD_ENERGY_TOOL);
     // Slice 8a Strada A: esposto solo in apertura (no entry aperta).
     if (noEntryOpen) tools.push(CLOSE_REVIEW_BURNOUT_TOOL);
+    if (noEntryOpen) tools.push(RECORD_EMOTIONAL_OFFLOAD_TOOL);
     return tools;
   }
 
@@ -320,6 +323,7 @@ export function getToolsForMode(
   // Slice 8a Strada A: come ramo per_entry. Su turno-1 fresh la phase e'
   // undefined (contextJson null) -> e' QUI che l'apertura espone il tool.
   if (noEntryOpen) tools.push(CLOSE_REVIEW_BURNOUT_TOOL);
+  if (noEntryOpen) tools.push(RECORD_EMOTIONAL_OFFLOAD_TOOL);
   return tools;
 }
 
@@ -454,6 +458,8 @@ export async function executeTool(
         return await executeConfirmCloseReview(userId, context);
       case 'close_review_burnout':
         return await executeCloseReviewBurnout(userId, context);
+      case 'record_emotional_offload':
+        return await executeRecordEmotionalOffload(userId, context);
       default:
         return { kind: 'sideEffect', success: false, error: `Unknown tool: ${toolName}` };
     }
@@ -1453,6 +1459,37 @@ async function executeCloseReviewBurnout(
     reviewId: result.reviewId,
     dailyPlanId: '',
     alreadyClosed: result.alreadyClosed,
+  };
+}
+
+async function executeRecordEmotionalOffload(
+  userId: string,
+  context: ToolExecutionContext | undefined,
+): Promise<ToolExecutionResult> {
+  // Backstop apertura-only (mirror del gate getToolsForMode/D4): rigetta se
+  // c'e' un'entry aperta (walk) o se manca triageState. NON richiede threadId:
+  // a differenza di close_review_burnout (terminale, archivia ChatThread per
+  // id), l'handler offload (D2) usa solo userId -> threadId non serve. Short-
+  // circuit: se triageState manca, ritorna prima di leggere currentEntryId.
+  // Loose != null come close_review_burnout (triage.ts:501).
+  if (!context?.triageState || context.triageState.currentEntryId != null) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'record_emotional_offload is only available during the evening review opening',
+    };
+  }
+
+  // Scrittura del signal (D2). NON terminale: nessun tocco a ChatThread, nessun
+  // DailyPlan, nessuna chiusura. Gli errori del create propagano al try/catch
+  // del dispatch. Kind 'sideEffect' success (NON 'mutator': l'offload non muta
+  // il triageState; NON 'closeReview': non e' terminale).
+  await handleRecordEmotionalOffload({ userId });
+
+  return {
+    kind: 'sideEffect',
+    success: true,
+    data: { recorded: 'emotional_offload' },
   };
 }
 

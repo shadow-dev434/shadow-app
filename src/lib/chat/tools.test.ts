@@ -1570,3 +1570,100 @@ describe('executeTool: close_review_burnout backstop (currentEntryId guard, Slic
     expect(handleCloseReviewBurnout).not.toHaveBeenCalled();
   });
 });
+
+// ── Slice 8b: record_emotional_offload wiring (additivo, NON modifica i test 8a) ──
+// Mirror dei test 8a (close_review_burnout): gating in apertura/walk + backstop
+// dell'executor. L'handler offload NON e' mockato: gira reale e scrive su
+// db.learningSignal.create (gia' mockato al top) -> verifica anche i campi.
+
+describe('getToolsForMode: record_emotional_offload currentEntryId gating (Slice 8b)', () => {
+  const names = (tools: ReturnType<typeof getToolsForMode>) => tools.map((t) => t.name);
+  const CUID = 'cmq4ckhuj0003ibdoadhigoqa'; // entry aperta
+
+  it('per_entry + currentEntryId=null -> record_emotional_offload ESPOSTO (apertura)', () => {
+    const ns = names(getToolsForMode('evening_review', 'per_entry', makeState({ currentEntryId: null })));
+    expect(ns).toContain('record_emotional_offload');
+  });
+  it('per_entry + currentEntryId=<cuid> -> record_emotional_offload ASSENTE (walk)', () => {
+    const ns = names(getToolsForMode('evening_review', 'per_entry', makeState({ currentEntryId: CUID })));
+    expect(ns).not.toContain('record_emotional_offload');
+  });
+  it('undefined + currentEntryId=null -> record_emotional_offload ESPOSTO (apertura turno 1)', () => {
+    const ns = names(getToolsForMode('evening_review', undefined, makeState({ currentEntryId: null })));
+    expect(ns).toContain('record_emotional_offload');
+  });
+  it('undefined + currentEntryId=<cuid> -> record_emotional_offload ASSENTE (walk legacy)', () => {
+    const ns = names(getToolsForMode('evening_review', undefined, makeState({ currentEntryId: CUID })));
+    expect(ns).not.toContain('record_emotional_offload');
+  });
+});
+
+describe('executeTool: record_emotional_offload backstop + writer (Slice 8b)', () => {
+  const CUID = 'cmq4ckhuj0003ibdoadhigoqa';
+
+  it('currentEntryId != null -> rigetta al guard, NON scrive il signal (apertura-only)', async () => {
+    const result = await executeTool('record_emotional_offload', {}, 'user1', {
+      triageState: makeState({ currentEntryId: CUID }),
+    });
+    expect(result.kind).toBe('sideEffect');
+    expect(result.success).toBe(false);
+    expect((result as { error?: string }).error).toContain('only available during the evening review opening');
+    expect(db.learningSignal.create).not.toHaveBeenCalled();
+  });
+
+  it('triageState assente -> rigetta al guard, NON scrive il signal', async () => {
+    const result = await executeTool('record_emotional_offload', {}, 'user1', {});
+    expect(result.success).toBe(false);
+    expect(db.learningSignal.create).not.toHaveBeenCalled();
+  });
+
+  it('currentEntryId == null + triageState presente -> success, scrive LearningSignal emotional_offload SENZA taskId (threadId non richiesto)', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.learningSignal.create).mockResolvedValue({ id: 'sigOffload' } as any);
+    // NB: nessun threadId nel context -> il backstop offload NON lo richiede
+    // (a differenza del burnout, terminale). L'handler reale gira (db mockato).
+    const result = await executeTool('record_emotional_offload', {}, 'user1', {
+      triageState: makeState({ currentEntryId: null }),
+    });
+    expect(result.kind).toBe('sideEffect');
+    expect(result.success).toBe(true);
+    expect(db.learningSignal.create).toHaveBeenCalledTimes(1);
+    // toHaveBeenCalledWith = deep-equal: l'assenza di taskId e' verificata qui
+    // (un taskId presente farebbe fallire il match).
+    expect(db.learningSignal.create).toHaveBeenCalledWith({
+      data: {
+        userId: 'user1',
+        signalType: 'emotional_offload',
+        metadata: '{}',
+      },
+    });
+  });
+});
+
+describe('getToolsForMode: coesistenza burnout<->scarico in apertura (sentinella B0, Slice 8b)', () => {
+  // DETERMINISTICO qui: la COESISTENZA dei due tool (entrambi esposti in apertura,
+  // nessuno nel walk) -- verso complementare di B0 a livello set-tool.
+  // NON testabile qui (E2E, celle C4/C5a/C5b di doc 18): la DISCRIMINAZIONE
+  // semantica del modello -- "sto male" nudo -> scarico vs "sto male stasera" ->
+  // burnout. Quello e' riconoscimento probabilistico, misurato dalla campagna.
+  const names = (tools: ReturnType<typeof getToolsForMode>) => tools.map((t) => t.name);
+  const CUID = 'cmq4ckhuj0003ibdoadhigoqa';
+  const BOTH = ['close_review_burnout', 'record_emotional_offload'];
+
+  it('apertura (currentEntryId=null, per_entry) -> set contiene ENTRAMBI', () => {
+    const ns = names(getToolsForMode('evening_review', 'per_entry', makeState({ currentEntryId: null })));
+    for (const n of BOTH) expect(ns).toContain(n);
+  });
+  it('apertura (currentEntryId=null, undefined turno 1) -> set contiene ENTRAMBI', () => {
+    const ns = names(getToolsForMode('evening_review', undefined, makeState({ currentEntryId: null })));
+    for (const n of BOTH) expect(ns).toContain(n);
+  });
+  it('walk (currentEntryId=<cuid>) -> set NON contiene NESSUNO dei due (per_entry e undefined)', () => {
+    const nsPer = names(getToolsForMode('evening_review', 'per_entry', makeState({ currentEntryId: CUID })));
+    const nsUnd = names(getToolsForMode('evening_review', undefined, makeState({ currentEntryId: CUID })));
+    for (const n of BOTH) {
+      expect(nsPer).not.toContain(n);
+      expect(nsUnd).not.toContain(n);
+    }
+  });
+});

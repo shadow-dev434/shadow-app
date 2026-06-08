@@ -39,7 +39,7 @@ export const CLOSE_REVIEW_BURNOUT_TOOL: LLMTool = {
     "Chiude la review serale per BURNOUT, in apertura. Da chiamare SOLO quando " +
     "l'utente, prima di entrare nel giro dei task (CURRENT_ENTRY=none), esprime " +
     "che stasera non ce la fa con la review INTERA (es. \"stasera non ce la " +
-    "faccio\", \"lasciamo perdere\", \"sto male\", \"sono distrutto\"). " +
+    "faccio\", \"lasciamo perdere\", \"sto male stasera\", \"sono distrutto\"). " +
     "NESSUN piano per domani viene prodotto, nessuna domanda che incalza: " +
     "Shadow riconosce e libera la serata. NON usare per una singola entry " +
     "durante il walk (per quello c'e' mark_entry_discussed con outcome " +
