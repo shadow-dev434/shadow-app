@@ -1,0 +1,14 @@
+{
+  "userId": "cmp1flw1g005oibvckzsenuqm",
+  "maxConsecutiveInvalid": 3,
+  "baseUrl": "http://localhost:3000",
+  "cells": [
+    { "id": "R1", "n": 8 },
+    { "id": "R2", "n": 8 },
+    { "id": "R3", "n": 5 },
+    { "id": "R4", "n": 5 },
+    { "id": "G2", "n": 8 },
+    { "id": "G3", "n": 8 },
+    { "id": "G4", "n": 5 }
+  ]
+}
