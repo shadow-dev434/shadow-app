@@ -315,3 +315,72 @@ C5b 5/5 serata->burnout, decisione B0 validata empiricamente) + C6 crisi 18/18 a
 lettura-a-mano con ZERO FAIL_UNSAFE (C6a 8/8, C6b 5/5 tilt, C6c 5/5 anti-falso-
 positivo). Scope: apertura-only; walk-scarico (Opzione B) e mossa D condizionata
 (conta >=3/14gg + statistiche emotional_offload) differiti V1.1 (doc 17).
+
+## Slice 8c — re-entry post-assenza ✅ CHIUSA
+
+**Cosa fa.** Gestisce il rientro dell'utente dopo un'assenza, all'apertura della review
+serale (`currentEntryId=null`, primo turno), con tono **bandato** e nel rispetto di "nomina
+ma non rinfaccia" — il rientro NON è una colpa da rinfacciare (nervo etico di 8c, speculare
+a 8b). Due pilastri:
+
+- **Riconoscimento** (apertura serale, primo turno). Da un **gap calcolato server-side**
+  (`max(ChatThread.lastTurnAt)` su tutti i mode, escluso il thread corrente;
+  `gapDays = floor((now − maxLastTurnAt)/86_400_000)`), Shadow saluta il rientro:
+  - **banda leggera** (`gapDays` 3–13): saluto caldo, **registro preservato**
+    (`direct`/`challenge` restano), **nessun numero/durata**, nessun override.
+  - **banda piena** (`gapDays ≥ 14`): **override etico a `gentle`** (convergenza *testuale*
+    leva-b, NON cambio di `voiceProfile`), durata **qualitativa** (mai numerica), hint
+    "prenditi il tempo". Dopo il saluto, ritorno al registro scelto.
+  - Forma inbox **ridotta**: nominare qualitativamente l'accumulo → walk normale (per-entry
+    `cancelled`→`archived` esistente). Nessun bulk-archive, nessun conteggio aggregato.
+  - **Precedenza apertura:** crisi > scarico/burnout > re-entry. Il saluto di rientro non
+    sovrascrive mai una guardia-crisi (sicurezza prima).
+- **Raggiungibilità** (la spina, `active-thread/route.ts`). Il rientrante tipico atterrava
+  su un thread non-evening `active` residuo che **nascondeva la card** della review (buco
+  dominante: i thread non-evening non transitano mai a terminale, nessun cleanup li tocca,
+  nessun filtro temporale li esclude). Su {in-finestra-serale ∧ `gapDays ≥ 3` ∧ thread
+  attivo più recente non-evening}, la spina **archivia l'intero set non-terminale**
+  (`state in {active,paused}`, incl. l'eventuale evening_review `paused` — "ombra del
+  paused-evening") e instrada al ramo card (`threadId=null`, review fresca). `normalize.ts`
+  intoccato; tre condizioni strette confinano il blast-radius (utente quotidiano / chi apre
+  fuori finestra mai toccati). La `lastTurnAt` persiste all'archiviazione → il gap al primo
+  turno resta corretto.
+
+**Soglia di riconoscimento ≥3 giorni** (decisione R6, in bande), **banda piena a ≥14**
+(`LONG_ABSENCE_THRESHOLD_DAYS`, riusato).
+
+**Decisioni cardine (R6).** Superficie = apertura serale (§1.3/1.4 mattutini differiti);
+scope §6.4 ridotto (budget elastico *tracciato* e domanda-memoria → `UserMemory` differiti);
+fonte gap = `max(lastTurnAt)` "assente del tutto", non "nessuna review"; raggiungibilità
+dentro 8c (il buco era dominante, non separabile); rinforzo **G2** (crisi+re-entry) con
+esempio worked, **G3** (burnout+re-entry) lasciato come cella di rischio scoperto.
+
+**Validazione.** Scaffold 5 edit, typecheck pulito, vitest **477/477** (helper con 10 unit =
+gate primario; +3 unit di formato `RE_ENTRY`). Tooling E2E con disciplina L4: scorer +
+acceptance verdi, **S1** (spina, route-level, 4 scenari) verde, **S2** (emissione, replica
+d'integrazione che esercita la query `aggregate(NOT id=fresh)` reale) verde, pre-validazione
+stimoli §6 verde — tutti gate dei successivi. **Campagna E2E 47/47 a soglia, 0 INVALID, 0
+ABORT, 0 re-freeze:**
+- R1 light/direct 8/8 (0 numero-recitato, registro preservato); R2 full/challenge 8/8
+  (0 numero-recitato, override a gentle + hint); R3 no-recognition 5/5; R4 utente-nuovo 5/5.
+- **G2 crisi+re-entry 8/8 a lettura-a-mano, zero FAIL_UNSAFE** (guardia-crisi, risorse
+  112 / Telefono Amico esatte, nessuna contaminazione-saluto) — giudizio di sicurezza R6
+  positivo.
+- **G3 burnout+re-entry 8/8** (`close_review_burnout`, **0/8 contaminazione-saluto** →
+  l'asimmetria scelta ha retto, nessun trigger di revisione); G4 scarico+re-entry 5/5.
+
+**Commit (pushato su origin):**
+- `1ad2377` — feat(evening-review): slice 8c re-entry post-assenza (9 file, 392+/11−).
+  Lineage sopra `113081f` (8b).
+
+**Artefatti:** `docs/tasks/20-slice-8c-design.md` (design), `docs/tasks/21-slice-8c-e2e-prereg.md`
+(pre-reg congelata + esito campagna). Vincolo-in-avanti `threadId=null` per futuri trigger
+manuali di review in `05-deploy-notes.md` (F7).
+
+**Confidenza calibrata.** 47 run = campione esplorativo solido, non garanzia su ogni
+fraseggio; la beta su N grande valida asintoticamente, il monitoraggio di produzione (stesso
+`payloadJson`) è dove un caso non-testato emergerebbe.
+
+**Differiti (V1.1+):** §1.3/§1.4 (accenno-gap mattutino, salti brevi — altra superficie);
+budget elastico *tracciato* una-tantum; domanda-memoria finale → `UserMemory`; esempio
+burnout+re-entry (G3 0/8 contaminazione → non necessario, chiamata R6).
