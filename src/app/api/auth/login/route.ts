@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { encode } from 'next-auth/jwt';
 import { db } from '@/lib/db';
+import { getAuthSecret } from '@/lib/auth-secret';
 
 const SESSION_COOKIE_NAME = 'next-auth.session-token';
 const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 days
 
 export async function POST(req: NextRequest) {
+  const secret = getAuthSecret();
   try {
     const { email, password } = await req.json();
     if (!email || !password) {
@@ -39,7 +41,6 @@ export async function POST(req: NextRequest) {
     // i flag onboarding devono essere iniettati qui nei claim, altrimenti
     // il middleware li leggerebbe come undefined → utente redirect a /tour
     // anche se ha già completato tutto.
-    const secret = process.env.NEXTAUTH_SECRET || 'shadow-secret-change-in-production';
     const token = await encode({
       token: {
         id: user.id,

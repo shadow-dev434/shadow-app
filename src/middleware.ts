@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { getAuthSecret } from '@/lib/auth-secret';
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -27,12 +28,10 @@ export async function middleware(req: NextRequest) {
 
   // ─── Lettura JWT ─────────────────────────────────────────────────────
   // Se il token è assente o scaduto, getToken ritorna null e non lancia.
+  const secret = getAuthSecret();
   let token: Awaited<ReturnType<typeof getToken>> = null;
   try {
-    token = await getToken({
-      req,
-      secret: process.env.NEXTAUTH_SECRET || 'shadow-secret-change-in-production',
-    });
+    token = await getToken({ req, secret });
   } catch {
     token = null;
   }
