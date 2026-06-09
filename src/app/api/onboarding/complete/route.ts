@@ -37,6 +37,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ④ sink guard: niente sintesi/persistenza del profilo (difficultAreas
+    // art. 9 → UserProfile + AdaptiveProfile) senza consenso. profile è
+    // caricato senza `select` (oggetto pieno) → consentGivenAt è presente:
+    // la guard NON scatta su chi ha consentito (verificato a sorgente).
+    if (!profile.consentGivenAt) {
+      return NextResponse.json(
+        { error: 'Consenso richiesto prima di completare l\'onboarding.' },
+        { status: 403 },
+      );
+    }
+
     let answers: OnboardingAnswers = {};
     try {
       answers = JSON.parse(profile.onboardingAnswers || '{}') as OnboardingAnswers;

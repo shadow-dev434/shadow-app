@@ -48,6 +48,21 @@ export async function PATCH(req: NextRequest) {
   const { error, userId } = await requireSession(req);
   if (error) return error;
 
+  // ④ sink guard: nessuna scrittura di dati onboarding (incl. difficultAreas,
+  // dato di categoria particolare art. 9) senza consenso. Difesa a valle del
+  // middleware contro i colpi diretti via API; nel flusso normale il consenso
+  // è già stato dato a /consent prima di arrivare qui.
+  const consent = await db.userProfile.findUnique({
+    where: { userId },
+    select: { consentGivenAt: true },
+  });
+  if (!consent?.consentGivenAt) {
+    return NextResponse.json(
+      { error: 'Consenso richiesto prima di salvare i dati di onboarding.' },
+      { status: 403 },
+    );
+  }
+
   let body: { step?: number; answers?: Record<string, unknown> };
   try {
     body = (await req.json()) as { step?: number; answers?: Record<string, unknown> };

@@ -40,6 +40,7 @@ export async function middleware(req: NextRequest) {
   const userId = typeof token?.id === 'string' ? token.id : undefined;
   let tourCompleted = Boolean(token?.tourCompleted);
   let onboardingComplete = Boolean(token?.onboardingComplete);
+  let consentGiven = Boolean(token?.consentGiven);
 
   // Distinguiamo "nessun cookie" (visitatore fresco) da "cookie presente
   // ma non decodabile" (sessione scaduta). Il primo caso deve vedere la
@@ -78,10 +79,11 @@ export async function middleware(req: NextRequest) {
       const { dbEdge } = await import('@/lib/db-edge');
       const profile = await dbEdge.userProfile.findUnique({
         where: { userId },
-        select: { tourCompleted: true, onboardingComplete: true },
+        select: { tourCompleted: true, onboardingComplete: true, consentGivenAt: true },
       });
       tourCompleted = profile?.tourCompleted ?? false;
       onboardingComplete = profile?.onboardingComplete ?? false;
+      consentGiven = profile?.consentGivenAt != null;
     } catch (err) {
       // DB unreachable o crash imprevisto dell'adapter: log esplicito
       // per visibilità nei Vercel logs (nel #8.2 l'errore veniva
@@ -110,6 +112,7 @@ export async function middleware(req: NextRequest) {
   // in docs/tasks/02-onboarding-flow-map.md (decisione D8).
   const isHome = pathname === '/';
   const isTourPage = pathname === '/tour';
+  const isConsentPage = pathname === '/consent';
   const isOnboardingPage = pathname === '/onboarding';
 
   if (!userId) {
@@ -135,15 +138,26 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // JWT presente. Se l'utente è già sulla pagina del flow di cui ha
-  // bisogno, passa (evita loop redirect durante tour/onboarding).
-  if (isTourPage || isOnboardingPage) return NextResponse.next();
+  // JWT presente. Pagine di flow che l'utente deve poter raggiungere per
+  // completarle: tour e consenso sono sempre accessibili quando ci si è
+  // sopra; /onboarding solo DOPO il consenso, perché la raccolta dei dati
+  // di categoria particolare (art. 9) avviene dentro l'onboarding → il
+  // gate consenso non dev'essere saltabile via deep-link a /onboarding.
+  if (isTourPage || isConsentPage) return NextResponse.next();
+  if (isOnboardingPage && consentGiven) return NextResponse.next();
 
-  // Gate: prima il tour, poi l'onboarding. Ordine obbligato perché il
-  // register manda sempre al tour, poi all'onboarding.
+  // Gate sequenziale: tour → consenso → onboarding. Ordine obbligato: il
+  // register manda al tour; il consenso deve precedere ogni raccolta di
+  // dati sensibili (onboarding) e la prima conversazione (gated a valle).
   if (!tourCompleted) {
     const url = req.nextUrl.clone();
     url.pathname = '/tour';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
+  if (!consentGiven) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/consent';
     url.search = '';
     return NextResponse.redirect(url);
   }
@@ -164,6 +178,7 @@ export const config = {
     '/',
     '/tasks/:path*',
     '/tour',
+    '/consent',
     '/onboarding',
     '/chat/:path*',
   ],

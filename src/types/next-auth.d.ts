@@ -6,6 +6,7 @@ declare module 'next-auth' {
       id: string;
       tourCompleted: boolean;
       onboardingComplete: boolean;
+      consentGiven: boolean;
     } & DefaultSession['user'];
   }
 }
@@ -15,5 +16,6 @@ declare module 'next-auth/jwt' {
     id?: string;
     tourCompleted?: boolean;
     onboardingComplete?: boolean;
+    consentGiven?: boolean;
   }
 }

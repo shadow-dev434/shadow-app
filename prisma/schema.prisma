@@ -333,6 +333,14 @@ model UserProfile {
   onboardingAnswers        String  @default("{}") @db.Text // JSON: risposte grezze raccolte durante il flow
   onboardingAnswersVersion Int     @default(1) // versione dello schema domande, per migration lazy
 
+  // ── Consenso (GDPR) ──────────────────────────────────────────────
+  // Gate pre-raccolta: il middleware li legge nella stessa findUnique
+  // dei flag onboarding (single source: src/middleware.ts). Tutti
+  // additivi e safe su righe esistenti → migration non distruttiva.
+  consentGivenAt DateTime?                 // null = consenso non dato (gate → /consent)
+  consentVersion String?                   // versione dell'informativa accettata
+  consentArt9    Boolean  @default(false)  // consenso esplicito dati art. 9 (salute: difficultAreas)
+
   // Tour state
   tourCompleted Boolean @default(false)
   tourStep      Int     @default(0)

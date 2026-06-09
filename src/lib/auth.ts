@@ -43,10 +43,11 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
         const profile = await db.userProfile.findUnique({
           where: { userId: user.id },
-          select: { tourCompleted: true, onboardingComplete: true },
+          select: { tourCompleted: true, onboardingComplete: true, consentGivenAt: true },
         });
         token.tourCompleted = profile?.tourCompleted ?? false;
         token.onboardingComplete = profile?.onboardingComplete ?? false;
+        token.consentGiven = profile?.consentGivenAt != null;
       }
       // Refresh esplicito dal client (dopo completion onboarding o reset):
       // ricarica i flag dal DB in modo che il middleware veda subito il
@@ -54,10 +55,11 @@ export const authOptions: NextAuthOptions = {
       if (trigger === 'update' && typeof token.id === 'string') {
         const profile = await db.userProfile.findUnique({
           where: { userId: token.id },
-          select: { tourCompleted: true, onboardingComplete: true },
+          select: { tourCompleted: true, onboardingComplete: true, consentGivenAt: true },
         });
         token.tourCompleted = profile?.tourCompleted ?? false;
         token.onboardingComplete = profile?.onboardingComplete ?? false;
+        token.consentGiven = profile?.consentGivenAt != null;
       }
       return token;
     },
@@ -66,6 +68,7 @@ export const authOptions: NextAuthOptions = {
         session.user.id = token.id;
         session.user.tourCompleted = token.tourCompleted ?? false;
         session.user.onboardingComplete = token.onboardingComplete ?? false;
+        session.user.consentGiven = token.consentGiven ?? false;
       }
       return session;
     },
