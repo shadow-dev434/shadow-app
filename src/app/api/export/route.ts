@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
+export const maxDuration = 60;
+
 // GET /api/export?format=csv|json
 export async function GET(req: NextRequest) {
   const { error, userId } = await requireSession(req);
@@ -11,18 +13,35 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const format = url.searchParams.get('format') || 'json';
 
-    const tasks = await db.task.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      include: {
+        profile: true,
+        settings: true,
+        tasks: true,
+        contacts: true,
+        streaks: true,
+        notifications: true,
+        patterns: true,
+        adaptiveProfile: true,
+        learningSignals: true,
+        microFeedbacks: true,
+        memories: true,
+        strictModeSessions: true,
+        chatThreads: { include: { messages: true } },
+        reviews: { include: { tasks: true } },
+        dailyPlans: { include: { tasks: true } },
+        calendarTokens: {
+          select: { id: true, provider: true, scope: true, expiresAt: true, createdAt: true },
+        },
+        // Esclusi di proposito: accounts, sessions, pushSubscription (segreti/infra).
+      },
     });
+    if (!user) {
+      return NextResponse.json({ error: 'Utente non trovato' }, { status: 404 });
+    }
 
-    const reviews = await db.review.findMany({
-      where: { userId },
-      orderBy: { date: 'desc' },
-      take: 90,
-    });
-
-    const patterns = await db.userPattern.findFirst({ where: { userId } });
+    const { password: _pw, ...userCore } = user;
 
     if (format === 'csv') {
       const headers = [
@@ -41,7 +60,7 @@ export async function GET(req: NextRequest) {
 
       const csvRows = [
         headers.join(','),
-        ...tasks.map((t) =>
+        ...user.tasks.map((t) =>
           headers.map((h) => escapeCSV((t as Record<string, unknown>)[h] as string | number | null)).join(',')
         ),
       ].join('\n');
@@ -55,14 +74,15 @@ export async function GET(req: NextRequest) {
     }
 
     // JSON format
-    return NextResponse.json({
+    const payload = {
       exportDate: new Date().toISOString(),
-      tasks,
-      reviews,
-      patterns,
-    }, {
+      exportVersion: '1.0',
+      ...userCore,
+    };
+    return new NextResponse(JSON.stringify(payload, null, 2), {
       headers: {
-        'Content-Disposition': 'attachment; filename="shadow-data-export.json"',
+        'Content-Type': 'application/json',
+        'Content-Disposition': 'attachment; filename="shadow-export.json"',
       },
     });
   } catch (error) {
