@@ -55,3 +55,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Salvataggio consenso fallito' }, { status: 500 });
   }
 }
+
+// DELETE /api/consent — revoca. Inverso della POST: azzera consentGivenAt e consentArt9
+// (consentVersion resta come record storico). Il gate del middleware (DB re-read) rimbalza
+// l'utente su /consent al primo hop di pagina, quindi la revoca ha effetto immediato.
+export async function DELETE(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
+  try {
+    await db.userProfile.update({
+      where: { userId },
+      data: { consentGivenAt: null, consentArt9: false },
+    });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('DELETE /api/consent error:', err);
+    return NextResponse.json({ error: 'Revoca consenso fallita' }, { status: 500 });
+  }
+}

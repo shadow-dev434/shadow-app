@@ -30,6 +30,7 @@ import {
   Palette, Wrench, Eye, EyeOff, MessageCircle, Hand
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { signOut } from 'next-auth/react';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -2944,6 +2945,10 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
   const profile = store.userProfile;
   const authUser = store.authUser;
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [busy, setBusy] = useState(false);
+
   const handleResetOnboarding = useCallback(async () => {
     try {
       await fetch('/api/onboarding/reset', { method: 'POST' });
@@ -2959,6 +2964,30 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
     onLogout();
   }, [onLogout]);
 
+  const handleRevokeConsent = useCallback(async () => {
+    try {
+      const res = await fetch('/api/consent', { method: 'DELETE' });
+      if (!res.ok) throw new Error('revoke failed');
+      toast({ title: 'Consenso revocato' });
+      router.replace('/');
+    } catch {
+      toast({ title: 'Revoca fallita' });
+    }
+  }, [router]);
+
+  const handleDeleteAccount = useCallback(async () => {
+    if (deleteConfirmText !== 'ELIMINA') return;
+    setBusy(true);
+    try {
+      const res = await fetch('/api/account', { method: 'DELETE' });
+      if (!res.ok) throw new Error('delete failed');
+      await signOut({ callbackUrl: '/' });
+    } catch {
+      setBusy(false);
+      toast({ title: 'Eliminazione fallita' });
+    }
+  }, [deleteConfirmText]);
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
       <h2 className="text-lg font-bold">Impostazioni</h2>
@@ -2968,9 +2997,48 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
         <CardHeader className="p-4 pb-2"><CardTitle className="text-base">Account</CardTitle></CardHeader>
         <CardContent className="p-4 pt-0">
           {authUser ? (
-            <div className="flex items-center justify-between">
-              <div><p className="text-sm font-medium">{authUser.name}</p><p className="text-xs text-zinc-400">{authUser.email}</p></div>
-              <Button variant="outline" size="sm" onClick={handleLogout}><LogOut className="w-3 h-3 mr-1" /> Esci</Button>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div><p className="text-sm font-medium">{authUser.name}</p><p className="text-xs text-zinc-400">{authUser.email}</p></div>
+                <Button variant="outline" size="sm" onClick={handleLogout}><LogOut className="w-3 h-3 mr-1" /> Esci</Button>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <div>
+                  <Button variant="outline" size="sm" onClick={handleRevokeConsent}>Revoca il consenso</Button>
+                  <p className="text-xs text-zinc-400 mt-1">{"Revocare il consenso ferma l'app finche' non lo riconcedi. Non cancella i tuoi dati."}</p>
+                </div>
+
+                {!showDeleteConfirm ? (
+                  <div>
+                    <Button variant="outline" size="sm" className="text-red-500 hover:text-red-500" onClick={() => setShowDeleteConfirm(true)}>
+                      <Trash2 className="w-3 h-3 mr-1" /> Elimina account e dati
+                    </Button>
+                    <p className="text-xs text-zinc-400 mt-1">Cancella in modo irreversibile il tuo account e tutti i tuoi dati.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-xs text-zinc-500">Azione irreversibile. Digita esattamente <strong className="text-red-400">ELIMINA</strong> per confermare.</p>
+                    <Input
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value.toUpperCase())}
+                      placeholder="ELIMINA"
+                      className="h-10 font-mono"
+                    />
+                    {deleteConfirmText.length > 0 && deleteConfirmText !== 'ELIMINA' && (
+                      <p className="text-xs text-red-400">Il testo non corrisponde</p>
+                    )}
+                    <div className="flex gap-2 pt-1">
+                      <Button variant="outline" size="sm" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}>Annulla</Button>
+                      <Button variant="destructive" size="sm" disabled={deleteConfirmText !== 'ELIMINA' || busy} onClick={handleDeleteAccount}>
+                        {busy ? 'Eliminazione...' : 'Elimina definitivamente'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <p className="text-sm text-zinc-400">Non autenticato</p>
