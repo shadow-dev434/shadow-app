@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
-import { ShieldCheck, Heart, LogOut, Sparkles } from 'lucide-react';
+import { ShieldCheck, LogOut, Sparkles } from 'lucide-react';
 
 // ConsentView — gate di consenso esplicito, montato su /consent dal
 // middleware PRIMA dell'onboarding (dove si raccolgono dati art. 9). Due
@@ -25,13 +25,13 @@ const CONSENT_COPY_VERSION = '0.2-draft';
 const COPY = {
   title: `Prima di iniziare`,
   intro: [
-    `Shadow è un'app di organizzazione a conversazione, pensata per adulti con ADHD. Per funzionare tratta anche dati delicati: quello che ci racconti su umore, energia e stato emotivo e un profilo su come affronti i compiti. Sono dati relativi alla salute e ricevono una protezione rafforzata.`,
-    `Qui sotto ti chiediamo due cose distinte: accettare i termini del servizio e — separatamente — dare il consenso esplicito al trattamento di questi dati. Puoi revocarlo quando vuoi dalle impostazioni.`,
-    `Per funzionare, Shadow è un sistema di intelligenza artificiale: le tue conversazioni vengono inviate a un fornitore di IA (Anthropic), che può trattarle negli Stati Uniti sulla base di Clausole Contrattuali Standard. Non gli inviamo il tuo nome né la tua email.`,
+    `Shadow è un'app di organizzazione conversazionale, pensata per adulti con ADHD. Per funzionare tratta anche dati delicati: quello che ci racconti su umore, energia e stato emotivo, e un profilo di come affronti i compiti. Sono dati relativi alla salute e per questo godono di una protezione rafforzata.`,
+    `Qui sotto ti chiediamo due cose distinte: accettare i Termini di Servizio e — separatamente — dare il consenso esplicito al trattamento di questi dati. Puoi revocarlo quando vuoi dalle impostazioni.`,
+    `Shadow è un sistema di intelligenza artificiale: per poterti rispondere, le tue conversazioni vengono inviate a un fornitore di IA (Anthropic), che può trattarle negli Stati Uniti sulla base di Clausole Contrattuali Standard. Non gli inviamo il tuo nome né la tua email.`,
   ],
   privacyNote: `Tutti i dettagli sono nell'informativa privacy.`,
   terms: `Ho letto l'informativa privacy e accetto i Termini di servizio di Shadow.`,
-  art9: `Acconsento espressamente al trattamento dei miei dati relativi alla salute — in particolare quello che condivido su umore, stato emotivo ed energia, e il profilo comportamentale che Shadow costruisce sul mio modo di affrontare i compiti in relazione all'ADHD — per fornirmi la funzione conversazionale e personalizzare il supporto, come descritto nell'informativa. So che si tratta di dati di categoria particolare (art. 9 GDPR) e che senza questo consenso l'app non può funzionare. Posso revocare questo consenso in qualsiasi momento dalle impostazioni.`,
+  art9: `Acconsento espressamente al trattamento dei miei dati relativi alla salute — in particolare quello che condivido su umore, stato emotivo ed energia, e il profilo comportamentale che Shadow costruisce sul mio modo di affrontare i compiti in relazione all'ADHD — per offrirmi la funzione conversazionale e personalizzare il supporto, come descritto nell'informativa. So che rientrano nelle categorie particolari di dati personali (art. 9 GDPR) e che senza questo consenso l'app non può funzionare. Posso revocare il consenso in qualsiasi momento dalle impostazioni, senza che ciò pregiudichi la liceità del trattamento effettuato prima della revoca.`,
   art9Help: `Perché te lo chiediamo separatamente? Perché questi dati sono i più delicati e meritano una scelta consapevole e distinta.`,
 };
 // ─── fine COPY v0.2 ────────────────────────────────────────────────────────
@@ -99,7 +99,12 @@ export function ConsentView() {
             {COPY.intro.map((p, i) => (
               <p key={i}>{p}</p>
             ))}
-            <p className="text-zinc-400">{COPY.privacyNote}</p>
+            <p className="text-zinc-400">
+              {"Prima di accettare, leggi: "}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-zinc-200">{"Informativa privacy"}</a>
+              {" · "}
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-zinc-200">{"Termini di servizio"}</a>
+            </p>
           </CardContent>
         </Card>
 
@@ -135,7 +140,6 @@ export function ConsentView() {
             className="mt-0.5"
           />
           <span className="text-sm text-zinc-300 leading-relaxed">
-            <Heart className="inline w-3.5 h-3.5 text-rose-400 mr-1 -mt-0.5" />
             {COPY.art9}
           </span>
         </label>
