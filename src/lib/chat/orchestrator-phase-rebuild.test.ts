@@ -29,6 +29,7 @@ vi.mock('@/lib/db', () => ({
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      aggregate: vi.fn(),
     },
     chatMessage: {
       findMany: vi.fn(),
@@ -176,6 +177,9 @@ beforeEach(() => {
   vi.mocked(db.chatThread.create).mockResolvedValue(makeThread({}));
   vi.mocked(db.chatThread.update).mockResolvedValue(makeThread({}));
   vi.mocked(db.chatThread.findUnique).mockResolvedValue(null);
+  // Slice 8c: default gap query no-op (vedi orchestrator.test.ts).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vi.mocked(db.chatThread.aggregate).mockResolvedValue({ _max: { lastTurnAt: null } } as any);
   vi.mocked(db.chatMessage.findMany).mockResolvedValue([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.mocked(db.chatMessage.create).mockResolvedValue({ id: 'msg1' } as any);

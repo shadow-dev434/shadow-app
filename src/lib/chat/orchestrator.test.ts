@@ -13,6 +13,8 @@ vi.mock('@/lib/db', () => ({
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      // Slice 8c: gap query del re-entry (triageWork, primo turno evening_review).
+      aggregate: vi.fn(),
     },
     chatMessage: {
       findMany: vi.fn(),
@@ -40,8 +42,9 @@ vi.mock('@/lib/llm/client', () => ({
 import { db } from '@/lib/db';
 import { callLLM } from '@/lib/llm/client';
 import type { LLMResponse } from '@/lib/llm/client';
-import { orchestrate, TERMINAL_THREAD_STATES } from './orchestrator';
+import { orchestrate, TERMINAL_THREAD_STATES, buildEveningReviewModeContext } from './orchestrator';
 import { EMPTY_PREVIEW_STATE } from '@/lib/evening-review/apply-overrides';
+import type { TriageState } from '@/lib/evening-review/triage';
 
 // Helper: factory di ChatThread row "fully shaped" per il mock findFirst.
 // Cast as any documentato: il select in produzione restituisce tutti i
@@ -77,6 +80,10 @@ beforeEach(() => {
   );
   vi.mocked(db.chatThread.update).mockResolvedValue(makeThread({}));
   vi.mocked(db.chatThread.findUnique).mockResolvedValue(null);
+  // Slice 8c: default gap query no-op (lastTurnAt=null -> reEntryGap=null ->
+  // nessun blocco RE_ENTRY). I test del re-entry overridano questo default.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vi.mocked(db.chatThread.aggregate).mockResolvedValue({ _max: { lastTurnAt: null } } as any);
   vi.mocked(db.chatMessage.findMany).mockResolvedValue([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.mocked(db.chatMessage.create).mockResolvedValue({ id: 'msg1' } as any);
@@ -574,5 +581,43 @@ describe('orchestrate: E2E multi-turn (BUG #A + #C regression)', () => {
 
     // LLM queue completamente drenata (5 risposte attese, 5 consumate).
     expect(llmQueue).toHaveLength(0);
+  });
+});
+
+describe('buildEveningReviewModeContext — blocco RE_ENTRY (Slice 8c, contratto con Edit 4)', () => {
+  // Funzione pura: testiamo SOLO il formato del blocco. Fixture = TriageState
+  // minimale (stessi 9 campi di initEveningReview), nessun mock DB necessario.
+  const baseTriage: TriageState = {
+    candidateTaskIds: [],
+    addedTaskIds: [],
+    excludedTaskIds: [],
+    reasonsByTaskId: {},
+    computedAt: '2026-06-08T20:00:00.000Z',
+    clientDate: '2026-06-08',
+    currentEntryId: null,
+    outcomes: {},
+    decomposition: null,
+  };
+  const NOW_MS = new Date('2026-06-08T20:00:00.000Z').getTime();
+
+  it('reEntryGap band=light -> riga col formato esatto', () => {
+    const out = buildEveningReviewModeContext(
+      baseTriage, true, [], NOW_MS, '2026-06-08', { gapDays: 5, band: 'light' },
+    );
+    expect(out).toContain('RE_ENTRY: gapDays=5, band=light');
+  });
+
+  it('reEntryGap band=full -> riga con band=full', () => {
+    const out = buildEveningReviewModeContext(
+      baseTriage, true, [], NOW_MS, '2026-06-08', { gapDays: 20, band: 'full' },
+    );
+    expect(out).toContain('RE_ENTRY: gapDays=20, band=full');
+  });
+
+  it('reEntryGap null -> NESSUN blocco RE_ENTRY', () => {
+    const out = buildEveningReviewModeContext(
+      baseTriage, true, [], NOW_MS, '2026-06-08', null,
+    );
+    expect(out).not.toContain('RE_ENTRY');
   });
 });

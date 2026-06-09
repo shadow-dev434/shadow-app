@@ -50,6 +50,7 @@ import {
 } from './at-risk-detection';
 import { captureWhatBlocked } from '@/lib/evening-review/what-blocked-capture';
 import { formatDeadlineLabel, formatTodayInRome } from '@/lib/evening-review/dates';
+import { computeInactivityGapDays, type InactivityGap } from '@/lib/evening-review/inactivity-gap';
 
 export type ChatMode =
   | 'morning_checkin'
@@ -214,19 +215,37 @@ export async function orchestrate(
       triageState: TriageState;
       allTasks: TaskProjection[];
       isFirstTurn: boolean;
+      reEntryGap: InactivityGap | null;
     }> => {
       if (loaded === null) {
         if (!input.clientDate) {
           console.warn('[evening-review] clientDate missing, falling back to server-side Europe/Rome');
         }
-        const result = await initEveningReview(
-          input.userId,
-          validatedClientDate,
-        );
-        return { triageState: result.triageState, allTasks: result.allTasks, isFirstTurn: true };
+        // Slice 8c: gap calcolato SOLO al primo turno (loaded===null), in
+        // parallelo con initEveningReview. ESCLUSIONE del thread corrente
+        // OBBLIGATORIA: il thread evening fresco e' gia' stato creato (~:146-158)
+        // con lastTurnAt~=now; senza NOT:{id:thread.id} il max sarebbe sempre
+        // ~now -> gapDays=0 -> il riconoscimento non scatterebbe mai. (Contrasto
+        // con Edit 2/active-thread: la' il thread fresco non esiste ancora,
+        // quindi where:{userId} senza esclusione.) Il Date dell'aggregate
+        // (Date | null) entra dritto in computeInactivityGapDays (F1=(a)).
+        const [result, gapAgg] = await Promise.all([
+          initEveningReview(input.userId, validatedClientDate),
+          db.chatThread.aggregate({
+            _max: { lastTurnAt: true },
+            where: { userId: input.userId, NOT: { id: thread.id } },
+          }),
+        ]);
+        return {
+          triageState: result.triageState,
+          allTasks: result.allTasks,
+          isFirstTurn: true,
+          reEntryGap: computeInactivityGapDays(gapAgg._max.lastTurnAt, turnNow),
+        };
       }
       const tasks = await loadAllNonTerminalTasks(input.userId);
-      return { triageState: loaded, allTasks: tasks, isFirstTurn: false };
+      // Slice 8c: resume (loaded!==null) -> re-entry e' first-turn-only -> nessun gap.
+      return { triageState: loaded, allTasks: tasks, isFirstTurn: false, reEntryGap: null };
     })();
 
     const [triageResult, fetchedProfileRow, fetchedSettingsRow] = await Promise.all([
@@ -267,7 +286,7 @@ export async function orchestrate(
     // isPreviewPhaseActive(triageState): pendingPhase e' ancora null pre-loop.
     const effectivePhasePre = derivePhase(pendingPhase, triageState, currentPhase);
     modeContext = buildEveningReviewModeContext(
-      triageState, isFirstTurn, allTasks, turnNowMs, validatedClientDate,
+      triageState, isFirstTurn, allTasks, turnNowMs, validatedClientDate, triageResult.reEntryGap,
     );
     if (effectivePhasePre !== 'per_entry') {
       modeContext += '\n\n' + formatPlanPreviewForPrompt(preview);
@@ -591,7 +610,10 @@ export async function orchestrate(
         });
         let modeContextPost =
           buildEveningReviewModeContext(
-            pendingTriageState, false, allTasks, turnNowMs, validatedClientDate,
+            // Slice 8c: reEntryGap=null nel rebuild mid-loop -- il re-entry e'
+            // first-turn-only; un rebuild a meta' walk non deve mai ri-emettere
+            // il saluto di rientro (RE_ENTRY).
+            pendingTriageState, false, allTasks, turnNowMs, validatedClientDate, null,
           ) + '\n\n' + formatPlanPreviewForPrompt(previewPost);
         if (phasePost === 'closing') {
           modeContextPost += '\n\nPHASE_MARKER: closing';
@@ -910,12 +932,13 @@ function derivePhase(
   return currentPhase;
 }
 
-function buildEveningReviewModeContext(
+export function buildEveningReviewModeContext(
   triageState: TriageState,
   isFirstTurn: boolean,
   allTasks: TaskProjection[],
   nowMs: number,
   clientDate: string,
+  reEntryGap: InactivityGap | null,
 ): string {
   const taskMap = new Map(allTasks.map((t) => [t.id, t]));
 
@@ -946,6 +969,15 @@ function buildEveningReviewModeContext(
 
   const lines: string[] = ['TRIAGE CORRENTE'];
   lines.push(`IS_FIRST_TURN=${isFirstTurn}`);
+  // Slice 8c: riga-dato del re-entry. reEntryGap e' non-null SOLO al primo turno
+  // (orchestrator triageWork, ramo loaded===null) -> emissione gia' gated a
+  // first-turn; one-shot, nessuna persistenza in contextJson (design §2.1). Le
+  // ISTRUZIONI d'uso vivono in EVENING_REVIEW_PROMPT (static, Edit 4); qui SOLO
+  // il dato (dynamicSuffix, non-cached, design §2.7). Formato ESATTO (contratto
+  // con Edit 4): "RE_ENTRY: gapDays=<N>, band=<light|full>".
+  if (reEntryGap !== null) {
+    lines.push(`RE_ENTRY: gapDays=${reEntryGap.gapDays}, band=${reEntryGap.band}`);
+  }
   // Slice 7 V1.x (Bug #8 split): due righe simmetriche MOOD_INTAKE +
   // ENERGY_INTAKE esposte separatamente. 'pending' default se non ancora
   // chiesto/risposto sul rispettivo campo; valore numerico se record_mood /

@@ -1312,3 +1312,44 @@ Riferimento: scoperta durante test V1.2.3 commit `db88679`, scenario (iv)
   carico. Da accertare leggendo le due `$transaction` prima di applicare il fix.
   Separato: valutare `pgbouncer=true&connection_limit=1` su `DATABASE_URL`
   (Neon+Prisma).
+
+## Slice 8c — vincolo-in-avanti: ogni trigger manuale di review deve passare `threadId=null`
+
+> Voce da accorpare in `docs/tasks/05-deploy-notes.md` (sezione known-issue / gotcha
+> architetturali). Prodotta come parte del pacchetto-doc di Slice 8c (re-entry post-assenza),
+> da committare insieme allo scaffold 8c. Corrisponde a F7 del piano e a §6 del design
+> `20-slice-8c-design.md`.
+
+**Invariante (load-bearing).** Il riconoscimento di re-entry vive in `initEveningReview` al
+primo turno (`isFirstTurn`, `currentEntryId == null`), e parte **pulito** — la history di un
+eventuale thread non-evening pregresso NON lo inquina — perché in produzione la
+`EveningReviewCard` è l'unico ingresso alla review serale e forza `threadId=null` (Addendum
+#1: la stessa condizione che assegnerebbe a `threadId` un thread non-evening — la
+reidratazione in `ChatView` — è quella che nasconde la card; non esiste, a sorgente, uno
+stato raggiungibile in cui la card è mostrata con `threadId ≠ null`).
+
+**Il rischio futuro.** Questa garanzia è un invariante dell'architettura a **singola-entry**.
+Se una slice futura aggiunge un **trigger manuale** di review serale — per esempio la
+"mini-review veloce ora" prefigurata da §1.4 della spec, o qualunque pulsante/azione che
+faccia `setMode('evening_review')` — e quel trigger **non azzera `threadId`**, la garanzia
+salta: la review si avvierebbe **sopra un thread stale** (es. un `general`/`planning` ancora
+`active`), e `initEveningReview` verrebbe eseguito al primo turno con la history pregressa
+caricata in `llmMessages` → riconoscimento di re-entry **inquinato**, e potenzialmente l'intero
+walk d'apertura contaminato da contesto non pertinente.
+
+**La regola.** Qualunque nuovo trigger manuale di review serale **DEVE passare
+`threadId=null` esplicito** al primo turno (come fa oggi `handleStartEveningReview` via lo
+stato inizializzato a `null`), in modo che l'orchestrator crei un thread fresco
+(`loadTriageStateFromContext(null) === null` → `initEveningReview`, `isFirstTurn=true`) e il
+gap venga calcolato sui thread *diversi* da quello corrente.
+
+**Nota di scope.** Slice 8c **non** aggiunge trigger manuali, quindi questo è un vincolo
+**documentale**, non un fix. La spina di raggiungibilità (8c, `active-thread/route.ts`)
+gestisce il caso del *residuo non-evening al rientro* archiviandolo e instradando alla card;
+ma quella spina protegge il percorso **card**, non un ipotetico trigger manuale che
+bypassasse la card. Chi introdurrà un trigger manuale è responsabile di preservare
+`threadId=null`.
+
+**Riferimenti:** `docs/tasks/20-slice-8c-design.md` §6 (vincolo-in-avanti) e §3 (spina);
+Addendum #1 (apertura pulita) e Addendum #2 (lifecycle dei thread non-evening) nella chat di
+design 8c.

@@ -74,6 +74,10 @@ export const EMOTIONAL_VENT_MAX_MINUTES = 10;
 
 // Long absence 6.4 - post-absence review (V1.1)
 
+// Slice 8c: soglia di riconoscimento del rientro (banda leggera: >=3 e <14gg).
+// La banda piena (>=14) riusa LONG_ABSENCE_THRESHOLD_DAYS qui sotto. Entrambe
+// consumate da inactivity-gap.ts (computeInactivityGapDays). Valori in giorni.
+export const RE_ENTRY_RECOGNITION_THRESHOLD_DAYS = 3;
 export const LONG_ABSENCE_THRESHOLD_DAYS = 14;
 export const POST_ABSENCE_REVIEW_BUDGET_MIN_MINUTES = 15;
 export const POST_ABSENCE_REVIEW_BUDGET_MAX_MINUTES = 20;

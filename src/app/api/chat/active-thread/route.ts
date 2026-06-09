@@ -67,6 +67,7 @@ import { isInsideEveningWindow } from '@/lib/evening-review/window';
 import { eveningReviewHasPriority } from '@/lib/evening-review/priority';
 import { INACTIVITY_PAUSE_MINUTES } from '@/lib/evening-review/config';
 import { normalizeThreadState } from '@/lib/evening-review/normalize';
+import { computeInactivityGapDays } from '@/lib/evening-review/inactivity-gap';
 
 const MESSAGE_LIMIT = 200;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -260,6 +261,71 @@ export async function GET(req: NextRequest) {
         }
       } else {
         console.warn('[active-thread] evening_review thread found but settings missing, skipping normalize');
+      }
+    }
+
+    // Slice 8c — spina di raggiungibilita' del re-entry.
+    // Dopo il normalize evening-gated sopra, se il thread piu' recente e' un
+    // residuo NON-evening (mode !== 'evening_review' implica state 'active': la
+    // query :186-196 seleziona i non-evening solo via { state: 'active' }) e
+    // l'utente sta rientrando da un'assenza DENTRO la finestra serale,
+    // archiviamo l'intero set non-terminale e cadiamo nel ramo !thread ->
+    // computeEveningReview -> card con threadId=null (Addendum #1/#2; design
+    // 20-slice-8c-design.md §3). normalize.ts resta INTOCCATO: la spina copre
+    // il caso "most-recent non-evening" che il gating evening-only di normalize
+    // non gestisce.
+    //
+    // Vincolo-in-avanti (design §6, F7): l'apertura pulita della review dipende
+    // dalla card che forza threadId=null. Ogni futuro trigger MANUALE di review
+    // dovra' passare threadId=null esplicito, o avvierebbe la review su un thread
+    // stale, inquinando initEveningReview al primo turno. (8c non aggiunge
+    // trigger manuali; nota anche in docs/tasks/05-deploy-notes.md.)
+    if (thread !== null && thread.mode !== 'evening_review') {
+      const settings = await loadSettings(userId);
+      // settings === null (onboarding incompleto): skip spina, comportamento
+      // odierno invariato (si prosegue al rehydrate del residuo). Fuori finestra:
+      // skip (senza shouldStart la card non apparirebbe; archiviare lascerebbe
+      // l'utente senza thread ne' card).
+      if (
+        settings !== null &&
+        validatedNowHHMM !== null &&
+        isInsideEveningWindow(validatedNowHHMM, settings)
+      ) {
+        // Gap = max(lastTurnAt) su TUTTI i thread dell'utente, NESSUNA esclusione:
+        // a active-thread il thread evening fresco non esiste ancora, quindi il
+        // max coincide con l'ultimo contatto reale. Il Date dell'aggregate
+        // (Date | null) entra DRITTO nell'helper (forcella F1=(a));
+        // _max.lastTurnAt===null e' impossibile qui (thread!==null) ma l'helper
+        // lo gestisce comunque (null -> skip).
+        const agg = await db.chatThread.aggregate({
+          _max: { lastTurnAt: true },
+          where: { userId },
+        });
+        const gap = computeInactivityGapDays(agg._max.lastTurnAt, now);
+        if (gap !== null) {
+          // INVARIANTE (load-bearing). L'updateMany archivia un SUPERSET di cio'
+          // che :186-196 restituisce, per due ragioni distinte: (a) include i
+          // `paused` NON-evening, che quella query non seleziona affatto; (b)
+          // include un eventuale evening_review (active o paused) PIU' VECCHIO del
+          // residuo non-evening: la query e' findFirst con orderBy lastTurnAt desc,
+          // quindi restituisce un solo thread -- se il residuo non-evening e' il
+          // piu' recente, un evening piu' vecchio non viene ne' restituito ne'
+          // visto dal normalize (che gira solo sul thread restituito), e
+          // sopravviverebbe a bloccare computeEveningReview. Sicuro per
+          // costruzione: gap>=3 <=> max(lastTurnAt) su TUTTI i thread >= 3gg <=>
+          // nessun thread non-terminale ha attivita' recente -> archiviare
+          // l'intero set non-terminale non distrugge mai un thread con lastTurnAt
+          // recente. Se un domani la query si allargasse (nuovi state
+          // non-terminali / nuova semantica), rivalutare l'invariante QUI. History
+          // in DB (archived, non cancellata): nessun messaggio perso. endedAt:now
+          // allineato a normalize (:253) e close-review (:242/:361).
+          console.warn('[8c re-entry] archived stale threads on re-entry, gapDays=' + gap.gapDays);
+          await db.chatThread.updateMany({
+            where: { userId, state: { in: ['active', 'paused'] } },
+            data: { state: 'archived', endedAt: now },
+          });
+          thread = null; // -> ramo !thread (:266) -> computeEveningReview -> card.
+        }
       }
     }
 
