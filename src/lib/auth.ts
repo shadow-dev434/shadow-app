@@ -3,6 +3,7 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
+import { getAuthSecret } from '@/lib/auth-secret';
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(db),
@@ -73,5 +74,5 @@ export const authOptions: NextAuthOptions = {
     signIn: '/?auth=login',
     error: '/?auth=error',
   },
-  secret: process.env.NEXTAUTH_SECRET || 'shadow-secret-change-in-production',
+  secret: getAuthSecret(),
 };

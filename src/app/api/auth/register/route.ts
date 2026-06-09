@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { encode } from 'next-auth/jwt';
 import { db } from '@/lib/db';
+import { getAuthSecret } from '@/lib/auth-secret';
 
 const SESSION_COOKIE_NAME = 'next-auth.session-token';
 const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 days
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
 
     // ── Create NextAuth-compatible JWT and set cookie (auto-login) ──
     // Flag sempre false al register: il middleware redirige subito a /tour.
-    const secret = process.env.NEXTAUTH_SECRET || 'shadow-secret-change-in-production';
+    const secret = getAuthSecret();
     const token = await encode({
       token: {
         id: user.id,
