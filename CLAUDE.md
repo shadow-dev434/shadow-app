@@ -26,7 +26,7 @@ Target deploy: web (Vercel) + APK Android (wrapper WebView).
 - **Prisma ORM** su **Postgres Neon** (branch `main`)
 - **NextAuth** (Credentials + Google OAuth)
 - **Zustand** per state client (`src/store/shadow-store.ts`, attualmente senza persist)
-- **z-ai-web-dev-sdk** per chiamate GLM (Z.ai) — orchestrate negli engine
+- Engine AI su **euristiche deterministiche in-house** (GLM/Z.ai rimosso, 2026-06-09)
 - **Tailwind CSS** + **shadcn/ui** + Radix primitives
 - **bun** come package manager e runtime dev
 
@@ -134,7 +134,6 @@ In `.env.local` (già configurate in dev + Vercel):
 - `NEXTAUTH_SECRET`
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 - `ANTHROPIC_API_KEY`
-- `ZAI_API_KEY` (GLM)
 
 **Mai** committare `.env.local` o stampare secret nei log.
 

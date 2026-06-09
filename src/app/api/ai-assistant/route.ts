@@ -5,13 +5,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import {
-  generateOnboardingQuestion,
   generateProactiveResponse,
   generateAIInsights,
   generateTaskRecommendation,
   detectProactiveTriggers,
   processMicroFeedbackAI,
-  type OnboardingContext,
   type ProactiveTrigger,
 } from '@/lib/engines/ai-assistant-engine';
 import {
@@ -115,21 +113,6 @@ export async function POST(request: NextRequest) {
     const { action } = body;
 
     switch (action) {
-      // ── Onboarding: generate next conversational question ──
-      case 'onboarding_question': {
-        const { step, answers } = body as { step: number; answers: Record<string, string | string[] | number | boolean> };
-        const profile = await getAdaptiveProfile(userId);
-
-        const context: OnboardingContext = {
-          step: step || 0,
-          answers: answers || {},
-          profile,
-        };
-
-        const response = await generateOnboardingQuestion(context);
-        return NextResponse.json({ response });
-      }
-
       // ── Proactive: generate contextual intervention ──
       case 'proactive': {
         const { trigger, taskContext } = body as {
