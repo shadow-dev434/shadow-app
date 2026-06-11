@@ -264,21 +264,29 @@ WHERE role = 'summary' AND "payloadJson" IS NOT NULL;
    codebase: la verifica del primo fold nei log del deploy Vercel è un item
    **BLOCCANTE** del report di chiusura, non una nota.
 
-   **Stato verifica (2026-06-11)**: build del preview deploy VERDE su
-   shadow-app2 (commit `3143e1f`, compilato senza warning; il progetto
-   `shadow-app` fallisce identico anche sui deploy precedenti — orfano del
-   consolidamento Task 3.6, non correlato). La verifica RUNTIME è rimasta
-   bloccata dalla Deployment Protection sui preview (401 senza bypass).
-   Runbook per chiuderla (una delle due):
-   - *Preview*: con protection bypass token —
-     `curl -H "x-vercel-protection-bypass: $TOKEN" <preview-url>/api/...`,
-     poi un turno su un thread general con 60+ messaggi e
-     `bun x vercel logs <preview-url> | grep "\[summary\]"`.
-   - *Produzione (path realistico)*: al merge su main, col primo uso reale
-     oltre i 60 messaggi: `bun x vercel logs https://shadow-app2.vercel.app | grep "\[summary\]"`
-     — attesa una riga `fold threadId=… batch=… cost=…`. Se non compare
-     entro pochi secondi dal turno: vedere matrice §5 (fail-open, nessun
-     impatto utente) e considerare `SHADOW_ROLLING_SUMMARY=off`.
+   **Stato verifica: ✅ CHIUSA (2026-06-11 sera)**. Build preview VERDE su
+   shadow-app2 (il progetto `shadow-app` fallisce identico anche sui deploy
+   precedenti — orfano del consolidamento Task 3.6, non correlato). Verifica
+   RUNTIME eseguita sul preview deploy `shadow-app2-carbfuui0` (commit
+   `503c60e`) via `scripts/e2e/probe-preview-fold.ts` (32 turni reali,
+   utente probe sintetico, lanciato da Antonio — Deployment Protection +
+   classifier richiedono esecuzione umana per scritture sul DB puntato dal
+   preview, che è risultato essere QUELLO DI PRODUZIONE):
+   - runtime log: `[summary] fold threadId=cmq9x2rgt… batch=30 covered=30
+     watermark=cmq9x38x8… tokens=1155/244 cost=$0.002375 latency=2314ms`
+     → after() completa su Vercel, UN solo fold (CAS ok), 2.3s ≪ maxDuration.
+   - behavioral PASS: il turno successivo recupera un fatto presente solo
+     nel summary ("ALFA-2") → iniezione verificata end-to-end su serverless.
+   - costo traffico verifica: $0.108 (32 turni haiku) + $0.0024 (fold).
+   - residuo intenzionale: 1 thread `PROBE-TASK40` sull'utente
+     `probe-prod@example.com` (cmq8nfct9…), che sparirà con la cancellazione
+     già pianificata di quell'utente (cleanup incident Task 23).
+   - ⚠️ NOTA AMBIENTE: le env Preview di Vercel puntano al DB di PRODUZIONE
+     (accertato via discriminatore read-only). Nessun probe scrivente sui
+     preview senza autorizzazione esplicita; il bypass token usato va
+     RIGENERATO (è circolato in chat/shell history).
+   Per il monitoraggio post-merge resta valido:
+   `bun x vercel logs https://shadow-app2.vercel.app | grep "\[summary\]"`.
 6. **Il summary muore col thread** (decisione #3): archiviazione 8c o rotazione
    BUG #C → il thread nuovo riparte senza summary (UserMemory resta).
 7. **`evening_review` escluso** (decisione #2).
