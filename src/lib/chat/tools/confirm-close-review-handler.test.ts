@@ -10,7 +10,14 @@ vi.mock('@/lib/evening-review/close-review', () => ({
   closeReview: vi.fn(),
 }));
 
+// Slice 9: stub del ricalcolo fill ratio (testato in calibration.test.ts).
+// Qui verifichiamo solo il wiring fail-open post-chiusura.
+vi.mock('@/lib/evening-review/calibration', () => ({
+  recalibrateFillRatio: vi.fn(),
+}));
+
 import { closeReview } from '@/lib/evening-review/close-review';
+import { recalibrateFillRatio } from '@/lib/evening-review/calibration';
 import {
   handleConfirmCloseReview,
   type HandleConfirmCloseReviewInput,
@@ -38,6 +45,11 @@ beforeEach(() => {
     reviewId: 'review-mock',
     dailyPlanId: 'plan-mock',
     alreadyClosed: false,
+  });
+  // Default recalibrate mock: no-op riuscito (dataset insufficiente).
+  vi.mocked(recalibrateFillRatio).mockResolvedValue({
+    updated: false,
+    reason: 'insufficient_data',
   });
 });
 
@@ -306,5 +318,56 @@ describe('handleConfirmCloseReview — closeReview result pass-through', () => {
     if (r.ok) return;
     expect(r.error).toContain('validation_failed');
     expect(r.error).toContain('thread userId mismatch');
+  });
+});
+
+// ─── Slice 9: ricalcolo fill ratio post-chiusura (D1, fail-open) ───────────
+
+describe('handleConfirmCloseReview — ricalcolo calibrazione (Slice 9)', () => {
+  it('chiusura ok -> recalibrateFillRatio invocato con userId + reviewDate', async () => {
+    await handleConfirmCloseReview(
+      makeInput({ userId: 'u-cal', clientDate: '2026-05-14' }),
+    );
+    expect(recalibrateFillRatio).toHaveBeenCalledTimes(1);
+    expect(recalibrateFillRatio).toHaveBeenCalledWith('u-cal', '2026-05-14');
+  });
+
+  it('chiusura alreadyClosed=true -> ricalcolo invocato comunque (idempotente)', async () => {
+    vi.mocked(closeReview).mockResolvedValue({
+      ok: true,
+      reviewId: 'rev-existing',
+      dailyPlanId: 'plan-existing',
+      alreadyClosed: true,
+    });
+    const r = await handleConfirmCloseReview(makeInput());
+    expect(r.ok).toBe(true);
+    expect(recalibrateFillRatio).toHaveBeenCalledTimes(1);
+  });
+
+  it('chiusura fallita -> NESSUN ricalcolo', async () => {
+    vi.mocked(closeReview).mockResolvedValue({
+      ok: false,
+      error: 'thread_missing',
+    });
+    await handleConfirmCloseReview(makeInput());
+    expect(recalibrateFillRatio).not.toHaveBeenCalled();
+  });
+
+  it('guard di fase fallito -> NESSUN ricalcolo', async () => {
+    await handleConfirmCloseReview(makeInput({ currentPhase: 'per_entry' }));
+    expect(recalibrateFillRatio).not.toHaveBeenCalled();
+  });
+
+  it('fail-open: ricalcolo che throwa NON degrada la chiusura', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.mocked(recalibrateFillRatio).mockRejectedValue(
+      new Error('calibration exploded'),
+    );
+    const r = await handleConfirmCloseReview(makeInput());
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.reviewId).toBe('review-mock');
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

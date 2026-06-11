@@ -655,6 +655,8 @@ describe('executeTool: mark_entry_discussed', () => {
     mockTaskOwned('a', 'Task A');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(db.task.update).mockResolvedValue({ id: 'a' } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.learningSignal.create).mockResolvedValue({ id: 'sig1' } as any);
     const state = makeState();
     const result = await executeTool(
       'mark_entry_discussed',
@@ -674,7 +676,17 @@ describe('executeTool: mark_entry_discussed', () => {
     const updateArg = vi.mocked(db.task.update).mock.calls[0][0];
     expect(updateArg.data).toHaveProperty('postponedCount');
     expect(updateArg.data).not.toHaveProperty('lastAvoidedAt');
-    expect(db.learningSignal.create).not.toHaveBeenCalled();
+    // Slice 9: il postponed emette il LearningSignal task_postponed (dataset
+    // per l'analisi "postponed multipli = evitamento mascherato", differita).
+    expect(db.learningSignal.create).toHaveBeenCalledTimes(1);
+    expect(db.learningSignal.create).toHaveBeenCalledWith({
+      data: {
+        userId: 'user1',
+        taskId: 'a',
+        signalType: 'task_postponed',
+        metadata: '{}',
+      },
+    });
   });
 
   it("'cancelled' outcome: sets status='archived'", async () => {

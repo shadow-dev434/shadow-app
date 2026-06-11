@@ -48,6 +48,10 @@ export interface ProfileRowForPreview {
   optimalSessionLength?: number | null;
   shameFrustrationSensitivity?: number | null;
   bestTimeWindows?: string | null;
+  // Slice 9: fill ratio calibrato dal learning. Opzionale: la row Prisma
+  // intera passata dall'orchestrator lo porta da se'; i call site/test che
+  // non lo passano restano sul default per sensitivity (buffer.ts).
+  calibratedFillRatio?: number | null;
 }
 
 /** Sottinsieme strutturale di Settings letto dalla reconstruction. */
@@ -94,6 +98,8 @@ export function reconstructEveningReviewPreview(
     optimalSessionLength: profileRow?.optimalSessionLength ?? 25,
     shameFrustrationSensitivity: profileRow?.shameFrustrationSensitivity ?? 3,
     bestTimeWindows: parseBestTimeWindows(profileRow?.bestTimeWindows ?? '[]'),
+    // Slice 9: null = pre-calibrazione, getFillRatio usa il default.
+    calibratedFillRatio: profileRow?.calibratedFillRatio ?? null,
   };
   const previewSettings = {
     wakeTime: settingsRow?.wakeTime ?? '07:00',

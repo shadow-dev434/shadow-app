@@ -39,6 +39,17 @@ export const FILL_RATIO_FOR_HIGH_SENSITIVITY = 0.5;
 export const FILL_RATIO_FLOOR = 0.3;
 export const FILL_RATIO_CEILING = 0.85;
 
+// Plan sizing - fill ratio calibration (Area 4.5, Slice 9)
+// Finestra mobile di osservazione pianificato-vs-completato, soglia minima di
+// DailyPlan validi prima che la calibrazione si attivi, completion rate target
+// (meanR = target -> coefficiente in equilibrio) e smoothing EMA-like per
+// evitare oscillazioni del piano sera-su-sera. Cfr. docs/tasks/41-slice-9.
+
+export const CALIBRATION_WINDOW_DAYS = 21;
+export const CALIBRATION_MIN_PLANS = 7;
+export const CALIBRATION_TARGET_COMPLETION = 0.8;
+export const CALIBRATION_SMOOTHING_ALPHA = 0.3;
+
 // Plan sizing - trimming (Area 4.4)
 
 export const DEADLINE_IMMUNITY_HOURS = 48;

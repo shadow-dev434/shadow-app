@@ -72,6 +72,9 @@ export type BuildDailyPlanPreviewInput = {
     optimalSessionLength: number;
     shameFrustrationSensitivity: number; // dichiarato nel piano A.3, usato in 6c (fillRatio)
     bestTimeWindows: SlotName[];
+    // Slice 9: fill ratio calibrato dal learning; assente/null = default
+    // per sensitivity (getFillRatio, buffer.ts).
+    calibratedFillRatio?: number | null;
   };
   settings: {
     wakeTime: string;

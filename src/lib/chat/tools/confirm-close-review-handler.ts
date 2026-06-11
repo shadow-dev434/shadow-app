@@ -38,6 +38,7 @@ import {
   closeReview,
   type CloseReviewResult,
 } from '@/lib/evening-review/close-review';
+import { recalibrateFillRatio } from '@/lib/evening-review/calibration';
 import {
   applyPreviewOverrides,
   type PreviewState,
@@ -115,6 +116,20 @@ export async function handleConfirmCloseReview(
       ok: false,
       error: `chiusura review fallita: ${result.error}${detail}`,
     };
+  }
+
+  // Slice 9 (D1): ricalcolo del fill ratio calibrato a chiusura avvenuta.
+  // recalibrateFillRatio e' fail-open per contratto (mai throw); il try/catch
+  // qui e' belt-and-suspenders: NESSUN errore di calibrazione deve mai
+  // degradare l'esito della chiusura, che a questo punto e' gia' persistita.
+  // Invocato anche su alreadyClosed=true: idempotente sul dataset.
+  try {
+    await recalibrateFillRatio(input.userId, reviewDate);
+  } catch (err) {
+    console.warn(
+      '[slice9-calibration] ricalcolo post-chiusura fallito (ignorato):',
+      err,
+    );
   }
 
   return {

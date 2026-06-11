@@ -937,13 +937,22 @@ async function executeMarkEntryDiscussed(
   // Side effects per outcome. Pattern coerente con executeAddCandidateToReview:
   // ownership e' gia' verificato dal findFirst, l'update usa solo {id}.
   // postponed NON tocca lastAvoidedAt: postponed e' decisione conscia in review,
-  // diverso dall'evitamento (che alimenta isRecentlyAvoided). TODO valutare in
-  // slice di calibration learning se postponed multipli sono evitamento mascherato.
+  // diverso dall'evitamento (che alimenta isRecentlyAvoided). Il LearningSignal
+  // task_postponed (Slice 9) e' il dataset per valutare se postponed multipli
+  // sono evitamento mascherato — l'analisi resta differita.
   switch (outcome) {
     case 'postponed':
       await db.task.update({
         where: { id: entryId },
         data: { postponedCount: { increment: 1 } },
+      });
+      await db.learningSignal.create({
+        data: {
+          userId,
+          taskId: entryId,
+          signalType: 'task_postponed',
+          metadata: '{}',
+        },
       });
       break;
     case 'cancelled':

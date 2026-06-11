@@ -461,6 +461,7 @@ model AdaptiveProfile {
   strictModeEffectiveness           Float @default(0.5) // 0-1
   recoverySuccessRate               Float @default(0.5) // 0-1
   preferredDecompositionGranularity Float @default(3) // 1-5 (1=very detailed, 5=very brief)
+  calibratedFillRatio               Float? // Slice 9: fill ratio calibrato da pianificato-vs-completato; null = usa default per sensitivity (buffer.ts)
 
   // Level 3: Predictive Adaptation (inferred over time)
   predictedBlockLikelihood    Float  @default(0.3) // general baseline
@@ -495,7 +496,7 @@ model LearningSignal {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  signalType String // task_started, task_completed, task_avoided, task_too_hard, recovery_success, recovery_fail, strict_activated, strict_exited, nudge_accepted, nudge_ignored, micro_feedback, session_duration
+  signalType String // task_started, task_completed, task_avoided, task_too_hard, task_emotional_skip, task_postponed, emotional_offload, recovery_success, recovery_fail, strict_activated, strict_exited, nudge_accepted, nudge_ignored, micro_feedback, session_duration
   taskId     String?
   category   String? // task category if relevant
   context    String? // execution context
