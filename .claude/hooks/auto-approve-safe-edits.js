@@ -37,6 +37,16 @@ const WHITELIST = [
   { pattern: /^src\/lib\/evening-review\/.*\.tsx?$/, label: 'lib-evening-review' },
   { pattern: /^src\/lib\/.*\.tsx?$/, label: 'lib-other' },
   { pattern: /^docs\/.*\.md$/, label: 'docs-md' },
+  { pattern: /^src\/features\/.*\.tsx?$/, label: 'features' },
+  { pattern: /^src\/store\/.*\.tsx?$/, label: 'store' },
+  { pattern: /^scripts\/.*\.(ts|tsx|mjs|cjs)$/, label: 'scripts' },
+];
+
+// Whitelist prioritaria: valutata PRIMA della blacklist. Aree feature di Fase 4
+// (Task 25-27) dove l'autonomia e' deliberata (piano 2026-06-11).
+const WHITELIST_PRIORITY = [
+  { pattern: /^src\/app\/api\/(voice|google)\/.*\.tsx?$/, label: 'api-voice-google' },
+  { pattern: /^src\/app\/focus\/.*\.tsx?$/, label: 'focus-ui' },
 ];
 
 const BLACKLIST = [
@@ -91,13 +101,14 @@ if (!['Edit', 'Write', 'MultiEdit'].includes(tool) || !filePath) {
 const absPath = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
 const relPath = path.relative(projectRoot, absPath).replace(/\\/g, '/');
 
-const blacklistHit = matchPattern(relPath, BLACKLIST);
+const priorityHit = matchPattern(relPath, WHITELIST_PRIORITY);
+const blacklistHit = priorityHit ? null : matchPattern(relPath, BLACKLIST);
 if (blacklistHit) {
   appendAudit({ decision: 'PASSTHROUGH', tool, path: relPath, reason: `blacklist match: ${blacklistHit}` });
   process.exit(0);
 }
 
-const whitelistHit = matchPattern(relPath, WHITELIST);
+const whitelistHit = priorityHit || matchPattern(relPath, WHITELIST);
 if (!whitelistHit) {
   process.exit(0);
 }

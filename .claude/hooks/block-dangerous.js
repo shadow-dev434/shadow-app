@@ -118,6 +118,11 @@ const BLOCKED_PATTERNS = [
   { pattern: /\bgit\s+push\s+(--force\b|-f\b)/, reason: 'git push --force può distruggere lavoro remoto. Usa --force-with-lease se proprio necessario.' },
   { pattern: /\bgit\s+push\s+.*\s+(--force\b|-f\b)/, reason: 'git push --force può distruggere lavoro remoto.' },
 
+  // Push verso main/master: main e' produzione (auto-deploy Vercel). Il push di
+  // main e' riservato ad Antonio, anche se la permission ask venisse approvata
+  // per distrazione. Copre anche refspec tipo HEAD:main / feature:main.
+  { pattern: /\bgit\s+push\b[^;&|]*[\s:](main|master)\b/, reason: 'git push verso main/master è riservato ad Antonio (deploy produzione). Usa un feature branch.' },
+
   // rm -rf: l'apocalisse. Strip stringhe perché un commit message può citarlo.
   { pattern: /\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\b/, reason: 'rm -rf bloccato. Cancella file uno alla volta o chiedi ad Antonio.' },
   { pattern: /\brm\s+-rf?\s+\//, reason: 'rm su path assoluto bloccato.' },

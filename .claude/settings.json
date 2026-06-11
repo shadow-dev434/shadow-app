@@ -38,6 +38,12 @@
       "Bash(git restore --staged:*)",
       "Bash(git reset HEAD:*)",
 
+      "Bash(git commit:*)",
+      "Bash(git checkout -b:*)",
+      "Bash(git switch feature/:*)",
+      "Bash(git tag:*)",
+      "Bash(bun test:*)",
+
       "Bash(bun run:*)",
       "Bash(bun install)",
       "Bash(bunx tsc:*)",
@@ -51,7 +57,6 @@
     ],
 
     "ask": [
-      "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(git pull:*)",
       "Bash(git merge:*)",

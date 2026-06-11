@@ -1,5 +1,9 @@
 # Task 24 — Diff proposti per `.claude/` (da applicare con approvazione interattiva di Antonio)
 
+> **APPLICATI il 2026-06-12** con autorizzazione esplicita di Antonio (testo che
+> nomina file e documento). Il documento resta come riferimento storico e come
+> verbale di cosa è cambiato.
+>
 > Il classifier di Claude Code ha (correttamente) bloccato l'auto-modifica dei permessi.
 > Questi sono i 3 diff esatti previsti dal piano approvato il 2026-06-11. Antonio può:
 > (a) approvarli interattivamente in una sessione live quando Code li ripropone, oppure

@@ -36,10 +36,10 @@ Claude Code lavora end-to-end sui macro-task. Antonio interviene solo su:
 
 ## Modifiche al setup `.claude/` (questo task)
 
-> **NON ancora applicate** — il classifier di Claude Code blocca l'auto-edit di
-> `.claude/*` (self-modification, by design). I diff esatti sono pronti in
-> `docs/tasks/24-workflow-v2-diffs.md`; applicazione in carico ad Antonio
-> (a mano, o approvandoli interattivamente in una sessione live).
+> **Applicate il 2026-06-12** con autorizzazione esplicita di Antonio. Il
+> classifier rifiuta le deleghe generiche sull'auto-modifica di `.claude/*`:
+> è servito un testo che nominasse i file e il documento dei diff
+> (`docs/tasks/24-workflow-v2-diffs.md`, che resta come riferimento).
 
 - `settings.json` — da spostare da `ask` ad `allow`: `git commit`, `git checkout -b`,
   `git switch feature/*` (le forme generiche di checkout/switch restano in `ask`),
@@ -66,11 +66,15 @@ Claude Code lavora end-to-end sui macro-task. Antonio interviene solo su:
 
 ## Acceptance
 
-- [ ] `bun run build` verde.
-- [ ] `git commit` su feature branch senza prompt; `git checkout -b` senza prompt
-      *(richiede i diff di `24-workflow-v2-diffs.md` applicati)*.
-- [ ] `git push origin main` bloccato dall'hook (test negativo, senza eseguirlo davvero: verificare il pattern con un dry input)
-      *(richiede i diff applicati — oggi l'hook blocca solo i force-push)*.
-- [ ] Edit su `docs/tasks/x.md` auto-approvati (già vero); edit su `src/features/x.tsx`, `scripts/x.ts` auto-approvati *(richiede i diff applicati)*; edit su `orchestrator.ts`/`schema.prisma`/`.claude/*` ancora sotto conferma.
-- [ ] CLAUDE.md aggiornato e fedele al codice attuale.
-- [ ] ROADMAP aggiornata con i task 24-27.
+- [x] `bun run build` verde.
+- [x] `git commit` su feature branch senza prompt; `git checkout -b` senza prompt
+      *(diff applicati il 2026-06-12)*.
+- [x] `git push origin main` bloccato dall'hook — verificato con dry input il
+      2026-06-12: `git push origin main` e `git push origin HEAD:main` → exit 2;
+      `git push -u origin feature/x` → exit 0.
+- [x] Edit su `docs/tasks/x.md`, `scripts/x.ts`, `src/app/api/voice/**`
+      auto-approvati (dry-run 2026-06-12, whitelist prioritaria vince sulla
+      blacklist); edit su `orchestrator.ts`/`schema.prisma`/`.claude/*` ancora
+      sotto conferma (passthrough verificato).
+- [x] CLAUDE.md aggiornato e fedele al codice attuale.
+- [x] ROADMAP aggiornata con i task 24-27.

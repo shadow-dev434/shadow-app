@@ -142,8 +142,8 @@ Restano SEMPRE sotto conferma esplicita: migration DB (`prisma migrate`), edit d
 ## Setup Claude Code (.claude/)
 
 - **`settings.json`** — `allow`: read/search, git status/diff/log/add/**commit**/
-  **checkout -b**/**switch**/**tag**, `bun run *`, `bun test`, `bunx tsc/next/prisma
-  generate|format|validate`. `ask`: push/pull/merge/rebase/reset --hard,
+  **checkout -b**/**switch feature/***/**tag**, `bun run *`, `bun test`, `bunx tsc/next/prisma
+  generate|format|validate` (checkout/switch generici restano in `ask`). `ask`: push/pull/merge/rebase/reset --hard,
   `prisma migrate|db push|db execute|db seed|studio`, rm/mv, curl/wget, edit dei file
   protetti elencati sopra.
 - **Hook `block-dangerous.js`** (PreToolUse Bash): blocca `rm -rf`, `sudo`,
