@@ -335,8 +335,13 @@ export function ChatView() {
         )}
       </div>
 
-      {/* Check-in beta (Task 23): mai durante la review serale. */}
-      <BetaCheckin suppress={eveningReviewShouldStart || mode === 'evening_review'} />
+      {/* Check-in beta (Task 23): soppresso solo finché la card della review
+          serale occupa la schermata vuota (niente due card impilate). Appena
+          l'utente interagisce — fa la review o chatta — il pulse torna
+          disponibile come banner non bloccante sopra l'input. */}
+      <BetaCheckin
+        suppress={messages.length === 0 && (eveningReviewShouldStart || mode === 'evening_review')}
+      />
 
       <form
         onSubmit={handleSubmit}

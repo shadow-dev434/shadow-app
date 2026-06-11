@@ -17,8 +17,10 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        // Normalizzata come in fase di registrazione (lowercase + trim):
+        // le email sono memorizzate normalizzate, qui matchiamo uguale.
         const user = await db.user.findUnique({
-          where: { email: credentials.email },
+          where: { email: credentials.email.trim().toLowerCase() },
         });
 
         if (!user || !user.password) return null;

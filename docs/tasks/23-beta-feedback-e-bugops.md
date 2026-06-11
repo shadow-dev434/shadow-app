@@ -13,6 +13,47 @@
 
 ---
 
+## Note di implementazione (review multi-agente, 2026-06-11)
+
+Una review multi-agente (98 agenti, 5 dimensioni + panel psicometrico) ha
+prodotto 24 finding confermati + 14 issue sugli strumenti. **Tutti corretti**
+nel commit "review fixes". I principali:
+
+- **Questionari, integrità dati**: il client inviava un solo item per PATCH
+  (fire-and-forget) e il server faceva read-merge-write non atomico → lost
+  update + `completedAt` mai valorizzato. Fix: il client invia la mappa intera
+  accumulata (ogni PATCH auto-contenuta), attende e verifica `completedAt`
+  sull'ultimo item prima di dichiarare completo.
+- **Pulse soppresso per sempre**: il `suppress` legato a `eveningReviewShouldStart`/
+  `mode==='evening_review'` non si rilasciava mai in sessione. Fix: soppresso
+  solo finché la card della review occupa la schermata vuota.
+- **Escalation admin**: email non normalizzate a registrazione/login →
+  variante-case dell'email admin aggirava l'allowlist. Fix: normalizzazione
+  lowercase+trim a registrazione e in `authorize` (chiude alla radice).
+- **Robustezza invii**: pulse/weekly/baseline/final non controllavano l'esito
+  del POST → "Grazie" anche su fallimento (il `final` era perdita permanente).
+  Fix: su errore il flow resta aperto con retry.
+- **One-shot server-side**: `weekly`/`final`/`baseline` ora idempotenti per
+  utente (no duplicati cross-day da resume).
+- **Privacy Sentry**: rimosso `query_string`/`referer` dagli event; breadcrumb
+  passati ad allowlist (navigation con query strippata, il resto solo
+  categoria/livello). Export: `bugReports` con select esplicito (mai
+  `adminNotes`/`priority`).
+- **ADEXI**: due item non erano ADEXI (mancavano gli ufficiali 6 e 14);
+  ripristinati dal self-report ufficiale (chexi.se). PGIC: ripristinato "il
+  cambiamento nella".
+- **Probe e2e**: il cleanup poteva cancellare un T0 ASRS reale; ora rifiuta di
+  girare se esiste un T0 completato e cancella solo i propri record (per id).
+
+**Deviazioni lasciate come scelte consapevoli** (annotate, non bug):
+- Weekly dovuto dopo **7 giorni pieni** (betaDay 8), T1 dopo 14 giorni pieni
+  (betaDay 15) — coerente con la formula §C4 `today - firstAssessmentDate ≥ 14`.
+- Diagnosi formale: non si raccoglie "da chi" (campo libero) per non appesantire
+  il T0; aggiunta opzione "preferisco non dirlo".
+- ASRS recall a 2 settimane (non 6 mesi standard): deviazione dichiarata §C2.
+
+---
+
 ## 0. Obiettivi e principi
 
 Tre deliverable, un unico sistema:

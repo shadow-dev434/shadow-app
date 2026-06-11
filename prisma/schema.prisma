@@ -631,7 +631,7 @@ model BetaFeedback {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  kind    String // daily_pulse | weekly | final
+  kind    String // daily_pulse | weekly | final | baseline (covariate T0)
   day     String // YYYY-MM-DD lato client (timezone-safe)
   version String @default("v1") // versione del wording del questionario
   answers String @db.Text // JSON

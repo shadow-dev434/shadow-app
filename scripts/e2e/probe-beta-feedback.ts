@@ -28,6 +28,10 @@ if (!userId) {
 }
 
 let failures = 0;
+// Id dei record assessment creati dal probe in questo run: cleanup li elimina
+// per id (oltre alle bozze), mai per criterio largo che colpirebbe un T0 reale.
+const createdAssessmentIds = new Set<string>();
+
 function check(name: string, ok: boolean, detail?: string) {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
   if (!ok) failures++;
@@ -81,15 +85,39 @@ async function cleanup(): Promise<void> {
   await db.betaFeedback.deleteMany({
     where: { userId, day: { in: [PROBE_DAY, PROBE_DAY_2] } },
   });
+  // ASRS pre non ha un marker: si cancella SOLO se è una bozza (completedAt
+  // null) o se è esattamente il record creato dal probe (per id). Un T0 reale
+  // completato di un altro id non viene mai toccato — e la guardia in main()
+  // impedisce comunque di girare se ne esiste uno.
   await db.assessmentResponse.deleteMany({
-    where: { userId, instrument: 'asrs', wave: 'pre' },
+    where: {
+      userId,
+      instrument: 'asrs',
+      wave: 'pre',
+      OR: [{ completedAt: null }, { id: { in: [...createdAssessmentIds] } }],
+    },
   });
 }
 
 async function main(): Promise<void> {
   const cookie = await mintCookie();
 
-  // Stato pulito in ingresso (run precedenti interrotte).
+  // GUARDIA: l'ASRS pre del probe non è distinguibile da un T0 reale.
+  // Se l'utente ha già un T0 ASRS completato, ci fermiamo: il probe va
+  // lanciato con un utente dedicato, mai con un tester reale (il T0 non è
+  // ripetibile — cfr. incidente prod-DB).
+  const realT0 = await db.assessmentResponse.findFirst({
+    where: { userId, instrument: 'asrs', wave: 'pre', completedAt: { not: null } },
+    select: { id: true },
+  });
+  if (realT0) {
+    console.error(
+      `STOP: l'utente ${userId} ha già un T0 ASRS completato. Usa un utente probe dedicato.`
+    );
+    process.exit(1);
+  }
+
+  // Stato pulito in ingresso (solo bozze/record del probe — vedi cleanup()).
   await cleanup();
 
   // ── 1. Bug report: POST + GET ────────────────────────────────────────
@@ -202,6 +230,13 @@ async function main(): Promise<void> {
     `atteso ${expectedFull.totalScore}, avuto ${r2?.totalScore}`
   );
   check('assessment: completedAt valorizzato', r2?.completedAt != null);
+
+  // Registra l'id del record del probe per il cleanup mirato (per id).
+  const probeRow = await db.assessmentResponse.findFirst({
+    where: { userId, instrument: 'asrs', wave: 'pre' },
+    select: { id: true },
+  });
+  if (probeRow) createdAssessmentIds.add(probeRow.id);
 
   const badScore = await api(cookie, 'PATCH', '/api/beta/assessment', {
     instrument: 'asrs',

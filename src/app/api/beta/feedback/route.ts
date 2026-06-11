@@ -8,6 +8,10 @@ import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
 const KINDS = new Set(['daily_pulse', 'weekly', 'final', 'baseline']);
+// One-shot per utente (a differenza di daily_pulse, uno al giorno): la unique
+// (userId, kind, day) protegge solo lo stesso giorno, quindi un resume in un
+// giorno diverso creerebbe duplicati. Qui li trattiamo come idempotenti.
+const ONE_SHOT_KINDS = new Set(['weekly', 'final', 'baseline']);
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_ANSWERS_CHARS = 16_000;
 
@@ -32,6 +36,18 @@ export async function POST(req: NextRequest) {
     const answersJson = JSON.stringify(answers);
     if (answersJson.length > MAX_ANSWERS_CHARS) {
       return NextResponse.json({ error: 'answers too large' }, { status: 400 });
+    }
+
+    // Per i kind one-shot: se esiste già una risposta (qualsiasi giorno) la
+    // prima vince, niente seconda riga in un giorno diverso (resume, back).
+    if (ONE_SHOT_KINDS.has(kind)) {
+      const existing = await db.betaFeedback.findFirst({
+        where: { userId, kind },
+        select: { id: true },
+      });
+      if (existing) {
+        return NextResponse.json({ feedback: null, duplicate: true });
+      }
     }
 
     try {

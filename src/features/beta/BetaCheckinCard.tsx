@@ -6,7 +6,7 @@
 // T0/T1 (Fase 4) usano lo stesso endpoint status e una card che porta a
 // /beta/assessment. Mai mostrato durante la review serale (suppress).
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ClipboardList, Loader2, Moon, X } from 'lucide-react';
 import { BugReportDialog } from '@/features/beta/BugReportDialog';
@@ -110,37 +110,58 @@ async function postFeedback(kind: string, day: string, answers: object): Promise
 export function BetaCheckin({ suppress }: { suppress?: boolean }) {
   const router = useRouter();
   const [status, setStatus] = useState<BetaStatusDto | null>(null);
-  const [day, setDay] = useState<string>('');
   const [flow, setFlow] = useState<'none' | 'pulse' | 'weekly'>('none');
   const [dismissed, setDismissed] = useState<{ [k: string]: boolean }>({});
   const [thanks, setThanks] = useState(false);
-  const fetchCalled = useRef(false);
+  const [submitError, setSubmitError] = useState(false);
+
+  // Lo status si ricalcola con l'orario CORRENTE (non quello del mount): un
+  // utente che tiene l'app aperta dal pomeriggio deve vedere il pulse quando
+  // entra nella finestra serale, e il `day` del salvataggio dev'essere quello
+  // del submit (non del mount) per non sbagliare oltre la mezzanotte.
+  const loadStatus = useCallback(async () => {
+    const { clientDate, clientTime } = nowClient();
+    try {
+      const res = await fetch(
+        `/api/beta/feedback/status?clientDate=${clientDate}&clientTime=${clientTime}`,
+        { cache: 'no-store' }
+      );
+      if (res.ok) setStatus((await res.json()) as BetaStatusDto);
+    } catch {
+      // status non disponibile: nessuna card, nessun rumore
+    }
+  }, []);
 
   useEffect(() => {
-    if (fetchCalled.current) return;
-    fetchCalled.current = true;
-    const { clientDate, clientTime } = nowClient();
-    setDay(clientDate);
-    (async () => {
-      try {
-        const res = await fetch(
-          `/api/beta/feedback/status?clientDate=${clientDate}&clientTime=${clientTime}`
-        );
-        if (res.ok) setStatus((await res.json()) as BetaStatusDto);
-      } catch {
-        // status non disponibile: nessuna card, nessun rumore
-      }
-    })();
-  }, []);
+    void loadStatus();
+    // Ricalcola quando l'app torna in foreground (TWA/PWA in resume non
+    // rimontano la pagina) o quando la tab ridiventa visibile.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void loadStatus();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [loadStatus]);
 
   if (suppress || !status) return null;
 
   if (flow === 'pulse') {
     return (
       <PulseFlow
+        error={submitError}
         onCancel={() => setFlow('none')}
         onDone={async (answers) => {
-          await postFeedback('daily_pulse', day, answers);
+          // `day` calcolato al submit, non al mount (sessioni lunghe/mezzanotte).
+          const ok = await postFeedback('daily_pulse', nowClient().clientDate, answers);
+          if (!ok) {
+            setSubmitError(true);
+            return;
+          }
+          setSubmitError(false);
           setStatus({ ...status, pulseDue: false });
           setFlow('none');
           setThanks(true);
@@ -153,9 +174,15 @@ export function BetaCheckin({ suppress }: { suppress?: boolean }) {
   if (flow === 'weekly') {
     return (
       <WeeklyFlow
+        error={submitError}
         onCancel={() => setFlow('none')}
         onDone={async (answers) => {
-          await postFeedback('weekly', day, answers);
+          const ok = await postFeedback('weekly', nowClient().clientDate, answers);
+          if (!ok) {
+            setSubmitError(true);
+            return;
+          }
+          setSubmitError(false);
           setStatus({ ...status, weeklyDue: false });
           setFlow('none');
           setThanks(true);
@@ -273,8 +300,11 @@ function FlowShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 p-3 animate-in slide-in-from-bottom duration-200">
-      <div className="max-w-md mx-auto bg-zinc-900 border border-zinc-700 rounded-2xl p-4 shadow-2xl space-y-3">
+    <div
+      className="fixed inset-x-0 bottom-0 z-50 p-3 animate-in slide-in-from-bottom duration-200"
+      style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+    >
+      <div className="max-w-md mx-auto bg-zinc-900 border border-zinc-700 rounded-2xl p-4 shadow-2xl space-y-3 max-h-[80vh] overflow-y-auto">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-zinc-200 flex-1">{title}</span>
           <div className="flex gap-1" aria-hidden>
@@ -370,9 +400,11 @@ function ChipToggle({
 function PulseFlow({
   onDone,
   onCancel,
+  error,
 }: {
   onDone: (answers: PulseAnswers) => Promise<void>;
   onCancel: () => void;
+  error?: boolean;
 }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<PulseAnswers>({});
@@ -384,6 +416,12 @@ function PulseFlow({
   const [sending, setSending] = useState(false);
 
   const TOTAL = 8; // 4 scale + helpedBy + bug + frizione + suggerimento
+
+  // Se l'invio fallisce, il parent setta error: sblocca il bottone così le
+  // risposte (ancora in memoria) si possono rinviare.
+  useEffect(() => {
+    if (error) setSending(false);
+  }, [error]);
 
   const finish = async (final: PulseAnswers) => {
     setSending(true);
@@ -452,10 +490,7 @@ function PulseFlow({
             />
             <OptionButton
               label="Sì — lo segnalo ora"
-              onClick={() => {
-                setAnswers((a) => ({ ...a, bugToday: 'yes' }));
-                setBugOpen(true);
-              }}
+              onClick={() => setBugOpen(true)}
             />
             <OptionButton
               label="Sì, ma l'ho già segnalato"
@@ -465,11 +500,16 @@ function PulseFlow({
               }}
             />
           </div>
+          {/* bugToday='yes' solo se la segnalazione è davvero inviata;
+              chiudere il dialog senza inviare resta allo step (no avanzamento
+              con un bugToday senza report associato). */}
           <BugReportDialog
             open={bugOpen}
-            onOpenChange={(o) => {
-              setBugOpen(o);
-              if (!o) setStep(6);
+            onOpenChange={setBugOpen}
+            onSubmitted={() => {
+              setAnswers((a) => ({ ...a, bugToday: 'yes' }));
+              setBugOpen(false);
+              setStep(6);
             }}
           />
         </div>
@@ -544,6 +584,9 @@ function PulseFlow({
               {sending ? <Loader2 size={15} className="animate-spin" /> : 'Invia'}
             </button>
           </div>
+          {error && (
+            <p className="text-xs text-amber-400">Invio non riuscito — riprova.</p>
+          )}
         </div>
       )}
     </FlowShell>
@@ -557,9 +600,11 @@ type WeeklyFeatureAnswer = { used: boolean; utility?: number; whyNot?: string };
 function WeeklyFlow({
   onDone,
   onCancel,
+  error,
 }: {
   onDone: (answers: object) => Promise<void>;
   onCancel: () => void;
+  error?: boolean;
 }) {
   const [step, setStep] = useState(0);
   const [features, setFeatures] = useState<Record<string, WeeklyFeatureAnswer>>({});
@@ -570,6 +615,10 @@ function WeeklyFlow({
   const [trust, setTrust] = useState<number | null>(null);
   const [onboardingGap, setOnboardingGap] = useState('');
   const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (error) setSending(false);
+  }, [error]);
 
   const N_FEATURES = WEEKLY_FEATURES.length;
   // feature steps + missing + nps(+why) + trust + onboardingGap
@@ -731,6 +780,9 @@ function WeeklyFlow({
           >
             {sending ? <Loader2 size={15} className="animate-spin" /> : 'Invia'}
           </button>
+          {error && (
+            <p className="text-xs text-amber-400">Invio non riuscito — riprova.</p>
+          )}
         </div>
       )}
     </FlowShell>

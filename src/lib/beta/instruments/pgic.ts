@@ -25,7 +25,7 @@ export const PGIC: InstrumentConfig = {
   items: [
     {
       id: 'p1',
-      text: 'Rispetto a quando hai iniziato a usare Shadow, come descriveresti la gestione delle tue giornate?',
+      text: 'Rispetto a quando hai iniziato a usare Shadow, come descriveresti il cambiamento nella gestione delle tue giornate?',
     },
   ],
 };

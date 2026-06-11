@@ -3,6 +3,7 @@
 // PATCH: triage { id, status?, priority?, adminNotes? }
 
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { requireAdminSession } from '@/lib/beta/admin-guard';
 import { db } from '@/lib/db';
 
@@ -45,13 +46,28 @@ export async function PATCH(req: NextRequest) {
 
     const data: Record<string, unknown> = {};
 
+    // resolvedAt deve essere stabile: il client confronta resolvedAt col
+    // proprio "ultimo visto" per il toast "risolto". Lo impostiamo solo se
+    // non già valorizzato (no re-stamp su fixed→in_progress→fixed), così il
+    // toast non si ri-triggera per la stessa segnalazione.
+    let existing: { resolvedAt: Date | null } | null = null;
     if (status !== undefined) {
       if (typeof status !== 'string' || !STATUSES.has(status)) {
         return NextResponse.json({ error: 'invalid status' }, { status: 400 });
       }
+      existing = await db.bugReport.findUnique({
+        where: { id },
+        select: { resolvedAt: true },
+      });
+      if (!existing) {
+        return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+      }
       data.status = status;
-      // resolvedAt segue lo stato: serve al client per il toast "risolto".
-      data.resolvedAt = status === 'fixed' ? new Date() : null;
+      if (status === 'fixed') {
+        data.resolvedAt = existing.resolvedAt ?? new Date();
+      } else {
+        data.resolvedAt = null;
+      }
     }
 
     if (priority !== undefined) {
@@ -72,8 +88,16 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'nothing to update' }, { status: 400 });
     }
 
-    const report = await db.bugReport.update({ where: { id }, data });
-    return NextResponse.json({ report });
+    try {
+      const report = await db.bugReport.update({ where: { id }, data });
+      return NextResponse.json({ report });
+    } catch (err) {
+      // P2025 = record inesistente (es. utente cancellato in cascade): 404, non 500.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+      }
+      throw err;
+    }
   } catch (err) {
     console.error('PATCH /api/admin/beta/bug-reports error:', err);
     return NextResponse.json({ error: 'Failed to update report' }, { status: 500 });

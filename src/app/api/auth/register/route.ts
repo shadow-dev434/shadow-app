@@ -9,14 +9,22 @@ const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 days
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, password } = await req.json();
+    const { name, email: rawEmail, password } = await req.json();
 
-    if (!email || !password) {
+    if (!rawEmail || !password) {
       return NextResponse.json({ error: 'Email e password sono obbligatori' }, { status: 400 });
     }
     if (password.length < 6) {
       return NextResponse.json({ error: 'Password deve essere almeno 6 caratteri' }, { status: 400 });
     }
+
+    // Normalizza l'email (lowercase + trim) PRIMA del controllo di unicità:
+    // l'indice unique di Postgres è case-sensitive, quindi senza questo due
+    // varianti di maiuscole (bob@x / Bob@x) coesisterebbero. Oltre all'igiene
+    // generale, chiude un'escalation: l'allowlist admin confronta in
+    // lowercase, quindi un attaccante non può registrare una variante-case
+    // dell'email di un admin. Il login (auth.ts authorize) normalizza uguale.
+    const email = String(rawEmail).trim().toLowerCase();
 
     const existingUser = await db.user.findUnique({ where: { email } });
     if (existingUser) {

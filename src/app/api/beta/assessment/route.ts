@@ -66,7 +66,10 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const { instrument, wave, itemScores, completed } = body ?? {};
 
-    if (typeof instrument !== 'string' || !(instrument in INSTRUMENTS)) {
+    // Object.hasOwn, non `in`: l'operatore `in` matcherebbe anche le chiavi
+    // ereditate da Object.prototype (toString, constructor, __proto__…),
+    // facendo risolvere config a un membro del prototype → 500 invece di 400.
+    if (typeof instrument !== 'string' || !Object.hasOwn(INSTRUMENTS, instrument)) {
       return NextResponse.json({ error: 'invalid instrument' }, { status: 400 });
     }
     if (typeof wave !== 'string' || !WAVES.has(wave)) {

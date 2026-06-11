@@ -7,9 +7,14 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent {
   if (event.request) {
     delete event.request.data;
     delete event.request.cookies;
+    // Il SDK node popola query_string in un campo separato dall'URL: va
+    // rimosso esplicitamente, altrimenti la query sopravvive allo strip
+    // dell'URL. Anche il referer può contenere URL con query.
+    delete event.request.query_string;
     if (event.request.headers) {
       delete event.request.headers['cookie'];
       delete event.request.headers['authorization'];
+      delete event.request.headers['referer'];
     }
     if (typeof event.request.url === 'string') {
       event.request.url = event.request.url.split('?')[0];
@@ -22,17 +27,12 @@ export function scrubEvent(event: ErrorEvent): ErrorEvent {
   return event;
 }
 
+const stripQuery = (v: unknown): string | undefined =>
+  typeof v === 'string' ? v.split('?')[0] : undefined;
+
 export function scrubBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb | null {
-  if (breadcrumb.category === 'console') {
-    // I console.* del codebase loggano oggetti che possono contenere
-    // contenuto utente: si tengono solo livello e categoria.
-    return { ...breadcrumb, message: '[scrubbed]', data: undefined };
-  }
   if (breadcrumb.category === 'fetch' || breadcrumb.category === 'xhr') {
-    const url =
-      typeof breadcrumb.data?.url === 'string'
-        ? breadcrumb.data.url.split('?')[0]
-        : undefined;
+    const url = stripQuery(breadcrumb.data?.url);
     return {
       ...breadcrumb,
       data: {
@@ -44,5 +44,18 @@ export function scrubBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb | null {
       },
     };
   }
-  return breadcrumb;
+  if (breadcrumb.category === 'navigation') {
+    // from/to includono la query string: strippata come per fetch/xhr.
+    return {
+      ...breadcrumb,
+      data: {
+        ...(stripQuery(breadcrumb.data?.from) ? { from: stripQuery(breadcrumb.data?.from) } : {}),
+        ...(stripQuery(breadcrumb.data?.to) ? { to: stripQuery(breadcrumb.data?.to) } : {}),
+      },
+    };
+  }
+  // Allowlist: ogni altra categoria (console, ui.click/ui.input che possono
+  // serializzare aria-label/title/valori, ecc.) tiene solo categoria e
+  // livello — mai message/data, che potrebbero trasportare contenuto utente.
+  return { category: breadcrumb.category, level: breadcrumb.level, type: breadcrumb.type };
 }

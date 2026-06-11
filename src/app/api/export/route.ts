@@ -34,8 +34,15 @@ export async function GET(req: NextRequest) {
         calendarTokens: {
           select: { id: true, provider: true, scope: true, expiresAt: true, createdAt: true },
         },
-        // Beta (Task 23)
-        bugReports: true,
+        // Beta (Task 23). bugReports con select esplicito: adminNotes e
+        // priority sono note INTERNE di triage, non vanno nell'export utente.
+        bugReports: {
+          select: {
+            id: true, area: true, description: true, expected: true,
+            severityUser: true, reproducibility: true, context: true,
+            appVersion: true, status: true, createdAt: true, resolvedAt: true,
+          },
+        },
         betaFeedbacks: true,
         assessmentResponses: true,
         // Esclusi di proposito: accounts, sessions, pushSubscription (segreti/infra).

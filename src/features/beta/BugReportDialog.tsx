@@ -174,11 +174,14 @@ export function BugReportDialog({
   onOpenChange,
   initialArea,
   initialDescription,
+  onSubmitted,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialArea?: BugArea;
   initialDescription?: string;
+  /** Chiamato a invio riuscito (usato dal pulse per registrare bugToday='yes'). */
+  onSubmitted?: () => void;
 }) {
   const [area, setArea] = useState<BugArea | null>(null);
   const [description, setDescription] = useState('');
@@ -206,6 +209,19 @@ export function BugReportDialog({
       setView('form');
     }
   }, [open, initialArea, initialDescription]);
+
+  // Torna al form pulito (anche dopo un invio: resetta `sent` così
+  // "Nuova segnalazione" mostra davvero un form vuoto, non il ringraziamento).
+  const resetForm = useCallback(() => {
+    setView('form');
+    setSent(false);
+    setArea(initialArea ?? guessArea());
+    setDescription('');
+    setExpected('');
+    setSeverity(null);
+    setRepro(null);
+    setSubmitError(null);
+  }, [initialArea]);
 
   const openMine = useCallback(async () => {
     setView('mine');
@@ -242,6 +258,7 @@ export function BugReportDialog({
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       setSent(true);
+      onSubmitted?.();
     } catch {
       setSubmitError(
         'Invio non riuscito. Riprova tra poco — o scrivici nel gruppo beta.'
@@ -249,13 +266,13 @@ export function BugReportDialog({
     } finally {
       setSending(false);
     }
-  }, [canSubmit, area, description, expected, severity, repro]);
+  }, [canSubmit, area, description, expected, severity, repro, onSubmitted]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         {view === 'mine' ? (
-          <MyReportsView reports={myReports} loading={loadingMine} onBack={() => setView('form')} />
+          <MyReportsView reports={myReports} loading={loadingMine} onBack={resetForm} />
         ) : sent ? (
           <div className="flex flex-col items-center text-center py-6 gap-3">
             <CheckCircle2 size={32} className="text-emerald-500" />

@@ -45,6 +45,7 @@ function AssessmentInner() {
   const [itemIdx, setItemIdx] = useState(0);
   const [scores, setScores] = useState<Record<string, ItemScores>>({});
   const [saveError, setSaveError] = useState(false);
+  const [submitErr, setSubmitErr] = useState(false);
   const loadCalled = useRef(false);
 
   // Covariate T0 (spec §C3)
@@ -114,7 +115,7 @@ function AssessmentInner() {
     instrument: InstrumentId,
     itemScores: ItemScores,
     completed?: boolean
-  ): Promise<void> => {
+  ): Promise<{ ok: boolean; completedAt: string | null }> => {
     try {
       const res = await fetch('/api/beta/assessment', {
         method: 'PATCH',
@@ -122,73 +123,99 @@ function AssessmentInner() {
         body: JSON.stringify({ instrument, wave, itemScores, completed }),
       });
       setSaveError(!res.ok);
+      if (!res.ok) return { ok: false, completedAt: null };
+      const data = (await res.json()) as { response?: { completedAt?: string | null } };
+      return { ok: true, completedAt: data.response?.completedAt ?? null };
     } catch {
       setSaveError(true);
+      return { ok: false, completedAt: null };
     }
   };
 
   const answer = (value: number) => {
     const item = config.items[itemIdx];
+    // Inviamo SEMPRE la mappa completa accumulata, non il singolo item: così
+    // ogni PATCH è auto-contenuta (risincronizza eventuali item persi da una
+    // richiesta precedente fallita) e l'ordine di arrivo non causa lost
+    // update — l'ultima scrittura contiene comunque tutte le risposte.
     const updated = { ...(scores[config.id] ?? {}), [item.id]: value };
     setScores((s) => ({ ...s, [config.id]: updated }));
 
     const isLastItem = itemIdx === config.items.length - 1;
-    void patch(config.id, { [item.id]: value }, isLastItem);
 
     if (!isLastItem) {
+      void patch(config.id, updated, false);
       setItemIdx(itemIdx + 1);
       return;
     }
-    // Strumento finito → prossimo, o chiusura.
-    if (instrumentIdx < sequence.length - 1) {
-      setInstrumentIdx(instrumentIdx + 1);
-      setItemIdx(0);
-    } else {
-      setPhase(wave === 'post' ? 'final' : 'done');
+
+    // Ultimo item dello strumento: attendiamo la conferma del server prima di
+    // dichiararlo completo. Se completedAt non torna valorizzato (item perso,
+    // rete), restiamo sull'ultimo item con il banner di errore visibile.
+    void (async () => {
+      const { ok, completedAt } = await patch(config.id, updated, true);
+      if (!ok || !completedAt) return;
+      if (instrumentIdx < sequence.length - 1) {
+        setInstrumentIdx(instrumentIdx + 1);
+        setItemIdx(0);
+      } else {
+        setPhase(wave === 'post' ? 'final' : 'done');
+      }
+    })();
+  };
+
+  const postFeedbackOk = async (kind: string, answers: object): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/beta/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, day: todayYMD(), version: 'v1', answers }),
+      });
+      // duplicate (one-shot già inviato) conta come successo: il dato c'è già.
+      return res.ok;
+    } catch {
+      return false;
     }
   };
 
   const submitBaseline = async () => {
-    await fetch('/api/beta/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'baseline',
-        day: todayYMD(),
-        version: 'v1',
-        answers: {
-          diagnosis,
-          meds,
-          medsStable: meds ? medsStable : null,
-          therapy,
-          expectation: expectation.trim() || null,
-        },
-      }),
-    }).catch(() => {});
+    setSubmitErr(false);
+    const ok = await postFeedbackOk('baseline', {
+      diagnosis,
+      meds,
+      medsStable: meds ? medsStable : null,
+      therapy,
+      expectation: expectation.trim() || null,
+    });
+    // Le covariate si raccolgono solo qui: se l'invio fallisce non si avanza,
+    // altrimenti andrebbero perse (il resume salta le covariate). Restiamo
+    // sulla schermata con il bottone per ritentare.
+    if (!ok) {
+      setSubmitErr(true);
+      return;
+    }
     setPhase('items');
   };
 
   const submitFinal = async () => {
     setSendingFinal(true);
-    await fetch('/api/beta/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'final',
-        day: todayYMD(),
-        version: 'v1',
-        answers: {
-          willContinue,
-          continueWhat: continueWhat.trim() || null,
-          topFixes: fixes.map((f) => f.trim()).filter(Boolean),
-          medicationChanged: confounder,
-          medicationChangeDetail: confounder ? confounderWhat.trim() || null : null,
-          testimonial: testimonialOk && testimonial.trim() ? testimonial.trim() : null,
-          testimonialConsent: testimonialOk,
-        },
-      }),
-    }).catch(() => {});
+    setSubmitErr(false);
+    const ok = await postFeedbackOk('final', {
+      willContinue,
+      continueWhat: continueWhat.trim() || null,
+      topFixes: fixes.map((f) => f.trim()).filter(Boolean),
+      medicationChanged: confounder,
+      medicationChangeDetail: confounder ? confounderWhat.trim() || null : null,
+      testimonial: testimonialOk && testimonial.trim() ? testimonial.trim() : null,
+      testimonialConsent: testimonialOk,
+    });
     setSendingFinal(false);
+    // Le risposte di chiusura T1 (incluso il controllo confondenti §C5) sono
+    // l'ultimo entry-point: se l'invio fallisce non si va a 'done'.
+    if (!ok) {
+      setSubmitErr(true);
+      return;
+    }
     setPhase('done');
   };
 
@@ -284,6 +311,11 @@ function AssessmentInner() {
               />
             </div>
 
+            {submitErr && (
+              <p className="text-sm text-amber-400">
+                Invio non riuscito — controlla la connessione e riprova.
+              </p>
+            )}
             <button
               type="button"
               disabled={diagnosis === null || meds === null || therapy === null || (meds === true && medsStable === null)}
@@ -387,7 +419,7 @@ function AssessmentInner() {
             </div>
 
             <YesNo
-              q="Nelle ultime 2 settimane hai iniziato, sospeso o cambiato dose di farmaci, o iniziato una psicoterapia?"
+              q="Nelle ultime 2 settimane hai iniziato, sospeso o cambiato dose di farmaci (per ADHD o altro), o iniziato una psicoterapia?"
               value={confounder}
               onChange={(v) => setConfounder(v)}
             />
@@ -425,6 +457,11 @@ function AssessmentInner() {
               )}
             </div>
 
+            {submitErr && (
+              <p className="text-sm text-amber-400">
+                Invio non riuscito — controlla la connessione e riprova.
+              </p>
+            )}
             <button
               type="button"
               disabled={willContinue === null || confounder === null || sendingFinal}
