@@ -159,11 +159,17 @@ export async function orchestrate(
         });
 
   // ── 2. Load history ──────────────────────────────────────────────────
-  const previousMessages = await db.chatMessage.findMany({
-    where: { threadId: thread.id },
-    orderBy: { createdAt: 'asc' },
-    take: MAX_HISTORY_MESSAGES,
-  });
+  // Gli ULTIMI N messaggi, non i primi: desc+take seleziona i più recenti,
+  // reverse() ripristina l'ordine cronologico atteso dal prompt. Con asc+take
+  // un thread oltre MAX_HISTORY_MESSAGES perdeva i turni recenti (bug fix
+  // Task 24, 2026-06-11).
+  const previousMessages = (
+    await db.chatMessage.findMany({
+      where: { threadId: thread.id },
+      orderBy: { createdAt: 'desc' },
+      take: MAX_HISTORY_MESSAGES,
+    })
+  ).reverse();
 
   // ── 3. User context ──────────────────────────────────────────────────
   const { userContext, voiceProfile } = await buildContextAndVoice(input.userId);
