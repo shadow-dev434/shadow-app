@@ -36,8 +36,14 @@ Claude Code lavora end-to-end sui macro-task. Antonio interviene solo su:
 
 ## Modifiche al setup `.claude/` (questo task)
 
-- `settings.json` — spostati da `ask` ad `allow`: `git commit`, `git checkout -b`,
-  `git switch`, `git tag`, `bun test`. Restano in `ask`: push/pull/merge/rebase/
+> **NON ancora applicate** — il classifier di Claude Code blocca l'auto-edit di
+> `.claude/*` (self-modification, by design). I diff esatti sono pronti in
+> `docs/tasks/24-workflow-v2-diffs.md`; applicazione in carico ad Antonio
+> (a mano, o approvandoli interattivamente in una sessione live).
+
+- `settings.json` — da spostare da `ask` ad `allow`: `git commit`, `git checkout -b`,
+  `git switch feature/*` (le forme generiche di checkout/switch restano in `ask`),
+  `git tag`, `bun test`. Restano in `ask`: push/pull/merge/rebase/
   reset --hard, `prisma migrate|db push|db execute|db seed`, edit di
   `prisma/schema.prisma`, `.env*`, `next.config.*`, `package.json` e dei 3 file
   core chat (`orchestrator.ts`, `prompts.ts`, `update-plan-preview-handler.ts`).
@@ -61,8 +67,10 @@ Claude Code lavora end-to-end sui macro-task. Antonio interviene solo su:
 ## Acceptance
 
 - [ ] `bun run build` verde.
-- [ ] `git commit` su feature branch senza prompt; `git checkout -b` senza prompt.
-- [ ] `git push origin main` bloccato dall'hook (test negativo, senza eseguirlo davvero: verificare il pattern con un dry input).
-- [ ] Edit su `docs/tasks/x.md`, `src/features/x.tsx`, `scripts/x.ts` auto-approvati; edit su `orchestrator.ts`/`schema.prisma`/`.claude/*` ancora sotto conferma.
+- [ ] `git commit` su feature branch senza prompt; `git checkout -b` senza prompt
+      *(richiede i diff di `24-workflow-v2-diffs.md` applicati)*.
+- [ ] `git push origin main` bloccato dall'hook (test negativo, senza eseguirlo davvero: verificare il pattern con un dry input)
+      *(richiede i diff applicati — oggi l'hook blocca solo i force-push)*.
+- [ ] Edit su `docs/tasks/x.md` auto-approvati (già vero); edit su `src/features/x.tsx`, `scripts/x.ts` auto-approvati *(richiede i diff applicati)*; edit su `orchestrator.ts`/`schema.prisma`/`.claude/*` ancora sotto conferma.
 - [ ] CLAUDE.md aggiornato e fedele al codice attuale.
 - [ ] ROADMAP aggiornata con i task 24-27.

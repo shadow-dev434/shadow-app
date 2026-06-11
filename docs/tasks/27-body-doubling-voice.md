@@ -9,7 +9,7 @@
 
 | Tema | Decisione |
 |---|---|
-| Dialogo | Orchestrator esistente, mode **`focus_companion`** (slot già nello schema, oggi inutilizzato), tier **`fast`** (haiku) — richiede override: oggi `orchestrator.ts:323` manda ogni mode ≠ general su `smart` |
+| Dialogo | Orchestrator esistente, mode **`focus_companion`** (slot già nello schema, oggi inutilizzato), tier **`fast`** (haiku) — richiede override: oggi il blocco «Determine model tier» di `orchestrator.ts` manda ogni mode ≠ general su `smart` |
 | Architettura v1 | **Turn-based**: registra utterance → STT → turno chat → TTS → playback. Latenza target 2-4s/turno. Realtime streaming = v2 (Vercel serverless non tiene WebSocket) |
 | STT | Proxy server batch per-utterance: `/api/voice/transcribe` → Deepgram REST (`language=it`). Niente token effimeri client→vendor in v1 (chiave mai sul client; entitlement+cap nello stesso hop) |
 | TTS | Proxy server `/api/voice/speak` → Deepgram Aura-2 (voce italiana, id scelto nello spike). ElevenLabs (`eleven_flash_v2_5`) swappabile via env. Fallback client `speechSynthesis` |

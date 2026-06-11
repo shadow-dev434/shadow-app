@@ -117,7 +117,7 @@ build verde.
 
 ## Fase 2 — Calendar awareness nello scheduling + write-back (3 sess.)
 
-- Aggancio dati: `orchestrator.ts` (~riga 251, `Promise.all` esistente) carica da cache
+- Aggancio dati: `orchestrator.ts` (blocco `Promise.all` del caricamento triage/profilo/settings) carica da cache
   `CalendarEvent` gli eventi timed non-Shadow del giorno del piano (clientDate+1) →
   `preview-reconstruction.ts` (`appointments: {title, startsAt, endsAt}[]`) →
   `plan-preview.ts`:
