@@ -184,5 +184,8 @@ export const config = {
     // (tour → consenso → onboarding) come ogni page route autenticata.
     '/admin/:path*',
     '/beta/:path*',
+    // Pubbliche by-design, FUORI dal matcher (stesso pattern di /privacy e
+    // /terms): '/reset-password' (Task 28) — ci si arriva dal link email,
+    // per definizione senza sessione. NON aggiungerle qui.
   ],
 };

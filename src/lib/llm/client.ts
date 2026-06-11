@@ -123,6 +123,13 @@ export interface LLMCallParams {
    * Vedi ToolChoiceParam JSDoc per il razionale e le 4 varianti.
    */
   toolChoice?: ToolChoiceParam;
+  /**
+   * Task 40: tentativi totali del retry interno (default 3, vedi callWithRetry).
+   * Il summarizer passa 1: il fold e' auto-riparante per costruzione (al turno
+   * successivo il count e' ancora sopra soglia) e il retry triplicherebbe il
+   * worst-case di durata dentro il budget maxDuration dell'after().
+   */
+  maxAttempts?: number;
 }
 
 export interface LLMResponse {
@@ -279,7 +286,8 @@ export async function callLLM(params: LLMCallParams): Promise<LLMResponse> {
 
   const start = Date.now();
 
-  const response: Message = await callWithRetry(() =>
+  const response: Message = await callWithRetry(
+    () =>
     getClient().messages.create({
       model,
       max_tokens: maxTokens,
@@ -290,6 +298,8 @@ export async function callLLM(params: LLMCallParams): Promise<LLMResponse> {
       // V1.3: forwarda tool_choice solo se definito. Undefined = SDK default 'auto'.
       ...(params.toolChoice !== undefined ? { tool_choice: params.toolChoice } : {}),
     }),
+    // undefined -> default parameter 3 di callWithRetry.
+    params.maxAttempts,
   );
 
   const latencyMs = Date.now() - start;

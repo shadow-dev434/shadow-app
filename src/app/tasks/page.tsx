@@ -573,8 +573,24 @@ function AuthGateView() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  // ── Password dimenticata (Task 28) ── stato locale: il form vive dentro
+  // la vista 'login', niente authView nuova nello store.
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
 
   const authView = store.authView;
+
+  // Deep-link: middleware, authOptions.pages.signIn e /reset-password
+  // rimandano qui con ?auth=login | ?auth=forgot. Letto una volta al mount
+  // (solo client, quindi window è disponibile).
+  useEffect(() => {
+    const authParam = new URLSearchParams(window.location.search).get('auth');
+    if (authParam === 'login' || authParam === 'forgot') {
+      useShadowStore.getState().setAuthView('login');
+      if (authParam === 'forgot') setForgotMode(true);
+    }
+  }, []);
 
   // Post-auth: andiamo a / e lasciamo decidere al middleware in base ai
   // flag nel JWT (tourCompleted, onboardingComplete). Niente più
@@ -645,6 +661,36 @@ function AuthGateView() {
     }
   }, [name, email, password, store, router]);
 
+  // Richiesta link di reset: la risposta del server è generica per design
+  // (non rivela se l'email esiste), quindi il 200 mostra sempre lo stesso
+  // messaggio di conferma.
+  const handleForgotPassword = useCallback(async () => {
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setError('Inserisci la tua email');
+      return;
+    }
+    setForgotLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setForgotSent(true);
+      } else {
+        setError(data.error || 'Errore durante la richiesta. Riprova.');
+      }
+    } catch {
+      setError('Errore di connessione. Riprova.');
+    } finally {
+      setForgotLoading(false);
+    }
+  }, [email]);
+
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
@@ -692,7 +738,7 @@ function AuthGateView() {
         )}
 
         {/* Login form */}
-        {authView === 'login' && (
+        {authView === 'login' && !forgotMode && (
           <div className="space-y-4 animate-in slide-in-from-right duration-300">
             <button onClick={() => { store.setAuthView('welcome'); setError(''); }} className="text-zinc-400 text-sm flex items-center gap-1">
               <ChevronLeft className="w-4 h-4" /> Indietro
@@ -736,6 +782,15 @@ function AuthGateView() {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                <div className="mt-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => { setForgotMode(true); setForgotSent(false); setError(''); }}
+                    className="text-xs text-zinc-500 hover:text-amber-400 underline"
+                  >
+                    Password dimenticata?
+                  </button>
+                </div>
               </div>
             </div>
             <Button
@@ -751,6 +806,73 @@ function AuthGateView() {
                 Registrati
               </button>
             </p>
+          </div>
+        )}
+
+        {/* Password dimenticata (Task 28): form inline nella vista login */}
+        {authView === 'login' && forgotMode && (
+          <div className="space-y-4 animate-in slide-in-from-right duration-300">
+            <button
+              onClick={() => { setForgotMode(false); setForgotSent(false); setError(''); }}
+              className="text-zinc-400 text-sm flex items-center gap-1"
+            >
+              <ChevronLeft className="w-4 h-4" /> Torna al login
+            </button>
+            <h2 className="text-xl font-bold text-white">Reimposta password</h2>
+            {forgotSent ? (
+              <div className="space-y-4">
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-emerald-950/50 border border-emerald-800">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <span className="text-sm text-emerald-300">
+                    Se l&apos;email è registrata, riceverai un link per reimpostare la password
+                    (valido 1 ora). Controlla anche lo spam.
+                  </span>
+                </div>
+                <Button
+                  onClick={() => { setForgotMode(false); setForgotSent(false); }}
+                  variant="outline"
+                  className="w-full h-11 border-zinc-700 text-white hover:bg-zinc-800"
+                >
+                  Torna al login
+                </Button>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-zinc-400">
+                  Inserisci l&apos;email del tuo account: ti invieremo un link per impostare una
+                  nuova password.
+                </p>
+                {error && (
+                  <div className="flex items-center gap-2 p-3 rounded-lg bg-red-950/50 border border-red-800">
+                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                    <span className="text-sm text-red-400">{error}</span>
+                  </div>
+                )}
+                <div>
+                  <Label className="text-xs text-zinc-400">Email</Label>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="email@esempio.com"
+                    className="mt-1 h-11 bg-zinc-900 border-zinc-700 text-white"
+                    onKeyDown={(e) => e.key === 'Enter' && handleForgotPassword()}
+                    disabled={forgotLoading}
+                  />
+                </div>
+                <Button
+                  onClick={handleForgotPassword}
+                  disabled={forgotLoading || !email.trim()}
+                  className="w-full h-11 bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {forgotLoading ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Invio...</>
+                  ) : (
+                    'Invia link di reset'
+                  )}
+                </Button>
+              </>
+            )}
           </div>
         )}
 
