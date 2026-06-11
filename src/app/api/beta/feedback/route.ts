@@ -7,7 +7,7 @@ import { Prisma } from '@prisma/client';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 
-const KINDS = new Set(['daily_pulse', 'weekly', 'final']);
+const KINDS = new Set(['daily_pulse', 'weekly', 'final', 'baseline']);
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_ANSWERS_CHARS = 16_000;
 
