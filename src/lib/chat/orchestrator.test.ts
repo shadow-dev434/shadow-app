@@ -39,9 +39,20 @@ vi.mock('@/lib/llm/client', () => ({
   callLLM: vi.fn(),
 }));
 
+// Task 40: mock PARZIALE del modulo summary — loadLatestSummary mockato (isola
+// orchestrator da db.chatMessage.findMany del reader e rende gli assert su
+// mock.calls indipendenti dall'ordine delle query), helper puri
+// (isAfterWatermark, buildSummaryBlock) REALI: i test di iniezione verificano
+// anche il formato del blocco.
+vi.mock('@/lib/chat/summary', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./summary')>();
+  return { ...actual, loadLatestSummary: vi.fn() };
+});
+
 import { db } from '@/lib/db';
 import { callLLM } from '@/lib/llm/client';
 import type { LLMResponse } from '@/lib/llm/client';
+import { loadLatestSummary, type LoadedSummary } from './summary';
 import { orchestrate, TERMINAL_THREAD_STATES, buildEveningReviewModeContext } from './orchestrator';
 import { EMPTY_PREVIEW_STATE } from '@/lib/evening-review/apply-overrides';
 import type { TriageState } from '@/lib/evening-review/triage';
@@ -87,6 +98,9 @@ beforeEach(() => {
   vi.mocked(db.chatMessage.findMany).mockResolvedValue([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.mocked(db.chatMessage.create).mockResolvedValue({ id: 'msg1' } as any);
+  // Task 40: default nessun summary — i test pre-esistenti restano identici
+  // (chiave summary omessa dal systemPrompt). I test di iniezione overridano.
+  vi.mocked(loadLatestSummary).mockResolvedValue(null);
   vi.mocked(db.adaptiveProfile.findUnique).mockResolvedValue(null);
   vi.mocked(db.userMemory.findMany).mockResolvedValue([]);
   vi.mocked(db.settings.findFirst).mockResolvedValue(null);
@@ -143,26 +157,29 @@ describe('TERMINAL_THREAD_STATES', () => {
   });
 });
 
-describe('orchestrate: history window (fix Task 24)', () => {
-  it('chiede gli ultimi N messaggi (desc+tiebreaker), li ripristina in ordine cronologico e scarta la testa non-user', async () => {
+// Factory condivisa: finestra di n righe come la restituisce il DB (desc =
+// più recente prima). h1 è la più vecchia; role alternato con h1 assistant
+// (n dispari = assistant): simula la parità sfasata da una riga user orfana.
+function makeWindowDesc(n: number, threadId = 'long-thread') {
+  return Array.from({ length: n }, (_, i) => {
+    const k = n - i; // h<n> (più recente) … h1 (più vecchio)
+    return {
+      id: `h${String(k).padStart(3, '0')}`,
+      threadId,
+      role: k % 2 === 0 ? 'user' : 'assistant', // h1 assistant, h2 user, …
+      content: `msg-${k}`,
+      createdAt: new Date(2026, 5, 11, 12, 0, k),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+  });
+}
+
+describe('orchestrate: history window (fix Task 24 + opzione 1 Task 40)', () => {
+  it('chiede gli ultimi HARD_CAP user/assistant (role nel WHERE), ripristina l\'ordine, scarta la testa non-user e marca il breakpoint cache', async () => {
     vi.mocked(db.chatThread.findFirst).mockResolvedValue(
       makeThread({ id: 'long-thread', state: 'active', mode: 'general' }),
     );
-    // Finestra di 20 righe come la restituisce il DB (desc = più recente prima).
-    // La più VECCHIA della finestra (h1) è un assistant: simula la parità
-    // sfasata da una riga user orfana lasciata da un turno fallito a metà.
-    const windowDesc = Array.from({ length: 20 }, (_, i) => {
-      const n = 20 - i; // h20 (più recente) … h1 (più vecchio)
-      return {
-        id: `h${n}`,
-        threadId: 'long-thread',
-        role: n % 2 === 0 ? 'user' : 'assistant', // h1 assistant, h2 user, …
-        content: `msg-${n}`,
-        createdAt: new Date(2026, 5, 11, 12, 0, n),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any;
-    });
-    vi.mocked(db.chatMessage.findMany).mockResolvedValue(windowDesc);
+    vi.mocked(db.chatMessage.findMany).mockResolvedValue(makeWindowDesc(20));
 
     await orchestrate({
       userId: 'u1',
@@ -171,10 +188,15 @@ describe('orchestrate: history window (fix Task 24)', () => {
       userMessage: 'nuovo turno',
     });
 
-    // Query shape: ultimi N = desc + take, tiebreaker deterministico su id.
+    // Query shape: desc + take HARD_CAP, tiebreaker deterministico su id,
+    // filtro role nel WHERE (Task 40: le righe role='summary' non rubano slot).
     const findManyArg = vi.mocked(db.chatMessage.findMany).mock.calls[0][0];
     expect(findManyArg?.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
-    expect(findManyArg?.take).toBe(20);
+    expect(findManyArg?.take).toBe(80);
+    expect(findManyArg?.where).toEqual({
+      threadId: 'long-thread',
+      role: { in: ['user', 'assistant'] },
+    });
 
     const llmArg = vi.mocked(callLLM).mock.calls[0][0];
     const messages = llmArg.messages;
@@ -182,10 +204,187 @@ describe('orchestrate: history window (fix Task 24)', () => {
     expect(messages[0]).toEqual({ role: 'user', content: 'msg-2' });
     // …prosegue in ordine cronologico ascendente…
     expect(messages[1]).toEqual({ role: 'assistant', content: 'msg-3' });
-    expect(messages[messages.length - 2]).toEqual({ role: 'user', content: 'msg-20' });
-    // …e chiude col messaggio utente del turno corrente.
+    // …l'ULTIMO messaggio della history porta il breakpoint cache (opzione 1)…
+    expect(messages[messages.length - 2]).toEqual({
+      role: 'user',
+      content: 'msg-20',
+      cacheControl: true,
+    });
+    // …e chiude col messaggio utente del turno corrente, FUORI dal prefisso.
     expect(messages[messages.length - 1]).toEqual({ role: 'user', content: 'nuovo turno' });
     expect(messages).toHaveLength(20); // 19 della finestra (h1 scartato) + turno corrente
+  });
+
+  it('slice(-WINDOW): con 80 righe in finestra il modello ne vede al massimo 60 (finestra opzione 1, mai HARD_CAP)', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 'long-thread', state: 'active', mode: 'general' }),
+    );
+    vi.mocked(db.chatMessage.findMany).mockResolvedValue(makeWindowDesc(80));
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: 'long-thread',
+      mode: 'general',
+      userMessage: 'nuovo turno',
+    });
+
+    const messages = vi.mocked(callLLM).mock.calls[0][0].messages;
+    // slice(-60) -> h21..h80; h21 (assistant) scartato dal parity trim ->
+    // 59 di history + turno corrente.
+    expect(messages[0]).toEqual({ role: 'user', content: 'msg-22' });
+    expect(messages).toHaveLength(60);
+  });
+
+  it('history vuota -> solo il messaggio corrente, nessun breakpoint', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 'empty-thread', state: 'active', mode: 'general' }),
+    );
+    vi.mocked(db.chatMessage.findMany).mockResolvedValue([]);
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: 'empty-thread',
+      mode: 'general',
+      userMessage: 'primo messaggio',
+    });
+
+    const messages = vi.mocked(callLLM).mock.calls[0][0].messages;
+    expect(messages).toEqual([{ role: 'user', content: 'primo messaggio' }]);
+  });
+});
+
+describe('orchestrate: rolling summary (Task 40)', () => {
+  // LoadedSummary con watermark su h10 della finestra makeWindowDesc:
+  // copre h1..h10, restano h11..h20.
+  function makeLoadedSummary(): LoadedSummary {
+    return {
+      text: 'l\'utente sta preparando il trasloco; rimandato il commercialista',
+      payload: {
+        kind: 'rolling-summary',
+        version: 1,
+        coveredUntilMessageId: 'h010',
+        coveredUntilCreatedAt: new Date(2026, 5, 11, 12, 0, 10).toISOString(),
+        messagesCovered: 10,
+        costUsd: 0.005,
+      },
+    };
+  }
+
+  it('inietta il blocco summary nel systemPrompt e ancora la finestra al watermark', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 'long-thread', state: 'active', mode: 'general' }),
+    );
+    vi.mocked(db.chatMessage.findMany).mockResolvedValue(makeWindowDesc(20));
+    vi.mocked(loadLatestSummary).mockResolvedValue(makeLoadedSummary());
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: 'long-thread',
+      mode: 'general',
+      userMessage: 'nuovo turno',
+    });
+
+    expect(loadLatestSummary).toHaveBeenCalledWith('long-thread');
+
+    const llmArg = vi.mocked(callLLM).mock.calls[0][0];
+    // Blocco summary nel systemPrompt (buildSummaryBlock REALE: header ledger).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sys = llmArg.systemPrompt as any;
+    expect(sys.summary).toContain('RIASSUNTO DEI TURNI PRECEDENTI');
+    expect(sys.summary).toContain('trasloco');
+    // 10 post-watermark <= WINDOW: nessuna nota di copertura parziale.
+    expect(sys.summary).not.toContain('NOTA COPERTURA');
+    // static/dynamic intatti (il summary e' un blocco a se': byte-identici).
+    expect(typeof sys.static).toBe('string');
+
+    // Finestra ancorata: h1..h10 (coperti dal watermark) ESCLUSI; h11
+    // (assistant in testa) scartato dal parity trim -> parte da h12 (user).
+    const messages = llmArg.messages;
+    expect(messages[0]).toEqual({ role: 'user', content: 'msg-12' });
+    expect(messages.map((m: { content: unknown }) => m.content)).not.toContain('msg-10');
+    expect(messages).toHaveLength(10); // h12..h20 (9) + turno corrente
+  });
+
+  it('nessun summary -> chiave summary OMESSA dal systemPrompt (byte-identico a pre-Task-40)', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 'long-thread', state: 'active', mode: 'general' }),
+    );
+    vi.mocked(db.chatMessage.findMany).mockResolvedValue(makeWindowDesc(4));
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: 'long-thread',
+      mode: 'general',
+      userMessage: 'ciao',
+    });
+
+    const llmArg = vi.mocked(callLLM).mock.calls[0][0];
+    expect('summary' in (llmArg.systemPrompt as object)).toBe(false);
+  });
+
+  it('mode evening_review -> loadLatestSummary MAI chiamato, nessuna chiave summary', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 'er-thread', state: 'active', mode: 'evening_review' }),
+    );
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: 'er-thread',
+      mode: 'evening_review',
+      userMessage: 'iniziamo',
+      clientDate: '2026-06-11',
+    });
+
+    expect(loadLatestSummary).not.toHaveBeenCalled();
+    const llmArg = vi.mocked(callLLM).mock.calls[0][0];
+    expect('summary' in (llmArg.systemPrompt as object)).toBe(false);
+  });
+
+  it('thread.mode evening_review con mode client general -> summary skip (gate doppio anti-desync, spec §8 #1)', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 'er-thread', state: 'active', mode: 'evening_review' }),
+    );
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: 'er-thread',
+      mode: 'general',
+      userMessage: 'continuo a chattare',
+    });
+
+    expect(loadLatestSummary).not.toHaveBeenCalled();
+  });
+
+  it('debugSummaryChars presente SOLO con SHADOW_SUMMARY_DEBUG=1', async () => {
+    const original = process.env.SHADOW_SUMMARY_DEBUG;
+    try {
+      vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+        makeThread({ id: 'long-thread', state: 'active', mode: 'general' }),
+      );
+      vi.mocked(db.chatMessage.findMany).mockResolvedValue(makeWindowDesc(20));
+      vi.mocked(loadLatestSummary).mockResolvedValue(makeLoadedSummary());
+
+      process.env.SHADOW_SUMMARY_DEBUG = '1';
+      const withDebug = await orchestrate({
+        userId: 'u1',
+        threadId: 'long-thread',
+        mode: 'general',
+        userMessage: 'turno debug',
+      });
+      expect(withDebug.debugSummaryChars).toBeGreaterThan(0);
+
+      delete process.env.SHADOW_SUMMARY_DEBUG;
+      const withoutDebug = await orchestrate({
+        userId: 'u1',
+        threadId: 'long-thread',
+        mode: 'general',
+        userMessage: 'turno normale',
+      });
+      expect('debugSummaryChars' in withoutDebug).toBe(false);
+    } finally {
+      if (original === undefined) delete process.env.SHADOW_SUMMARY_DEBUG;
+      else process.env.SHADOW_SUMMARY_DEBUG = original;
+    }
   });
 });
 

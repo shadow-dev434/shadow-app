@@ -49,6 +49,15 @@ import {
   extractSelfCorrectionTrigger,
 } from './at-risk-detection';
 import { captureWhatBlocked } from '@/lib/evening-review/what-blocked-capture';
+// Task 40: rolling summary — finestra ancorata al watermark + blocco system
+// cachato. Soglie e helper vivono nel modulo (auto-approvabile), qui solo wiring.
+import {
+  buildSummaryBlock,
+  isAfterWatermark,
+  loadLatestSummary,
+  SUMMARY_HARD_CAP,
+  SUMMARY_WINDOW,
+} from './summary';
 import { formatDeadlineLabel, formatTodayInRome } from '@/lib/evening-review/dates';
 import { computeInactivityGapDays, type InactivityGap } from '@/lib/evening-review/inactivity-gap';
 
@@ -84,9 +93,17 @@ export interface OrchestratorOutput {
   tokensOut: number;
   modelUsed: string;
   latencyMs: number;
+  /**
+   * Task 40, solo con SHADOW_SUMMARY_DEBUG=1: lunghezza del blocco summary
+   * iniettato nel system prompt (0 = nessun summary). Observable per il
+   * probe e2e — il prompt non viene persistito, questa e' la spia esterna.
+   */
+  debugSummaryChars?: number;
 }
 
-const MAX_HISTORY_MESSAGES = 20;
+// Task 40 (opzione 1): MAX_HISTORY_MESSAGES=20 rimosso. La finestra history e'
+// governata dal modulo summary: SUMMARY_WINDOW (60) finestra effettiva,
+// SUMMARY_HARD_CAP (80) cap di fetch.
 const MAX_TOOL_ITERATIONS = 8;
 
 // Regex to match [[QR: opt1 | opt2 | opt3]] at end of message (or anywhere, but
@@ -158,24 +175,34 @@ export async function orchestrate(
           },
         });
 
-  // ── 2. Load history ──────────────────────────────────────────────────
+  // ── 2+3. Load history + user context + rolling summary (in parallelo) ─
   // Gli ULTIMI N messaggi, non i primi: desc+take seleziona i più recenti,
-  // reverse() ripristina l'ordine cronologico atteso dal prompt. Con asc+take
-  // un thread oltre MAX_HISTORY_MESSAGES perdeva i turni recenti (bug fix
-  // Task 24, 2026-06-11).
-  // Tiebreaker su id: createdAt da solo non è deterministico a parità di
-  // timestamp (Postgres sort instabile) — col take in gioco deciderebbe
-  // anche la membership della finestra, non solo l'ordine.
-  const previousMessages = (
-    await db.chatMessage.findMany({
-      where: { threadId: thread.id },
+  // reverse() ripristina l'ordine cronologico atteso dal prompt (bug fix
+  // Task 24, 2026-06-11). Tiebreaker su id: createdAt da solo non è
+  // deterministico a parità di timestamp (Postgres sort instabile) — col
+  // take in gioco deciderebbe anche la membership della finestra.
+  // Task 40: filtro role nel WHERE — le righe role='summary' (e ruoli futuri)
+  // non rubano slot alla finestra; take=SUMMARY_HARD_CAP è il cap di FETCH
+  // che compensa le righe pre-watermark scartate in §4: la finestra effettiva
+  // resta slice(-SUMMARY_WINDOW) in ogni stato del flag.
+  // Gate del summary su mode E thread.mode SERVER-side: il mode del client
+  // desincronizza sistematicamente post-review (spec Task 40 §8 #1) e non
+  // va mai usato da solo.
+  // Promise.all: history e context erano sequenziali — il load del summary
+  // non aggiunge round-trip percepiti, ne toglie uno.
+  const summaryEligible =
+    mode !== 'evening_review' && thread.mode !== 'evening_review';
+  const [windowDesc, ctxAndVoice, latestSummary] = await Promise.all([
+    db.chatMessage.findMany({
+      where: { threadId: thread.id, role: { in: ['user', 'assistant'] } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: MAX_HISTORY_MESSAGES,
-    })
-  ).reverse();
-
-  // ── 3. User context ──────────────────────────────────────────────────
-  const { userContext, voiceProfile } = await buildContextAndVoice(input.userId);
+      take: SUMMARY_HARD_CAP,
+    }),
+    buildContextAndVoice(input.userId),
+    summaryEligible ? loadLatestSummary(thread.id) : Promise.resolve(null),
+  ]);
+  const previousMessages = windowDesc.reverse();
+  const { userContext, voiceProfile } = ctxAndVoice;
 
   // ── 3.5. Evening review triage state ────────────────────────────────
   let triageState: TriageState | null = null;
@@ -310,9 +337,18 @@ export async function orchestrate(
   }
 
   // ── 4. Build messages for LLM ────────────────────────────────────────
-  const historyMessages = previousMessages.filter(
-    m => m.role === 'user' || m.role === 'assistant',
-  );
+  // Task 40: finestra ancorata al watermark del summary — i messaggi già
+  // piegati escono dal prompt (sono rappresentati dal blocco summary). Il
+  // fronte resta FISSO tra un fold e l'altro: è ciò che fa fare hit al cache
+  // breakpoint della history (con sliding puro non farebbe mai hit).
+  // slice(-SUMMARY_WINDOW) SEMPRE attivo: a flag off / nessun summary la
+  // finestra è esattamente l'opzione 1 (60), mai HARD_CAP. Il filtro role
+  // vive nel WHERE della query (§2).
+  const postWatermarkMessages =
+    latestSummary !== null
+      ? previousMessages.filter(m => isAfterWatermark(m, latestSummary.payload))
+      : previousMessages;
+  const historyMessages = postWatermarkMessages.slice(-SUMMARY_WINDOW);
   // La finestra scorrevole (desc+take) può iniziare su un messaggio assistant
   // — es. una riga user orfana di un turno fallito a metà sfasa la parità —
   // ma l'API Anthropic esige messages[0] con role 'user' (400 altrimenti):
@@ -324,6 +360,15 @@ export async function orchestrate(
     role: m.role as 'user' | 'assistant',
     content: m.content,
   }));
+
+  // Opzione 1 (Task 40): cache breakpoint sull'ultimo messaggio della history
+  // (caching incrementale delle conversazioni: tra turni il prefisso cresce in
+  // coda e fa hit; intra-turno le iterazioni 2+ del tool loop rileggono il
+  // prefisso). Il messaggio utente corrente resta FUORI dal prefisso cachato.
+  // Budget breakpoint Anthropic: static + summary + history = 3 su 4 max.
+  if (llmMessages.length > 0) {
+    llmMessages[llmMessages.length - 1].cacheControl = true;
+  }
 
   llmMessages.push({ role: 'user', content: input.userMessage });
 
@@ -346,6 +391,16 @@ export async function orchestrate(
   const systemParts = buildSystemPromptParts(mode, userContext, modeContext, voiceProfile);
   const staticPrefix = systemParts.staticPrefix;
   let dynamicSuffix = systemParts.dynamicSuffix;
+
+  // Task 40: blocco summary (terzo text block system con cache_control proprio,
+  // vedi client.ts). Stabile per tutto il turno — il rebuild mid-loop tocca
+  // solo dynamicSuffix — e tra i turni cambia solo a ogni fold (~15 turni).
+  // uncoveredCount PRE-slice: oltre la finestra l'header dichiara la copertura
+  // parziale (convergenza backlog dei thread veterani, spec Task 40 §8 #3).
+  const summaryBlock =
+    latestSummary !== null
+      ? buildSummaryBlock(latestSummary, postWatermarkMessages.length)
+      : undefined;
 
   let totalCost = 0;
   let totalTokensIn = 0;
@@ -454,7 +509,13 @@ export async function orchestrate(
   // evening_review o thread pre-6c, getToolsForMode degrada al set completo.
   let currentResponse = await callLLM({
     tier: modelTier,
-    systemPrompt: { static: staticPrefix, dynamic: dynamicSuffix },
+    // Task 40: chiave summary OMESSA quando assente — byte-identico al
+    // comportamento pre-Task-40 per i turni senza summary.
+    systemPrompt: {
+      static: staticPrefix,
+      ...(summaryBlock !== undefined && { summary: summaryBlock }),
+      dynamic: dynamicSuffix,
+    },
     messages: llmMessages,
     tools: getToolsForMode(mode, currentPhase, triageState ?? undefined),
     maxTokens: 500,
@@ -654,7 +715,11 @@ export async function orchestrate(
     // tool di closing, non quelli di plan_preview.
     const nextResponse = await callLLM({
       tier: modelTier,
-      systemPrompt: { static: staticPrefix, dynamic: dynamicSuffix },
+      systemPrompt: {
+        static: staticPrefix,
+        ...(summaryBlock !== undefined && { summary: summaryBlock }),
+        dynamic: dynamicSuffix,
+      },
       messages: llmMessages,
       tools: getToolsForMode(mode, pendingPhase ?? currentPhase, pendingTriageState ?? undefined),
       maxTokens: 500,
@@ -811,6 +876,10 @@ export async function orchestrate(
     tokensOut: totalTokensOut,
     modelUsed: lastModel,
     latencyMs: totalLatencyMs,
+    // Task 40: observable di debug per il probe e2e, mai attivo di default.
+    ...(process.env.SHADOW_SUMMARY_DEBUG === '1' && {
+      debugSummaryChars: summaryBlock?.length ?? 0,
+    }),
   };
 }
 
