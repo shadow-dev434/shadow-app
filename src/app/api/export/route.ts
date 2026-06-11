@@ -34,6 +34,10 @@ export async function GET(req: NextRequest) {
         calendarTokens: {
           select: { id: true, provider: true, scope: true, expiresAt: true, createdAt: true },
         },
+        // Beta (Task 23)
+        bugReports: true,
+        betaFeedbacks: true,
+        assessmentResponses: true,
         // Esclusi di proposito: accounts, sessions, pushSubscription (segreti/infra).
       },
     });

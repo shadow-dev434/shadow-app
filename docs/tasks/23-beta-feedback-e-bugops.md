@@ -1,7 +1,11 @@
 # Task 23 — Beta: risposta rapida ai bug, feedback giornaliero, valutazione efficacia
 
-> **Stato:** decisioni di prodotto sciolte da Antonio il 2026-06-11 (registro
-> in §7). Piano operativo in approvazione (plan mode); implementazione a valle.
+> **Stato (2026-06-11):** implementato end-to-end su
+> `feature/23-beta-feedback-bugops` (Fasi 1-5, un commit per fase).
+> ⚠️ **Migration DB non ancora applicata** — serve conferma esplicita per
+> `bun run db:migrate --name task23_beta_feedback_bugops` (a valle: rieseguire
+> il probe `scripts/e2e/probe-beta-feedback.ts`). Setup esterno richiesto:
+> Sentry DSN, Resend API key, `ADMIN_EMAILS` (vedi §6 E1).
 > **Scope:** Beta robusta B (20-100 tester), web Vercel + TWA Play closed testing.
 > **Complementare a:** `SHADOW-guida-beta-v1.md` (questo è un nuovo track
 > parallelizzabile, da chiudere PRIMA dell'invito ai tester — Checkpoint 4).

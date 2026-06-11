@@ -17,6 +17,7 @@ import {
 import { useShadowStore } from '@/store/shadow-store';
 import { buildContextSnapshot, wireBreadcrumbs } from '@/lib/beta/breadcrumbs';
 import { APP_VERSION } from '@/lib/version';
+import { toast } from '@/hooks/use-toast';
 
 export type BugArea =
   | 'chat'
@@ -57,6 +58,59 @@ const REPRO_OPTIONS = [
 
 type Severity = (typeof SEVERITY_OPTIONS)[number]['value'];
 type Repro = (typeof REPRO_OPTIONS)[number]['value'];
+
+const STATUS_LABELS: Record<string, string> = {
+  new: 'Ricevuta',
+  triaged: 'Presa in carico',
+  in_progress: 'In lavorazione',
+  fixed: 'Risolta ✓',
+  wont_fix: 'Non previsto',
+  duplicate: 'Già nota',
+};
+
+interface MyReport {
+  id: string;
+  area: string;
+  description: string;
+  status: string;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+const LAST_SEEN_FIXED_KEY = 'shadow-beta-fixed-seen-at';
+let resolvedCheckDone = false;
+
+// Loop di chiusura col tester (spec §A2): all'apertura dell'app, se una
+// sua segnalazione è passata a "Risolta" dall'ultima visita, un toast lo
+// ringrazia. Un tester che vede i suoi bug morire segnala di più.
+async function notifyResolvedReports(): Promise<void> {
+  if (resolvedCheckDone || typeof window === 'undefined') return;
+  resolvedCheckDone = true;
+  try {
+    const res = await fetch('/api/beta/bug-report');
+    if (!res.ok) return;
+    const { reports } = (await res.json()) as { reports: MyReport[] };
+    const lastSeen = Number(localStorage.getItem(LAST_SEEN_FIXED_KEY) ?? 0);
+    const fresh = (reports ?? []).filter(
+      (r) =>
+        r.status === 'fixed' &&
+        r.resolvedAt &&
+        new Date(r.resolvedAt).getTime() > lastSeen
+    );
+    if (fresh.length > 0) {
+      toast({
+        title: 'Segnalazione risolta 🎉',
+        description:
+          fresh.length === 1
+            ? `«${fresh[0].description.slice(0, 70)}» è stata sistemata. Grazie!`
+            : `${fresh.length} tue segnalazioni sono state risolte. Grazie!`,
+      });
+      localStorage.setItem(LAST_SEEN_FIXED_KEY, String(Date.now()));
+    }
+  } catch {
+    // silenzioso: il toast è un nice-to-have
+  }
+}
 
 // Precompila l'area dalla superficie corrente: route '/' = chat, su /tasks
 // si mappa la vista attiva dello store.
@@ -134,6 +188,9 @@ export function BugReportDialog({
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [view, setView] = useState<'form' | 'mine'>('form');
+  const [myReports, setMyReports] = useState<MyReport[]>([]);
+  const [loadingMine, setLoadingMine] = useState(false);
 
   // A ogni apertura il form riparte pulito, precompilato con la superficie
   // corrente (o con i valori passati dal recovery screen).
@@ -146,8 +203,21 @@ export function BugReportDialog({
       setRepro(null);
       setSent(false);
       setSubmitError(null);
+      setView('form');
     }
   }, [open, initialArea, initialDescription]);
+
+  const openMine = useCallback(async () => {
+    setView('mine');
+    setLoadingMine(true);
+    try {
+      const res = await fetch('/api/beta/bug-report');
+      if (res.ok) setMyReports(((await res.json()) as { reports: MyReport[] }).reports ?? []);
+    } catch {
+      // lista non disponibile: si mostra vuota
+    }
+    setLoadingMine(false);
+  }, []);
 
   const canSubmit =
     !!area && !!severity && !!repro && description.trim().length > 0 && !sending;
@@ -184,7 +254,9 @@ export function BugReportDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
-        {sent ? (
+        {view === 'mine' ? (
+          <MyReportsView reports={myReports} loading={loadingMine} onBack={() => setView('form')} />
+        ) : sent ? (
           <div className="flex flex-col items-center text-center py-6 gap-3">
             <CheckCircle2 size={32} className="text-emerald-500" />
             <DialogTitle>Grazie, ricevuta!</DialogTitle>
@@ -198,6 +270,13 @@ export function BugReportDialog({
               className="mt-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-200 transition-colors"
             >
               Chiudi
+            </button>
+            <button
+              type="button"
+              onClick={() => void openMine()}
+              className="text-xs text-zinc-500 hover:text-zinc-300 underline"
+            >
+              Le mie segnalazioni
             </button>
           </div>
         ) : (
@@ -308,6 +387,14 @@ export function BugReportDialog({
                   'Invia segnalazione'
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={() => void openMine()}
+                className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300 underline"
+              >
+                Le mie segnalazioni
+              </button>
             </div>
           </>
         )}
@@ -326,9 +413,10 @@ export function BugReportButton({
   const [open, setOpen] = useState(false);
 
   // Il bottone è presente su entrambe le superfici (chat e /tasks): è il
-  // punto giusto per agganciare i breadcrumb una sola volta.
+  // punto giusto per agganciare i breadcrumb e il check "risolto" una volta.
   useEffect(() => {
     wireBreadcrumbs();
+    void notifyResolvedReports();
   }, []);
 
   return (
@@ -347,5 +435,63 @@ export function BugReportButton({
       </button>
       <BugReportDialog open={open} onOpenChange={setOpen} initialArea={area} />
     </>
+  );
+}
+
+function MyReportsView({
+  reports,
+  loading,
+  onBack,
+}: {
+  reports: MyReport[];
+  loading: boolean;
+  onBack: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <DialogHeader>
+        <DialogTitle>Le mie segnalazioni</DialogTitle>
+        <DialogDescription>Lo stato di quello che hai segnalato.</DialogDescription>
+      </DialogHeader>
+      {loading && (
+        <div className="flex items-center justify-center py-8 text-zinc-500 text-sm">
+          <Loader2 size={15} className="animate-spin mr-2" /> Caricamento…
+        </div>
+      )}
+      {!loading && reports.length === 0 && (
+        <p className="text-sm text-zinc-500 py-6 text-center">Nessuna segnalazione ancora.</p>
+      )}
+      {!loading &&
+        reports.map((r) => (
+          <div
+            key={r.id}
+            className="bg-zinc-800/60 border border-zinc-700 rounded-lg px-3 py-2 space-y-1"
+          >
+            <div className="flex items-center gap-2 text-xs">
+              <span
+                className={
+                  'px-1.5 py-0.5 rounded-full border ' +
+                  (r.status === 'fixed'
+                    ? 'bg-emerald-950 text-emerald-300 border-emerald-900'
+                    : 'bg-zinc-900 text-zinc-400 border-zinc-700')
+                }
+              >
+                {STATUS_LABELS[r.status] ?? r.status}
+              </span>
+              <span className="text-zinc-500">
+                {new Date(r.createdAt).toLocaleDateString('it-IT')}
+              </span>
+            </div>
+            <p className="text-sm text-zinc-200">{r.description}</p>
+          </div>
+        ))}
+      <button
+        type="button"
+        onClick={onBack}
+        className="w-full px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg text-sm text-zinc-200 transition-colors"
+      >
+        ← Nuova segnalazione
+      </button>
+    </div>
   );
 }

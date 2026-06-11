@@ -32,6 +32,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { signOut } from 'next-auth/react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
+import { APP_VERSION } from '@/lib/version';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -3097,6 +3098,9 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
           }}><Download className="w-4 h-4 mr-2" /> Esporta JSON</Button>
         </CardContent>
       </Card>
+
+      {/* Versione app (Task 23: allegata anche a bug report e Sentry) */}
+      <p className="text-center text-[11px] text-zinc-500 pb-2">Shadow v{APP_VERSION}</p>
     </div>
   );
 }
