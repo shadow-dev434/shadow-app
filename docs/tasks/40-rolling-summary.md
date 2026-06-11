@@ -261,8 +261,24 @@ WHERE role = 'summary' AND "payloadJson" IS NOT NULL;
 4. **Il summary compare nell'export utente** (decisione #5): documentato.
 5. **`after()` è bounded da `maxDuration`**: `turn/route.ts` esporta
    `maxDuration = 60` (pattern `export/route.ts:5`). Primo uso di `after()` nel
-   codebase: la verifica del primo fold nei log del preview deploy è un item
+   codebase: la verifica del primo fold nei log del deploy Vercel è un item
    **BLOCCANTE** del report di chiusura, non una nota.
+
+   **Stato verifica (2026-06-11)**: build del preview deploy VERDE su
+   shadow-app2 (commit `3143e1f`, compilato senza warning; il progetto
+   `shadow-app` fallisce identico anche sui deploy precedenti — orfano del
+   consolidamento Task 3.6, non correlato). La verifica RUNTIME è rimasta
+   bloccata dalla Deployment Protection sui preview (401 senza bypass).
+   Runbook per chiuderla (una delle due):
+   - *Preview*: con protection bypass token —
+     `curl -H "x-vercel-protection-bypass: $TOKEN" <preview-url>/api/...`,
+     poi un turno su un thread general con 60+ messaggi e
+     `bun x vercel logs <preview-url> | grep "\[summary\]"`.
+   - *Produzione (path realistico)*: al merge su main, col primo uso reale
+     oltre i 60 messaggi: `bun x vercel logs https://shadow-app2.vercel.app | grep "\[summary\]"`
+     — attesa una riga `fold threadId=… batch=… cost=…`. Se non compare
+     entro pochi secondi dal turno: vedere matrice §5 (fail-open, nessun
+     impatto utente) e considerare `SHADOW_ROLLING_SUMMARY=off`.
 6. **Il summary muore col thread** (decisione #3): archiviazione 8c o rotazione
    BUG #C → il thread nuovo riparte senza summary (UserMemory resta).
 7. **`evening_review` escluso** (decisione #2).
