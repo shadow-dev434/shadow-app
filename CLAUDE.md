@@ -18,11 +18,15 @@ review serale conversazionale che produce il piano di domani. Feature:
 - **Memoria rinforzata per-utente** (`UserMemory` con strength/evidence)
 - **Priority/decomposition/nudge/learning engine** — euristiche deterministiche in-house
 - **Strict mode** anti-distrazione con friction intenzionale
-- In arrivo (Fase 4 post-beta, ultraplan 2026-06-11): **body doubling vocale** (Task 27,
-  piano MAX), **Google Calendar + Gmail ingest** (Task 26, piano PRO+),
-  **entitlements FREE/PRO/MAX** (Task 25)
+- In arrivo (**Shadow v3**, piano approvato 2026-06-11, spec `docs/tasks/30..39-v3-*.md`):
+  **4 piani BASE/PLUS/PRO/MAX** con model router per tier (W2-W3), **app native
+  iOS/Android via Capacitor** con strict mode che blocca davvero le app (W5-W6),
+  **body doubling con avatar 3D** (W7, MAX — supera Task 27; voce in v1.1),
+  **Google Calendar ingest** (W8, PRO — supera Task 26; Gmail fase 2),
+  **bilinguismo it/en** (W4). Task 25 superato da W2. Cfr. supersessioni in ROADMAP.
 
-Target deploy: web (Vercel) + Android TWA via Bubblewrap (closed testing Play Store).
+Target deploy: web (Vercel) + Android TWA via Bubblewrap (closed testing, interim);
+in v3: app native iOS + Android via **Capacitor** (stesso package — W5-M2 sostituisce la TWA).
 
 ---
 
@@ -85,6 +89,10 @@ altrimenti il gate auth non gira.
 - 🔄 Beta in preparazione: Task 22 (TWA packaging, runbook pronto), Task 23 (BugOps)
 - 🆕 Fase 4 post-beta pianificata (ultraplan 2026-06-11): task 24-27 in
   `docs/ROADMAP.md` + `docs/tasks/24..27-*.md`. Tag rollback: `pre-ultraplan-2026-06-11`.
+- 🆕 **Shadow v3 approvato (sessione ultraplan v3, 2026-06-11)**: monetizzazione 4 tier,
+  model router, Capacitor iOS/Android, bilinguismo. Spec in `docs/tasks/30..39-v3-*.md`
+  (+ tabella e supersessioni in ROADMAP, Fase v3). W0 (checklist amministrativa,
+  doc 30) in carico ad Antonio — più urgente: richiesta entitlement FamilyControls.
 
 ## Regole non negoziabili per Claude Code
 
@@ -95,7 +103,11 @@ altrimenti il gate auth non gira.
 4. **Non toccare `src/components/ui/`** — componenti shadcn generati
 5. **Ogni modifica deve compilare**: `bun run build` deve passare prima di dichiarare finito
 6. **Commit atomici** con messaggi descrittivi in italiano (es. `fix(auth): isolate tasks by userId`)
-7. **Testi utente in italiano** — prompt LLM e label UI in italiano
+7. **Testi utente bilingui it/en** (dal piano v3, W4): nelle viste già estratte
+   niente stringhe hardcoded — chiavi next-intl in `messages/{it,en}.json`.
+   I prompt LLM restano master in italiano con direttiva lingua + esempi
+   localizzati (cfr. `docs/tasks/34-v3-w4-i18n.md`). Nelle viste non ancora
+   estratte vale la regola precedente: testi in italiano.
 8. **Se una scelta di design è ambigua**: se è una decisione di prodotto, chiedi ad
    Antonio con AskUserQuestion (opzioni + raccomandazione + trade-off); se è minore,
    scegli tu e annotala nel report. Mai inventare in silenzio su scelte di prodotto.
@@ -157,6 +169,11 @@ In `.env.local` (già configurate in dev + Vercel):
 Previste (Task 27, da aggiungere quando si implementa): `DEEPGRAM_API_KEY`,
 `ELEVENLABS_API_KEY?`, `VOICE_STT_PROVIDER`, `VOICE_TTS_PROVIDER`,
 `VOICE_TTS_VOICE_ID?`, `VOICE_DAILY_TURN_CAP`, `VOICE_DAILY_SESSION_CAP`.
+
+Previste (Shadow v3, si aggiungono per workstream — cfr. `docs/tasks/30-v3-w0-checklist-amministrativa.md`):
+`REVENUECAT_WEBHOOK_AUTH`, `STRIPE_SECRET_KEY`, `STRIPE_PRICE_{BASE,PLUS,PRO,MAX}_{MONTHLY,YEARLY}`,
+`SHADOW_TRIAL_EPOCH`, `SHADOW_MODEL_ROUTING?`, `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`,
+`CRON_SECRET`, `FCM_SERVICE_ACCOUNT_JSON`, `APNS_KEY_ID`/`APNS_TEAM_ID`/`APNS_PRIVATE_KEY`.
 
 **Mai** committare `.env.local` o stampare secret nei log.
 

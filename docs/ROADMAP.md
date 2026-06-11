@@ -248,6 +248,11 @@ Pianificata con Claude Code in plan mode (piano approvato da Antonio). Checkpoin
 rollback: tag `pre-ultraplan-2026-06-11`. Gating per piani abbonamento:
 Google → PRO+, voce → MAX. Billing fuori scope (task futuro).
 
+> **Aggiornamento (piano v3, approvato lo stesso 2026-06-11):** il billing non è
+> più fuori scope — è pianificato nella **Fase v3** qui sotto, che assorbe e
+> aggiorna i task 25-27 (tier definitivi **BASE/PLUS/PRO/MAX**, non FREE/PRO/MAX).
+> Prima di lavorare su 25/26/27 leggere le supersessioni della Fase v3.
+
 | # | Task | Spec | Branch | Stima |
 |---|------|------|--------|-------|
 | 24 | Workflow v2 (sviluppo autonomo) + fix bug history orchestrator | `docs/tasks/24-workflow-v2.md` | `feature/24-workflow-v2` | 1 sess. |
@@ -258,6 +263,44 @@ Google → PRO+, voce → MAX. Billing fuori scope (task futuro).
 Ordine consigliato: 24 → 25 → spike 27-fase-0 (GO/NO-GO su mic in TWA) → 26 Calendar →
 27 MVP voce → 26 Gmail → 27 polish. Compliance Google: Calendar = verifica gratuita
 pre-lancio; Gmail = CASA Tier 2 a pagamento, decisione a fine beta (runbook nella spec 26).
+
+---
+
+## 🎯 Fase v3 — Monetizzazione, nativo, bilingue *(piano approvato 2026-06-11)*
+
+Piano completo approvato in sessione ultraplan v3 del 2026-06-11 (decisioni D1-D10:
+4 piani BASE/PLUS/PRO/MAX a 4,99/9,99/14,99/19,99 €/mese, annuale = 10 mesi,
+trial 21 giorni di MAX, Capacitor, routing modelli per tier, avatar 3D,
+RevenueCat + Stripe, Calendar-first, bilinguismo it/en). Spec operative, una per
+workstream:
+
+| WS | Spec | Contenuto | Dipendenze |
+|---|---|---|---|
+| W0 | `docs/tasks/30-v3-w0-checklist-amministrativa.md` | Apple Developer + entitlement FamilyControls, RevenueCat, Stripe, FCM, verifica OAuth, Mac, legal EN | — (**Antonio, SUBITO**) |
+| W1 | `docs/tasks/31-v3-w1-migration-schema.md` | Migration additiva unica (Subscription, RcWebhookEvent, AppConfig, AiUsage, PushDevice, UserProfile.locale) | ratificata col piano |
+| W2 | `docs/tasks/32-v3-w2-entitlements-billing.md` | Entitlements, webhook RevenueCat, Stripe web, paywall, trial 21gg | W1 |
+| W3 | `docs/tasks/33-v3-w3-model-router.md` | Router (tier × taskClass), budget giornaliero con degradazione, Opus 4.8 | W1 (∥ W2) |
+| W4 | `docs/tasks/34-v3-w4-i18n.md` | next-intl it/en, estrazione ~1.050 stringhe, prompt bilingui | W1 (long-tail) |
+| W5 | `docs/tasks/35-v3-w5-capacitor-android.md` | Capacitor, sostituzione TWA, auth bridge, push, app blocker, IAP | W1-W2 |
+| W6 | `docs/tasks/36-v3-w6-ios.md` | iOS bring-up + Screen Time (FamilyControls) | W5 + Mac + entitlement |
+| W7 | `docs/tasks/37-v3-w7-body-doubling.md` | Avatar 3D + check-in AI + review profonda Opus | W3 + W5/W6 |
+| W8 | `docs/tasks/38-v3-w8-pro-google.md` | Calendar ingest (lancio), Gmail fase 2 (CASA) | W2 |
+| W9 | `docs/tasks/39-v3-w9-store-submission.md` | Submission bilingue Apple + Play | tutto |
+
+**Supersessioni** (per non implementare due volte):
+- **Task 25** (entitlements FREE/PRO/MAX) → **W2**: modello definitivo a 4 tier
+  + billing RevenueCat/Stripe. La spec 25 va aggiornata o archiviata.
+- **Task 26** (Google integrations) → **W8**: la spec 26 resta il dettaglio
+  implementativo dell'ingest, con gating aggiornato ai nuovi tier; Gmail/CASA
+  confermata come fase 2 post-lancio.
+- **Task 27 / Task 11** (body doubling vocale) → **W7** per avatar 3D +
+  check-in testuali; la spec 27 (voce STT/TTS) diventa la v1.1.
+- **Task 4**, voce "rate limiting AI" → **W3** (budget giornaliero per tier).
+- **Task 8** (push/widget) → **W5-M4** (PushDevice + dispatcher + cron).
+- **Task 3.7** (destino service worker) → deciso: resta per il web, disabilitato
+  nelle app native (`Capacitor.isNativePlatform()`).
+- **Task 22** (TWA) → resta per il closed testing corrente; **W5-M2** la
+  sostituisce con Capacitor (stesso package, stesso upload keystore).
 
 ---
 
