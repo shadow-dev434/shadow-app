@@ -1,21 +1,11 @@
 import * as Sentry from '@sentry/nextjs';
-import { scrubBreadcrumb, scrubEvent } from './lib/beta/sentry-scrub';
+import { initSentryClient } from './lib/beta/sentry-client';
 
-const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
-
-// Init solo se il DSN è configurato (in dev senza env resta tutto spento).
-if (dsn) {
-  Sentry.init({
-    dsn,
-    tracesSampleRate: 0,
-    sendDefaultPii: false,
-    beforeSend: scrubEvent,
-    beforeBreadcrumb: scrubBreadcrumb,
-    environment: process.env.NODE_ENV,
-    initialScope: {
-      tags: { appVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? 'dev' },
-    },
-  });
-}
+// Convenzione Next 15.3+: questo file viene caricato prima del codice
+// frontend. L'init vero (DSN-gated, scrub privacy) vive in
+// src/lib/beta/sentry-client.ts ed è idempotente: viene richiamato anche
+// dal componente SentryInit nel root layout, perché in dev/Turbopack
+// l'esecuzione di questo entrypoint si è rivelata inaffidabile.
+initSentryClient();
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

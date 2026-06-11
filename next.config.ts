@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
   env: {
     // Versione app esposta al client (bug report, tag Sentry, Impostazioni).
     NEXT_PUBLIC_APP_VERSION: pkg.version,
+    // DSN Sentry inlinato esplicitamente: Turbopack non sostituisce in modo
+    // affidabile process.env.NEXT_PUBLIC_* dentro instrumentation-client.ts,
+    // quindi passiamo dal canale env del config (come APP_VERSION).
+    NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN ?? '',
   },
 };
 
