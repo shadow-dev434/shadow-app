@@ -356,16 +356,20 @@ export async function rollSummaryIfNeeded(threadId: string): Promise<RollSummary
 
     const last = batch[batch.length - 1];
 
-    // Guard idempotente: re-read del watermark subito prima dell'insert.
-    // Copre il caso comune (doppio trigger ravvicinato sullo stesso thread);
-    // la race residua multi-device produce una riga doppia append-only che il
-    // reader pick-max converge. Watermark mai regressivo in ogni caso.
+    // Guard CAS: re-read del watermark subito prima dell'insert — si inserisce
+    // SOLO se il watermark su cui questo fold si e' basato (prev) e' ancora
+    // l'ultimo. Un fold concorrente che e' avanzato nel frattempo (es. after()
+    // di un turno precedente ritardato sotto carico: osservato nel probe e2e)
+    // fa scartare il nostro: i suoi messaggi non coperti verranno ripiegati al
+    // trigger successivo (auto-riparante). Restringe la finestra di race dalla
+    // durata della chiamata LLM (secondi) ai millisecondi del re-read; la race
+    // residua produce una riga doppia append-only che il reader pick-max
+    // converge — watermark mai regressivo in ogni caso.
     const current = await loadLatestSummary(threadId);
-    if (
-      current !== null &&
-      !isAfterWatermark({ id: last.id, createdAt: last.createdAt }, current.payload)
-    ) {
-      return { status: 'skipped', reason: 'already_covered' };
+    const currentWm = current?.payload.coveredUntilMessageId ?? null;
+    const prevWm = prev?.payload.coveredUntilMessageId ?? null;
+    if (currentWm !== prevWm) {
+      return { status: 'skipped', reason: 'concurrent_fold' };
     }
 
     const payload: SummaryPayload = {

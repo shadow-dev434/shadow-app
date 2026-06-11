@@ -452,11 +452,12 @@ describe('rollSummaryIfNeeded (fail-open, gate server-side)', () => {
     expect(db.chatMessage.create).not.toHaveBeenCalled();
   });
 
-  it('guard idempotente: watermark gia\' coperto al re-read -> skipped, nessun insert (mai regressivo)', async () => {
+  it('guard CAS: watermark avanzato da un fold concorrente al re-read -> skipped, nessun insert (mai regressivo)', async () => {
     const history = makeMsgs(SUMMARY_TRIGGER);
     const boundary = history[SUMMARY_TRIGGER - SUMMARY_KEEP - 1];
-    // 1a lettura (prev): nessun summary. 2a lettura (guard): un fold
-    // concorrente ha gia' coperto fino al confine del nostro batch.
+    // 1a lettura (prev): nessun summary. 2a lettura (guard CAS): un fold
+    // concorrente e' atterrato nel frattempo — il watermark corrente non e'
+    // piu' quello su cui questo fold si era basato -> scarta il nostro.
     const concurrent = makeSummaryRow(
       makePayload({
         coveredUntilMessageId: boundary.id,
@@ -466,7 +467,7 @@ describe('rollSummaryIfNeeded (fail-open, gate server-side)', () => {
     );
     dispatchFindMany([[], [concurrent]], history);
     const res = await rollSummaryIfNeeded('t1');
-    expect(res).toEqual({ status: 'skipped', reason: 'already_covered' });
+    expect(res).toEqual({ status: 'skipped', reason: 'concurrent_fold' });
     expect(db.chatMessage.create).not.toHaveBeenCalled();
   });
 
