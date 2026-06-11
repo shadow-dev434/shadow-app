@@ -306,6 +306,93 @@ describe('orchestrate: Section 1 thread lifecycle (BUG #C)', () => {
     expect(callArg.data.relatedTaskId).toBeNull();
     expect(result.threadId).toBe('new-thread-id');
   });
+
+  // Task 41 follow-up: guard anti mode-spoof. Il mode dichiarato dal client
+  // su un thread esistente NON terminale viene degradato a thread.mode
+  // (console.warn con entrambi i valori). I due test pinnano le due direzioni
+  // del degrado: il branch effettivo e' quello del THREAD, non del client.
+
+  it('GUARD mode-spoof: turno evening_review su thread general ATTIVO -> degrada a general, gira il branch general', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+        makeThread({ id: 'general-active', state: 'active', mode: 'general' }),
+      );
+      const result = await orchestrate({
+        userId: 'u1',
+        threadId: 'general-active',
+        mode: 'evening_review',
+        userMessage: 'ciao',
+        clientDate: '2026-05-14',
+      });
+
+      // Thread riusato, nessuna rotazione.
+      expect(db.chatThread.create).not.toHaveBeenCalled();
+      expect(result.threadId).toBe('general-active');
+
+      // Branch general: tier fast (non smart) e CHAT_TOOLS, nessun tool
+      // evening_review esposto al modello.
+      const llmArgs = vi.mocked(callLLM).mock.calls[0][0];
+      expect(llmArgs.tier).toBe('fast');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const tools = (llmArgs.tools ?? []).map((t: any) => t.name);
+      expect(tools).toContain('create_task');
+      expect(tools).not.toContain('confirm_close_review');
+      expect(tools).not.toContain('confirm_plan_preview');
+      expect(tools).not.toContain('set_current_entry');
+
+      // Niente init triage: ne' task load ne' gap query (Slice 8c).
+      expect(db.task.findMany).not.toHaveBeenCalled();
+      expect(db.chatThread.aggregate).not.toHaveBeenCalled();
+
+      // Warn con entrambi i valori (dichiarato + effettivo).
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('declared mode=evening_review'),
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('mode=general'),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('GUARD mode-spoof simmetrico: turno general su thread evening_review attivo -> degrada a evening_review (riprende la review)', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+        makeThread({
+          id: 'evening-active',
+          state: 'active',
+          mode: 'evening_review',
+        }),
+      );
+      const result = await orchestrate({
+        userId: 'u1',
+        threadId: 'evening-active',
+        mode: 'general',
+        userMessage: 'ciao',
+      });
+
+      expect(db.chatThread.create).not.toHaveBeenCalled();
+      expect(result.threadId).toBe('evening-active');
+
+      // Branch evening: degrado a thread.mode (NON a 'general') -> tier smart
+      // e init triage eseguito.
+      const llmArgs = vi.mocked(callLLM).mock.calls[0][0];
+      expect(llmArgs.tier).toBe('smart');
+      expect(db.task.findMany).toHaveBeenCalled();
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('declared mode=general'),
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('mode=evening_review'),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
 });
 
 // ─── Slice 7 STEP 4: E2E multi-turn regression test ────────────────────────

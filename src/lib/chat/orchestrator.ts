@@ -140,9 +140,36 @@ export async function orchestrate(
     );
   }
 
-  // Mode effettivo: override forzato a 'general' su thread terminale.
-  // Usato in tutti i siti downstream invece di input.mode.
-  const mode: ChatMode = previousThreadWasTerminal ? 'general' : input.mode;
+  // Task 41 follow-up (guard anti mode-spoof): un client buggato/stale/
+  // malevolo puo' dichiarare un mode diverso da quello del thread NON
+  // terminale a cui punta (es. evening_review su thread general attivo:
+  // initEveningReview da zero, tool review esposti, tier smart, contextJson
+  // sovrascritto col namespace triage al commit). Degrado a thread.mode.
+  // Flussi legittimi intatti: threadId null e not-found usano input.mode,
+  // thread terminale resta sull'override BUG #C, resume evening paused
+  // dichiara gia' evening_review (match).
+  const activeThreadModeMismatch =
+    existingThread !== null &&
+    !previousThreadWasTerminal &&
+    existingThread.mode !== input.mode;
+
+  if (activeThreadModeMismatch && existingThread !== null) {
+    console.warn(
+      `[orchestrator mode-guard] turn declared mode=${input.mode} on ` +
+        `non-terminal thread ${existingThread.id} ` +
+        `(mode=${existingThread.mode}, state=${existingThread.state}); ` +
+        `degrading to thread mode`,
+    );
+  }
+
+  // Mode effettivo: override forzato a 'general' su thread terminale, degrado
+  // a thread.mode su mismatch con thread non terminale. Usato in tutti i siti
+  // downstream invece di input.mode.
+  const mode: ChatMode = previousThreadWasTerminal
+    ? 'general'
+    : activeThreadModeMismatch && existingThread !== null
+      ? (existingThread.mode as ChatMode)
+      : input.mode;
 
   let thread =
     existingThread !== null && !previousThreadWasTerminal
