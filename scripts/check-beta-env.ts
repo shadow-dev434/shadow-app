@@ -25,6 +25,19 @@ present('SENTRY_DSN');
 present('RESEND_API_KEY');
 present('BETA_ALERT_EMAIL_TO');
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const recipients = (process.env.BETA_ALERT_EMAIL_TO ?? '')
+  .split(',')
+  .map((s) => s.trim().replace(/^["']|["']$/g, ''))
+  .filter(Boolean);
+for (const t of recipients) {
+  if (!EMAIL_PATTERN.test(t)) {
+    console.log(`   ⚠️  BETA_ALERT_EMAIL_TO: «${mask(t)}» NON è un'email valida (segnaposto rimasto?)`);
+  } else {
+    console.log(`   ✅ destinatario alert valido: ${mask(t)}`);
+  }
+}
+
 const admins = (process.env.ADMIN_EMAILS ?? '')
   .split(',')
   .map((e) => e.trim().toLowerCase())
