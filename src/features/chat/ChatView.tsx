@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { List, Send, Loader2, CheckCircle2 } from 'lucide-react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
+import { BetaCheckin } from '@/features/beta/BetaCheckinCard';
 
 interface QuickReply {
   label: string;
@@ -333,6 +334,9 @@ export function ChatView() {
           </div>
         )}
       </div>
+
+      {/* Check-in beta (Task 23): mai durante la review serale. */}
+      <BetaCheckin suppress={eveningReviewShouldStart || mode === 'evening_review'} />
 
       <form
         onSubmit={handleSubmit}

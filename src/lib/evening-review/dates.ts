@@ -138,9 +138,10 @@ export function formatDeadlineLabel(
  * Delta in giorni-calendario fra due date YYYY-MM-DD (toYMD - fromYMD).
  * Date.UTC su mezzanotte UTC -> differenza esatta in giorni interi, immune da
  * DST (entrambi gli operandi sono date pure, nessuna ora coinvolta).
- * Helper privato di formatDeadlineLabel.
+ * Nato come helper privato di formatDeadlineLabel; esportato per la
+ * due-logic beta (Task 23, computeBetaStatus).
  */
-function ymdDeltaDays(fromYMD: string, toYMD: string): number {
+export function ymdDeltaDays(fromYMD: string, toYMD: string): number {
   const ms = (ymd: string): number => {
     const [y, m, d] = ymd.split('-').map(Number);
     return Date.UTC(y, m - 1, d);
