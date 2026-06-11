@@ -112,7 +112,8 @@ Riusa gli engine esistenti: `priority-engine`, `decomposition-engine`,
 
 ### 🟠 Task 6 — Ingest Gmail
 
-**Spec**: `docs/tasks/06-gmail-ingest.md` *(da creare)*
+**Spec**: superata — vedi `docs/tasks/26-google-integrations.md` (fase 3) e la
+sezione "Fase 4 — Post-beta" più sotto. Pianificato nell'ultraplan 2026-06-11.
 
 Google OAuth è già configurato per login. Estendere scope per lettura Gmail.
 Parsing intelligente di scadenze, pagamenti, appuntamenti, cose da fare.
@@ -125,8 +126,9 @@ Ingest verso inbox con `source: 'gmail'` e link email originale.
 Priorità guidate dal feedback dei 20-100 tester.
 
 ### 🟡 Task 7 — Calendar sync bidirezionale
-Lettura eventi esistenti da Google Calendar per scheduling intelligente senza
-conflitti. Scrittura task schedulati come eventi.
+**Spec**: superata — vedi `docs/tasks/26-google-integrations.md` (fasi 1-2),
+ultraplan 2026-06-11. Lettura eventi esistenti da Google Calendar per scheduling
+intelligente senza conflitti. Scrittura task schedulati come eventi.
 
 ### 🟡 Task 8 — Widget inbox sempre disponibile
 Notifiche push per aggiungere voci inbox senza aprire l'app. Capability mobile
@@ -200,6 +202,9 @@ implementata end-to-end.
 
 ### 🟡 Task 11 — Body doubling voice-first
 
+**Spec operativa**: `docs/tasks/27-body-doubling-voice.md` (ultraplan 2026-06-11) —
+sostituisce questa scheda, che resta come razionale di prodotto.
+
 Quando l'utente tappa un task della lista per "farlo con Shadow", si
 apre una modalità body doubling vocale: un avatar 1D animato (figura
 semplice con stati: in ascolto / parla / pensa / pausa) parla via
@@ -237,13 +242,37 @@ per beta v1.**
 
 ---
 
+## 🎯 Fase 4 — Post-beta (ultraplan 2026-06-11)
+
+Pianificata con Claude Code in plan mode (piano approvato da Antonio). Checkpoint di
+rollback: tag `pre-ultraplan-2026-06-11`. Gating per piani abbonamento:
+Google → PRO+, voce → MAX. Billing fuori scope (task futuro).
+
+| # | Task | Spec | Branch | Stima |
+|---|------|------|--------|-------|
+| 24 | Workflow v2 (sviluppo autonomo) + fix bug history orchestrator | `docs/tasks/24-workflow-v2.md` | `feature/24-workflow-v2` | 1 sess. |
+| 25 | Entitlements FREE/PRO/MAX | `docs/tasks/25-entitlements.md` | `feature/25-entitlements` | 1 sess. |
+| 26 | Google Calendar (fasi 1-2) + Gmail ingest (fasi 3-4) | `docs/tasks/26-google-integrations.md` | `feature/26-google` | 9-10 sess. |
+| 27 | Body doubling voice-first (spike → MVP → polish) | `docs/tasks/27-body-doubling-voice.md` | `feature/27-voice` | 16-22 sess. |
+
+Ordine consigliato: 24 → 25 → spike 27-fase-0 (GO/NO-GO su mic in TWA) → 26 Calendar →
+27 MVP voce → 26 Gmail → 27 polish. Compliance Google: Calendar = verifica gratuita
+pre-lancio; Gmail = CASA Tier 2 a pagamento, decisione a fine beta (runbook nella spec 26).
+
+---
+
 ## Come lavorare su un task
 
-1. Aprire Claude Code: `claude` in `C:\shadow-app`
-2. Dire: `Leggi docs/tasks/NN-nome.md. Fai il piano e aspetta OK prima di scrivere codice.`
-3. Approvare piano, implementare a step verificabili
-4. `bun run build` deve passare prima di commit
-5. Commit locale con messaggio descrittivo (no push automatico)
-6. Discutere qui con Antonio prima del push
-7. `git push`, verifica deploy Vercel, acceptance test
-8. Marcare task come ✅ in questo file
+> Dal 2026-06-11 vale il **Workflow v2** — contratto completo in
+> `docs/tasks/24-workflow-v2.md` e in `CLAUDE.md`.
+
+1. Antonio dà il brief di prodotto in chat a Claude Code
+2. Code esplora, fa le domande di prodotto (scelta multipla), scrive la spec in
+   `docs/tasks/NN-nome.md` e propone il piano in plan mode
+3. Approvazione del piano = unico checkpoint umano
+4. Code implementa end-to-end con self-verification (`bun run build` + `bunx tsc`
+   + `bun run test` + probe e2e) e commit autonomi su `feature/NN-nome`
+5. Report finale: file toccati + comandi di test manuale
+6. Push del feature branch (preview deploy Vercel) su conferma; push/merge su
+   `main` decide solo Antonio
+7. Acceptance test della spec, poi marcare il task come ✅ in questo file

@@ -3,20 +3,26 @@
 > Questo file è letto automaticamente da Claude Code a ogni sessione.
 > Contiene il contesto permanente del progetto. Non contiene task:
 > i task sono in `docs/ROADMAP.md` e nei file `docs/tasks/*.md`.
+> Riscritto il 2026-06-11 (Workflow v2, ultraplan post-beta).
 
 ---
 
 ## Cos'è Shadow
 
-App per adulti con ADHD. Core features:
+App per adulti con ADHD. Core loop: inbox ovunque → chat come punto d'ingresso →
+review serale conversazionale che produce il piano di domani. Feature:
+- **Chat conversazionale** su Claude API (morning check-in, review serale, chat libera)
+- **Review serale** (`evening_review`): triage inbox voce per voce, decomposizione,
+  piano del giorno dopo (Slice 5-8 chiuse)
 - **Profilazione adattiva** (`AdaptiveProfile`, 60+ dimensioni comportamentali)
-- **Memoria rinforzata per-utente** (`UserMemory` con strength/evidence/EMA)
-- **Priority engine** che propone task adeguati a tempo/contesto/stato
-- **Decomposizione AI** di task grandi in micro-step
+- **Memoria rinforzata per-utente** (`UserMemory` con strength/evidence)
+- **Priority/decomposition/nudge/learning engine** — euristiche deterministiche in-house
 - **Strict mode** anti-distrazione con friction intenzionale
-- **Nudge system** adattivo basato su `LearningSignal` pregressi
+- In arrivo (Fase 4 post-beta, ultraplan 2026-06-11): **body doubling vocale** (Task 27,
+  piano MAX), **Google Calendar + Gmail ingest** (Task 26, piano PRO+),
+  **entitlements FREE/PRO/MAX** (Task 25)
 
-Target deploy: web (Vercel) + APK Android (wrapper WebView).
+Target deploy: web (Vercel) + Android TWA via Bubblewrap (closed testing Play Store).
 
 ---
 
@@ -24,116 +30,133 @@ Target deploy: web (Vercel) + APK Android (wrapper WebView).
 
 - **Next.js 16** (App Router) + React 19 + **TypeScript strict**
 - **Prisma ORM** su **Postgres Neon** (branch `main`)
-- **NextAuth** (Credentials + Google OAuth)
-- **Zustand** per state client (`src/store/shadow-store.ts`, attualmente senza persist)
-- Engine AI su **euristiche deterministiche in-house** (GLM/Z.ai rimosso, 2026-06-09)
-- **Tailwind CSS** + **shadcn/ui** + Radix primitives
-- **bun** come package manager e runtime dev
+- **NextAuth v4** — login **solo CredentialsProvider** (email+password, JWT strategy).
+  `GOOGLE_CLIENT_ID/SECRET` servono al flusso OAuth separato delle integrazioni
+  (Task 26), NON al login.
+- **LLM: Claude API** (`@anthropic-ai/sdk`) via `src/lib/llm/client.ts` —
+  tier `fast` = `claude-haiku-4-5` (chat generale), tier `smart` = `claude-sonnet-4-6`
+  (review serale). Prompt caching static/dynamic attivo, cost tracking per messaggio.
+- **Engine euristici deterministici** in `src/lib/engines/` (GLM/Z.ai rimosso 2026-06-09)
+- **Zustand** per state client (`src/store/shadow-store.ts`, senza persist)
+- **Tailwind CSS** + **shadcn/ui** + Radix; **framer-motion** per animazioni
+- **bun** come package manager e runtime dev; **vitest** per i test
 
-## Struttura cartelle
+## Struttura cartelle (aggiornata 2026-06-11)
 
 ```
 src/
 ├── app/
-│   ├── page.tsx                  ← ~3934 righe, da splittare (TASK 2 ROADMAP)
-│   ├── api/
-│   │   ├── tasks/route.ts
-│   │   ├── daily-plan/route.ts
-│   │   ├── decompose/route.ts
-│   │   ├── review/route.ts
-│   │   ├── notifications/route.ts
-│   │   ├── streaks/route.ts
-│   │   ├── contacts/route.ts
-│   │   ├── settings/route.ts
-│   │   ├── export/route.ts
-│   │   ├── calendar/route.ts
-│   │   ├── strict-mode/route.ts
-│   │   ├── patterns/route.ts
-│   │   ├── onboarding/route.ts
-│   │   ├── push-subscription/route.ts
-│   │   ├── memory/route.ts
-│   │   ├── learning-signal/route.ts
-│   │   ├── micro-feedback/route.ts
-│   │   ├── adaptive-profile/route.ts
-│   │   ├── profile/route.ts
-│   │   ├── ai-assistant/route.ts
-│   │   └── ai-classify/route.ts
+│   ├── page.tsx                  ← 33 righe: monta ChatView (split completato)
+│   ├── tasks/page.tsx            ← monolite residuo ~3100 righe (inbox, execution,
+│   │                                strict mode, settings) — estrazioni minime
+│   ├── api/                      ← ~27 route, tutte protette con requireSession
+│   │   ├── chat/turn, chat/bootstrap, chat/active-thread
+│   │   ├── tasks, daily-plan, review, strict-mode, settings, calendar, export, …
 │   └── layout.tsx
+├── features/
+│   └── chat/ChatView.tsx         ← UI chat (~350 righe), POST /api/chat/turn sincrono
 ├── lib/
-│   ├── auth.ts                   ← config NextAuth
-│   ├── engines/                  ← 9 engine AI (NON riscrivere, riusare)
-│   │   ├── priority-engine.ts
-│   │   ├── decomposition-engine.ts
-│   │   ├── execution-engine.ts
-│   │   ├── nudge-engine.ts
-│   │   ├── learning-engine.ts
-│   │   ├── memory-engine.ts
-│   │   ├── profiling-engine.ts
-│   │   └── ai-assistant.ts
-│   └── types/shadow.ts           ← tipi condivisi
-├── store/shadow-store.ts         ← Zustand (senza persist — TASK 3 ROADMAP)
+│   ├── auth.ts, auth-guard.ts    ← NextAuth config + requireSession
+│   ├── llm/client.ts             ← callLLM (tier, caching, costi) — unico client LLM
+│   ├── chat/
+│   │   ├── orchestrator.ts       ← loop multi-iterazione (max 8) + tool execution
+│   │   ├── prompts.ts            ← CORE_IDENTITY, mode prompt, voice profile, varianti
+│   │   ├── tools.ts + tools/     ← tool LLM (flavor sideEffect/mutator/…) + gating per fase
+│   ├── evening-review/           ← triage, plan-preview, slot-allocation, config
+│   ├── engines/                  ← engine euristici (NON riscrivere, riusare)
+│   └── types/shadow.ts
+├── store/shadow-store.ts
 ├── components/ui/                ← shadcn, NON MODIFICARE
-└── middleware.ts                 ← NextAuth middleware
-prisma/
-└── schema.prisma                 ← User, Task, AdaptiveProfile, LearningSignal,
-                                    UserMemory, StrictModeSession, DailyPlan, …
+└── middleware.ts                 ← gate auth + tour/consent/onboarding (matcher esplicito!)
+prisma/schema.prisma              ← User, Task, ChatThread/ChatMessage, AdaptiveProfile,
+                                    StrictModeSession, DailyPlan, Review, UserMemory, …
+scripts/                          ← script operativi bun + probe e2e (scripts/e2e/*)
 ```
 
-## Stato attuale (25 aprile 2026)
+Nota: ogni route nuova sotto `src/app/` va aggiunta al `matcher` di `middleware.ts`,
+altrimenti il gate auth non gira.
 
-- ✅ App deployata su Vercel, URL produzione: `https://shadow-app2.vercel.app/`
-- ✅ DB Postgres Neon attivo, schema migrato
-- ✅ Repo: `github.com/shadow-dev434/shadow-app`
-- ✅ NextAuth funzionante (Credentials + Google)
-- ✅ 4 fix comportamentali applicati e in produzione:
-  - Filtro contesto hard nel priority engine
-  - setTimeout feedback a 30s invece di 3s
-  - Pulsante "Completa tutto" sempre visibile
-  - Trigger strict mode indipendente dal task
-- ✅ Task 3 — Persistenza thread chat (2026-04-24): rehydration del thread
-  attivo on mount, skip della morning check-in se c'è già un thread attivo,
-  nuovo endpoint `GET /api/chat/active-thread`, script di cleanup degli
-  orfani. Commits `e459893`, `4cbe8fe`, `a6bb316`, `b7ae798`.
-- ✅ Task 3.5 — Onboarding finish redirect (2026-04-25): root cause è
-  `public/sw.js` che intercettava le HTML navigation con
-  stale-while-revalidate, servendo redirect cached senza far girare il
-  middleware. Fix in `73157d9`: bypass SW per `request.mode === 'navigate'`
-  + bump cache v2→v3. Safety net in `OnboardingView` e `TourView`:
-  try/catch attorno a `router.replace('/')` + fallback a 1s su
-  `window.location.href` (`204ece7`, `9e1f4ed`, `a400f9b`).
-- ⚠️ Problemi strutturali NON risolti (vedi `docs/ROADMAP.md`)
+## Stato attuale (11 giugno 2026)
+
+- ✅ Produzione su Vercel: `https://shadow-app2.vercel.app/` (consolidamento 4 progetti = Task 3.6)
+- ✅ Review serale conversazionale live (Slice 5-8: triage, varianti per source,
+  plan preview, closing, burnout/scarico emotivo)
+- ✅ Prompt caching V2b + cost tracking V2c
+- 🔄 Beta in preparazione: Task 22 (TWA packaging, runbook pronto), Task 23 (BugOps)
+- 🆕 Fase 4 post-beta pianificata (ultraplan 2026-06-11): task 24-27 in
+  `docs/ROADMAP.md` + `docs/tasks/24..27-*.md`. Tag rollback: `pre-ultraplan-2026-06-11`.
 
 ## Regole non negoziabili per Claude Code
 
 1. **TypeScript strict** — zero `any` impliciti, tutti gli import devono risolvere
-2. **Non riscrivere logica già corretta** — riusa gli engine esistenti
+2. **Non riscrivere logica già corretta** — riusa engine, orchestrator, llm client
 3. **Non introdurre dipendenze nuove** senza necessità esplicita documentata
-4. **Non toccare `src/components/ui/`** — sono componenti shadcn generati
+   (Google/voce = REST via fetch, zero SDK vendor)
+4. **Non toccare `src/components/ui/`** — componenti shadcn generati
 5. **Ogni modifica deve compilare**: `bun run build` deve passare prima di dichiarare finito
 6. **Commit atomici** con messaggi descrittivi in italiano (es. `fix(auth): isolate tasks by userId`)
-7. **Testi utente in italiano** — prompt GLM e label UI in italiano
-8. **Se una scelta di design è ambigua**, commenta `// TODO: decidere con Antonio` invece di inventare
-9. **Prima di modificare un file grande (>500 righe), chiedi conferma** del piano
-10. **Non fare push automatico** — fermati dopo `git commit`, lascio io decidere il push
+7. **Testi utente in italiano** — prompt LLM e label UI in italiano
+8. **Se una scelta di design è ambigua**: se è una decisione di prodotto, chiedi ad
+   Antonio con AskUserQuestion (opzioni + raccomandazione + trade-off); se è minore,
+   scegli tu e annotala nel report. Mai inventare in silenzio su scelte di prodotto.
+9. **Dentro un piano approvato in plan mode**: implementa end-to-end senza conferme
+   intermedie, anche su file >500 righe. **Fuori da un piano approvato**: per file
+   grandi o fuori scope, proponi prima il piano.
+10. **Commit autonomi su feature branch** (`feature/NN-nome`) a build verde.
+    Push del feature branch solo su conferma (serve per i preview deploy Vercel).
+    **Push/merge su `main` decide solo Antonio** — il push verso main è anche
+    bloccato hard dall'hook.
 
-## Workflow preferito
+## Workflow v2 (dal 2026-06-11)
 
-1. Claude Code legge `docs/ROADMAP.md` e il task specifico in `docs/tasks/<nome>.md`
-2. Propone un **piano** prima di scrivere codice, aspetta OK dall'utente
-3. Implementa in step verificabili (un sotto-step alla volta se il task è grande)
-4. Dopo ogni step: `bun run build` — se fallisce, correggere prima di proseguire
-5. Al termine del task: eseguire acceptance test del file task
-6. Se tutto verde: `git add` + `git commit` con messaggio descrittivo (NO push)
-7. Report finale: file modificati/creati/eliminati + comandi da eseguire per testare manualmente
+Contratto completo in `docs/tasks/24-workflow-v2.md`. Ciclo per macro-task:
+
+1. Antonio dà il **brief di prodotto** in chat.
+2. Code esplora, fa le **domande di prodotto** (AskUserQuestion, scelta multipla con
+   raccomandazione e costi), scrive la **spec** in `docs/tasks/NN-nome.md` e propone
+   il **piano** in plan mode.
+3. **Approvazione del piano = unico checkpoint umano.**
+4. Implementazione end-to-end con **self-verification a ogni step**:
+   `bun run build` + `bunx tsc --noEmit` + `bun run test` + probe e2e (`scripts/e2e/*`)
+   + verifica browser (preview tools) per cambi visibili.
+5. **Commit checkpoint autonomi** su feature branch.
+6. Report finale: file toccati, comandi di test manuale, costi/telemetria se rilevanti.
+   Antonio decide push/merge.
+
+Restano SEMPRE sotto conferma esplicita: migration DB (`prisma migrate`), edit di
+`prisma/schema.prisma`, `.env*`, `next.config.*`, `package.json`, file core chat
+(`orchestrator.ts`, `prompts.ts`, `update-plan-preview-handler.ts`), `.claude/*`, push.
+
+## Setup Claude Code (.claude/)
+
+- **`settings.json`** — `allow`: read/search, git status/diff/log/add/**commit**/
+  **checkout -b**/**switch**/**tag**, `bun run *`, `bun test`, `bunx tsc/next/prisma
+  generate|format|validate`. `ask`: push/pull/merge/rebase/reset --hard,
+  `prisma migrate|db push|db execute|db seed|studio`, rm/mv, curl/wget, edit dei file
+  protetti elencati sopra.
+- **Hook `block-dangerous.js`** (PreToolUse Bash): blocca `rm -rf`, `sudo`,
+  pipe-to-shell, `git push --force` e **qualunque `git push` verso main/master**.
+  Exit 2 = stop. Non aggirare un blocco: spiega ad Antonio cosa volevi fare.
+- **Hook `protect-secrets.js`**: blocca lettura/edit di `.env*`, chiavi, credenziali.
+- **Hook `auto-approve-safe-edits.js`**: auto-approva Edit/Write su
+  `src/lib/**` (tranne core chat), `src/features/**`, `src/store/**`,
+  `src/app/focus/**`, `src/app/api/voice/**`, `src/app/api/google/**`,
+  `scripts/**`, `docs/**.md` — se non rimuovono export. Il resto passa al
+  permission system normale. Audit in `.claude/hooks-audit.log`.
+- **Hook `typecheck-on-ts-edit.js`** (PostToolUse): `bunx tsc --noEmit --incremental`
+  dopo edit `.ts/.tsx`. Se gli errori sono preesistenti, segnalalo e continua.
 
 ## Variabili d'ambiente
 
 In `.env.local` (già configurate in dev + Vercel):
-- `DATABASE_URL` — Postgres Neon connection string
-- `NEXTAUTH_URL` — `http://localhost:3000` in dev, URL Vercel in prod
-- `NEXTAUTH_SECRET`
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
-- `ANTHROPIC_API_KEY`
+- `DATABASE_URL`, `DIRECT_URL` — Postgres Neon
+- `NEXTAUTH_URL`, `NEXTAUTH_SECRET`
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — integrazioni Google (Task 26)
+- `ANTHROPIC_API_KEY` — chat LLM
+
+Previste (Task 27, da aggiungere quando si implementa): `DEEPGRAM_API_KEY`,
+`ELEVENLABS_API_KEY?`, `VOICE_STT_PROVIDER`, `VOICE_TTS_PROVIDER`,
+`VOICE_TTS_VOICE_ID?`, `VOICE_DAILY_TURN_CAP`, `VOICE_DAILY_SESSION_CAP`.
 
 **Mai** committare `.env.local` o stampare secret nei log.
 
@@ -143,75 +166,12 @@ In `.env.local` (già configurate in dev + Vercel):
 bun install              # installa dipendenze
 bun run dev              # dev server su :3000
 bun run build            # build di produzione (deve passare prima di commit)
+bun run test             # vitest
 bun run lint             # eslint
-bunx prisma studio       # UI tabellare DB
-bunx prisma migrate dev  # nuova migration dopo change schema
+bunx prisma studio       # UI tabellare DB (ask)
+bunx prisma migrate dev  # nuova migration dopo change schema (ask)
 bunx prisma migrate status
 ```
-# Snippet per `CLAUDE.md`
-
-Aggiungi questa sezione al `CLAUDE.md` esistente, in coda (o subito prima
-delle "Regole non negoziabili"). Documenta a Claude Code il nuovo setup
-così non ci sono sorprese a inizio sessione.
-
----
-
-## Setup Claude Code (.claude/)
-
-A partire dal 2026-04-26 il progetto ha un `.claude/` configurato con:
-
-- **`settings.json`**: rules di permission che auto-approvano comandi safe
-  (Read/Glob/Grep, `git status/diff/log`, `git add`, `bun run build`, `bunx
-  tsc`, `bunx prisma generate/format/validate`) e chiedono conferma per
-  comandi che toccano repo remoti, DB, schema, env (`git commit/push`,
-  `prisma migrate/db push/db execute`, edit di `prisma/schema.prisma` e
-  `.env*`).
-- **Hook `block-dangerous.js`**: blocca pattern distruttivi (`rm -rf`,
-  `git push --force`, `sudo`, pipe-to-shell). Exit code 2 = stop.
-- **Hook `protect-secrets.js`**: blocca lettura/edit di `.env*`, file di
-  chiavi (`.pem`, `.key`, `id_rsa`), credenziali Google.
-- **Hook `typecheck-on-ts-edit.js`**: dopo Edit/Write su `.ts`/`.tsx`
-  dentro `src/` o `prisma/`, lancia `bunx tsc --noEmit --incremental` e
-  segnala errori. Non bloccante.
-- **Skill `/post-mortem`**: invocabile manualmente da Antonio per
-  generare doc strutturati di debug.
-
-### Implicazioni operative
-
-1. **Non chiedere conferma per comandi auto-approvati.** Se vedi un
-   comando in `permissions.allow` di `settings.json`, eseguilo
-   direttamente senza preambolo.
-
-2. **Per comandi in `ask`** (commit, push, migrate, schema/env edit),
-   continua a fermarti e chiedere conferma esplicita ad Antonio. La
-   convenzione consolidata è opzione 1, mai opzione 2.
-
-3. **Se un hook ti blocca**, leggi attentamente il messaggio stderr.
-   Probabilmente stai per fare qualcosa di distruttivo. NON tentare di
-   aggirare l'hook (es. spezzando il comando in più step) senza prima
-   spiegare ad Antonio cosa stavi cercando di fare e perché.
-
-4. **Errori TypeScript dal hook `typecheck-on-ts-edit.js`**: se vedi
-   `[typecheck] N errori TS dopo edit di X`, valuta se sistemare prima
-   di proseguire. Se gli errori sono preesistenti (non causati dal tuo
-   edit), segnalalo ad Antonio e continua.
-
-5. **`/post-mortem` non si auto-invoca.** Aspetti che Antonio lo digiti.
-
-### File da non toccare in autonomia
-
-Anche con permission "ask" che chiede conferma, questi file richiedono
-discussione PRIMA del cambio (non solo conferma del diff):
-- `prisma/schema.prisma` (qualunque modifica → impatto migration)
-- `.env*` (qualunque modifica → potenziale rottura prod)
-- `.claude/settings.json` (modifiche al setup permessi → impatto
-  workflow)
-- `.claude/hooks/*.js` (modifiche a hook di sicurezza)
-
-Se proponi di modificarli, fermati e spiega cosa vuoi cambiare e perché,
-prima di proporre il diff.
-
----
 
 ## Troubleshooting Windows
 
@@ -221,25 +181,18 @@ prima di proporre il diff.
 `EPERM: operation not permitted` su
 `node_modules/.prisma/client/query_engine-windows.dll.node`.
 
-**Causa.** File locking dell'engine Prisma su Windows. Quando `bun run dev`
-o `bunx prisma studio` girano in un altro terminale, tengono un handle
-aperto sulla DLL dell'engine; `prisma generate` non può sovrascriverla.
+**Causa.** File locking dell'engine Prisma su Windows: `bun run dev` o
+`bunx prisma studio` aperti in un altro terminale tengono un handle sulla DLL.
 Windows-specific: non si manifesta su Linux/Vercel.
 
-**Workaround.**
+**Workaround.** Chiudere dev server e Studio in tutti i terminali, rilanciare il build.
 
-1. Chiudere `bun run dev` in tutti i terminali aperti.
-2. Chiudere `bunx prisma studio` in tutti i terminali aperti.
-3. Rilanciare `bun run build`.
-
-**Check facoltativo** (PowerShell, per identificare processi sospetti):
+**Check facoltativo** (PowerShell):
 
 ```powershell
 Get-Process node, bun -ErrorAction SilentlyContinue |
   Select-Object Id, ProcessName, StartTime
 ```
 
-Un processo `node` o `bun` con `StartTime` recente è tipicamente un dev
-server o uno Studio attivo. I sub-process `node` zombie post-typecheck
-(vedi `docs/tasks/05-deploy-notes.md:346`) possono comparire qui ma si
-auto-puliscono in 30-60s e non sono la causa dell'EPERM.
+I sub-process `node` zombie post-typecheck si auto-puliscono in 30-60s e non sono
+la causa dell'EPERM.
