@@ -188,3 +188,21 @@ E2E conversazionale**. Gate:
   l'host `ep-billowing-bird…`, ma il dev DB attivo (da `.env.local`, lineage
   completa) è `ep-royal-feather…` — verbale da aggiornare o host ruotato;
   segnalato ad Antonio nel report di sessione.
+
+## Verifica flusso reale (2026-06-12, richiesta da Antonio)
+
+`scripts/e2e/probe-slice9-close-flow.ts`: review serale VERA via `/api/chat/turn`
+(LLM reale, dev server, utente probe usa-e-getta con 7 DailyPlan seminati a
+completion 50%), driver adattivo per fase. Walk di 10 turni:
+apertura+mood (1-3) → per_entry 2 task kept (4-8) → `plan_preview` confermato (9)
+→ `closing` → `confirm_close_review` → thread `completed` (10). **4/4 PASS:**
+
+1. `calibratedFillRatio` NULL per tutto il walk → il trigger è SOLO la chiusura (D1).
+2. `Review` di oggi creata e linkata al thread (regressione Slice 7 ok).
+3. `DailyPlan` di domani creato con `originalPlanJson` popolato.
+4. `calibratedFillRatio` = **0.5325 esatto** alla chiusura (default 0.6, meanR 0.5
+   — stesso valore predetto dalla formula e dalla probe deterministica).
+
+Costo walk LLM: ~$1.04 (10 turni tier smart su prompt evening review pieno).
+Cleanup cascade eseguito. Nota: con utenti senza piani in finestra il campo resta
+NULL (coperto da probe deterministica scenario D + unit).
