@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { signOut } from 'next-auth/react';
+import { BugReportButton } from '@/features/beta/BugReportDialog';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -1798,6 +1799,7 @@ function AppHeader({ onLogout }: {
             <span>{getEnergyEmoji(energy)}</span>
             <span>{getEnergyLabel(energy)}</span>
           </div>
+          <BugReportButton className="p-1.5 rounded-full hover:bg-zinc-800 active:bg-zinc-700 transition-colors text-zinc-400 hover:text-white" />
           {authUser ? (
             <Button variant="ghost" size="sm" className="text-zinc-400" onClick={onLogout}><LogOut className="w-3.5 h-3.5" /></Button>
           ) : null}

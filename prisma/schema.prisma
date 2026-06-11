@@ -39,6 +39,11 @@ model User {
   memories           UserMemory[]
   dailyPlans         DailyPlan[]
   reviews            Review[]
+
+  // Beta (Task 23)
+  bugReports          BugReport[]
+  betaFeedbacks       BetaFeedback[]
+  assessmentResponses AssessmentResponse[]
 }
 
 model Account {
@@ -592,4 +597,66 @@ model ChatMessage {
   createdAt DateTime @default(now())
 
   @@index([threadId, createdAt])
+}
+
+// ─── Beta: segnalazioni bug, feedback, questionari (Task 23) ──────────────
+
+model BugReport {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  area            String // chat | evening_review | inbox_task | today_plan | focus_strict | notifications | onboarding | auth | settings | other
+  description     String  @db.Text
+  expected        String? @db.Text
+  severityUser    String // blocking | annoying | cosmetic (percezione utente)
+  reproducibility String // always | sometimes | once
+  context         String  @default("{}") @db.Text // JSON: snapshot auto-allegato (vista, route, UA, breadcrumbs)
+  appVersion      String?
+
+  status     String    @default("new") // new | triaged | in_progress | fixed | wont_fix | duplicate
+  priority   String? // P0 | P1 | P2 | P3 — assegnata in triage admin
+  adminNotes String?   @db.Text
+  resolvedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model BetaFeedback {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  kind    String // daily_pulse | weekly | final
+  day     String // YYYY-MM-DD lato client (timezone-safe)
+  version String @default("v1") // versione del wording del questionario
+  answers String @db.Text // JSON
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, kind, day])
+  @@index([userId, kind])
+}
+
+model AssessmentResponse {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  instrument String // asrs | adexi | sus | pgic
+  wave       String // pre | post
+  itemScores String  @default("{}") @db.Text // JSON: { [itemId]: score } — accumulato a ogni PATCH
+  totalScore Float   @default(0) // ricalcolato dagli item presenti a ogni salvataggio
+  subscales  String? @db.Text // JSON: es. { inattention, hyperactivity } per ASRS
+
+  completedAt    DateTime? // null = bozza in corso (salvataggio incrementale)
+  administeredAt DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([userId, instrument, wave])
+  @@index([userId, wave])
 }

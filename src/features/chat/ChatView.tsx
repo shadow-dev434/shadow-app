@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { List, Send, Loader2, CheckCircle2 } from 'lucide-react';
+import { BugReportButton } from '@/features/beta/BugReportDialog';
 
 interface QuickReply {
   label: string;
@@ -283,6 +284,7 @@ export function ChatView() {
           <h1 className="text-base font-semibold">Shadow</h1>
           <p className="text-xs text-zinc-500">Sempre qui</p>
         </div>
+        <BugReportButton area="chat" />
         <button
           onClick={() => router.push('/tasks')}
           className="p-2 -mr-2 rounded-full hover:bg-zinc-800 active:bg-zinc-700 transition-colors text-zinc-400 hover:text-zinc-200"
