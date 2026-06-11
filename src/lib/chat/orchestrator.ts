@@ -72,6 +72,15 @@ export interface OrchestratorInput {
 
 export interface OrchestratorOutput {
   threadId: string;
+  /**
+   * Mode autorevole post-turno per il client (Task 41 follow-up): 'general'
+   * se il thread e' terminale a fine turno (review chiusa in QUESTO turno o
+   * gia' chiusa), altrimenti il mode effettivo del turno — che coincide con
+   * thread.mode per i thread esistenti grazie al guard anti mode-spoof di
+   * Section 1. Sostituisce la findUnique post-turno che turn/route.ts
+   * faceva per arricchire la response.
+   */
+  mode: ChatMode;
   assistantMessage: string;
   toolsExecuted: Array<{
     name: string;
@@ -830,6 +839,12 @@ export async function orchestrate(
 
   return {
     threadId: thread.id,
+    // Terminale a fine turno (chiusura in questo turno o alreadyClosed) ->
+    // il client si sgancia subito su 'general', coerente col filtro di
+    // active-thread sui thread terminali. Race teorica non rilevata: thread
+    // archiviato da un normalize CONCORRENTE mid-turn (si auto-ripara al
+    // turno successivo via BUG #C + questo campo).
+    mode: reviewClosed !== null ? 'general' : mode,
     assistantMessage: finalAssistantMessage,
     toolsExecuted,
     quickReplies,
