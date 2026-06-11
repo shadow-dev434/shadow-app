@@ -143,6 +143,52 @@ describe('TERMINAL_THREAD_STATES', () => {
   });
 });
 
+describe('orchestrate: history window (fix Task 24)', () => {
+  it('chiede gli ultimi N messaggi (desc+tiebreaker), li ripristina in ordine cronologico e scarta la testa non-user', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 'long-thread', state: 'active', mode: 'general' }),
+    );
+    // Finestra di 20 righe come la restituisce il DB (desc = più recente prima).
+    // La più VECCHIA della finestra (h1) è un assistant: simula la parità
+    // sfasata da una riga user orfana lasciata da un turno fallito a metà.
+    const windowDesc = Array.from({ length: 20 }, (_, i) => {
+      const n = 20 - i; // h20 (più recente) … h1 (più vecchio)
+      return {
+        id: `h${n}`,
+        threadId: 'long-thread',
+        role: n % 2 === 0 ? 'user' : 'assistant', // h1 assistant, h2 user, …
+        content: `msg-${n}`,
+        createdAt: new Date(2026, 5, 11, 12, 0, n),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any;
+    });
+    vi.mocked(db.chatMessage.findMany).mockResolvedValue(windowDesc);
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: 'long-thread',
+      mode: 'general',
+      userMessage: 'nuovo turno',
+    });
+
+    // Query shape: ultimi N = desc + take, tiebreaker deterministico su id.
+    const findManyArg = vi.mocked(db.chatMessage.findMany).mock.calls[0][0];
+    expect(findManyArg?.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+    expect(findManyArg?.take).toBe(20);
+
+    const llmArg = vi.mocked(callLLM).mock.calls[0][0];
+    const messages = llmArg.messages;
+    // h1 (assistant in testa cronologica) scartato: la history parte da h2 (user)…
+    expect(messages[0]).toEqual({ role: 'user', content: 'msg-2' });
+    // …prosegue in ordine cronologico ascendente…
+    expect(messages[1]).toEqual({ role: 'assistant', content: 'msg-3' });
+    expect(messages[messages.length - 2]).toEqual({ role: 'user', content: 'msg-20' });
+    // …e chiude col messaggio utente del turno corrente.
+    expect(messages[messages.length - 1]).toEqual({ role: 'user', content: 'nuovo turno' });
+    expect(messages).toHaveLength(20); // 19 della finestra (h1 scartato) + turno corrente
+  });
+});
+
 describe('orchestrate: Section 1 thread lifecycle (BUG #C)', () => {
   it('threadId null -> crea nuovo thread con input.mode (no findFirst call)', async () => {
     await orchestrate({

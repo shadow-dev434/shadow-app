@@ -163,10 +163,13 @@ export async function orchestrate(
   // reverse() ripristina l'ordine cronologico atteso dal prompt. Con asc+take
   // un thread oltre MAX_HISTORY_MESSAGES perdeva i turni recenti (bug fix
   // Task 24, 2026-06-11).
+  // Tiebreaker su id: createdAt da solo non è deterministico a parità di
+  // timestamp (Postgres sort instabile) — col take in gioco deciderebbe
+  // anche la membership della finestra, non solo l'ordine.
   const previousMessages = (
     await db.chatMessage.findMany({
       where: { threadId: thread.id },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: MAX_HISTORY_MESSAGES,
     })
   ).reverse();
@@ -307,12 +310,20 @@ export async function orchestrate(
   }
 
   // ── 4. Build messages for LLM ────────────────────────────────────────
-  const llmMessages: LLMMessage[] = previousMessages
-    .filter(m => m.role === 'user' || m.role === 'assistant')
-    .map(m => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    }));
+  const historyMessages = previousMessages.filter(
+    m => m.role === 'user' || m.role === 'assistant',
+  );
+  // La finestra scorrevole (desc+take) può iniziare su un messaggio assistant
+  // — es. una riga user orfana di un turno fallito a metà sfasa la parità —
+  // ma l'API Anthropic esige messages[0] con role 'user' (400 altrimenti):
+  // scarta le righe di testa non-user.
+  while (historyMessages.length > 0 && historyMessages[0].role !== 'user') {
+    historyMessages.shift();
+  }
+  const llmMessages: LLMMessage[] = historyMessages.map(m => ({
+    role: m.role as 'user' | 'assistant',
+    content: m.content,
+  }));
 
   llmMessages.push({ role: 'user', content: input.userMessage });
 
