@@ -107,9 +107,16 @@ sliding puro il prefisso cambierebbe a ogni turno e non farebbe MAI hit).
   pattern da continuare"), istruzione di ignorare marker sintetici
   (`__auto_start__` del bootstrap) e di preservare segnali emotivi/crisi.
   Messaggi oltre ~1500 char troncati nel prompt del summarizer (bound costi).
-- Guard idempotente: re-read del watermark subito prima dell'insert, skip se
-  già coperto. Retry: **1 solo tentativo** (no retry interno aggiuntivo: il
-  fold è auto-riparante — al turno successivo il count è ancora sopra soglia).
+- Guard **CAS** (raffinato post-probe): re-read del watermark subito prima
+  dell'insert — insert SOLO se il watermark su cui il fold si è basato è
+  ancora l'ultimo; altrimenti skip `concurrent_fold` (auto-riparante). Il
+  probe ha osservato la race reale: l'`after()` di un turno precedente,
+  ritardato sotto carico, produceva un fold doppio overlapping (covered=76
+  con prev=fold1). Col CAS la finestra di race scende dai secondi della
+  chiamata LLM ai ms del re-read; la race residua produce una riga doppia
+  append-only che il reader pick-max converge. Retry: **1 solo tentativo**
+  (il fold è auto-riparante — al turno successivo il count è ancora sopra
+  soglia).
 
 ### 3.4 Iniezione nel prompt: terzo blocco system cachato
 
@@ -176,15 +183,23 @@ che copre tutto il resto. Con finestra 40 (alternativa non scelta):
 | Fold ucciso da timeout/`maxDuration` | Come sopra: auto-riparante | Solo efficienza |
 | `payloadJson` malformato | Riga scartata dal parse tollerante → pick-max sulla precedente o nessun summary | Solo il fold corrotto |
 | Backlog > finestra (convergenza o fold falliti a lungo) | Header dinamico dichiara la copertura parziale | Onestà del prompt preservata |
-| Doppio fold concorrente (multi-device) | Due righe append-only; reader pick-max-watermark converge; watermark mai regressivo | Una chiamata Haiku sprecata |
+| Doppio fold concorrente (multi-device, after() ritardato) | Guard CAS scarta il fold basato su watermark stale (`concurrent_fold`); race residua = riga doppia append-only, reader pick-max converge; watermark mai regressivo | Al peggio una chiamata Haiku sprecata |
 | Errore in `rollSummaryIfNeeded` | MAI propagato al turno utente (`after()` + try/catch totale) | Nessuna |
 
 ---
 
-## 6. Costi e cache (numeri onesti, da confermare al probe — Step 7)
+## 6. Costi e cache (CONFERMATI dal probe e2e, 2026-06-11)
 
-- **Per fold**: ~$0.008-0.012 (Haiku: batch 40 msg + prev summary + istruzioni
-  ≈ 4-8k token in, ≤700 out). Worst case con messaggi al cap 4000 char: ~$0.04.
+- **Misurato dal probe** (messaggi sintetici corti): fold1 batch 40 =
+  **$0.0030** (1490→294 tok, 2.7s); fold2 merge batch 36 = **$0.0042**
+  (1620→509 tok, 3.4s). Latenza fold ben dentro il budget `maxDuration=60`.
+- **Recupero behavioral verificato**: il modello ha risposto correttamente a
+  una domanda su un fatto presente SOLO nel summary (non più in finestra);
+  `debugSummaryChars=739-810` conferma l'iniezione.
+- **Stima su messaggi reali** (più lunghi dei sintetici): ~$0.008-0.012/fold
+  (Haiku: batch 40 + prev summary + istruzioni ≈ 4-8k token in, ≤700 out).
+  Worst case con messaggi al cap 4000 char: ~$0.04 (mitigato dal troncamento
+  per-messaggio a 1500 char).
 - **Convergenza one-shot** dei thread veterani al deploy: ~$0.06-0.08/thread
   (~7-12 fold consecutivi, uno per turno).
 - **Mensile per utente**: mediano (10 turni/die) ~$0.10-0.20; heavy (40/die)
