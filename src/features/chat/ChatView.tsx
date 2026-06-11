@@ -283,6 +283,13 @@ export function ChatView() {
 
   const handleStartEveningReview = () => {
     setEveningReviewShouldStart(false);
+    // La review parte SEMPRE su un thread nuovo. La card e' visibile solo a
+    // chat vuota, ma threadId puo' essere non-null se il rehydrate ha trovato
+    // un thread attivo SENZA messaggi (orfano di un primo turno fallito):
+    // senza reset il primo turno evening_review finirebbe su quel thread
+    // general e il guard anti mode-spoof dell'orchestrator lo degraderebbe a
+    // general (review mai partita). Il thread orfano resta com'era.
+    setThreadId(null);
     setMode('evening_review');
     setTimeout(() => inputRef.current?.focus(), 50);
   };
