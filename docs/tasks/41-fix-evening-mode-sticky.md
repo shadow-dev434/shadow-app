@@ -80,16 +80,55 @@ specifici e non sono toccati.
   assoluto ma richiede edit di `orchestrator.ts` (file protetto, serve
   conferma esplicita). Proposto come follow-up sotto.
 
-## Follow-up proposto (richiede conferma Antonio: file protetto)
+## Follow-up implementato (2026-06-12, piano approvato in plan mode)
 
-In `orchestrator.ts` Section 1: se `input.threadId` punta a un thread
-**esistente attivo** e `input.mode !== thread.mode`, degradare il mode
-effettivo a `thread.mode` (+ `console.warn` con entrambi i valori). Chiude
-anche il caso di client malevoli/buggati che il fix client-side non copre.
-Con quell'edit andrebbe aggiunto il test unit "turno evening su thread general
-attivo" in `orchestrator.test.ts` (caso oggi coperto a livello route in
-`route.test.ts`). In quel momento si può anche esporre `mode` in
-`OrchestratorOutput` ed eliminare il `findUnique` aggiunto qui.
+Chiude il buco residuo lato server (client buggati/stale/malevoli che il fix
+client-side non copre). Quattro commit sul branch:
+
+1. **Guard anti mode-spoof** (`orchestrator.ts` Section 1, file protetto —
+   edit approvato col piano): se `input.threadId` punta a un thread esistente
+   **non terminale** (`active` o `paused`) e `input.mode !== thread.mode`, il
+   mode effettivo degrada a `thread.mode` con `console.warn`
+   (`[orchestrator mode-guard]`, logga dichiarato + effettivo + state).
+   Precedenze: override BUG #C su thread terminale (invariato, vince) →
+   guard su mismatch → `input.mode`. Flussi legittimi intatti: threadId
+   null e not-found usano `input.mode`; resume evening paused dichiara già
+   `evening_review` (match). Su paused il degrado è anche semanticamente
+   giusto: un `general` dichiarato su paused-evening riprende la review.
+2. **`mode` in `OrchestratorOutput`** (parte opzionale, approvata col piano):
+   mode client-facing post-turno = `'general'` se il thread è terminale a
+   fine turno (accumulator `reviewClosed`: chiusura in questo turno o
+   alreadyClosed), altrimenti il mode effettivo (= `thread.mode` via guard).
+   `turn/route.ts` ridotta a passthrough (`NextResponse.json(result)`):
+   eliminati la `findUnique` post-turno di questo task, l'import di `db` e
+   di `TERMINAL_THREAD_STATES`. −1 query per turno. La response del
+   bootstrap (spread `...result`) guadagna `mode='morning_checkin'`,
+   additivo (ChatView aveva già il fallback). Race teorica non più
+   rilevata: thread archiviato da un normalize CONCORRENTE mid-turn — si
+   auto-ripara al turno successivo (BUG #C + campo mode), annotata nel
+   codice.
+3. **Hardening card review** (`ChatView.tsx`): `setThreadId(null)` in
+   `handleStartEveningReview`. No-op nel caso normale (card visibile solo a
+   chat vuota); copre l'unico path UI che poteva inciampare nel guard: thread
+   attivo VUOTO rehydratato (orfano di un turno fallito) + click sulla card.
+4. **Test**: in `orchestrator.test.ts` i due test guard ("evening_review su
+   general attivo → branch general, tier fast, niente init triage, warn" e
+   il simmetrico "general su evening attivo → riprende la review, tier
+   smart") + assert `result.mode` su tutti i casi Section 1 e sull'E2E
+   3-turni (in corso → `evening_review`, chiusura → `general`, post-BUG #C →
+   `general`). `route.test.ts` riscritto sul nuovo contratto (passthrough,
+   sanitizzazione mode invalido, 400 senza userMessage; niente più mock db).
+
+### Verifica follow-up
+
+- `bun x tsc --noEmit` ✅ (worktree)
+- `bun run test` ✅ — 30 file, 508 test (510 − 6 vecchi test route + 4 nuovi)
+- `bun run build` ✅ (placeholder env, pattern worktree del fix originario)
+- Probe e2e: invariati per costruzione anche col guard — `run-walk.ts` parte
+  da `threadId:null` e incatena `resp.threadId` con mode fisso
+  `evening_review` su walk T1–T7 tutti in triage (mai oltre la chiusura);
+  `probe-8c-s2` crea il thread evening direttamente in DB. Nessun walk può
+  produrre mismatch. Da rilanciare comunque al giro di preview deploy.
 
 ## Verifica
 
@@ -121,9 +160,11 @@ attivo" in `orchestrator.test.ts` (caso oggi coperto a livello route in
 ## Note di merge
 
 - Conflitto **atteso e voluto** con `feature/40-rolling-summary` su
-  `route.ts` (entrambi aggiungono import e codice tra `orchestrate()` e il
-  `return`): tenere ENTRAMBI i blocchi — l'`after(rollSummaryIfNeeded)` di 40
-  e il `findUnique`+`mode` di questo task sono indipendenti; il `return`
-  finale è quello di questo branch (`{ ...result, mode: clientMode }`).
+  `route.ts`. Aggiornato col follow-up: questo branch ora NON ha più blocco
+  tra `orchestrate()` e il `return` (findUnique eliminata, passthrough).
+  Risoluzione: tenere l'`after(rollSummaryIfNeeded)` di 40 tra
+  `orchestrate()` e il return, e il `return NextResponse.json(result)` di
+  questo branch (il `mode` ora arriva da `OrchestratorOutput`, non dalla
+  route). Niente import `db`/`TERMINAL_THREAD_STATES` da questo branch.
 - ROADMAP.md non toccato qui (file in lavorazione concorrente sul checkout
   principale): aggiungere la riga Task 41 al momento del merge.
