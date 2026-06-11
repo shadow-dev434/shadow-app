@@ -155,11 +155,28 @@
 
 ## Slice 9 — Calibrazione learning
 
-**Scope:**
+**Stato:** ✅ CHIUSA (2026-06-11, Task 41, commit `6545b56` su branch `feature/41-slice-9-calibrazione`).
+
+**Scope (originale):**
 - Nuovi `LearningSignal.signalType`: `task_postponed`, `emotional_offload`.
 - Calibrazione del fill ratio dal rapporto reale "pianificato vs completato" (4.5).
 
 **Last-mile.** Può girare anche durante la beta — non blocca lo ship.
+
+**Com'è stata chiusa** (spec + decisioni D1-D4 in `docs/tasks/41-slice-9-calibrazione-learning.md`):
+- `emotional_offload` era già stato implementato in Slice 8b → voce soddisfatta retroattivamente.
+- `task_postponed` emesso da `mark_entry_discussed` outcome=`postponed` (tools.ts).
+- Campo `AdaptiveProfile.calibratedFillRatio Float?` (migration `20260611215857`).
+- Modulo `src/lib/evening-review/calibration.ts`: ricalcolo a chiusura review
+  (D1, fail-open), conteggio semplice completati/pianificati per giorno solare
+  (D2), finestra 21gg / min 7 piani (D3), legge di controllo con target 0.8 +
+  smoothing 0.3 + clamp floor/ceiling. Lookup in `getFillRatio` con cap a 0.5
+  per sensitivity alta a lettura (D4). Prompt e orchestrator INTOCCATI (zero
+  invalidazione cache).
+- Validazione: tsc pulito, vitest 591/591 (~27 test nuovi), build verde,
+  probe deterministica `scripts/e2e/probe-slice9-calibration.ts` 5/5 PASS
+  su dev DB (scende con completion 50%, sale con 100%, cap sensitivity, no-op
+  sotto soglia). Niente campagna LLM: logica interamente deterministica.
 
 ---
 
