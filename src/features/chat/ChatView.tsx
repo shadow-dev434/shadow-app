@@ -28,6 +28,8 @@ interface Message {
 
 interface TurnResponse {
   threadId: string;
+  /** Mode autorevole del thread effettivo dopo il turno (Task 41). */
+  mode?: string;
   assistantMessage: string;
   toolsExecuted: ToolExecution[];
   quickReplies?: QuickReply[];
@@ -232,6 +234,13 @@ export function ChatView() {
 
       const data = (await res.json()) as TurnResponse;
       setThreadId(data.threadId);
+      // Task 41: adotta il mode autorevole dal server. Senza questo, dopo la
+      // chiusura della review il client resterebbe sticky su 'evening_review'
+      // e dal secondo messaggio re-inizializzerebbe la review sul nuovo
+      // thread general creato dal path BUG #C (vedi turn/route.ts).
+      if (data.mode && data.mode !== mode) {
+        setMode(data.mode);
+      }
 
       const assistantMsg: Message = {
         id: 'assist-' + Date.now(),

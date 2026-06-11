@@ -2,14 +2,19 @@
  * POST /api/chat/turn
  *
  * Body: { threadId?: string, mode: ChatMode, userMessage: string, relatedTaskId?: string, clientDate?: string }
- * Response: { threadId, assistantMessage, toolsExecuted, costUsd, ... }
+ * Response: { threadId, mode, assistantMessage, toolsExecuted, costUsd, ... }
  *
  * Auth: requires NextAuth session cookie. Set by /api/auth/login.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
-import { orchestrate, type ChatMode } from '@/lib/chat/orchestrator';
+import { db } from '@/lib/db';
+import {
+  orchestrate,
+  TERMINAL_THREAD_STATES,
+  type ChatMode,
+} from '@/lib/chat/orchestrator';
 
 const VALID_MODES: ChatMode[] = [
   'morning_checkin',
@@ -64,7 +69,33 @@ export async function POST(req: NextRequest) {
       clientDate: validClientDate,
     });
 
-    return NextResponse.json(result);
+    // Task 41 (bug mode-sticky post-review): il client risincronizza il suo
+    // `mode` solo al remount, quindi dopo la chiusura della review (o la
+    // rotazione BUG #C su thread terminale) continuerebbe a postare
+    // mode='evening_review' su un thread general ATTIVO, re-inizializzando il
+    // triage e sovrascrivendone il contextJson dal secondo messaggio in poi.
+    // La response espone il mode AUTOREVOLE del thread effettivo del turno
+    // (result.threadId, già scoped per userId dall'orchestrator):
+    // - stato terminale (review chiusa in QUESTO turno) -> 'general', coerente
+    //   col rehydrate (active-thread filtra i thread terminali);
+    // - thread attivo -> thread.mode (post BUG #C il nuovo thread è general);
+    // - thread non rileggibile (teorico) -> echo del mode richiesto, identico
+    //   al comportamento pre-fix.
+    // ChatView fa setMode(data.mode) accanto a setThreadId. Il guard più
+    // robusto DENTRO l'orchestrator (degrado di input.mode a thread.mode su
+    // mismatch) è il follow-up proposto nella spec: file protetto.
+    const thread = await db.chatThread.findUnique({
+      where: { id: result.threadId },
+      select: { mode: true, state: true },
+    });
+    const clientMode: ChatMode =
+      thread === null
+        ? chatMode
+        : TERMINAL_THREAD_STATES.has(thread.state)
+          ? 'general'
+          : (thread.mode as ChatMode);
+
+    return NextResponse.json({ ...result, mode: clientMode });
   } catch (err) {
     console.error('[/api/chat/turn] error:', err);
     const message = err instanceof Error ? err.message : 'Internal error';
