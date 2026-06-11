@@ -14,7 +14,9 @@ import type {
   Message,
   MessageParam,
   Tool,
+  ToolResultBlockParam,
   ToolUseBlock,
+  ToolUseBlockParam,
   TextBlock,
   TextBlockParam,
 } from '@anthropic-ai/sdk/resources/messages';
@@ -51,6 +53,15 @@ const CACHE_READ_MULTIPLIER = 0.10;   // read da cache     = 0.10x input
 export interface LLMMessage {
   role: 'user' | 'assistant';
   content: string | LLMContentBlock[];
+  /**
+   * Opzione 1 (Task 40): true = cache breakpoint ephemeral sull'ultimo blocco
+   * di questo messaggio. L'orchestrator marca l'ultimo messaggio della history
+   * (pattern di caching incrementale delle conversazioni): tra turni il
+   * prefisso cresce in coda e fa hit; intra-turno le iterazioni 2+ del tool
+   * loop rileggono il prefisso cachato. Budget Anthropic: max 4 breakpoint
+   * per richiesta (qui: static + summary + 1 history = 3).
+   */
+  cacheControl?: true;
 }
 
 export type LLMContentBlock =
@@ -97,10 +108,12 @@ export interface LLMCallParams {
   /**
    * V2b prompt caching: stringa = prompt unico SENZA cache_control (retro-compat
    * completeText / engine one-shot). Oggetto = prefisso statico con cache_control
-   * ephemeral + coda dinamica senza cache. static+dynamic resta byte-identico al
-   * prompt che il modello vede (il caching cambia solo la fatturazione).
+   * ephemeral + blocco summary opzionale (Task 40: rolling summary del thread,
+   * cache_control proprio — cambia solo a ogni fold, ~15 turni) + coda dinamica
+   * senza cache. static+summary+dynamic resta byte-identico al prompt che il
+   * modello vede (il caching cambia solo la fatturazione).
    */
-  systemPrompt: string | { static: string; dynamic?: string };
+  systemPrompt: string | { static: string; summary?: string; dynamic?: string };
   messages: LLMMessage[];
   tools?: LLMTool[];
   maxTokens?: number;
@@ -178,26 +191,53 @@ export async function callLLM(params: LLMCallParams): Promise<LLMResponse> {
   const maxTokens = params.maxTokens ?? 1024;
 
   // Convert our internal format to Anthropic format
-  const anthropicMessages: MessageParam[] = params.messages.map(m => ({
-    role: m.role,
-    content: typeof m.content === 'string'
-      ? m.content
-      : m.content.map(block => {
-          if (block.type === 'text') return { type: 'text' as const, text: block.text };
-          if (block.type === 'tool_use') return {
-            type: 'tool_use' as const,
-            id: block.id,
-            name: block.name,
-            input: block.input as Record<string, unknown>,
-          };
-          if (block.type === 'tool_result') return {
-            type: 'tool_result' as const,
-            tool_use_id: block.tool_use_id,
-            content: block.content,
-          };
-          throw new Error('Unknown block type');
-        }),
-  }));
+  const anthropicMessages: MessageParam[] = params.messages.map(m => {
+    // Opzione 1 (Task 40): cache breakpoint per-messaggio. La shorthand stringa
+    // non supporta cache_control -> il messaggio marcato viene promosso a
+    // singolo text block. Il breakpoint va sull'ULTIMO blocco del messaggio:
+    // il prefisso cacheable copre tools+system+messaggi fino al blocco incluso.
+    if (typeof m.content === 'string') {
+      if (m.cacheControl !== true) {
+        return { role: m.role, content: m.content };
+      }
+      return {
+        role: m.role,
+        content: [
+          {
+            type: 'text' as const,
+            text: m.content,
+            cache_control: { type: 'ephemeral' as const },
+          },
+        ],
+      };
+    }
+    // Union ristretta ai 3 block param prodotti dal mapping (tutti accettano
+    // cache_control; il ContentBlockParam completo include ThinkingBlockParam
+    // che non lo accetta e romperebbe lo spread sotto).
+    const blocks: Array<TextBlockParam | ToolUseBlockParam | ToolResultBlockParam> =
+      m.content.map(block => {
+      if (block.type === 'text') return { type: 'text' as const, text: block.text };
+      if (block.type === 'tool_use') return {
+        type: 'tool_use' as const,
+        id: block.id,
+        name: block.name,
+        input: block.input as Record<string, unknown>,
+      };
+      if (block.type === 'tool_result') return {
+        type: 'tool_result' as const,
+        tool_use_id: block.tool_use_id,
+        content: block.content,
+      };
+      throw new Error('Unknown block type');
+    });
+    if (m.cacheControl === true && blocks.length > 0) {
+      blocks[blocks.length - 1] = {
+        ...blocks[blocks.length - 1],
+        cache_control: { type: 'ephemeral' as const },
+      };
+    }
+    return { role: m.role, content: blocks };
+  });
 
   const anthropicTools: Tool[] | undefined = params.tools?.map(t => ({
     name: t.name,
@@ -205,9 +245,14 @@ export async function callLLM(params: LLMCallParams): Promise<LLMResponse> {
     input_schema: t.input_schema,
   }));
 
-  // V2b prompt caching: stringa -> system piano (no cache). Oggetto {static,dynamic}
-  // -> due text block, cache_control ephemeral SOLO sul prefisso statico. Il blocco
-  // dinamico e' omesso se vuoto (l'API rifiuta text block vuoti).
+  // V2b prompt caching: stringa -> system piano (no cache). Oggetto -> text block
+  // multipli: static con cache_control, summary (Task 40) con cache_control
+  // proprio, dynamic senza. Blocchi vuoti omessi (l'API rifiuta text block vuoti).
+  // Gerarchia di invalidazione: un byte cambiato in static invalida anche summary
+  // e history a valle; il blocco summary cambia solo a ogni fold (~15 turni).
+  // Minimo cacheable (prefisso CUMULATIVO al breakpoint): 4096 token su
+  // claude-haiku-4-5, 2048 su claude-sonnet-4-6 — sotto soglia il breakpoint
+  // e' silenziosamente no-op (cache_creation=0), innocuo.
   let system: string | TextBlockParam[];
   if (typeof params.systemPrompt === 'string') {
     system = params.systemPrompt;
@@ -219,6 +264,13 @@ export async function callLLM(params: LLMCallParams): Promise<LLMResponse> {
         cache_control: { type: 'ephemeral' },
       },
     ];
+    if (params.systemPrompt.summary) {
+      blocks.push({
+        type: 'text',
+        text: params.systemPrompt.summary,
+        cache_control: { type: 'ephemeral' },
+      });
+    }
     if (params.systemPrompt.dynamic) {
       blocks.push({ type: 'text', text: params.systemPrompt.dynamic });
     }
