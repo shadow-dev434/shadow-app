@@ -8,6 +8,7 @@ vi.mock('@/lib/db', () => ({
     task: {
       findFirst: vi.fn(),
       update: vi.fn(),
+      create: vi.fn(),
     },
     learningSignal: {
       create: vi.fn(),
@@ -1677,5 +1678,246 @@ describe('getToolsForMode: coesistenza burnout<->scarico in apertura (sentinella
       expect(nsPer).not.toContain(n);
       expect(nsUnd).not.toContain(n);
     }
+  });
+});
+
+// ── Task 42: gating TASK_MANAGEMENT_TOOLS ──────────────────────────────────
+
+describe('getToolsForMode: TASK_MANAGEMENT_TOOLS (Task 42)', () => {
+  const names = (tools: ReturnType<typeof getToolsForMode>) => tools.map((t) => t.name);
+  const MGMT = ['complete_task', 'update_task', 'archive_task'];
+
+  it('fuori da evening_review (general / morning_checkin / planning) -> esposti', () => {
+    for (const mode of ['general', 'morning_checkin', 'planning']) {
+      const ns = names(getToolsForMode(mode));
+      for (const n of MGMT) expect(ns).toContain(n);
+    }
+  });
+
+  it('evening_review -> MAI esposti, in nessuna fase (mutazione task = solo triage)', () => {
+    const phases = ['per_entry', 'plan_preview', 'closing', undefined] as const;
+    for (const phase of phases) {
+      const ns = names(getToolsForMode('evening_review', phase, makeState()));
+      for (const n of MGMT) expect(ns).not.toContain(n);
+    }
+  });
+});
+
+// ── Task 42: executor gestione task ────────────────────────────────────────
+
+// Variante di mockTaskOwned con status: i tre executor Task 42 (e il guard
+// dedup di create_task) selezionano {id, title, status}.
+function mockTaskWithStatus(id: string, title: string, status: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vi.mocked(db.task.findFirst).mockResolvedValue({ id, title, status } as any);
+}
+
+describe('executeTool: complete_task (Task 42)', () => {
+  it('task attivo -> update status=completed + completedAt, success action=completed', async () => {
+    mockTaskWithStatus('t1', 'Fare la spesa', 'inbox');
+    const result = await executeTool('complete_task', { taskId: 't1' }, 'user1');
+    expect(result.kind).toBe('sideEffect');
+    expect(result.success).toBe(true);
+    expect((result.data as { action: string }).action).toBe('completed');
+    expect(db.task.update).toHaveBeenCalledWith({
+      where: { id: 't1' },
+      data: { status: 'completed', completedAt: expect.any(Date) },
+    });
+  });
+
+  it('ownership: findFirst riceve { id, userId }', async () => {
+    mockTaskWithStatus('t1', 'X', 'inbox');
+    await executeTool('complete_task', { taskId: 't1' }, 'user1');
+    expect(db.task.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 't1', userId: 'user1' } }),
+    );
+  });
+
+  it('gia completed -> success idempotente (alreadyCompleted), NESSUN update', async () => {
+    mockTaskWithStatus('t1', 'Fare la spesa', 'completed');
+    const result = await executeTool('complete_task', { taskId: 't1' }, 'user1');
+    expect(result.success).toBe(true);
+    expect((result.data as { alreadyCompleted: boolean }).alreadyCompleted).toBe(true);
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+
+  it('archived -> success false con errore esplicativo, NESSUN update', async () => {
+    mockTaskWithStatus('t1', 'Fare la spesa', 'archived');
+    const result = await executeTool('complete_task', { taskId: 't1' }, 'user1');
+    expect(result.success).toBe(false);
+    expect((result as { error?: string }).error).toContain('archived');
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+
+  it('task non trovato/non owned -> success false', async () => {
+    vi.mocked(db.task.findFirst).mockResolvedValue(null);
+    const result = await executeTool('complete_task', { taskId: 'tX' }, 'user1');
+    expect(result.success).toBe(false);
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+
+  it('taskId mancante -> success false senza toccare il db', async () => {
+    const result = await executeTool('complete_task', {}, 'user1');
+    expect(result.success).toBe(false);
+    expect(db.task.findFirst).not.toHaveBeenCalled();
+  });
+});
+
+describe('executeTool: update_task (Task 42)', () => {
+  it('aggiorna solo i campi passati, ritorna changed', async () => {
+    mockTaskWithStatus('t1', 'Fare 35 fatture', 'inbox');
+    const result = await executeTool(
+      'update_task',
+      { taskId: 't1', title: 'Fare 25 fatture', urgency: 5 },
+      'user1',
+    );
+    expect(result.success).toBe(true);
+    expect((result.data as { changed: string[] }).changed).toEqual(['title', 'urgency']);
+    expect((result.data as { title: string }).title).toBe('Fare 25 fatture');
+    expect(db.task.update).toHaveBeenCalledWith({
+      where: { id: 't1' },
+      data: { title: 'Fare 25 fatture', urgency: 5 },
+    });
+  });
+
+  it('urgency fuori range -> clamp 1-5', async () => {
+    mockTaskWithStatus('t1', 'X', 'inbox');
+    await executeTool('update_task', { taskId: 't1', urgency: 99 }, 'user1');
+    expect(db.task.update).toHaveBeenCalledWith({
+      where: { id: 't1' },
+      data: { urgency: 5 },
+    });
+  });
+
+  it('deadline stringa vuota -> rimozione (null)', async () => {
+    mockTaskWithStatus('t1', 'X', 'inbox');
+    const result = await executeTool('update_task', { taskId: 't1', deadline: '' }, 'user1');
+    expect(result.success).toBe(true);
+    expect(db.task.update).toHaveBeenCalledWith({
+      where: { id: 't1' },
+      data: { deadline: null },
+    });
+  });
+
+  it('deadline invalida -> success false, NESSUN update', async () => {
+    mockTaskWithStatus('t1', 'X', 'inbox');
+    const result = await executeTool('update_task', { taskId: 't1', deadline: 'dopodomani' }, 'user1');
+    expect(result.success).toBe(false);
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+
+  it('categoria sconosciuta -> success false con lista valide', async () => {
+    mockTaskWithStatus('t1', 'X', 'inbox');
+    const result = await executeTool('update_task', { taskId: 't1', category: 'sport' }, 'user1');
+    expect(result.success).toBe(false);
+    expect((result as { error?: string }).error).toContain('household');
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+
+  it('nessun campo da aggiornare -> success false', async () => {
+    mockTaskWithStatus('t1', 'X', 'inbox');
+    const result = await executeTool('update_task', { taskId: 't1' }, 'user1');
+    expect(result.success).toBe(false);
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+
+  it('task terminale (completed) -> success false', async () => {
+    mockTaskWithStatus('t1', 'X', 'completed');
+    const result = await executeTool('update_task', { taskId: 't1', title: 'Y' }, 'user1');
+    expect(result.success).toBe(false);
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('executeTool: archive_task (Task 42)', () => {
+  it('task attivo -> update status=archived, success action=archived', async () => {
+    mockTaskWithStatus('t1', 'Fare la spesa', 'inbox');
+    const result = await executeTool('archive_task', { taskId: 't1' }, 'user1');
+    expect(result.success).toBe(true);
+    expect((result.data as { action: string }).action).toBe('archived');
+    expect(db.task.update).toHaveBeenCalledWith({
+      where: { id: 't1' },
+      data: { status: 'archived' },
+    });
+  });
+
+  it('gia archived -> success idempotente (alreadyArchived), NESSUN update', async () => {
+    mockTaskWithStatus('t1', 'X', 'archived');
+    const result = await executeTool('archive_task', { taskId: 't1' }, 'user1');
+    expect(result.success).toBe(true);
+    expect((result.data as { alreadyArchived: boolean }).alreadyArchived).toBe(true);
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+
+  it('completed -> success false (gia fuori dalle liste live)', async () => {
+    mockTaskWithStatus('t1', 'X', 'completed');
+    const result = await executeTool('archive_task', { taskId: 't1' }, 'user1');
+    expect(result.success).toBe(false);
+    expect(db.task.update).not.toHaveBeenCalled();
+  });
+});
+
+// ── Task 42: idempotenza create_task ───────────────────────────────────────
+
+describe('executeTool: create_task dedup (Task 42)', () => {
+  it('omonimo aperto -> success con alreadyExists, NESSUN create', async () => {
+    mockTaskWithStatus('t1', 'Fare la spesa', 'inbox');
+    const result = await executeTool(
+      'create_task',
+      { title: 'Fare la spesa', urgency: 3, importance: 3, category: 'household' },
+      'user1',
+    );
+    expect(result.success).toBe(true);
+    expect((result.data as { alreadyExists: boolean }).alreadyExists).toBe(true);
+    expect((result.data as { id: string }).id).toBe('t1');
+    expect(db.task.create).not.toHaveBeenCalled();
+  });
+
+  it('guard query: titolo case-insensitive + status notIn terminali', async () => {
+    vi.mocked(db.task.findFirst).mockResolvedValue(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.task.create).mockResolvedValue({ id: 'n1', title: 'Fare la spesa', urgency: 3, importance: 3, category: 'household' } as any);
+    await executeTool(
+      'create_task',
+      { title: 'Fare la spesa', urgency: 3, importance: 3, category: 'household' },
+      'user1',
+    );
+    expect(db.task.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          userId: 'user1',
+          title: { equals: 'Fare la spesa', mode: 'insensitive' },
+          status: { notIn: ['completed', 'abandoned', 'archived'] },
+        },
+      }),
+    );
+    expect(db.task.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('nessun omonimo aperto -> create normale', async () => {
+    vi.mocked(db.task.findFirst).mockResolvedValue(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.task.create).mockResolvedValue({ id: 'n1', title: 'Pane', urgency: 3, importance: 3, category: 'household' } as any);
+    const result = await executeTool(
+      'create_task',
+      { title: 'Pane', urgency: 3, importance: 3, category: 'household' },
+      'user1',
+    );
+    expect(result.success).toBe(true);
+    expect((result.data as { id: string }).id).toBe('n1');
+    expect(db.task.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('allowDuplicate=true -> guard saltato (NESSUN findFirst), create eseguito', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.task.create).mockResolvedValue({ id: 'n2', title: 'Fare la spesa', urgency: 3, importance: 3, category: 'household' } as any);
+    const result = await executeTool(
+      'create_task',
+      { title: 'Fare la spesa', urgency: 3, importance: 3, category: 'household', allowDuplicate: true },
+      'user1',
+    );
+    expect(result.success).toBe(true);
+    expect(db.task.findFirst).not.toHaveBeenCalled();
+    expect(db.task.create).toHaveBeenCalledTimes(1);
   });
 });

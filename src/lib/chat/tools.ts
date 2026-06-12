@@ -7,7 +7,8 @@
  * Three flavors of tool result:
  * - 'sideEffect': the executor performs DB writes itself. data is loggable
  *   metadata shown to the model as tool_result. Used for create_task,
- *   get_today_tasks, set_user_energy. Convention: failures of ANY kind
+ *   get_today_tasks, set_user_energy, complete_task, update_task,
+ *   archive_task (Task 42). Convention: failures of ANY kind
  *   fall back to 'sideEffect' with success: false + error (so a failed
  *   mutator never produces a partial newTriageState). data resta opzionale
  *   anche su success: false: utile per failure che vogliono comunicare
@@ -91,6 +92,10 @@ export const CHAT_TOOLS: LLMTool[] = [
           description: 'Categoria del task',
         },
         deadline: { type: 'string', description: 'Scadenza in formato ISO YYYY-MM-DD se specificata, altrimenti stringa vuota' },
+        allowDuplicate: {
+          type: 'boolean',
+          description: 'Default false. Metti true SOLO se l\'utente ha confermato esplicitamente di volere un secondo task con lo stesso titolo di uno già aperto in lista.',
+        },
       },
       required: ['title', 'urgency', 'importance', 'category'],
     },
@@ -98,7 +103,7 @@ export const CHAT_TOOLS: LLMTool[] = [
   {
     name: 'get_today_tasks',
     description:
-      'Recupera i task su cui l\'utente sta lavorando oggi (non completati, non abbandonati). Usa quando l\'utente chiede cosa deve fare, cosa ha in lista, come va la giornata.',
+      'Recupera i task su cui l\'utente sta lavorando oggi (non completati, non abbandonati). Usa quando l\'utente chiede cosa deve fare, cosa ha in lista, come va la giornata. Restituisce anche gli id dei task, necessari per complete_task / update_task / archive_task.',
     input_schema: {
       type: 'object',
       properties: {},
@@ -117,6 +122,61 @@ export const CHAT_TOOLS: LLMTool[] = [
         level: { type: 'number', description: 'Livello energia 1-5 (1=a terra, 5=sul pezzo)' },
       },
       required: ['level'],
+    },
+  },
+];
+
+/**
+ * Task 42 — gestione task dalla chat. Esposti SOLO fuori da evening_review
+ * (vedi getToolsForMode): dentro la review la mutazione dei task passa dal
+ * triage (mark_entry_discussed outcome cancelled, ecc.), un secondo canale
+ * di scrittura confliggerebbe con il triage state.
+ */
+export const TASK_MANAGEMENT_TOOLS: LLMTool[] = [
+  {
+    name: 'complete_task',
+    description:
+      'Segna come completato un task esistente. Usa quando l\'utente dice che ha fatto/finito qualcosa che è in lista. L\'id arriva da get_today_tasks: se non ce l\'hai nel contesto, chiama prima get_today_tasks.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'ID del task da completare' },
+      },
+      required: ['taskId'],
+    },
+  },
+  {
+    name: 'update_task',
+    description:
+      'Aggiorna i campi di un task esistente. Passa SOLO i campi da cambiare. Usa quando l\'utente vuole correggere o riscrivere un task (titolo, quantità, scadenza, ecc.), NON per crearne uno nuovo.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'ID del task da aggiornare' },
+        title: { type: 'string', description: 'Nuovo titolo conciso (max 80 caratteri)' },
+        description: { type: 'string', description: 'Nuova descrizione' },
+        urgency: { type: 'number', description: 'Nuova urgenza 1-5' },
+        importance: { type: 'number', description: 'Nuova importanza 1-5' },
+        category: {
+          type: 'string',
+          enum: ['work', 'personal', 'health', 'admin', 'creative', 'study', 'household', 'general'],
+          description: 'Nuova categoria',
+        },
+        deadline: { type: 'string', description: 'Nuova scadenza ISO YYYY-MM-DD, oppure stringa vuota per rimuoverla' },
+      },
+      required: ['taskId'],
+    },
+  },
+  {
+    name: 'archive_task',
+    description:
+      'Archivia un task: lo rimuove dalla lista SENZA segnarlo completato (reversibile dall\'app). Per duplicati o task non più rilevanti. NON è il completamento. Chiamalo SOLO dopo conferma esplicita dell\'utente in questo turno.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'ID del task da archiviare' },
+      },
+      required: ['taskId'],
     },
   },
 ];
@@ -259,6 +319,9 @@ export const EVENING_REVIEW_TOOLS: LLMTool[] = [
  * CHAT_TOOLS (create_task / get_today_tasks / set_user_energy) restano in
  * tutte le fasi: edge case ammissibili come "aggiungi questa in inbox"
  * mentre l'utente sta gia' in plan_preview.
+ *
+ * TASK_MANAGEMENT_TOOLS (Task 42: complete_task / update_task / archive_task)
+ * sono esposti SOLO fuori da evening_review — vedi commento sopra l'array.
  */
 export function getToolsForMode(
   mode: string,
@@ -266,7 +329,7 @@ export function getToolsForMode(
   triageState?: TriageState,
 ): LLMTool[] {
   if (mode !== 'evening_review') {
-    return CHAT_TOOLS;
+    return [...CHAT_TOOLS, ...TASK_MANAGEMENT_TOOLS];
   }
 
   // Slice 7 V1.x Bug #1 (B1): gating mood/energy per dimensione pending.
@@ -432,6 +495,12 @@ export async function executeTool(
         return await executeGetTodayTasks(userId);
       case 'set_user_energy':
         return await executeSetUserEnergy(input, userId);
+      case 'complete_task':
+        return await executeCompleteTask(input, userId);
+      case 'update_task':
+        return await executeUpdateTask(input, userId);
+      case 'archive_task':
+        return await executeArchiveTask(input, userId);
       case 'record_mood':
         return executeRecordMood(input, context);
       case 'record_energy':
@@ -485,6 +554,35 @@ async function executeCreateTask(
   const description = String(input.description ?? '');
   const deadlineStr = String(input.deadline ?? '').trim();
   const deadline = deadlineStr ? new Date(deadlineStr) : null;
+
+  // Task 42 — idempotenza: un omonimo ancora aperto e' quasi sempre replay del
+  // modello o reinvio dopo un turno fallito (i sideEffect scrivono subito, i
+  // messaggi committano solo a fine turno: un turno morto a meta' "dimentica"
+  // il task gia' creato). Nessuna finestra temporale: un omonimo in stato
+  // terminale non blocca la ri-creazione legittima.
+  if (input.allowDuplicate !== true) {
+    const existing = await db.task.findFirst({
+      where: {
+        userId,
+        title: { equals: title, mode: 'insensitive' },
+        status: { notIn: terminalTaskStatuses() },
+      },
+      select: { id: true, title: true, status: true },
+    });
+    if (existing) {
+      return {
+        kind: 'sideEffect',
+        success: true,
+        data: {
+          alreadyExists: true,
+          id: existing.id,
+          title: existing.title,
+          status: existing.status,
+          note: 'Task with the same title already open: no duplicate created. Tell the user it is already in the list. Only if the user explicitly confirms wanting a second identical task, call create_task again with allowDuplicate=true.',
+        },
+      };
+    }
+  }
 
   const task = await db.task.create({
     data: {
@@ -557,6 +655,197 @@ async function executeSetUserEnergy(
   });
 
   return { kind: 'sideEffect', success: true, data: { level } };
+}
+
+// ── Task 42 executors: gestione task dalla chat ────────────────────────────
+// Stessi pattern degli executor di review: ownership check findFirst({id,
+// userId}), failure -> sideEffect success:false, idempotenza sul replay.
+
+const UPDATABLE_CATEGORIES = [
+  'work', 'personal', 'health', 'admin', 'creative', 'study', 'household', 'general',
+];
+
+async function executeCompleteTask(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const taskId = String(input.taskId ?? '').trim();
+  if (!taskId) return { kind: 'sideEffect', success: false, error: 'taskId is required' };
+
+  const task = await db.task.findFirst({
+    where: { id: taskId, userId },
+    select: { id: true, title: true, status: true },
+  });
+  if (!task) {
+    return { kind: 'sideEffect', success: false, error: `Task ${taskId} not found or not owned by user` };
+  }
+
+  // Idempotente sul replay: gia' completato -> success senza ri-scrittura.
+  if (task.status === 'completed') {
+    return {
+      kind: 'sideEffect',
+      success: true,
+      data: { id: task.id, title: task.title, alreadyCompleted: true },
+    };
+  }
+  if (task.status === 'archived' || task.status === 'abandoned') {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: `Task "${task.title}" is '${task.status}' and cannot be completed. The user can restore it from the app.`,
+    };
+  }
+
+  await db.task.update({
+    where: { id: task.id },
+    data: { status: 'completed', completedAt: new Date() },
+  });
+
+  return {
+    kind: 'sideEffect',
+    success: true,
+    data: { id: task.id, title: task.title, action: 'completed' },
+  };
+}
+
+async function executeUpdateTask(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const taskId = String(input.taskId ?? '').trim();
+  if (!taskId) return { kind: 'sideEffect', success: false, error: 'taskId is required' };
+
+  const task = await db.task.findFirst({
+    where: { id: taskId, userId },
+    select: { id: true, title: true, status: true },
+  });
+  if (!task) {
+    return { kind: 'sideEffect', success: false, error: `Task ${taskId} not found or not owned by user` };
+  }
+  if ((terminalTaskStatuses() as string[]).includes(task.status)) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: `Task "${task.title}" is '${task.status}' (terminal) and cannot be updated.`,
+    };
+  }
+
+  const data: {
+    title?: string;
+    description?: string;
+    urgency?: number;
+    importance?: number;
+    category?: string;
+    deadline?: Date | null;
+  } = {};
+  const changed: string[] = [];
+
+  if (input.title !== undefined) {
+    const t = String(input.title).trim();
+    if (!t) return { kind: 'sideEffect', success: false, error: 'title cannot be empty' };
+    data.title = t;
+    changed.push('title');
+  }
+  if (input.description !== undefined) {
+    data.description = String(input.description);
+    changed.push('description');
+  }
+  if (input.urgency !== undefined) {
+    data.urgency = clampInt(input.urgency, 1, 5, 3);
+    changed.push('urgency');
+  }
+  if (input.importance !== undefined) {
+    data.importance = clampInt(input.importance, 1, 5, 3);
+    changed.push('importance');
+  }
+  if (input.category !== undefined) {
+    const c = String(input.category);
+    if (!UPDATABLE_CATEGORIES.includes(c)) {
+      return {
+        kind: 'sideEffect',
+        success: false,
+        error: `Invalid category '${c}'. Valid: ${UPDATABLE_CATEGORIES.join(' | ')}`,
+      };
+    }
+    data.category = c;
+    changed.push('category');
+  }
+  if (input.deadline !== undefined) {
+    const s = String(input.deadline).trim();
+    if (s === '') {
+      data.deadline = null;
+    } else {
+      const d = new Date(s);
+      if (Number.isNaN(d.getTime())) {
+        return {
+          kind: 'sideEffect',
+          success: false,
+          error: `Invalid deadline '${s}': use YYYY-MM-DD, or empty string to remove it.`,
+        };
+      }
+      data.deadline = d;
+    }
+    changed.push('deadline');
+  }
+
+  if (changed.length === 0) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: 'No fields to update: pass at least one of title / description / urgency / importance / category / deadline.',
+    };
+  }
+
+  await db.task.update({ where: { id: task.id }, data });
+
+  return {
+    kind: 'sideEffect',
+    success: true,
+    data: { id: task.id, title: data.title ?? task.title, changed, action: 'updated' },
+  };
+}
+
+async function executeArchiveTask(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const taskId = String(input.taskId ?? '').trim();
+  if (!taskId) return { kind: 'sideEffect', success: false, error: 'taskId is required' };
+
+  const task = await db.task.findFirst({
+    where: { id: taskId, userId },
+    select: { id: true, title: true, status: true },
+  });
+  if (!task) {
+    return { kind: 'sideEffect', success: false, error: `Task ${taskId} not found or not owned by user` };
+  }
+
+  // Idempotente sul replay: gia' archiviato -> success senza ri-scrittura.
+  if (task.status === 'archived') {
+    return {
+      kind: 'sideEffect',
+      success: true,
+      data: { id: task.id, title: task.title, alreadyArchived: true },
+    };
+  }
+  if (task.status === 'completed' || task.status === 'abandoned') {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: `Task "${task.title}" is '${task.status}': nothing to archive (it is already out of the live lists).`,
+    };
+  }
+
+  await db.task.update({
+    where: { id: task.id },
+    data: { status: 'archived' },
+  });
+
+  return {
+    kind: 'sideEffect',
+    success: true,
+    data: { id: task.id, title: task.title, action: 'archived' },
+  };
 }
 
 async function executeAddCandidateToReview(
