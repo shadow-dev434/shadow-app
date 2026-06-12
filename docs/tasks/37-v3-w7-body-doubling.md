@@ -20,8 +20,14 @@ Tagli ratificati rispetto a questa spec:
   (`recordAiUsage`, taskClass `body_double_checkin`), cap giornaliero
   `BODY_DOUBLE_DAILY_CHECKIN_CAP` (default 150, 0 = kill-switch).
 - **Niente gating** (TODO W2): i beta tester hanno MAX promozionale.
-- **Niente voce** (v1.1) e **niente review profonda Opus** (resta in questa
-  spec per il W7 pieno).
+- **Voce**: taglio parzialmente superato su richiesta di Antonio in chat
+  (2026-06-12, sera): **voce in USCITA anticipata** — i check-in (e il fine
+  timer) sono parlati via `speechSynthesis` browser (zero chiavi/costi),
+  toggle in header persistito, default ON; interfaccia `use-speech.ts`
+  pronta per lo swap a Deepgram Aura-2/ElevenLabs (doc 27). **Mic/STT
+  restano v1.1** (doc 27): richiedono account+`DEEPGRAM_API_KEY` di Antonio
+  e lo spike GO/NO-GO sul microfono nella TWA prima di prometterlo ai tester.
+- **Niente review profonda Opus** (resta in questa spec per il W7 pieno).
 - Sessione: riuso `POST /api/strict-mode` con `triggerType:'body_double'`
   (+ `PATCH action:'extend'` per il +15 a fine timer). Niente
   ChatThread/persistenza dei check-in: stato client + `AiUsage`.
