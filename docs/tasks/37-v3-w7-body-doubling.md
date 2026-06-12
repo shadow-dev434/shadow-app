@@ -41,15 +41,24 @@ italiani hardcoded (vista nuova, i18n in W4); l'avvio NON cambia lo status del
 task (solo micro-step); fix collaterale: il client strict-mode non mandava
 `mode` al POST (sessioni mai create server-side) — corretto.
 
-Stato (2026-06-12): UI `/focus` completa con **fallback 2D** (blob-ombra
-framer-motion). La scena 3D si innesta in `AvatarStage.tsx` quando le deps
-(`three@0.184.0` pin, `@react-three/fiber@^9.6.1` — v9 obbligatoria per React
-19, `@pixiv/three-vrm@^3.5.3`) saranno installate (**bun add sotto conferma**).
-Design scena validato: loader manuale (no useLoader), `<Canvas flat
-frameloop="demand" dpr={[1,1.5]}>`, cap 30fps via invalidate throttled +
-pausa su visibilitychange, animazioni procedurali (breathing/blink/aa/lookAt),
-`VRMUtils rotateVRM0/combineSkeletons/deepDispose`, ErrorBoundary +
-webglcontextlost → fallback 2D.
+Stato (2026-06-12, sera — COMPLETO sul branch): migration W1 applicata
+(autorizzata, `20260612102418`), deps installate (`three@0.184.0` pin,
+`@react-three/fiber@9.6.1`, `@pixiv/three-vrm@3.5.3`, `@types/three` dev),
+**scena 3D montata** in `AvatarStage.tsx`: gate WebGL2 → chunk lazy →
+cross-fade dal 2D al ready; loader manuale (no useLoader), `<Canvas flat
+frameloop="demand" dpr={[1,1.5]}>`, cap 30fps via invalidate + stop totale in
+background, rig procedurale (breathing/sway/blink/aa/relaxed/lookAt con
+micro-saccadi, damp tra stati), `VRMUtils
+removeUnnecessaryVertices/combineSkeletons/rotateVRM0/deepDispose`,
+ErrorBoundary + webglcontextlost + load-fail → 2D permanente.
+
+Verifica: `scripts/e2e/probe-body-double.ts` **PASS 18/18** (sessione, check-in
+reali, AiUsage upsert con modelMix haiku, extend, exited). **Costo reale:
+~$0,0005/check-in** (683 tok in / 77 out per 2 call — metà della stima spec).
+Browser: flusso completo verificato col fallback 2D; la **resa visiva 3D**
+non è verificabile nel preview headless (tab nascosto: ResizeObserver/texture
+decode congelati → R3F non si inizializza, il 2D resta correttamente in scena)
+→ eyeball test demandato ad Antonio su browser visibile.
 
 ## UX `BodyDoubleView` (gated `body_double`)
 
