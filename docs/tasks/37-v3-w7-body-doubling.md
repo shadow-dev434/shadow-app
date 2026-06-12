@@ -24,12 +24,15 @@ Tagli ratificati rispetto a questa spec:
   (2026-06-12, sera): **voce in USCITA anticipata** — i check-in (e il fine
   timer) sono parlati, toggle in header persistito, default ON.
   **Upgrade 2026-06-13 (branch `feature/27-voice-tts`)**: TTS server-first via
-  **ElevenLabs** (`eleven_flash_v2_5`, REST zero-SDK in `src/lib/voice/`,
-  route `/api/voice/speak`) con fallback automatico a `speechSynthesis` su
-  501/errori/autoplay-block. Vendor unico deciso con Antonio (account
-  ElevenLabs esistente; la chiave NON ha scope voices_read → voce premade
-  Rachel di default, override `VOICE_TTS_VOICE_ID`). Costi in `AiUsage`
-  taskClass `voice_tts` (tokensOut=caratteri, ~$0,0015/check-in), cap
+  **ElevenLabs** (REST zero-SDK in `src/lib/voice/`, route `/api/voice/speak`)
+  con fallback automatico a `speechSynthesis` su 501/errori/autoplay-block.
+  Vendor unico deciso con Antonio (account ElevenLabs esistente; la chiave NON
+  ha scope voices_read → solo env override). **QA voce (sera)**: flash v2.5
+  robotico in italiano → default `eleven_multilingual_v2` + `speed 1.1`
+  (override `VOICE_TTS_MODEL`/`VOICE_TTS_SPEED`); **voce default Matilda**
+  scelta da Antonio su 4 campioni A/B/C/D (override `VOICE_TTS_VOICE_ID`).
+  Costi in `AiUsage` taskClass `voice_tts` (tokensOut=caratteri,
+  ~$0,003/check-in con multilingual), cap
   `VOICE_TTS_DAILY_CAP` (default 300, 0=kill-switch). Probe
   `scripts/e2e/probe-voice-speak.ts` PASS 8/8. Env prod: **ELEVENLABS_API_KEY
   va aggiunta su Vercel** prima del deploy, altrimenti degrado silenzioso a

@@ -6,10 +6,10 @@
 
 import { TTS_MAX_CHARS, type TtsProvider, type TtsSynthesis } from './provider';
 
-// Voce premade "Rachel": disponibile su ogni account. Override:
-// VOICE_TTS_VOICE_ID (la chiave di Antonio non ha lo scope voices_read →
-// niente listing runtime, solo env).
-const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
+// Voce premade "Matilda" (calda): scelta da Antonio sui campioni A/B/C/D del
+// 2026-06-13. Override: VOICE_TTS_VOICE_ID (la chiave non ha lo scope
+// voices_read → niente listing runtime, solo env).
+const DEFAULT_VOICE_ID = 'XrExE9yKIg1WjnnlVkGX';
 // multilingual_v2: la resa italiana naturale (QA Antonio 2026-06-13: flash
 // v2.5 suonava robotico). Costa il doppio del flash (~$0,003/check-in) e
 // aggiunge ~1s di latenza: accettato per la qualità. Override VOICE_TTS_MODEL.
