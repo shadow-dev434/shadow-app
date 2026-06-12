@@ -1,21 +1,23 @@
 'use client';
 
-// ─── Voce di Shadow: TTS browser (v3 W7, anticipo voce-in-uscita) ───────────
-// v1 = speechSynthesis nativo: zero chiavi, zero costi, zero route (decisione
-// annotata nel doc 37 — Antonio ha chiesto la voce in chat 2026-06-12, mic
-// rimandato a Task 27 v1.1 con spike TWA). L'interfaccia (speak/stop/enabled)
-// è il punto di swap per il provider server (/api/voice/speak → Deepgram
-// Aura-2 / ElevenLabs, doc 27): i consumer non cambieranno.
+// ─── Voce di Shadow (v3 W7 → Task 27 v1.1) ──────────────────────────────────
+// v1.1 (2026-06-13): server-first — prova /api/voice/speak (ElevenLabs flash,
+// voce naturale) e degrada in automatico a speechSynthesis browser su 501
+// (provider non configurato: ricordato per la sessione), 4xx/5xx, rete o
+// play() bloccato dall'autoplay policy. L'interfaccia (speak/stop/enabled)
+// resta identica alla v1: i consumer non cambiano.
+// L'elemento <audio> è UNICO e riusato: creato alla prima battuta (che arriva
+// sempre dopo il tap di avvio sessione → user activation), i play successivi
+// sull'elemento già "sbloccato" passano anche senza gesto recente.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const STORAGE_KEY = 'shadow-bd-voice';
 
 /**
- * Sceglie la voce italiana migliore disponibile. Pura, esportata per i test.
- * Preferenza: voce Google (qualità più alta su Chrome/Android) → default
- * it-IT del sistema → prima italiana trovata → null (lascia decidere al
- * browser via utterance.lang).
+ * Sceglie la voce italiana migliore disponibile per il fallback browser.
+ * Pura, esportata per i test. Preferenza: voce Google (qualità più alta su
+ * Chrome/Android) → default it-IT di sistema → prima italiana → null.
  */
 export function pickItalianVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   const it = voices.filter((v) => v.lang?.toLowerCase().startsWith('it'));
@@ -31,21 +33,42 @@ export function useSpeech() {
   const [supported, setSupported] = useState(false);
   const [enabled, setEnabledState] = useState(true);
   const utterRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
+  /** 'unknown' finché non si è visto un esito; 'no' = 501, inutile riprovare. */
+  const serverTtsRef = useRef<'unknown' | 'yes' | 'no'>('unknown');
+  /** Generazione corrente: una nuova speak/stop invalida i callback in volo. */
+  const seqRef = useRef(0);
 
   useEffect(() => {
-    setSupported('speechSynthesis' in window);
+    // Audio element è universale: il toggle ha senso anche dove manca
+    // speechSynthesis (il fallback semplicemente non scatterà).
+    setSupported(true);
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved !== null) setEnabledState(saved === 'on');
     } catch {
-      // localStorage indisponibile: si resta sul default ON
+      // localStorage indisponibile: default ON
     }
   }, []);
 
+  const releaseObjectUrl = () => {
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+  };
+
   const stop = useCallback(() => {
+    seqRef.current += 1;
     utterRef.current = null;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.removeAttribute('src');
+    }
+    releaseObjectUrl();
     try {
-      window.speechSynthesis.cancel();
+      window.speechSynthesis?.cancel();
     } catch {
       // niente da fermare
     }
@@ -64,36 +87,90 @@ export function useSpeech() {
     [stop],
   );
 
+  /** Fallback browser. Ritorna false se speechSynthesis manca o fallisce. */
+  const speakBrowser = useCallback((text: string, seq: number, onEnd?: () => void): boolean => {
+    if (!('speechSynthesis' in window)) return false;
+    try {
+      const synth = window.speechSynthesis;
+      synth.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'it-IT';
+      const voice = pickItalianVoice(synth.getVoices());
+      if (voice) utterance.voice = voice;
+      utterance.rate = 1.02;
+      const done = () => {
+        if (seqRef.current !== seq) return;
+        if (utterRef.current === utterance) utterRef.current = null;
+        onEnd?.();
+      };
+      utterance.onend = done;
+      utterance.onerror = done;
+      utterRef.current = utterance;
+      synth.speak(utterance);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   /**
-   * Parla il testo (cancella l'eventuale battuta precedente). Ritorna false
-   * se la voce è spenta/non supportata o l'engine fallisce: il chiamante
-   * degrada allo stato speaking a tempo fisso.
+   * Parla il testo (cancellando l'eventuale battuta precedente). Ritorna false
+   * solo se la voce è spenta: il chiamante usa allora la finestra fissa.
+   * Il percorso server/fallback è asincrono; onEnd arriva in ogni caso
+   * (anche su doppio fallimento, così lo stato "parla" si chiude subito).
    */
   const speak = useCallback(
     (text: string, { onEnd }: SpeakCallbacks = {}): boolean => {
-      if (!supported || !enabled) return false;
-      try {
-        const synth = window.speechSynthesis;
-        synth.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'it-IT';
-        const voice = pickItalianVoice(synth.getVoices());
-        if (voice) utterance.voice = voice;
-        utterance.rate = 1.02;
-        const done = () => {
-          if (utterRef.current === utterance) utterRef.current = null;
-          onEnd?.();
-        };
-        utterance.onend = done;
-        utterance.onerror = done;
-        utterRef.current = utterance;
-        synth.speak(utterance);
-        return true;
-      } catch {
-        return false;
-      }
+      if (!enabled) return false;
+      stop();
+      const seq = (seqRef.current += 1);
+      const guardedEnd = () => {
+        if (seqRef.current === seq) onEnd?.();
+      };
+
+      void (async () => {
+        if (serverTtsRef.current !== 'no') {
+          try {
+            const res = await fetch('/api/voice/speak', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text }),
+            });
+            if (res.status === 501) {
+              serverTtsRef.current = 'no'; // non configurato: stop ai tentativi
+              throw new Error('tts server non configurato');
+            }
+            if (!res.ok) throw new Error(`tts server ${res.status}`);
+            const blob = await res.blob();
+            if (seqRef.current !== seq) return; // superato da stop/speak nuova
+            serverTtsRef.current = 'yes';
+
+            const audio = (audioRef.current ??= new Audio());
+            releaseObjectUrl();
+            const url = URL.createObjectURL(blob);
+            objectUrlRef.current = url;
+            audio.src = url;
+            audio.onended = () => {
+              releaseObjectUrl();
+              guardedEnd();
+            };
+            audio.onerror = () => {
+              releaseObjectUrl();
+              guardedEnd();
+            };
+            await audio.play();
+            return;
+          } catch {
+            // qualunque guasto server/playback → fallback browser sotto
+          }
+        }
+        if (seqRef.current !== seq) return;
+        if (!speakBrowser(text, seq, onEnd)) guardedEnd();
+      })();
+
+      return true;
     },
-    [supported, enabled],
+    [enabled, speakBrowser, stop],
   );
 
   // Stop allo smontaggio: la voce non deve sopravvivere alla vista.
