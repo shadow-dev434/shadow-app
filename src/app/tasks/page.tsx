@@ -183,10 +183,13 @@ async function loadProfile(): Promise<UserProfileData | null> {
 }
 
 async function startStrictModeSession(mode: 'soft' | 'strict', taskId: string | null, durationMinutes: number, blockedApps: string[]) {
+  // fix(v3-w7): il body non mandava `mode` (la route rispondeva 400 e la sessione
+  // non veniva mai creata server-side) e usava `plannedDurationMinutes` dove la
+  // route legge `durationMinutes` (la durata pianificata finiva sempre a 25).
   const res = await fetch('/api/strict-mode', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ triggerType: mode, taskId, plannedDurationMinutes: durationMinutes, blockedApps }),
+    body: JSON.stringify({ mode, triggerType: 'manual', taskId, durationMinutes, blockedApps }),
   });
   return res.json();
 }
