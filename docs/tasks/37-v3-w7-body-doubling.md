@@ -22,11 +22,21 @@ Tagli ratificati rispetto a questa spec:
 - **Niente gating** (TODO W2): i beta tester hanno MAX promozionale.
 - **Voce**: taglio parzialmente superato su richiesta di Antonio in chat
   (2026-06-12, sera): **voce in USCITA anticipata** — i check-in (e il fine
-  timer) sono parlati via `speechSynthesis` browser (zero chiavi/costi),
-  toggle in header persistito, default ON; interfaccia `use-speech.ts`
-  pronta per lo swap a Deepgram Aura-2/ElevenLabs (doc 27). **Mic/STT
-  restano v1.1** (doc 27): richiedono account+`DEEPGRAM_API_KEY` di Antonio
-  e lo spike GO/NO-GO sul microfono nella TWA prima di prometterlo ai tester.
+  timer) sono parlati, toggle in header persistito, default ON.
+  **Upgrade 2026-06-13 (branch `feature/27-voice-tts`)**: TTS server-first via
+  **ElevenLabs** (`eleven_flash_v2_5`, REST zero-SDK in `src/lib/voice/`,
+  route `/api/voice/speak`) con fallback automatico a `speechSynthesis` su
+  501/errori/autoplay-block. Vendor unico deciso con Antonio (account
+  ElevenLabs esistente; la chiave NON ha scope voices_read → voce premade
+  Rachel di default, override `VOICE_TTS_VOICE_ID`). Costi in `AiUsage`
+  taskClass `voice_tts` (tokensOut=caratteri, ~$0,0015/check-in), cap
+  `VOICE_TTS_DAILY_CAP` (default 300, 0=kill-switch). Probe
+  `scripts/e2e/probe-voice-speak.ts` PASS 8/8. Env prod: **ELEVENLABS_API_KEY
+  va aggiunta su Vercel** prima del deploy, altrimenti degrado silenzioso a
+  voce browser. **Mic/STT restano v1.1**: ElevenLabs **Scribe** come STT
+  primario (stesso vendor), Deepgram solo se lo spike boccia le latenze;
+  resta lo spike GO/NO-GO sul microfono nella TWA prima di prometterlo ai
+  tester.
 - **Niente review profonda Opus** (resta in questa spec per il W7 pieno).
 - Sessione: riuso `POST /api/strict-mode` con `triggerType:'body_double'`
   (+ `PATCH action:'extend'` per il +15 a fine timer). Niente

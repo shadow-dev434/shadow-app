@@ -7,7 +7,6 @@
 
 import { db } from '@/lib/db';
 import { formatTodayInRome } from '@/lib/evening-review/dates';
-import type { LLMResponse } from './client';
 
 export type AiTaskClass =
   | 'chat'
@@ -15,7 +14,8 @@ export type AiTaskClass =
   | 'decompose'
   | 'nudge'
   | 'review_deep'
-  | 'body_double_checkin';
+  | 'body_double_checkin'
+  | 'voice_tts'; // v1.1: sintesi vocale (unità di costo = caratteri, in tokensOut)
 
 export interface ModelMixEntry {
   calls: number;
@@ -24,7 +24,16 @@ export interface ModelMixEntry {
   costUsd: number;
 }
 
-export type AiUsageSample = Pick<LLMResponse, 'model' | 'tokensIn' | 'tokensOut' | 'costUsd'>;
+/**
+ * Sample strutturale: una LLMResponse lo soddisfa così com'è; i provider non
+ * LLM (es. TTS) passano un model string libero (es. 'elevenlabs/flash-v2.5').
+ */
+export interface AiUsageSample {
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+}
 
 /**
  * Merge puro di un sample nel JSON modelMix esistente. Esportata per i test.
