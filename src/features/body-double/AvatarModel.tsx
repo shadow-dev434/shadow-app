@@ -31,10 +31,12 @@ import {
   talkMouthValue,
 } from './lib/procedural-animation';
 
-// Braccia lungo i fianchi: in T-pose il braccio sinistro punta +X; Rz(-70°)
-// lo porta verso -Y (giù). Destro speculare. Avambracci leggermente flessi.
-const ARM_DOWN_RAD = 1.22; // ~70°
-const FOREARM_BEND_RAD = 0.18;
+// Braccia lungo i fianchi. Segno verificato empiricamente sul rig normalizzato
+// (QA Antonio 2026-06-13: col segno opposto le braccia finivano ALZATE):
+// sinistro Rz POSITIVO = giù, destro speculare. ~75° da T-pose = aderenti al
+// corpo; avambracci con micro-flessione per non compenetrare i fianchi.
+const ARM_DOWN_RAD = 1.31; // ~75°
+const FOREARM_BEND_RAD = 0.12;
 
 export function AvatarModel({
   vrm,
@@ -77,10 +79,10 @@ export function AvatarModel({
     const rightUpper = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
     const leftLower = vrm.humanoid.getNormalizedBoneNode('leftLowerArm');
     const rightLower = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
-    if (leftUpper) leftUpper.rotation.z = -ARM_DOWN_RAD;
-    if (rightUpper) rightUpper.rotation.z = ARM_DOWN_RAD;
-    if (leftLower) leftLower.rotation.z = -FOREARM_BEND_RAD;
-    if (rightLower) rightLower.rotation.z = FOREARM_BEND_RAD;
+    if (leftUpper) leftUpper.rotation.z = ARM_DOWN_RAD;
+    if (rightUpper) rightUpper.rotation.z = -ARM_DOWN_RAD;
+    if (leftLower) leftLower.rotation.z = FOREARM_BEND_RAD;
+    if (rightLower) rightLower.rotation.z = -FOREARM_BEND_RAD;
 
     scene.add(lookTarget);
     if (vrm.lookAt) vrm.lookAt.target = lookTarget;

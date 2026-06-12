@@ -6,16 +6,28 @@
 
 import { TTS_MAX_CHARS, type TtsProvider, type TtsSynthesis } from './provider';
 
-// Voce premade "Rachel": disponibile su ogni account, resa italiana corretta
-// col modello multilingue flash. Override: VOICE_TTS_VOICE_ID (la chiave di
-// Antonio non ha lo scope voices_read → niente listing runtime, solo env).
+// Voce premade "Rachel": disponibile su ogni account. Override:
+// VOICE_TTS_VOICE_ID (la chiave di Antonio non ha lo scope voices_read →
+// niente listing runtime, solo env).
 const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
-const DEFAULT_MODEL = 'eleven_flash_v2_5';
+// multilingual_v2: la resa italiana naturale (QA Antonio 2026-06-13: flash
+// v2.5 suonava robotico). Costa il doppio del flash (~$0,003/check-in) e
+// aggiunge ~1s di latenza: accettato per la qualità. Override VOICE_TTS_MODEL.
+const DEFAULT_MODEL = 'eleven_multilingual_v2';
+// Ritmo del parlato (range ElevenLabs 0.7-1.2): 1.1 = un filo più svelto del
+// neutro (QA: "parla un po' troppo tempo"). Override VOICE_TTS_SPEED.
+const DEFAULT_SPEED = 1.1;
 // mp3 22.05kHz/32kbps: ~4KB/s, qualità più che sufficiente per battute brevi.
 const OUTPUT_FORMAT = 'mp3_22050_32';
-const TIMEOUT_MS = 6_000;
+const TIMEOUT_MS = 8_000; // multilingual_v2 è più lento del flash
 const RETRY_BACKOFF_MS = 400;
 const ATTEMPTS = 2;
+
+function speedFromEnv(): number {
+  const raw = Number(process.env.VOICE_TTS_SPEED);
+  if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_SPEED;
+  return Math.min(1.2, Math.max(0.7, raw));
+}
 
 export class ElevenLabsTtsProvider implements TtsProvider {
   readonly name = 'elevenlabs';
@@ -41,6 +53,7 @@ export class ElevenLabsTtsProvider implements TtsProvider {
           body: JSON.stringify({
             text: truncated,
             model_id: process.env.VOICE_TTS_MODEL || DEFAULT_MODEL,
+            voice_settings: { speed: speedFromEnv() },
           }),
           signal: controller.signal,
         });

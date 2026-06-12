@@ -32,7 +32,17 @@ describe('ElevenLabsTtsProvider', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/v1/text-to-speech/');
     expect((init.headers as Record<string, string>)['xi-api-key']).toBe('test-key');
-    expect(JSON.parse(init.body as string).model_id).toBe('eleven_flash_v2_5');
+    const sent = JSON.parse(init.body as string);
+    expect(sent.model_id).toBe('eleven_multilingual_v2');
+    expect(sent.voice_settings.speed).toBe(1.1);
+  });
+
+  it('VOICE_TTS_SPEED viene clampato al range ElevenLabs', async () => {
+    vi.stubEnv('VOICE_TTS_SPEED', '2.5');
+    fetchMock.mockResolvedValueOnce(audioResponse());
+    await new ElevenLabsTtsProvider().synthesize('veloce');
+    const sent = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(sent.voice_settings.speed).toBe(1.2);
   });
 
   it('tronca il testo a TTS_MAX_CHARS', async () => {
