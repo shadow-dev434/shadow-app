@@ -44,6 +44,11 @@ model User {
   bugReports          BugReport[]
   betaFeedbacks       BetaFeedback[]
   assessmentResponses AssessmentResponse[]
+
+  // Shadow v3 — W1 (doc 31). Cascade necessari per cancellazione account (GDPR).
+  subscription Subscription?
+  pushDevices  PushDevice[]
+  aiUsages     AiUsage[]
 }
 
 model Account {
@@ -377,6 +382,9 @@ model UserProfile {
   focusModeDefault String @default("soft") // soft, strict
   blockedApps      String @default("[]") @db.Text // JSON array of app names
 
+  // Shadow v3 — W1 (doc 31): lingua UI/prompt (W4 i18n). 'it' | 'en'
+  locale String @default("it")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -389,7 +397,7 @@ model StrictModeSession {
   status String @default("inactive")
 
   // What triggered activation
-  triggerType String @default("manual") // manual, auto_launch, auto_hold, auto_session
+  triggerType String @default("manual") // manual, auto_launch, auto_hold, auto_session, body_double (v3 W7)
 
   // Session details
   taskId    String? // linked task if any
@@ -660,4 +668,74 @@ model AssessmentResponse {
 
   @@unique([userId, instrument, wave])
   @@index([userId, wave])
+}
+
+// ─── Shadow v3 — W1 (doc 31): subscription, billing events, config, AI usage, push ───
+
+model Subscription {
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier                String    @default("none")   // 'none'|'base'|'plus'|'pro'|'max'
+  status              String    @default("none")   // 'none'|'trialing'|'active'|'grace'|'billing_issue'|'expired'
+  store               String    @default("")       // 'app_store'|'play_store'|'stripe'|'promotional'|'app_trial'
+  periodType          String    @default("")       // 'normal'|'trial'|'intro'
+  currentPeriodEndsAt DateTime?
+  trialEndsAt         DateTime?
+  willRenew           Boolean   @default(false)
+  entitlementsJson    String    @default("{}") @db.Text
+  lastRcEventId       String    @default("")
+  lastRcEventAt       DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model RcWebhookEvent {
+  id          String   @id // event.id RevenueCat → idempotenza
+  type        String
+  appUserId   String
+  payloadJson String   @db.Text
+  processedAt DateTime @default(now())
+
+  @@index([appUserId, processedAt])
+}
+
+model AppConfig {
+  key       String   @id // 'model_routing' | 'model_pricing' | 'ai_budget'
+  valueJson String   @db.Text
+  updatedAt DateTime @updatedAt
+}
+
+model AiUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day       String // YYYY-MM-DD Europe/Rome
+  taskClass String // 'chat'|'classify'|'decompose'|'nudge'|'review_deep'|'body_double_checkin'
+  calls     Int      @default(0)
+  tokensIn  Int      @default(0)
+  tokensOut Int      @default(0)
+  costUsd   Float    @default(0)
+  modelMix  String   @default("{}") @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, day, taskClass])
+  @@index([userId, day])
+}
+
+model PushDevice {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform   String // 'web'|'android'|'ios'
+  token      String   @db.Text // FCM token / APNs token / endpoint web push
+  p256dh     String? // solo web
+  auth       String? // solo web
+  locale     String?
+  appVersion String?
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, token])
+  @@index([userId])
 }
