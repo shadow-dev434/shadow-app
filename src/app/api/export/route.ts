@@ -45,7 +45,18 @@ export async function GET(req: NextRequest) {
         },
         betaFeedbacks: true,
         assessmentResponses: true,
-        // Esclusi di proposito: accounts, sessions, pushSubscription (segreti/infra).
+        // Shadow v3 — W1 (doc 31)
+        subscription: true,
+        aiUsages: true,
+        pushDevices: {
+          select: {
+            id: true, platform: true, locale: true, appVersion: true,
+            lastSeenAt: true, createdAt: true,
+          },
+        },
+        // Esclusi di proposito: accounts, sessions, pushSubscription (segreti/infra),
+        // token/chiavi di PushDevice (infra), RcWebhookEvent (log di sistema, non dati utente:
+        // purgato per appUserId alla cancellazione account).
       },
     });
     if (!user) {
