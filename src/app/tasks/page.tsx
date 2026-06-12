@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useShadowStore, type ViewMode, type ShadowTask, type MicroStep, type UserProfileData, type AIClassifyResult } from '@/store/shadow-store';
-import { STRICT_EXIT_STEPS, type ExitFrictionStep, type AdaptiveProfileData, type LearningSignalData, type AIInsight, type ProactiveTrigger, type NudgeMessage, type TaskRecommendation, type ProactiveChatbotResponse } from '@/lib/types/shadow';
+import { type AdaptiveProfileData, type LearningSignalData, type AIInsight, type ProactiveTrigger, type NudgeMessage, type TaskRecommendation, type ProactiveChatbotResponse } from '@/lib/types/shadow';
 import { formatDateInRome } from '@/lib/evening-review/dates';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,6 +32,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { signOut } from 'next-auth/react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
+import { StrictModeExitDialog, type StrictModeExitResult } from '@/features/strict-mode/StrictModeExitDialog';
 import { APP_VERSION } from '@/lib/version';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -183,10 +184,13 @@ async function loadProfile(): Promise<UserProfileData | null> {
 }
 
 async function startStrictModeSession(mode: 'soft' | 'strict', taskId: string | null, durationMinutes: number, blockedApps: string[]) {
+  // fix(v3-w7): il body non mandava `mode` (la route rispondeva 400 e la sessione
+  // non veniva mai creata server-side) e usava `plannedDurationMinutes` dove la
+  // route legge `durationMinutes` (la durata pianificata finiva sempre a 25).
   const res = await fetch('/api/strict-mode', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ triggerType: mode, taskId, plannedDurationMinutes: durationMinutes, blockedApps }),
+    body: JSON.stringify({ mode, triggerType: 'manual', taskId, durationMinutes, blockedApps }),
   });
   return res.json();
 }
@@ -545,7 +549,7 @@ export default function ShadowApp() {
       <PriorityConfirmDialog />
 
       {/* Strict Mode Exit Dialog (full-screen overlay) */}
-      {store.strictModeState === 'pending_exit' && <StrictModeExitDialog />}
+      {store.strictModeState === 'pending_exit' && <StrictModeExitDialogConnected />}
 
       {/* Micro Feedback Dialog */}
       <MicroFeedbackDialog />
@@ -954,72 +958,28 @@ function AuthGateView() {
 }
 
 
-// ─── Strict Mode Exit Dialog ────────────────────────────────────────────────
+// ─── Strict Mode Exit Dialog (wrapper connesso) ─────────────────────────────
+// La friction a 4 step è estratta in src/features/strict-mode/ (v3 W7) ed è
+// riusata dal body doubling. Questo wrapper la collega allo shadow-store
+// riproducendo il comportamento storico del monolite.
 
-function StrictModeExitDialog() {
+function StrictModeExitDialogConnected() {
   const store = useShadowStore();
-  const [countdown, setCountdown] = useState(15);
-  const [exitReason, setExitReason] = useState('');
-  const [confirmationText, setConfirmationText] = useState('');
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const currentExitStep = store.strictExitStep;
-  const exitStepData = STRICT_EXIT_STEPS[currentExitStep - 1];
-
-  // Countdown timer for step 2
-  useEffect(() => {
-    if (currentExitStep === 2 && countdown > 0) {
-      store.setStrictCountdownActive(true);
-      countdownRef.current = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            if (countdownRef.current) clearInterval(countdownRef.current);
-            store.setStrictCountdownActive(false);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    };
-  }, [currentExitStep, store]);
-
-  // Reset countdown is handled in handleConfirmStep1 when transitioning to step 2
 
   const handleCancel = useCallback(() => {
     store.setStrictModeState('active_strict');
     store.setStrictExitStep(0);
-    setExitReason('');
-    setConfirmationText('');
-    setCountdown(15);
   }, [store]);
 
-  const handleConfirmStep1 = useCallback(() => {
+  const handleAttempt = useCallback(() => {
     store.setStrictExitAttempts(store.strictExitAttempts + 1);
-    store.setStrictExitStep(2);
-    setCountdown(15);
   }, [store]);
 
-  const handleConfirmStep2 = useCallback(() => {
-    if (countdown > 0) return;
-    store.setStrictExitStep(3);
-  }, [countdown, store]);
-
-  const handleConfirmStep3 = useCallback(() => {
-    if (!exitReason.trim()) return;
-    store.setStrictExitReason(exitReason.trim());
-    store.setStrictExitStep(4);
-  }, [exitReason, store]);
-
-  const handleConfirmStep4 = useCallback(async () => {
-    if (confirmationText !== 'VOGLIO USCIRE') return;
-
+  const handleConfirm = useCallback(async ({ reason, confirmationText }: StrictModeExitResult) => {
     // Actually exit strict mode
     if (store.strictSessionId) {
       try {
-        await endStrictModeSession(store.strictSessionId, store.strictExitReason, confirmationText);
+        await endStrictModeSession(store.strictSessionId, reason, confirmationText);
       } catch {}
     }
 
@@ -1040,144 +1000,17 @@ function StrictModeExitDialog() {
     store.setFocusModeActive(false);
     store.setFocusModeType('soft');
     store.setCurrentView('today');
-    setConfirmationText('');
-    setExitReason('');
 
     toast({ title: 'Sessione terminata', description: 'Sei uscito dalla strict mode' });
-  }, [confirmationText, store]);
+  }, [store]);
 
   return (
-    <div className="fixed inset-0 z-[100] bg-zinc-950/95 flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-sm space-y-6">
-        {/* Progress indicator */}
-        <div className="flex items-center justify-center gap-2">
-          {STRICT_EXIT_STEPS.map((s, idx) => (
-            <div
-              key={s.step}
-              className={`h-1.5 rounded-full transition-all ${
-                idx < currentExitStep ? 'bg-red-500 w-8' : idx === currentExitStep - 1 ? 'bg-red-400 w-8 animate-pulse' : 'bg-zinc-700 w-6'
-              }`}
-            />
-          ))}
-        </div>
-
-        {/* Icon */}
-        <div className="text-center">
-          <div className="w-16 h-16 rounded-2xl bg-red-950/50 border border-red-800 flex items-center justify-center mx-auto mb-4">
-            <ShieldAlert className="w-8 h-8 text-red-500" />
-          </div>
-          <p className="text-xs text-zinc-500 uppercase tracking-wider">Step {currentExitStep}/4</p>
-        </div>
-
-        {/* Step 1: Confirmation */}
-        {currentExitStep === 1 && (
-          <div className="text-center space-y-4 animate-in fade-in duration-300">
-            <h2 className="text-xl font-bold text-white">{exitStepData?.title}</h2>
-            <p className="text-sm text-zinc-400">{exitStepData?.description}</p>
-            <div className="flex gap-3 pt-2">
-              <Button variant="outline" className="flex-1 h-12 border-zinc-700 text-white hover:bg-zinc-800" onClick={handleCancel}>
-                No, resto
-              </Button>
-              <Button variant="destructive" className="flex-1 h-12" onClick={handleConfirmStep1}>
-                Sì, voglio uscire
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 2: Countdown */}
-        {currentExitStep === 2 && (
-          <div className="text-center space-y-4 animate-in fade-in duration-300">
-            <h2 className="text-xl font-bold text-white">{exitStepData?.title}</h2>
-            <p className="text-sm text-zinc-400">{exitStepData?.description}</p>
-            <div className="py-6">
-              <p className="text-5xl font-mono font-bold text-red-500">{countdown}</p>
-              <p className="text-xs text-zinc-500 mt-2">secondi rimanenti</p>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <Button variant="outline" className="flex-1 h-12 border-zinc-700 text-white hover:bg-zinc-800" onClick={handleCancel}>
-                Annulla, resto nel focus
-              </Button>
-              <Button
-                variant="destructive"
-                className="flex-1 h-12"
-                disabled={countdown > 0}
-                onClick={handleConfirmStep2}
-              >
-                {countdown > 0 ? `Aspetta... ${countdown}s` : 'Continua'}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Motivation / reason */}
-        {currentExitStep === 3 && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <div className="text-center">
-              <h2 className="text-xl font-bold text-white">{exitStepData?.title}</h2>
-              <p className="text-sm text-zinc-400 mt-1">{exitStepData?.description}</p>
-            </div>
-            <Textarea
-              value={exitReason}
-              onChange={(e) => setExitReason(e.target.value)}
-              placeholder="Scrivi il motivo per cui vuoi uscire..."
-              rows={4}
-              className="bg-zinc-900 border-zinc-700 text-white resize-none"
-            />
-            <div className="flex gap-3 pt-2">
-              <Button variant="outline" className="flex-1 h-12 border-zinc-700 text-white hover:bg-zinc-800" onClick={handleCancel}>
-                Annulla, resto nel focus
-              </Button>
-              <Button
-                variant="destructive"
-                className="flex-1 h-12"
-                disabled={!exitReason.trim()}
-                onClick={handleConfirmStep3}
-              >
-                Continua
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* Step 4: Type confirmation */}
-        {currentExitStep === 4 && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <div className="text-center">
-              <h2 className="text-xl font-bold text-white">{exitStepData?.title}</h2>
-              <p className="text-sm text-zinc-400 mt-1">{exitStepData?.description}</p>
-            </div>
-            <div>
-              <Label className="text-xs text-zinc-500 mb-2 block">
-                Digita esattamente: <strong className="text-red-400">VOGLIO USCIRE</strong>
-              </Label>
-              <Input
-                value={confirmationText}
-                onChange={(e) => setConfirmationText(e.target.value.toUpperCase())}
-                placeholder="VOGLIO USCIRE"
-                className="h-12 bg-zinc-900 border-zinc-700 text-white text-center font-mono text-lg tracking-wider"
-              />
-              {confirmationText.length > 0 && confirmationText !== 'VOGLIO USCIRE' && (
-                <p className="text-xs text-red-400 mt-1 text-center">Il testo non corrisponde</p>
-              )}
-            </div>
-            <div className="flex gap-3 pt-2">
-              <Button variant="outline" className="flex-1 h-12 border-zinc-700 text-white hover:bg-zinc-800" onClick={handleCancel}>
-                Annulla, resto nel focus
-              </Button>
-              <Button
-                variant="destructive"
-                className="flex-1 h-12"
-                disabled={confirmationText !== 'VOGLIO USCIRE'}
-                onClick={handleConfirmStep4}
-              >
-                Conferma uscita
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+    <StrictModeExitDialog
+      onCancel={handleCancel}
+      onAttempt={handleAttempt}
+      onConfirm={handleConfirm}
+      onCountdownActiveChange={store.setStrictCountdownActive}
+    />
   );
 }
 
@@ -2318,6 +2151,7 @@ function TaskSection({ title, icon, tasks, onTaskClick, onStartFocus, colorClass
 
 function FocusView() {
   const store = useShadowStore();
+  const router = useRouter();
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
@@ -2592,6 +2426,15 @@ function FocusView() {
                 <p className="text-xs text-zinc-500 mt-1">Uscita difficile</p>
               </button>
             </div>
+            {/* v3 W7: body doubling — sessione dedicata su /focus */}
+            <button
+              onClick={() => { if (selectedTask) router.push(`/focus?taskId=${selectedTask.id}`); }}
+              className="w-full p-4 rounded-xl border border-violet-300 dark:border-violet-700 bg-white dark:bg-zinc-900 text-left hover:border-violet-400 transition-colors"
+            >
+              <Users className="w-6 h-6 text-violet-600 mb-2" />
+              <p className="font-medium text-sm">Con Shadow</p>
+              <p className="text-xs text-zinc-500 mt-1">Body doubling: l&apos;avatar resta con te mentre lavori</p>
+            </button>
             <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => setShowModeSelector(false)}>Annulla</Button>
           </CardContent>
         </Card>
@@ -2706,6 +2549,7 @@ function FocusView() {
 // ─── Task Detail View ───────────────────────────────────────────────────────
 
 function TaskDetailView() {
+  const router = useRouter();
   const store = useShadowStore();
   const selectedTask = store.tasks.find((t) => t.id === store.selectedTaskId);
   const [isDecomposing, setIsDecomposing] = useState(false);
@@ -2830,6 +2674,14 @@ function TaskDetailView() {
 
       <div className="flex gap-2">
         <Button onClick={handleStart} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"><Play className="w-4 h-4 mr-2" /> Inizia</Button>
+        {/* v3 W7: body doubling */}
+        <Button
+          onClick={() => router.push(`/focus?taskId=${selectedTask.id}`)}
+          variant="outline"
+          className="flex-1 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40"
+        >
+          <Users className="w-4 h-4 mr-2" /> Fallo con Shadow
+        </Button>
         <Button variant="ghost" size="sm" className="text-zinc-400" onClick={handleDelete}><Trash2 className="w-3 h-3 mr-1" /> Elimina</Button>
       </div>
     </div>

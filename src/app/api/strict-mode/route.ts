@@ -90,7 +90,7 @@ export async function PATCH(req: NextRequest) {
   if (error) return error;
 
   try {
-    const { sessionId, status, exitReason, exitConfirmationText, taskCompleted } = await req.json();
+    const { sessionId, status, exitReason, exitConfirmationText, taskCompleted, action, minutes } = await req.json();
 
     if (!sessionId) {
       return NextResponse.json({ error: 'sessionId è obbligatorio' }, { status: 400 });
@@ -99,6 +99,30 @@ export async function PATCH(req: NextRequest) {
     const existing = await db.strictModeSession.findFirst({ where: { id: sessionId, userId } });
     if (!existing) {
       return NextResponse.json({ error: 'Sessione non trovata' }, { status: 404 });
+    }
+
+    // v3 W7: estensione sessione (+N minuti) — il body doubling propone +15 alla
+    // scadenza del timer. Base = endsAt se nel futuro, altrimenti adesso (un +15
+    // su timer già scaduto non deve produrre una sessione ancora scaduta).
+    if (action === 'extend') {
+      const extendBy = Math.min(Math.max(Math.round(Number(minutes)) || 15, 5), 60);
+      const baseMs = existing.endsAt && new Date(existing.endsAt).getTime() > Date.now()
+        ? new Date(existing.endsAt).getTime()
+        : Date.now();
+      const session = await db.strictModeSession.update({
+        where: { id: sessionId },
+        data: {
+          endsAt: new Date(baseMs + extendBy * 60000),
+          plannedDurationMinutes: existing.plannedDurationMinutes + extendBy,
+        },
+      });
+      return NextResponse.json({
+        session: {
+          ...session,
+          blockedApps: JSON.parse(session.blockedApps),
+          blockedSites: JSON.parse(session.blockedSites),
+        },
+      });
     }
 
     const updateData: Record<string, unknown> = {};

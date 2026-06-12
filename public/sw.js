@@ -3,9 +3,12 @@
 // Shadow PWA — Enhanced Service Worker
 // Features: caching strategies, push notifications, background sync, quick capture
 
+// v4 (2026-06-12, W7 body doubling): bump obbligatorio a ogni release con CSS/JS
+// nuovi — staleWhileRevalidate servirebbe ai client i bundle vecchi (classi
+// Tailwind nuove assenti → layout rotto, visto in QA W7).
 const CACHE_NAME = 'shadow-v2';
-const STATIC_CACHE = 'shadow-static-v3';
-const DYNAMIC_CACHE = 'shadow-dynamic-v3';
+const STATIC_CACHE = 'shadow-static-v4';
+const DYNAMIC_CACHE = 'shadow-dynamic-v4';
 
 const STATIC_ASSETS = [
   '/',
