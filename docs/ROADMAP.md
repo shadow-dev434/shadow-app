@@ -257,8 +257,9 @@ Google → PRO+, voce → MAX. Billing fuori scope (task futuro).
 |---|------|------|--------|-------|
 | 24 | Workflow v2 (sviluppo autonomo) + fix bug history orchestrator | `docs/tasks/24-workflow-v2.md` | `feature/24-workflow-v2` | 1 sess. |
 | 25 | Entitlements FREE/PRO/MAX | `docs/tasks/25-entitlements.md` | `feature/25-entitlements` | 1 sess. |
-| 26 | Google Calendar (fasi 1-2) + Gmail ingest (fasi 3-4) | `docs/tasks/26-google-integrations.md` | `feature/26-google` | 9-10 sess. |
+| 26 | Google Calendar (fasi 1-2) + Gmail ingest (fase 3) + hardening (fase 4) | `docs/tasks/26-google-integrations.md` | `feature/26-google` | 9-10 sess. |
 | 27 | Body doubling voice-first (spike → MVP → polish) | `docs/tasks/27-body-doubling-voice.md` | `feature/27-voice` | 16-22 sess. |
+| 40 | ✅ Rolling summary chat + finestra 60 con caching history (pre-beta, 2026-06-11) | `docs/tasks/40-rolling-summary.md` | `feature/40-rolling-summary` | 1 sess. |
 
 Ordine consigliato: 24 → 25 → spike 27-fase-0 (GO/NO-GO su mic in TWA) → 26 Calendar →
 27 MVP voce → 26 Gmail → 27 polish. Compliance Google: Calendar = verifica gratuita
