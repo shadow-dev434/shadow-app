@@ -15,6 +15,7 @@ export type AiTaskClass =
   | 'nudge'
   | 'review_deep'
   | 'body_double_checkin'
+  | 'body_double_chat' // chat libera col companion (2026-06-13)
   | 'voice_tts'; // v1.1: sintesi vocale (unità di costo = caratteri, in tokensOut)
 
 export interface ModelMixEntry {

@@ -1,18 +1,20 @@
 'use client';
 
 // ─── BodyDoubleView: sessione body doubling full-screen (v3 W7, doc 37) ─────
-// Avatar companion + timer + micro-step del task + check-in con quick-reply.
-// Exit anticipato con la friction condivisa (StrictModeExitDialog estratto);
-// "Ho finito" chiude senza friction (pattern handleComplete del monolite).
+// Avatar companion "videochiamata" + timer + micro-step + THREAD conversazionale
+// (check-in proattivi + chat libera, richiesta Antonio 2026-06-13): l'utente
+// scrive a Shadow come in una chat, Shadow risponde a voce (TTS) con labiale.
+// Exit anticipato con la friction condivisa; "Ho finito" chiude senza friction.
 // Testi italiani hardcoded: vista nuova, l'estrazione i18n arriva con W4.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import {
-  Check, Loader2, Pause, Play, Sparkles, Timer, Volume2, VolumeX, X,
+  Check, Loader2, Pause, Play, Send, Sparkles, Timer, Volume2, VolumeX, X,
 } from 'lucide-react';
 import { StrictModeExitDialog } from '@/features/strict-mode/StrictModeExitDialog';
 import { AvatarStage } from './AvatarStage';
@@ -32,6 +34,8 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
   const bd = useBodyDoubleSession(taskId);
   const defaultDuration = bd.task?.sessionDuration || 25;
   const [duration, setDuration] = useState<number | null>(null);
+  const [draft, setDraft] = useState('');
+  const threadRef = useRef<HTMLDivElement | null>(null);
   const selectedDuration = duration ?? defaultDuration;
 
   const presets = useMemo(() => {
@@ -39,7 +43,21 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
     return [...set].sort((a, b) => a - b);
   }, [defaultDuration]);
 
+  // Il thread resta incollato in fondo quando arrivano messaggi.
+  useEffect(() => {
+    const el = threadRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  }, [bd.messages.length, bd.chatPending]);
+
   const goBack = () => router.push('/tasks');
+
+  const submitDraft = (e?: { preventDefault: () => void }) => {
+    e?.preventDefault();
+    const text = draft.trim();
+    if (!text || bd.chatPending) return;
+    setDraft('');
+    void bd.sendChatMessage(text);
+  };
 
   // ── Stati terminali/di servizio ──
   if (bd.phase === 'loading') {
@@ -64,7 +82,7 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
   if (bd.phase === 'ended') {
     return (
       <div className="min-h-dvh bg-zinc-950 flex flex-col items-center justify-center gap-6 p-6">
-        <AvatarStage state="present" />
+        <AvatarStage state="present" getMouthLevel={bd.getMouthLevel} />
         <div className="text-center space-y-2">
           <h1 className="text-xl font-bold text-white">Sessione chiusa</h1>
           <p className="text-sm text-zinc-400">
@@ -87,7 +105,7 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
   if (bd.phase === 'setup' || bd.phase === 'starting') {
     return (
       <div className="min-h-dvh bg-zinc-950 flex flex-col items-center justify-center gap-6 p-6">
-        <AvatarStage state="present" />
+        <AvatarStage state="present" getMouthLevel={bd.getMouthLevel} />
         <div className="text-center space-y-1 max-w-sm">
           <p className="text-xs text-violet-400 uppercase tracking-wider">Body doubling</p>
           <h1 className="text-xl font-bold text-white">{bd.task?.title}</h1>
@@ -130,11 +148,18 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
 
   // ── Running / timeUp ──
   const currentStep = bd.steps.find((s) => !s.done) ?? null;
+  const lastMessage = bd.messages[bd.messages.length - 1];
+  const showQuickReplies =
+    bd.phase === 'running' &&
+    !bd.chatPending &&
+    lastMessage?.role === 'assistant' &&
+    lastMessage.kind === 'checkin' &&
+    !lastMessage.replied;
 
   return (
-    <div className="min-h-dvh bg-zinc-950 flex flex-col">
-      {/* Header: exit (friction) — task — timer */}
-      <header className="flex items-center justify-between p-4">
+    <div className="h-dvh bg-zinc-950 flex flex-col">
+      {/* Header: exit (friction) — task — voce + timer */}
+      <header className="flex items-center justify-between p-4 shrink-0">
         <button
           onClick={bd.requestExit}
           className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-red-400"
@@ -142,7 +167,7 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
         >
           <X className="w-5 h-5" />
         </button>
-        <p className="text-sm text-zinc-400 truncate max-w-[45%]">{bd.task?.title}</p>
+        <p className="text-sm text-zinc-400 truncate max-w-[40%]">{bd.task?.title}</p>
         <div className="flex items-center gap-3">
           {bd.voiceSupported && (
             <button
@@ -161,50 +186,41 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
         </div>
       </header>
 
-      {/* Scena: avatar + bolla check-in */}
-      <main className="flex-1 flex flex-col items-center justify-center gap-4 px-6">
-        <AvatarStage state={bd.avatarState} />
+      {/* Scena: avatar "videochiamata" + thread + input */}
+      <main className="flex-1 min-h-0 flex flex-col items-center px-4 gap-2">
+        <div className="shrink-0 flex items-center justify-center">
+          <AvatarStage state={bd.avatarState} getMouthLevel={bd.getMouthLevel} />
+        </div>
 
-        <div className="min-h-[7.5rem] w-full max-w-md flex flex-col items-center gap-3">
-          <AnimatePresence mode="wait">
-            {bd.phase === 'timeUp' ? (
+        <div className="w-full max-w-md flex-1 min-h-0 flex flex-col gap-2">
+          {/* Thread conversazionale */}
+          <div
+            ref={threadRef}
+            data-testid="bd-thread"
+            className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 pr-1"
+          >
+            {bd.messages.map((m) => (
               <motion.div
-                key="timeup"
-                initial={{ opacity: 0, y: 8 }}
+                key={m.id}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="bg-zinc-900 border border-zinc-700 rounded-2xl rounded-tl-sm px-4 py-3 text-center"
+                className={
+                  m.role === 'assistant'
+                    ? 'self-start bg-zinc-900 border border-zinc-700 rounded-2xl rounded-tl-sm px-3 py-2 max-w-[85%]'
+                    : 'self-end bg-violet-700/70 rounded-2xl rounded-tr-sm px-3 py-2 max-w-[85%]'
+                }
               >
-                <p className="text-sm text-zinc-200 mb-3">{TIME_UP_MESSAGE}</p>
-                <div className="flex gap-2 justify-center">
-                  <Button size="sm" className="bg-violet-600 hover:bg-violet-500" onClick={() => void bd.extend()}>
-                    +15 minuti
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-zinc-700 text-white"
-                    onClick={() => void bd.closeSession('timer_completed')}
-                  >
-                    Chiudiamo
-                  </Button>
-                </div>
+                <p className="text-sm text-zinc-100 whitespace-pre-wrap">{m.content}</p>
               </motion.div>
-            ) : bd.bubble ? (
-              <motion.div
-                key={bd.bubble.at}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="bg-zinc-900 border border-zinc-700 rounded-2xl rounded-tl-sm px-4 py-3"
-              >
-                <p className="text-sm text-zinc-200" data-testid="bd-bubble">{bd.bubble.text}</p>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+            ))}
+            {bd.chatPending && (
+              <p className="self-start text-xs text-zinc-500 px-2 animate-pulse">Shadow sta scrivendo…</p>
+            )}
+          </div>
 
-          {bd.phase === 'running' && bd.bubble && !bd.bubble.replied && (
-            <div className="flex gap-2">
+          {/* Quick replies sotto l'ultimo check-in senza risposta */}
+          {showQuickReplies && (
+            <div className="flex gap-2 shrink-0">
               <Button size="sm" variant="outline" className="border-zinc-700 text-zinc-200" onClick={() => bd.quickReply('ok')}>
                 Tutto ok
               </Button>
@@ -218,13 +234,55 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
               )}
             </div>
           )}
+
+          {/* Fine timer: proposta locale (parlata), niente LLM */}
+          {bd.phase === 'timeUp' && (
+            <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 flex items-center justify-between gap-2 shrink-0">
+              <p className="text-sm text-zinc-200">{TIME_UP_MESSAGE}</p>
+              <div className="flex gap-2 shrink-0">
+                <Button size="sm" className="bg-violet-600 hover:bg-violet-500" onClick={() => void bd.extend()}>
+                  +15 min
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-zinc-700 text-white"
+                  onClick={() => void bd.closeSession('timer_completed')}
+                >
+                  Chiudiamo
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {bd.chatError && <p className="text-xs text-red-400 shrink-0">{bd.chatError}</p>}
+
+          {/* Input chat: parla con Shadow come in una chat */}
+          <form onSubmit={submitDraft} className="flex gap-2 shrink-0 pb-1">
+            <Input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Scrivi a Shadow…"
+              aria-label="Scrivi a Shadow"
+              className="h-11 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500"
+            />
+            <Button
+              type="submit"
+              size="icon"
+              className="h-11 w-11 bg-violet-600 hover:bg-violet-500 shrink-0"
+              disabled={!draft.trim() || bd.chatPending}
+              aria-label="Invia"
+            >
+              <Send className="w-4 h-4" />
+            </Button>
+          </form>
         </div>
       </main>
 
       {/* Micro-step */}
-      <section className="px-4 pb-2">
+      <section className="px-4 pb-2 shrink-0">
         <Card className="bg-zinc-900/80 border-zinc-800">
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             {bd.steps.length === 0 ? (
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm text-zinc-400">Nessun micro-step: vuoi spezzarlo in passi piccoli?</p>
@@ -234,13 +292,13 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
                 </Button>
               </div>
             ) : (
-              <div className="space-y-2 max-h-40 overflow-y-auto">
+              <div className="space-y-1.5 max-h-28 overflow-y-auto">
                 {bd.steps.map((step) => (
                   <button
                     key={step.id}
                     onClick={() => !step.done && bd.markStepDone(step.id)}
                     disabled={step.done}
-                    className={`w-full flex items-center gap-3 text-left rounded-lg px-2 py-1.5 transition-colors ${
+                    className={`w-full flex items-center gap-3 text-left rounded-lg px-2 py-1 transition-colors ${
                       step.done ? 'opacity-50' : 'hover:bg-zinc-800'
                     } ${step.id === currentStep?.id ? 'bg-violet-950/40 border border-violet-900' : ''}`}
                   >
@@ -263,10 +321,10 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
       </section>
 
       {/* Footer: pausa + ho finito */}
-      <footer className="flex items-center justify-center gap-3 p-4">
+      <footer className="flex items-center justify-center gap-3 px-4 pb-4 shrink-0">
         <Button
           variant="outline"
-          className="h-12 flex-1 max-w-[12rem] border-zinc-700 text-white"
+          className="h-11 flex-1 max-w-[12rem] border-zinc-700 text-white"
           onClick={bd.togglePause}
         >
           {bd.paused ? (
@@ -280,7 +338,7 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
           )}
         </Button>
         <Button
-          className="h-12 flex-1 max-w-[12rem] bg-emerald-700 hover:bg-emerald-600"
+          className="h-11 flex-1 max-w-[12rem] bg-emerald-700 hover:bg-emerald-600"
           onClick={() => void bd.closeSession('completed')}
         >
           <Check className="w-4 h-4 mr-2" /> Ho finito
@@ -288,7 +346,7 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
       </footer>
 
       {bd.paused && (
-        <div className="fixed bottom-24 inset-x-0 flex justify-center pointer-events-none">
+        <div className="fixed bottom-20 inset-x-0 flex justify-center pointer-events-none">
           <span className="text-xs text-zinc-500 bg-zinc-900/90 border border-zinc-800 rounded-full px-3 py-1">
             In pausa — il timer continua
           </span>

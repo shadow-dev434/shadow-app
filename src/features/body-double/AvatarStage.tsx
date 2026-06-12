@@ -20,7 +20,13 @@ const AvatarCanvas = dynamic(() => import('./AvatarCanvas'), {
   loading: () => null,
 });
 
-export function AvatarStage({ state }: { state: AvatarState }) {
+export function AvatarStage({
+  state,
+  getMouthLevel,
+}: {
+  state: AvatarState;
+  getMouthLevel?: () => number;
+}) {
   const webgl = useWebglSupport();
   const [mode, setMode] = useState<'loading' | 'ready' | 'failed'>('loading');
   const fail = useCallback(() => setMode('failed'), []);
@@ -30,7 +36,10 @@ export function AvatarStage({ state }: { state: AvatarState }) {
   const live3d = try3d && mode === 'ready';
 
   return (
-    <div className="relative w-[260px] h-[260px]" data-avatar-stage={live3d ? '3d' : '2d'}>
+    <div
+      className="relative w-[300px] h-[340px] max-w-[85vw]"
+      data-avatar-stage={live3d ? '3d' : '2d'}
+    >
       {!live3d && (
         <div className="absolute inset-0 flex items-center justify-center">
           <Avatar2DFallback state={state} />
@@ -43,7 +52,13 @@ export function AvatarStage({ state }: { state: AvatarState }) {
               live3d ? 'opacity-100' : 'opacity-0'
             }`}
           >
-            <AvatarCanvas state={state} onReady={ready} onFail={fail} onContextLost={fail} />
+            <AvatarCanvas
+              state={state}
+              onReady={ready}
+              onFail={fail}
+              onContextLost={fail}
+              getMouthLevel={getMouthLevel}
+            />
           </div>
         </AvatarErrorBoundary>
       )}

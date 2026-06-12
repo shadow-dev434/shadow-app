@@ -13,12 +13,18 @@ export type BodyDoublePhase =
   | 'ended' // sessione chiusa (riepilogo)
   | 'error';
 
-/** Bolla di check-in mostrata accanto all'avatar. */
-export interface CheckinBubble {
-  text: string;
+/**
+ * Messaggio del thread companion (check-in proattivi + chat libera,
+ * richiesta Antonio 2026-06-13). `kind: 'checkin'` con `replied: false`
+ * = quick-reply ancora mostrabili sotto il messaggio.
+ */
+export interface CompanionMessage {
+  id: number;
+  role: 'user' | 'assistant';
+  content: string;
   at: number; // epoch ms
-  /** true quando l'utente ha risposto (quick-reply) o la bolla è informativa. */
-  replied: boolean;
+  kind: 'checkin' | 'chat';
+  replied?: boolean;
 }
 
 /** Messaggio locale (no LLM) alla scadenza del timer — renderizzato E parlato. */

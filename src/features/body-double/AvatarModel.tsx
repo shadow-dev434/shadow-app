@@ -5,9 +5,18 @@
 // vrm.update(delta) — SEMPRE per ultimo: copia normalized→raw, applica
 // expressions, lookAt e springbones (i capelli oscillano "gratis").
 // Niente file di animazione: tutto procedurale (doc 37, presenza senza costi).
+//
+// Fix QA Antonio 2026-06-13:
+// - posa di riposo: i VRM caricano in T-pose → braccia abbassate post-load
+// - inquadratura "videochiamata": camera agganciata all'altezza REALE della
+//   testa del modello (niente numeri magici → regge lo swap dell'avatar)
+// - labiale: se disponibile il livello RMS dell'audio TTS (getMouthLevel),
+//   la bocca segue il parlato vero; altrimenti fallback al rumore procedurale
+// - guard espressioni su expressionMap (il vecchio guard su expressionName
+//   poteva azzerare blink/bocca su alcuni modelli)
 
 import { useEffect, useMemo, useRef } from 'react';
-import { Object3D } from 'three';
+import { Object3D, Vector3 } from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import type { VRM } from '@pixiv/three-vrm';
 import type { AvatarState } from './types';
@@ -22,13 +31,27 @@ import {
   talkMouthValue,
 } from './lib/procedural-animation';
 
-export function AvatarModel({ vrm, state }: { vrm: VRM; state: AvatarState }) {
+// Braccia lungo i fianchi: in T-pose il braccio sinistro punta +X; Rz(-70°)
+// lo porta verso -Y (giù). Destro speculare. Avambracci leggermente flessi.
+const ARM_DOWN_RAD = 1.22; // ~70°
+const FOREARM_BEND_RAD = 0.18;
+
+export function AvatarModel({
+  vrm,
+  state,
+  getMouthLevel,
+}: {
+  vrm: VRM;
+  state: AvatarState;
+  getMouthLevel?: () => number;
+}) {
   const { camera, scene } = useThree();
   const lookTarget = useMemo(() => new Object3D(), []);
   const t = useRef(0);
   const params = useRef<AnimParams>({ ...ANIMATION_PARAMS.present });
   const blinkTimer = useRef(nextBlinkDelay(ANIMATION_PARAMS.present.blinkEvery));
   const blinkPhase = useRef(0);
+  const mouthSmooth = useRef(0);
 
   const bones = useMemo(
     () => ({
@@ -40,16 +63,25 @@ export function AvatarModel({ vrm, state }: { vrm: VRM; state: AvatarState }) {
     [vrm],
   );
 
-  // Nomi expression realmente presenti sul modello: i preset VRM0 vengono
-  // normalizzati da three-vrm ai nomi v1 ('blink', 'aa', 'relaxed'…), ma non
-  // tutti i modelli li hanno tutti — il guard evita warn per-frame.
-  const expressions = useMemo(() => {
-    const names = new Set<string>();
-    for (const e of vrm.expressionManager?.expressions ?? []) names.add(e.expressionName);
-    return names;
-  }, [vrm]);
+  // Nomi expression presenti sul modello (preset VRM0 normalizzati ai nomi v1
+  // da three-vrm). expressionMap è la fonte affidabile.
+  const expressions = useMemo(
+    () => new Set(Object.keys(vrm.expressionManager?.expressionMap ?? {})),
+    [vrm],
+  );
 
+  // Posa di riposo + lookAt target. Le rotazioni restano: il per-frame tocca
+  // solo hips/spine/chest/neck.
   useEffect(() => {
+    const leftUpper = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+    const rightUpper = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+    const leftLower = vrm.humanoid.getNormalizedBoneNode('leftLowerArm');
+    const rightLower = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
+    if (leftUpper) leftUpper.rotation.z = -ARM_DOWN_RAD;
+    if (rightUpper) rightUpper.rotation.z = ARM_DOWN_RAD;
+    if (leftLower) leftLower.rotation.z = -FOREARM_BEND_RAD;
+    if (rightLower) rightLower.rotation.z = FOREARM_BEND_RAD;
+
     scene.add(lookTarget);
     if (vrm.lookAt) vrm.lookAt.target = lookTarget;
     return () => {
@@ -57,6 +89,18 @@ export function AvatarModel({ vrm, state }: { vrm: VRM; state: AvatarState }) {
       scene.remove(lookTarget);
     };
   }, [vrm, scene, lookTarget]);
+
+  // Inquadratura videochiamata: volto al centro, mezzo busto stretto. La
+  // quota della testa è letta dal modello (un update() per propagare la posa).
+  useEffect(() => {
+    vrm.update(0);
+    const head = vrm.humanoid.getNormalizedBoneNode('head');
+    const headWorld = new Vector3();
+    if (head) head.getWorldPosition(headWorld);
+    const headY = head ? headWorld.y + 0.06 : 1.4; // ~occhi
+    camera.position.set(0, headY, 0.9);
+    camera.lookAt(0, headY - 0.04, 0);
+  }, [vrm, camera]);
 
   useFrame((_, rawDelta) => {
     // Clamp anti-spike: al ritorno da tab nascosto il delta è enorme e
@@ -91,8 +135,16 @@ export function AvatarModel({ vrm, state }: { vrm: VRM; state: AvatarState }) {
       setExpr('blink', blinkValue(blinkPhase.current));
     }
 
-    // (c) bocca nello stato speaking + espressione di fondo
-    setExpr('aa', talkMouthValue(t.current) * 0.55 * p.mouth);
+    // (c) bocca: RMS dell'audio TTS quando disponibile (labiale reale),
+    // altrimenti rumore procedurale nello stato speaking. EMA per evitare
+    // lo sfarfallio frame-to-frame.
+    const level = getMouthLevel?.() ?? 0;
+    const target =
+      level > 0.015
+        ? Math.min(1, level * 2.4)
+        : talkMouthValue(t.current) * 0.55 * p.mouth;
+    mouthSmooth.current += (target - mouthSmooth.current) * Math.min(1, delta * 18);
+    setExpr('aa', mouthSmooth.current);
     setExpr('relaxed', p.relaxed);
 
     // (d) lookAt camera con micro-saccadi; in paused lo sguardo cala

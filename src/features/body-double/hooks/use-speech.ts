@@ -39,6 +39,11 @@ export function useSpeech() {
   const serverTtsRef = useRef<'unknown' | 'yes' | 'no'>('unknown');
   /** Generazione corrente: una nuova speak/stop invalida i callback in volo. */
   const seqRef = useRef(0);
+  // Labiale: AnalyserNode sull'audio TTS (creato UNA volta insieme all'Audio
+  // element — createMediaElementSource è one-shot per elemento).
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const levelDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
 
   useEffect(() => {
     // Audio element è universale: il toggle ha senso anche dove manca
@@ -145,7 +150,32 @@ export function useSpeech() {
             if (seqRef.current !== seq) return; // superato da stop/speak nuova
             serverTtsRef.current = 'yes';
 
-            const audio = (audioRef.current ??= new Audio());
+            let audio = audioRef.current;
+            if (!audio) {
+              audio = audioRef.current = new Audio();
+              // Catena per il labiale: source → analyser → output. Il primo
+              // play arriva sempre dopo un gesto (avvio sessione) → il
+              // context nasce/riparte senza blocchi autoplay.
+              try {
+                const Ctx = window.AudioContext;
+                if (Ctx) {
+                  const ctx = (audioCtxRef.current = new Ctx());
+                  const source = ctx.createMediaElementSource(audio);
+                  const analyser = ctx.createAnalyser();
+                  analyser.fftSize = 512;
+                  analyser.smoothingTimeConstant = 0.6;
+                  source.connect(analyser);
+                  analyser.connect(ctx.destination);
+                  analyserRef.current = analyser;
+                  levelDataRef.current = new Uint8Array(analyser.fftSize);
+                }
+              } catch {
+                // niente analyser: l'audio suona comunque, labiale procedurale
+              }
+            }
+            if (audioCtxRef.current?.state === 'suspended') {
+              void audioCtxRef.current.resume().catch(() => {});
+            }
             releaseObjectUrl();
             const url = URL.createObjectURL(blob);
             objectUrlRef.current = url;
@@ -173,8 +203,35 @@ export function useSpeech() {
     [enabled, speakBrowser, stop],
   );
 
-  // Stop allo smontaggio: la voce non deve sopravvivere alla vista.
-  useEffect(() => stop, [stop]);
+  /**
+   * Livello RMS istantaneo [0..~0.5] dell'audio TTS in riproduzione (0 se
+   * fermo o se il labiale non è disponibile, es. fallback speechSynthesis).
+   * Chiamata per-frame dal rig dell'avatar: nessuna allocazione.
+   */
+  const getAudioLevel = useCallback((): number => {
+    const analyser = analyserRef.current;
+    const data = levelDataRef.current;
+    const audio = audioRef.current;
+    if (!analyser || !data || !audio || audio.paused) return 0;
+    analyser.getByteTimeDomainData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) {
+      const v = (data[i] - 128) / 128;
+      sum += v * v;
+    }
+    return Math.sqrt(sum / data.length);
+  }, []);
 
-  return { supported, enabled, setEnabled, speak, stop };
+  // Stop allo smontaggio: la voce non deve sopravvivere alla vista (il
+  // context audio si chiude per liberare l'hardware).
+  useEffect(() => {
+    return () => {
+      stop();
+      void audioCtxRef.current?.close().catch(() => {});
+      audioCtxRef.current = null;
+      analyserRef.current = null;
+    };
+  }, [stop]);
+
+  return { supported, enabled, setEnabled, speak, stop, getAudioLevel };
 }

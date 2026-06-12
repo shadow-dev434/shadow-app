@@ -24,10 +24,12 @@ function VrmScene({
   state,
   onReady,
   onFail,
+  getMouthLevel,
 }: {
   state: AvatarState;
   onReady: () => void;
   onFail: () => void;
+  getMouthLevel?: () => number;
 }) {
   const { vrm, failed } = useVrm(AVATAR_URL);
   useEffect(() => {
@@ -37,7 +39,7 @@ function VrmScene({
     if (failed) onFail();
   }, [failed, onFail]);
   if (!vrm) return null;
-  return <AvatarModel vrm={vrm} state={state} />;
+  return <AvatarModel vrm={vrm} state={state} getMouthLevel={getMouthLevel} />;
 }
 
 export default function AvatarCanvas({
@@ -45,11 +47,13 @@ export default function AvatarCanvas({
   onReady,
   onFail,
   onContextLost,
+  getMouthLevel,
 }: {
   state: AvatarState;
   onReady: () => void;
   onFail: () => void;
   onContextLost: () => void;
+  getMouthLevel?: () => number;
 }) {
   return (
     <Canvas
@@ -57,10 +61,11 @@ export default function AvatarCanvas({
       frameloop="demand"
       dpr={[1, 1.5]}
       gl={{ powerPreference: 'low-power', antialias: true, alpha: true }}
-      camera={{ fov: 30, position: [0, 1.35, 1.7] }}
+      // Default pre-load; l'inquadratura definitiva la fissa AvatarModel
+      // sull'altezza reale della testa (framing videochiamata).
+      camera={{ fov: 26, position: [0, 1.4, 0.9] }}
       onCreated={({ gl, camera }) => {
-        // Inquadratura mezzo busto: camera all'altezza della testa.
-        camera.lookAt(0, 1.3, 0);
+        camera.lookAt(0, 1.36, 0);
         gl.domElement.addEventListener('webglcontextlost', (e) => {
           e.preventDefault();
           onContextLost();
@@ -70,7 +75,7 @@ export default function AvatarCanvas({
       <ambientLight intensity={0.9} />
       <directionalLight position={[1, 2, 3]} intensity={1.4} />
       <FrameLimiter />
-      <VrmScene state={state} onReady={onReady} onFail={onFail} />
+      <VrmScene state={state} onReady={onReady} onFail={onFail} getMouthLevel={getMouthLevel} />
     </Canvas>
   );
 }

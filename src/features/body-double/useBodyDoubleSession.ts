@@ -9,7 +9,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MicroStep } from '@/store/shadow-store';
 import { startShield, stopShield } from '@/lib/focus-shield';
 import type { CheckinOutcome, CheckinTrigger } from '@/lib/body-double/checkin';
-import { TIME_UP_MESSAGE, type AvatarState, type BodyDoublePhase, type CheckinBubble } from './types';
+import { CHAT_HISTORY_MAX_MESSAGES } from '@/lib/body-double/chat';
+import { TIME_UP_MESSAGE, type AvatarState, type BodyDoublePhase, type CompanionMessage } from './types';
 import { useSpeech } from './hooks/use-speech';
 
 const CHECKIN_INTERVAL_MS = 10 * 60_000; // cadenza ~10 min (doc 37)
@@ -93,7 +94,9 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
   const [steps, setSteps] = useState<MicroStep[]>([]);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [paused, setPaused] = useState(false);
-  const [bubble, setBubble] = useState<CheckinBubble | null>(null);
+  const [messages, setMessages] = useState<CompanionMessage[]>([]);
+  const [chatPending, setChatPending] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +107,8 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
   const lastOutcomeRef = useRef<CheckinOutcome>('none');
   const lastCheckinAtRef = useRef(0);
   const checkinInFlightRef = useRef(false);
+  const msgIdRef = useRef(0);
+  const messagesRef = useRef<CompanionMessage[]>([]);
   const speakingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Stato letto dal tick dell'interval senza ricrearlo a ogni render.
   const phaseRef = useRef(phase);
@@ -116,8 +121,17 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
   taskRef.current = task;
   const stepsRef = useRef(steps);
   stepsRef.current = steps;
+  messagesRef.current = messages;
 
   const avatarState: AvatarState = paused ? 'paused' : speaking ? 'speaking' : 'present';
+
+  const pushMessage = useCallback(
+    (msg: Omit<CompanionMessage, 'id' | 'at'>): void => {
+      msgIdRef.current += 1;
+      setMessages((prev) => [...prev, { ...msg, id: msgIdRef.current, at: Date.now() }]);
+    },
+    [],
+  );
 
   // Voce di Shadow (TTS browser v1 — anticipo voce-in-uscita, doc 37): lo
   // stato "parla" segue la durata reale dell'utterance; voce spenta o non
@@ -129,6 +143,7 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
     supported: voiceSupported,
     enabled: voiceEnabled,
     setEnabled: setVoiceEnabled,
+    getAudioLevel,
   } = useSpeech();
 
   const speak = useCallback(
@@ -164,7 +179,7 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
         if (res.ok) {
           const data = (await res.json()) as { text?: string };
           if (data.text) {
-            setBubble({ text: data.text, at: Date.now(), replied: false });
+            pushMessage({ role: 'assistant', kind: 'checkin', content: data.text, replied: false });
             speak(data.text);
           }
         }
@@ -176,7 +191,7 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
         checkinInFlightRef.current = false;
       }
     },
-    [speak],
+    [speak, pushMessage],
   );
 
   // ── Mount: fetch task + recovery di una sessione body_double attiva ──
@@ -332,9 +347,18 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
     [doCheckin, persistSteps],
   );
 
+  const markLastCheckinReplied = useCallback(() => {
+    setMessages((prev) => {
+      const idx = [...prev].reverse().findIndex((m) => m.role === 'assistant' && m.kind === 'checkin' && !m.replied);
+      if (idx === -1) return prev;
+      const realIdx = prev.length - 1 - idx;
+      return prev.map((m, i) => (i === realIdx ? { ...m, replied: true } : m));
+    });
+  }, []);
+
   const quickReply = useCallback(
     (outcome: Exclude<CheckinOutcome, 'none'>) => {
-      setBubble((b) => (b ? { ...b, replied: true } : b));
+      markLastCheckinReplied();
       lastOutcomeRef.current = outcome;
       if (outcome === 'step_done') {
         const firstPending = stepsRef.current.find((s) => !s.done);
@@ -349,7 +373,50 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
         void doCheckin('interval');
       }
     },
-    [doCheckin, markStepDone],
+    [doCheckin, markStepDone, markLastCheckinReplied],
+  );
+
+  // ── Chat libera col companion (richiesta Antonio 2026-06-13) ──
+  // History client-side per la durata della sessione (si perde al reload:
+  // accettato in beta). Un messaggio dell'utente "risponde" anche all'ultimo
+  // check-in e posticipa il prossimo check-in periodico.
+  const sendChatMessage = useCallback(
+    async (raw: string) => {
+      const text = raw.trim();
+      const s = sessionRef.current;
+      const t = taskRef.current;
+      if (!text || !s || !t || chatPending) return;
+      setChatError(null);
+      markLastCheckinReplied();
+      const lastOutcome = lastOutcomeRef.current;
+      lastOutcomeRef.current = 'none';
+      const history = messagesRef.current
+        .slice(-CHAT_HISTORY_MAX_MESSAGES)
+        .map((m) => ({ role: m.role, content: m.content }));
+      pushMessage({ role: 'user', kind: 'chat', content: text });
+      setChatPending(true);
+      lastCheckinAtRef.current = Date.now(); // conversazione attiva = niente check-in sovrapposti
+      try {
+        const res = await fetch('/api/body-double/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: s.id, taskId: t.id, message: text, history, lastOutcome }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { text?: string; error?: string };
+        if (res.ok && data.text) {
+          pushMessage({ role: 'assistant', kind: 'chat', content: data.text });
+          speak(data.text);
+          lastCheckinAtRef.current = Date.now();
+        } else {
+          setChatError(data.error ?? 'Shadow non riesce a risponderti ora. Riprova tra poco.');
+        }
+      } catch {
+        setChatError('Connessione persa: il messaggio non è arrivato. Riprova.');
+      } finally {
+        setChatPending(false);
+      }
+    },
+    [chatPending, markLastCheckinReplied, pushMessage, speak],
   );
 
   const decompose = useCallback(async () => {
@@ -462,7 +529,9 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
     task,
     steps,
     paused,
-    bubble,
+    messages,
+    chatPending,
+    chatError,
     avatarState,
     remainingSeconds,
     plannedMinutes: session?.plannedDurationMinutes ?? null,
@@ -473,10 +542,12 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
     voiceSupported,
     voiceEnabled,
     setVoiceEnabled,
+    getMouthLevel: getAudioLevel,
     start,
     togglePause,
     markStepDone,
     quickReply,
+    sendChatMessage,
     decompose,
     extend,
     closeSession,
