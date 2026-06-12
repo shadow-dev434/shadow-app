@@ -279,13 +279,13 @@ workstream:
 | WS | Spec | Contenuto | Dipendenze |
 |---|---|---|---|
 | W0 | `docs/tasks/30-v3-w0-checklist-amministrativa.md` | Apple Developer + entitlement FamilyControls, RevenueCat, Stripe, FCM, verifica OAuth, Mac, legal EN | — (**Antonio, SUBITO**) |
-| W1 | `docs/tasks/31-v3-w1-migration-schema.md` | Migration additiva unica (Subscription, RcWebhookEvent, AppConfig, AiUsage, PushDevice, UserProfile.locale) | ratificata col piano |
+| W1 | `docs/tasks/31-v3-w1-migration-schema.md` | Migration additiva unica (Subscription, RcWebhookEvent, AppConfig, AiUsage, PushDevice, UserProfile.locale) — 🔄 2026-06-12: schema+export/account su `feature/v3-w1`, build verde; **`bun run db:migrate` in attesa di conferma Antonio** (Neon dev=prod) | ratificata col piano |
 | W2 | `docs/tasks/32-v3-w2-entitlements-billing.md` | Entitlements, webhook RevenueCat, Stripe web, paywall, trial 21gg | W1 |
 | W3 | `docs/tasks/33-v3-w3-model-router.md` | Router (tier × taskClass), budget giornaliero con degradazione, Opus 4.8 | W1 (∥ W2) |
 | W4 | `docs/tasks/34-v3-w4-i18n.md` | next-intl it/en, estrazione ~1.050 stringhe, prompt bilingui | W1 (long-tail) |
 | W5 | `docs/tasks/35-v3-w5-capacitor-android.md` | Capacitor, sostituzione TWA, auth bridge, push, app blocker, IAP | W1-W2 |
 | W6 | `docs/tasks/36-v3-w6-ios.md` | iOS bring-up + Screen Time (FamilyControls) | W5 + Mac + entitlement |
-| W7 | `docs/tasks/37-v3-w7-body-doubling.md` | Avatar 3D + check-in AI + review profonda Opus | W3 + W5/W6 |
+| W7 | `docs/tasks/37-v3-w7-body-doubling.md` | Avatar 3D + check-in AI + review profonda Opus — 🔄 2026-06-12: **anticipo web in beta** su `feature/v3-w7-body-doubling` (vista /focus, check-in Haiku hardcoded, shield no-op, friction estratta; tagli e stato nella sezione "Rilascio beta web" del doc 37); restano per W7 pieno: scena 3D VRM (deps in attesa di conferma), gating W2, router W3, shield nativo W5/W6, review Opus | W3 + W5/W6 (anticipo web: solo W1) |
 | W8 | `docs/tasks/38-v3-w8-pro-google.md` | Calendar ingest (lancio), Gmail fase 2 (CASA) | W2 |
 | W9 | `docs/tasks/39-v3-w9-store-submission.md` | Submission bilingue Apple + Play | tutto |
 
