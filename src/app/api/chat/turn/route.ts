@@ -2,7 +2,7 @@
  * POST /api/chat/turn
  *
  * Body: { threadId?: string, mode: ChatMode, userMessage: string, relatedTaskId?: string, clientDate?: string }
- * Response: { threadId, assistantMessage, toolsExecuted, costUsd, ... }
+ * Response: { threadId, mode, assistantMessage, toolsExecuted, costUsd, ... }
  *
  * Auth: requires NextAuth session cookie. Set by /api/auth/login.
  */
@@ -88,6 +88,11 @@ export async function POST(req: NextRequest) {
       ),
     );
 
+    // Task 41 (bug mode-sticky post-review): result.mode e' il mode
+    // autorevole post-turno calcolato dall'orchestrator (thread terminale a
+    // fine turno -> 'general'; altrimenti thread.mode, garantito dal guard
+    // anti mode-spoof di Section 1). ChatView fa setMode(data.mode) accanto
+    // a setThreadId a ogni risposta.
     return NextResponse.json(result);
   } catch (err) {
     console.error('[/api/chat/turn] error:', err);

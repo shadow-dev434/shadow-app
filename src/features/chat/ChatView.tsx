@@ -28,6 +28,8 @@ interface Message {
 
 interface TurnResponse {
   threadId: string;
+  /** Mode autorevole del thread effettivo dopo il turno (Task 41). */
+  mode?: string;
   assistantMessage: string;
   toolsExecuted: ToolExecution[];
   quickReplies?: QuickReply[];
@@ -232,6 +234,13 @@ export function ChatView() {
 
       const data = (await res.json()) as TurnResponse;
       setThreadId(data.threadId);
+      // Task 41: adotta il mode autorevole dal server. Senza questo, dopo la
+      // chiusura della review il client resterebbe sticky su 'evening_review'
+      // e dal secondo messaggio re-inizializzerebbe la review sul nuovo
+      // thread general creato dal path BUG #C (vedi turn/route.ts).
+      if (data.mode && data.mode !== mode) {
+        setMode(data.mode);
+      }
 
       const assistantMsg: Message = {
         id: 'assist-' + Date.now(),
@@ -274,6 +283,13 @@ export function ChatView() {
 
   const handleStartEveningReview = () => {
     setEveningReviewShouldStart(false);
+    // La review parte SEMPRE su un thread nuovo. La card e' visibile solo a
+    // chat vuota, ma threadId puo' essere non-null se il rehydrate ha trovato
+    // un thread attivo SENZA messaggi (orfano di un primo turno fallito):
+    // senza reset il primo turno evening_review finirebbe su quel thread
+    // general e il guard anti mode-spoof dell'orchestrator lo degraderebbe a
+    // general (review mai partita). Il thread orfano resta com'era.
+    setThreadId(null);
     setMode('evening_review');
     setTimeout(() => inputRef.current?.focus(), 50);
   };
