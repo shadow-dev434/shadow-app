@@ -31,8 +31,8 @@ le raccomandate, annotate qui):
 
 | Tema | Decisione |
 |---|---|
-| Modello VRM | CC0 esistente: **Vita.vrm** (β AvatarSample_3, pixiv/VRoid — CC0 da FAQ ufficiale, ~14MB, androgino). Verifica manuale licenza prima del commit + `public/models/LICENSE-avatar.md`. |
-| Aspetto | Umanoide neutro/androgino (Vita). Mascotte-ombra custom = eventuale v3. |
+| Modello VRM | ~~Vita.vrm~~ → **Sendagaya_Shino.vrm** (pixiv/VRoid, CC0). La verifica licenza 2026-06-12 ha scartato Vita: CC0 non confermabile (FAQ 403 per i bot, OpenGameArt non la elenca, mirror senza il file). Shino è CC0 confermato (OpenGameArt + mirror madjin/vrm-samples, 15MB). Asset committato: `public/models/avatar-v1.vrm` + `LICENSE-avatar.md` (link FAQ da verificare a occhio prima del lancio pubblico). |
+| Aspetto | Richiesto neutro/androgino, ma nessun CC0 verificato disponibile → applicato il fallback documentato nella domanda di prodotto: **femminile anime-style** (Shino). Swap libero in seguito (es. custom VRoid Studio di Antonio), file versionato senza tocchi al codice. |
 | Timer | Default da `task.sessionDuration` (25), preset 25/50/90; a scadenza bolla locale +15/chiusura (no LLM). |
 | Check-in | Quick-reply "Tutto ok / Sono bloccato / Fatto!" → `lastOutcome` del check-in successivo; "Sono bloccato" → check-in immediato; niente testo libero. |
 
