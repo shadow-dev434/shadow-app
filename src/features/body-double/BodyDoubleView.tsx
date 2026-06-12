@@ -68,7 +68,7 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
           <h1 className="text-xl font-bold text-white">Sessione chiusa</h1>
           <p className="text-sm text-zinc-400">
             {bd.summary
-              ? `${bd.summary.actualMinutes} minuti con Shadow` +
+              ? `${bd.summary.actualMinutes} ${bd.summary.actualMinutes === 1 ? 'minuto' : 'minuti'} con Shadow` +
                 (bd.summary.stepsTotal > 0
                   ? ` · ${bd.summary.stepsDone}/${bd.summary.stepsTotal} passi fatti`
                   : '')
