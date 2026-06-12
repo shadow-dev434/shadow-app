@@ -21,3 +21,10 @@ scripts/temp-*.ts
 scripts/replay-*.ts
 scripts/dump-*.ts
 scripts/cleanup-evening-review-failed-bug13.ts
+
+# Android / TWA signing artifacts — mai committare keystore o chiavi (R6, Giulio)
+*.keystore
+*.jks
+
+# Config locale del launcher Claude Code desktop (porte/runtime di questa macchina)
+.claude/launch.json
