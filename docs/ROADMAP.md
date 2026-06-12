@@ -260,6 +260,7 @@ Google → PRO+, voce → MAX. Billing fuori scope (task futuro).
 | 26 | Google Calendar (fasi 1-2) + Gmail ingest (fase 3) + hardening (fase 4) | `docs/tasks/26-google-integrations.md` | `feature/26-google` | 9-10 sess. |
 | 27 | Body doubling voice-first (spike → MVP → polish) | `docs/tasks/27-body-doubling-voice.md` | `feature/27-voice` | 16-22 sess. |
 | 40 | ✅ Rolling summary chat + finestra 60 con caching history (pre-beta, 2026-06-11) | `docs/tasks/40-rolling-summary.md` | `feature/40-rolling-summary` | 1 sess. |
+| 41 | ✅ Slice 9 — calibrazione learning fill ratio + signal `task_postponed` (chiude Task 5; 2026-06-12) | `docs/tasks/41-slice-9-calibrazione-learning.md` | `feature/41-slice-9-calibrazione` (merged) | 1 sess. |
 
 Ordine consigliato: 24 → 25 → spike 27-fase-0 (GO/NO-GO su mic in TWA) → 26 Calendar →
 27 MVP voce → 26 Gmail → 27 polish. Compliance Google: Calendar = verifica gratuita

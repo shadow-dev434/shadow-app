@@ -206,3 +206,20 @@ apertura+mood (1-3) → per_entry 2 task kept (4-8) → `plan_preview` confermat
 Costo walk LLM: ~$1.04 (10 turni tier smart su prompt evening review pieno).
 Cleanup cascade eseguito. Nota: con utenti senza piani in finestra il campo resta
 NULL (coperto da probe deterministica scenario D + unit).
+
+## Migration in produzione — stato al 2026-06-12
+
+`20260611215857_add_calibrated_fill_ratio` è applicata all'host
+`ep-royal-feather…` (`.env.local`). Per il riallineamento di sessione del
+2026-06-12 quel Neon è **condiviso dev=prod** (consolidamento post-incidente
+doc 23 — gli host `billowing-bird`/`purple-paper` del verbale non sono più
+quelli attivi): la colonna è quindi **già live anche per la produzione**,
+nessun gate di deploy pendente.
+
+Caveat residuo: l'orchestrator legge la riga `AdaptiveProfile` intera
+(`findUnique` senza `select`) — se in futuro le env Vercel Production
+puntassero a un DB diverso senza questa migration, ogni path che tocca il
+profilo fallirebbe a runtime con P2022 (pattern incidente doc 23). In quel
+caso: `prisma migrate deploy` mirato (pattern verbale doc 23, gate read-only
+`migrate status` prima). Smoke naturale: la prima review serale completata in
+prod senza errori conferma la colonna.
