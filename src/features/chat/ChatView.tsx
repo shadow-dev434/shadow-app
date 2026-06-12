@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { List, Send, Loader2, CheckCircle2 } from 'lucide-react';
+import { Archive, Info, List, Pencil, Send, Loader2, CheckCircle2 } from 'lucide-react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { BetaCheckin } from '@/features/beta/BetaCheckinCard';
 
@@ -70,6 +70,7 @@ const SUGGESTED_PROMPTS = [
   { label: 'Ho un task nuovo', prompt: 'Devo aggiungere qualcosa alla lista: ' },
   { label: 'Cosa ho in lista?', prompt: 'Cosa ho in lista oggi?' },
   { label: 'Sono bloccato', prompt: 'Sono bloccato su qualcosa e non riesco a partire.' },
+  { label: 'Come funziona Shadow?', prompt: 'Spiegami come funziona Shadow e cosa puoi fare per me.' },
 ];
 
 export function ChatView() {
@@ -536,10 +537,38 @@ function QuickReplyButtons({
   );
 }
 
+// Etichette italiane dei campi di update_task (l'executor ritorna i nomi
+// tecnici in `changed`).
+const FIELD_LABELS: Record<string, string> = {
+  title: 'titolo',
+  description: 'descrizione',
+  urgency: 'urgenza',
+  importance: 'importanza',
+  category: 'categoria',
+  deadline: 'scadenza',
+};
+
 function ToolExecutionCard({ tool }: { tool: ToolExecution }) {
   if (tool.name === 'create_task') {
-    const result = tool.result as { title?: string; urgency?: number; category?: string } | null;
+    const result = tool.result as {
+      title?: string;
+      urgency?: number;
+      category?: string;
+      alreadyExists?: boolean;
+    } | null;
     if (!result?.title) return null;
+    // Task 42: il dedup guard non ha creato nulla — card neutra, non "creato".
+    if (result.alreadyExists) {
+      return (
+        <div className="flex items-start gap-2 bg-zinc-800/50 border border-zinc-700 rounded-lg px-3 py-2">
+          <Info size={16} className="text-zinc-400 mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <div className="text-xs text-zinc-400 font-medium">Già in lista</div>
+            <div className="text-sm text-zinc-200 truncate">{result.title}</div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex items-start gap-2 bg-emerald-950/40 border border-emerald-900/50 rounded-lg px-3 py-2">
         <CheckCircle2 size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
@@ -553,6 +582,59 @@ function ToolExecutionCard({ tool }: { tool: ToolExecution }) {
               {result.urgency && <span>urgenza {result.urgency}</span>}
             </div>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  if (tool.name === 'complete_task') {
+    const result = tool.result as { title?: string; alreadyCompleted?: boolean } | null;
+    if (!result?.title) return null;
+    return (
+      <div className="flex items-start gap-2 bg-emerald-950/40 border border-emerald-900/50 rounded-lg px-3 py-2">
+        <CheckCircle2 size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs text-emerald-400 font-medium">
+            {result.alreadyCompleted ? 'Era già completato' : 'Task completato'}
+          </div>
+          <div className="text-sm text-zinc-200 truncate line-through decoration-zinc-500">
+            {result.title}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (tool.name === 'update_task') {
+    const result = tool.result as { title?: string; changed?: string[] } | null;
+    if (!result?.title) return null;
+    return (
+      <div className="flex items-start gap-2 bg-sky-950/40 border border-sky-900/50 rounded-lg px-3 py-2">
+        <Pencil size={16} className="text-sky-500 mt-0.5 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs text-sky-400 font-medium">Task aggiornato</div>
+          <div className="text-sm text-zinc-200 truncate">{result.title}</div>
+          {result.changed && result.changed.length > 0 && (
+            <div className="text-xs text-zinc-500 mt-0.5">
+              {result.changed.map(f => FIELD_LABELS[f] ?? f).join(', ')}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (tool.name === 'archive_task') {
+    const result = tool.result as { title?: string; alreadyArchived?: boolean } | null;
+    if (!result?.title) return null;
+    return (
+      <div className="flex items-start gap-2 bg-zinc-800/50 border border-zinc-700 rounded-lg px-3 py-2">
+        <Archive size={16} className="text-zinc-400 mt-0.5 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs text-zinc-400 font-medium">
+            {result.alreadyArchived ? 'Era già archiviato' : 'Task archiviato'}
+          </div>
+          <div className="text-sm text-zinc-200 truncate">{result.title}</div>
         </div>
       </div>
     );
