@@ -802,6 +802,22 @@ export async function orchestrate(
     finalAssistantMessage = finalAssistantMessage.replace(QR_REGEX, '').trim();
   }
 
+  // ── 8b. Empty-response fallback (Task 42) ───────────────────────────
+  // Osservato nel beta test 2026-06-12: il modello puo' chiudere il turno
+  // senza testo (stop con soli tool_use sotto il cap, oppure testo che lo
+  // strip QR riduce a ''). Senza guard il client mostra la bolla
+  // "(nessuna risposta)" (ChatView.tsx). Fallback deterministico: niente
+  // chiamata LLM aggiuntiva (costo/latenza), il warn e' l'osservabile.
+  if (finalAssistantMessage.trim() === '') {
+    console.warn(
+      `[orchestrator] empty-response fallback: threadId=${thread.id}, ` +
+      `mode=${mode}, iterations=${iteration}, toolsExecuted=${toolsExecuted.length}`,
+    );
+    finalAssistantMessage = toolsExecuted.length > 0
+      ? 'Fatto. Dimmi tu come proseguiamo.'
+      : 'Mi sono perso un attimo — puoi ripetere?';
+  }
+
   // ── 9. Atomic commit: assistant message + thread update (lastTurnAt + optional contextJson)
   // Single $transaction so a partial write cannot leave an orphan assistant message
   // without the corresponding triage state, and vice versa.

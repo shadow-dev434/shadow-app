@@ -79,13 +79,16 @@ export function ChatView() {
   const [mode, setMode] = useState<string>('general');
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; status?: number } | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [eveningReviewShouldStart, setEveningReviewShouldStart] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const mountInitCalled = useRef(false);
+  // Ultimo messaggio utente fallito, per il Riprova (Task 42). Ref e non
+  // state: serve solo al click handler, nessun re-render necessario.
+  const lastFailedRef = useRef<string | null>(null);
 
   // Mount init: prima prova a rehydratare un thread attivo esistente
   // via GET /api/chat/active-thread. Se non ce n'e' nessuno (o il
@@ -197,20 +200,24 @@ export function ChatView() {
     }
   }, [input]);
 
-  const sendMessage = useCallback(async (text: string) => {
+  const sendMessage = useCallback(async (text: string, opts?: { isRetry?: boolean }) => {
     const trimmed = text.trim();
     if (!trimmed || sending) return;
 
     setError(null);
     setSending(true);
 
-    const userMsg: Message = {
-      id: 'temp-' + Date.now(),
-      role: 'user',
-      content: trimmed,
-      createdAt: new Date().toISOString(),
-    };
-    setMessages(prev => [...prev, userMsg]);
+    // Sul retry la bolla utente ottimistica del tentativo fallito e' gia'
+    // in lista: non duplicarla (Task 42).
+    if (!opts?.isRetry) {
+      const userMsg: Message = {
+        id: 'temp-' + Date.now(),
+        role: 'user',
+        content: trimmed,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, userMsg]);
+    }
     setInput('');
 
     try {
@@ -229,7 +236,11 @@ export function ChatView() {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({ error: 'Errore sconosciuto' }));
-        throw new Error(errData.error || 'HTTP ' + res.status);
+        // Lo status serve all'error box: 404 (probabile deployment skew) ha
+        // un'azione diversa (Ricarica) dal resto (Riprova). Task 42.
+        const err = new Error(errData.error || 'HTTP ' + res.status) as Error & { status?: number };
+        err.status = res.status;
+        throw err;
       }
 
       const data = (await res.json()) as TurnResponse;
@@ -251,9 +262,12 @@ export function ChatView() {
         createdAt: new Date().toISOString(),
       };
       setMessages(prev => [...prev, assistantMsg]);
+      lastFailedRef.current = null;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Errore';
-      setError(msg);
+      const status = err instanceof Error ? (err as Error & { status?: number }).status : undefined;
+      lastFailedRef.current = trimmed;
+      setError({ message: msg, status });
     } finally {
       setSending(false);
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -345,8 +359,33 @@ export function ChatView() {
         {sending && <ThinkingIndicator />}
 
         {error && (
-          <div className="max-w-[85%] bg-red-950/50 border border-red-900 text-red-200 text-sm px-4 py-2 rounded-lg">
-            Errore: {error}
+          <div className="max-w-[85%] bg-red-950/50 border border-red-900 text-red-200 text-sm px-4 py-2 rounded-lg space-y-2">
+            <div>
+              {error.status === 404
+                ? 'Non ho raggiunto il server — probabile aggiornamento dell\'app in corso.'
+                : `Errore: ${error.message}`}
+            </div>
+            {error.status === 404 ? (
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="px-3 py-1 bg-red-900/40 hover:bg-red-900/60 active:bg-red-900 border border-red-800 rounded-md text-xs font-medium text-red-100 transition-colors"
+              >
+                Ricarica
+              </button>
+            ) : lastFailedRef.current ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const failed = lastFailedRef.current;
+                  if (failed) sendMessage(failed, { isRetry: true });
+                }}
+                disabled={sending}
+                className="px-3 py-1 bg-red-900/40 hover:bg-red-900/60 active:bg-red-900 border border-red-800 rounded-md text-xs font-medium text-red-100 disabled:opacity-50 transition-colors"
+              >
+                Riprova
+              </button>
+            ) : null}
           </div>
         )}
       </div>
