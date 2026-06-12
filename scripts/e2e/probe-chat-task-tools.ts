@@ -194,19 +194,26 @@ async function main(): Promise<void> {
     });
     warn('S3 titolo aggiornato sul DB', renamed !== null);
 
-    // ── Scenario 4: archive_task (con conferma nel messaggio) ────────────
+    // ── Scenario 4: archive_task (flusso a due turni: richiesta → conferma)
+    // Il prompt impone conferma esplicita: il modello legittimamente puo'
+    // chiedere prima di archiviare. Il probe replica il flusso utente reale.
     const archiveTitle = renamed?.title ?? 'Comprare il pane';
-    const t4 = await postTurn(
+    const t4a = await postTurn(
       cookie,
-      `Il task "${archiveTitle}" non mi serve più: archivialo. Sì, confermo l'archiviazione.`,
+      `Il task "${archiveTitle}" non mi serve più: toglilo dalla lista.`,
       threadId,
     );
-    check('S4 turno HTTP 200', t4.status === 200, `status=${t4.status}`);
-    warn(
-      'S4 il modello ha chiamato archive_task',
-      toolNames(t4.json).includes('archive_task'),
-      `tool=${toolNames(t4.json).join(',') || 'nessuno'}`,
-    );
+    threadId = t4a.json.threadId ?? threadId;
+    check('S4a turno HTTP 200', t4a.status === 200, `status=${t4a.status}`);
+    let archivedNow = toolNames(t4a.json).includes('archive_task');
+    let s4detail = `t4a tool=[${toolNames(t4a.json).join(',')}] msg="${(t4a.json.assistantMessage ?? '').slice(0, 100)}"`;
+    if (!archivedNow) {
+      const t4b = await postTurn(cookie, 'Sì, confermo: archivialo.', threadId);
+      check('S4b turno HTTP 200', t4b.status === 200, `status=${t4b.status}`);
+      archivedNow = toolNames(t4b.json).includes('archive_task');
+      s4detail += ` | t4b tool=[${toolNames(t4b.json).join(',')}] msg="${(t4b.json.assistantMessage ?? '').slice(0, 100)}"`;
+    }
+    warn('S4 archive_task chiamato (subito o dopo conferma)', archivedNow, s4detail);
     const archived = await db.task.findFirst({
       where: { userId, title: archiveTitle, status: 'archived' },
     });
