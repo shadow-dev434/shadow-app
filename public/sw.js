@@ -8,8 +8,8 @@
 // Tailwind nuove assenti → layout rotto, visto in QA W7).
 // v5 (2026-06-12, Task 42): card tool gestione task + error UX in ChatView.
 const CACHE_NAME = 'shadow-v2';
-const STATIC_CACHE = 'shadow-static-v5';
-const DYNAMIC_CACHE = 'shadow-dynamic-v5';
+const STATIC_CACHE = 'shadow-static-v6';
+const DYNAMIC_CACHE = 'shadow-dynamic-v6';
 
 const STATIC_ASSETS = [
   '/',
