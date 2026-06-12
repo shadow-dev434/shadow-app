@@ -12,10 +12,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
-  Check, Loader2, Pause, Play, Sparkles, Timer, X,
+  Check, Loader2, Pause, Play, Sparkles, Timer, Volume2, VolumeX, X,
 } from 'lucide-react';
 import { StrictModeExitDialog } from '@/features/strict-mode/StrictModeExitDialog';
 import { AvatarStage } from './AvatarStage';
+import { TIME_UP_MESSAGE } from './types';
 import { useBodyDoubleSession } from './useBodyDoubleSession';
 
 function formatTimer(totalSeconds: number): string {
@@ -142,9 +143,21 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
           <X className="w-5 h-5" />
         </button>
         <p className="text-sm text-zinc-400 truncate max-w-[45%]">{bd.task?.title}</p>
-        <div className="flex items-center gap-2 font-mono text-lg text-white" data-testid="bd-timer">
-          <Timer className="w-4 h-4 text-violet-400" />
-          {formatTimer(bd.remainingSeconds)}
+        <div className="flex items-center gap-3">
+          {bd.voiceSupported && (
+            <button
+              onClick={() => bd.setVoiceEnabled(!bd.voiceEnabled)}
+              className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-400 hover:text-violet-300"
+              aria-label={bd.voiceEnabled ? 'Disattiva la voce di Shadow' : 'Attiva la voce di Shadow'}
+              data-testid="bd-voice-toggle"
+            >
+              {bd.voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+            </button>
+          )}
+          <div className="flex items-center gap-2 font-mono text-lg text-white" data-testid="bd-timer">
+            <Timer className="w-4 h-4 text-violet-400" />
+            {formatTimer(bd.remainingSeconds)}
+          </div>
         </div>
       </header>
 
@@ -162,9 +175,7 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
                 exit={{ opacity: 0 }}
                 className="bg-zinc-900 border border-zinc-700 rounded-2xl rounded-tl-sm px-4 py-3 text-center"
               >
-                <p className="text-sm text-zinc-200 mb-3">
-                  Tempo finito. Altri 15 minuti o chiudiamo qui?
-                </p>
+                <p className="text-sm text-zinc-200 mb-3">{TIME_UP_MESSAGE}</p>
                 <div className="flex gap-2 justify-center">
                   <Button size="sm" className="bg-violet-600 hover:bg-violet-500" onClick={() => void bd.extend()}>
                     +15 minuti

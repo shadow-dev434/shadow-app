@@ -9,7 +9,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MicroStep } from '@/store/shadow-store';
 import { startShield, stopShield } from '@/lib/focus-shield';
 import type { CheckinOutcome, CheckinTrigger } from '@/lib/body-double/checkin';
-import type { AvatarState, BodyDoublePhase, CheckinBubble } from './types';
+import { TIME_UP_MESSAGE, type AvatarState, type BodyDoublePhase, type CheckinBubble } from './types';
+import { useSpeech } from './hooks/use-speech';
 
 const CHECKIN_INTERVAL_MS = 10 * 60_000; // cadenza ~10 min (doc 37)
 const STEP_DONE_THROTTLE_MS = 60_000; // step a raffica → un solo check-in al minuto
@@ -118,11 +119,32 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
 
   const avatarState: AvatarState = paused ? 'paused' : speaking ? 'speaking' : 'present';
 
-  const speak = useCallback(() => {
-    setSpeaking(true);
-    if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
-    speakingTimeoutRef.current = setTimeout(() => setSpeaking(false), SPEAKING_MS);
-  }, []);
+  // Voce di Shadow (TTS browser v1 — anticipo voce-in-uscita, doc 37): lo
+  // stato "parla" segue la durata reale dell'utterance; voce spenta o non
+  // supportata → finestra fissa SPEAKING_MS. Il safety timeout copre gli
+  // engine che non emettono onend.
+  const {
+    speak: ttsSpeak,
+    stop: ttsStop,
+    supported: voiceSupported,
+    enabled: voiceEnabled,
+    setEnabled: setVoiceEnabled,
+  } = useSpeech();
+
+  const speak = useCallback(
+    (text: string) => {
+      setSpeaking(true);
+      if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
+      const spoke = ttsSpeak(text, {
+        onEnd: () => {
+          if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
+          setSpeaking(false);
+        },
+      });
+      speakingTimeoutRef.current = setTimeout(() => setSpeaking(false), spoke ? 30_000 : SPEAKING_MS);
+    },
+    [ttsSpeak],
+  );
 
   const doCheckin = useCallback(
     async (trigger: CheckinTrigger) => {
@@ -143,7 +165,7 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
           const data = (await res.json()) as { text?: string };
           if (data.text) {
             setBubble({ text: data.text, at: Date.now(), replied: false });
-            speak();
+            speak(data.text);
           }
         }
         // 429 (cap giornaliero) o errori: silenzio — la presenza dell'avatar
@@ -211,6 +233,7 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
       setRemainingSeconds(remaining);
       if (phaseRef.current === 'running' && remaining <= 0) {
         setPhase('timeUp');
+        speak(TIME_UP_MESSAGE);
         return;
       }
       if (
@@ -222,7 +245,7 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
       }
     }, 1000);
     return () => clearInterval(id);
-  }, [doCheckin]);
+  }, [doCheckin, speak]);
 
   // Cleanup timeout dell'avatar allo smontaggio.
   useEffect(() => {
@@ -230,6 +253,14 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
       if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current);
     };
   }, []);
+
+  // In pausa la voce tace subito (il countdown invece continua).
+  useEffect(() => {
+    if (paused) {
+      ttsStop();
+      setSpeaking(false);
+    }
+  }, [paused, ttsStop]);
 
   // ── Azioni ──
   const start = useCallback(
@@ -369,10 +400,11 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
         stepsDone: all.filter((st) => st.done).length,
         stepsTotal: all.length,
       });
+      ttsStop();
       void stopShield();
       setPhase('ended');
     },
-    [],
+    [ttsStop],
   );
 
   const closeSession = useCallback(
@@ -393,10 +425,12 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
 
   // ── Exit anticipato con friction (StrictModeExitDialog estratto) ──
   const requestExit = useCallback(() => {
+    ttsStop();
+    setSpeaking(false);
     const s = sessionRef.current;
     if (s) void patchSession({ sessionId: s.id, status: 'pending_exit' });
     setExitDialogOpen(true);
-  }, []);
+  }, [ttsStop]);
 
   const cancelExit = useCallback(() => {
     const s = sessionRef.current;
@@ -436,6 +470,9 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
     summary,
     exitDialogOpen,
     decomposing,
+    voiceSupported,
+    voiceEnabled,
+    setVoiceEnabled,
     start,
     togglePause,
     markStepDone,

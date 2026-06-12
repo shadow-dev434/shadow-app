@@ -20,3 +20,6 @@ export interface CheckinBubble {
   /** true quando l'utente ha risposto (quick-reply) o la bolla è informativa. */
   replied: boolean;
 }
+
+/** Messaggio locale (no LLM) alla scadenza del timer — renderizzato E parlato. */
+export const TIME_UP_MESSAGE = 'Tempo finito. Altri 15 minuti o chiudiamo qui?';
