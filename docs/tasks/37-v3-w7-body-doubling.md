@@ -41,6 +41,24 @@ Tagli ratificati rispetto a questa spec:
 - Sessione: riuso `POST /api/strict-mode` con `triggerType:'body_double'`
   (+ `PATCH action:'extend'` per il +15 a fine timer). Niente
   ChatThread/persistenza dei check-in: stato client + `AiUsage`.
+- **Chat conversazionale col companion** (feedback Antonio 2026-06-13, commit
+  `31e914d`): thread nella vista (check-in + chat libera), input "Scrivi a
+  Shadow", risposte parlate. `POST /api/body-double/chat`: Haiku one-shot,
+  history client-side (max 16 turni sanitizzati — si perde al reload,
+  accettato in beta), system statico cacheable con **tecniche adulti dal
+  Manuale ADHD del Dr. Errico** (2-minuti, snowball, implementation
+  intentions, pomodoro adattato, MIT, riformulazione CBT, dopamine menu,
+  RAIN, ora/non-ora — UNA alla volta, mai lezione; limiti: no diagnosi/farmaci)
+  + contesto dinamico del task. Cap `BODY_DOUBLE_DAILY_CHAT_CAP` (default
+  200), AiUsage `body_double_chat` ~$0,0017/turno. Probe
+  `scripts/e2e/probe-body-double-chat.ts` PASS 8/8. Il mic (v1.1) si
+  innesterà su QUESTA chat: utterance → STT → stesso endpoint.
+- **Fix avatar post-QA Antonio (2026-06-13)**: T-pose corretta (braccia lungo
+  i fianchi), guard espressioni su expressionMap (blink/bocca erano a rischio
+  zero), **labiale su RMS reale** dell'audio ElevenLabs (AnalyserNode in
+  use-speech → AvatarModel, fallback procedurale per voce browser),
+  inquadratura "videochiamata" agganciata all'altezza reale della testa
+  (regge lo swap modello), stage 300x340.
 
 Decisioni di prodotto (domande poste 2026-06-12, nessuna risposta → applicate
 le raccomandate, annotate qui):
