@@ -2151,6 +2151,7 @@ function TaskSection({ title, icon, tasks, onTaskClick, onStartFocus, colorClass
 
 function FocusView() {
   const store = useShadowStore();
+  const router = useRouter();
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
@@ -2425,6 +2426,15 @@ function FocusView() {
                 <p className="text-xs text-zinc-500 mt-1">Uscita difficile</p>
               </button>
             </div>
+            {/* v3 W7: body doubling — sessione dedicata su /focus */}
+            <button
+              onClick={() => { if (selectedTask) router.push(`/focus?taskId=${selectedTask.id}`); }}
+              className="w-full p-4 rounded-xl border border-violet-300 dark:border-violet-700 bg-white dark:bg-zinc-900 text-left hover:border-violet-400 transition-colors"
+            >
+              <Users className="w-6 h-6 text-violet-600 mb-2" />
+              <p className="font-medium text-sm">Con Shadow</p>
+              <p className="text-xs text-zinc-500 mt-1">Body doubling: l&apos;avatar resta con te mentre lavori</p>
+            </button>
             <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => setShowModeSelector(false)}>Annulla</Button>
           </CardContent>
         </Card>
@@ -2539,6 +2549,7 @@ function FocusView() {
 // ─── Task Detail View ───────────────────────────────────────────────────────
 
 function TaskDetailView() {
+  const router = useRouter();
   const store = useShadowStore();
   const selectedTask = store.tasks.find((t) => t.id === store.selectedTaskId);
   const [isDecomposing, setIsDecomposing] = useState(false);
@@ -2663,6 +2674,14 @@ function TaskDetailView() {
 
       <div className="flex gap-2">
         <Button onClick={handleStart} className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"><Play className="w-4 h-4 mr-2" /> Inizia</Button>
+        {/* v3 W7: body doubling */}
+        <Button
+          onClick={() => router.push(`/focus?taskId=${selectedTask.id}`)}
+          variant="outline"
+          className="flex-1 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40"
+        >
+          <Users className="w-4 h-4 mr-2" /> Fallo con Shadow
+        </Button>
         <Button variant="ghost" size="sm" className="text-zinc-400" onClick={handleDelete}><Trash2 className="w-3 h-3 mr-1" /> Elimina</Button>
       </div>
     </div>
