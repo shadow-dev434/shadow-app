@@ -141,15 +141,6 @@ async function deleteTaskAPI(id: string): Promise<void> {
   await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
 }
 
-async function generateDailyPlan(energy: number, timeAvailable: number, currentContext: string) {
-  const res = await fetch('/api/daily-plan', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ energy, timeAvailable, currentContext }),
-  });
-  return res.json();
-}
-
 async function decomposeTask(taskId: string, taskTitle: string, taskDescription: string, energy: number, timeAvailable: number, currentContext: string) {
   const res = await fetch('/api/decompose', {
     method: 'POST',
@@ -2008,31 +1999,6 @@ function InboxView() {
 
 function TodayView() {
   const store = useShadowStore();
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  const handleGenerate = useCallback(async () => {
-    setIsGenerating(true);
-    try {
-      const result = await generateDailyPlan(store.energy, store.timeAvailable, store.currentContext);
-      if (result.breakdown) {
-        const updatedTasks = await fetchTasks();
-        store.setTasks(updatedTasks);
-        const planTasks = {
-          top3: result.breakdown.top3.map((t: { id: string }) => updatedTasks.find((task: ShadowTask) => task.id === t.id)).filter(Boolean) as ShadowTask[],
-          doNow: result.breakdown.doNow.map((t: { id: string }) => updatedTasks.find((task: ShadowTask) => task.id === t.id)).filter(Boolean) as ShadowTask[],
-          schedule: result.breakdown.schedule.map((t: { id: string }) => updatedTasks.find((task: ShadowTask) => task.id === t.id)).filter(Boolean) as ShadowTask[],
-          delegate: result.breakdown.delegate.map((t: { id: string }) => updatedTasks.find((task: ShadowTask) => task.id === t.id)).filter(Boolean) as ShadowTask[],
-          postpone: result.breakdown.postpone.map((t: { id: string }) => updatedTasks.find((task: ShadowTask) => task.id === t.id)).filter(Boolean) as ShadowTask[],
-        };
-        store.setDailyPlan(planTasks);
-        toast({ title: 'Piano generato' });
-      }
-    } catch {
-      toast({ title: 'Errore', description: 'Impossibile generare il piano', variant: 'destructive' });
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [store]);
 
   const handleTaskClick = useCallback((taskId: string) => {
     store.setSelectedTaskId(taskId);
@@ -2139,8 +2105,8 @@ function TodayView() {
               <Brain className="w-3 h-3 inline mr-1" /> Profilo: carico cognitivo {store.userProfile.cognitiveLoad}/5, sessione consigliata {store.userProfile.preferredSessionLength}min
             </div>
           )}
-          <Button onClick={handleGenerate} disabled={isGenerating} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
-            {isGenerating ? <><Activity className="w-4 h-4 mr-2 animate-spin" /> Generazione...</> : <><Brain className="w-4 h-4 mr-2" /> Genera Piano Giornaliero</>}
+          <Button onClick={() => { window.location.href = '/?plan=today'; }} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
+            <MessageCircle className="w-4 h-4 mr-2" /> Pianifica con Shadow
           </Button>
         </CardContent>
       </Card>
@@ -2189,7 +2155,7 @@ function TodayView() {
       ) : (
         <div className="text-center py-12 space-y-3">
           <Sun className="w-12 h-12 text-zinc-300 mx-auto" />
-          <p className="text-zinc-400 text-sm">Imposta il tuo contesto e genera il piano</p>
+          <p className="text-zinc-400 text-sm">Nessun piano per oggi. Costruiamone uno insieme con “Pianifica con Shadow”.</p>
         </div>
       )}
     </div>
