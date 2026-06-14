@@ -43,6 +43,7 @@ function makeTask(overrides: Partial<TaskProjection>): TaskProjection {
     size: 3,
     priorityScore: 0,
     status: 'inbox',
+    recurringTemplateId: null,
     ...overrides,
   };
 }
@@ -122,6 +123,29 @@ describe('selectCandidates', () => {
     const r = runTriage([t]);
     expect(r).toHaveLength(1);
     expect(r[0].reason).toBe('deadline');
+  });
+
+  it('Task 46: includes a recurring instance as reason=recurring', () => {
+    // createdAt ieri + nessuna deadline/avoidance: senza ricorrenza sarebbe escluso.
+    const t = makeTask({
+      id: 't1',
+      recurringTemplateId: 'tmpl-1',
+      createdAt: new Date('2026-04-26T18:00:00Z'),
+    });
+    const r = runTriage([t]);
+    expect(r).toHaveLength(1);
+    expect(r[0].reason).toBe('recurring');
+  });
+
+  it('Task 46: reason precedence recurring > carryover > new, ma deadline vince', () => {
+    const recurringOnly = makeTask({ id: 'rec', recurringTemplateId: 'tmpl', avoidanceCount: 2 });
+    expect(runTriage([recurringOnly])[0].reason).toBe('recurring');
+    const withDeadline = makeTask({
+      id: 'dl',
+      recurringTemplateId: 'tmpl',
+      deadline: new Date('2026-04-28T18:00:00Z'),
+    });
+    expect(runTriage([withDeadline])[0].reason).toBe('deadline');
   });
 
   it('orders composite cases: deadline ASC, then avoidanceCount DESC, then createdAt DESC', () => {
@@ -331,6 +355,7 @@ describe('reasonsFromCandidates', () => {
         size: 3,
         priorityScore: 0,
         status: 'inbox',
+        recurringTemplateId: null,
         reason: 'deadline',
       },
       {
@@ -346,6 +371,7 @@ describe('reasonsFromCandidates', () => {
         size: 3,
         priorityScore: 0,
         status: 'inbox',
+        recurringTemplateId: null,
         reason: 'carryover',
       },
     ];

@@ -801,12 +801,20 @@ async function executeStopTaskRecurrence(
 async function executeGetTodayTasks(userId: string): Promise<ToolExecutionResult> {
   // Task 46: materializza le istanze ricorrenti di oggi prima di leggere la lista,
   // così un'abitudine resa ricorrente compare nel piano del mattino senza ricrearla.
-  await materializeRecurringForDate(userId, formatTodayInRome());
+  const today = formatTodayInRome();
+  await materializeRecurringForDate(userId, today);
 
   const tasks = await db.task.findMany({
     where: {
       userId,
       status: { notIn: terminalTaskStatuses() },
+      // Task 46: nascondi le istanze ricorrenti di giorni FUTURI (es. quella di
+      // domani materializzata dalla review serale). I task normali hanno
+      // occurrenceDate null e restano sempre visibili.
+      OR: [
+        { recurringTemplateId: null },
+        { occurrenceDate: { lte: today } },
+      ],
     },
     orderBy: [
       { priorityScore: 'desc' },

@@ -23,7 +23,10 @@ vi.mock('@/lib/db', () => ({
     adaptiveProfile: { findUnique: vi.fn() },
     userMemory: { findMany: vi.fn() },
     settings: { findFirst: vi.fn() },
-    task: { findMany: vi.fn() },
+    task: { findMany: vi.fn(), create: vi.fn() },
+    // Task 46: materializeRecurringForDate (chiamato da initEveningReview) legge i
+    // template ricorrenti. Default [] in beforeEach -> no-op nei test esistenti.
+    recurringTask: { findMany: vi.fn() },
     // Slice 7 STEP 4: spies per il flow closeReview (review.upsert + dailyPlan.*
     // + dailyPlanTask.* per Slice 7 BUG #B). Additivi: i test esistenti
     // non li usano, quindi default no-op safe in beforeEach.
@@ -105,6 +108,7 @@ beforeEach(() => {
   vi.mocked(db.userMemory.findMany).mockResolvedValue([]);
   vi.mocked(db.settings.findFirst).mockResolvedValue(null);
   vi.mocked(db.task.findMany).mockResolvedValue([]);
+  vi.mocked(db.recurringTask.findMany).mockResolvedValue([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.mocked(db.learningSignal.create).mockResolvedValue({ id: 'sig1' } as any);
   // Slice 7 STEP 4: defaults safe per il flow closeReview. Test che non
