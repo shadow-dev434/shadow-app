@@ -101,6 +101,39 @@ export function ChatView() {
     mountInitCalled.current = true;
 
     (async () => {
+      // Task 44: CTA "Costruiamo il piano di oggi" da /tasks (?plan=today).
+      // Avvio manuale del morning check-in: bypassa le guardie del bootstrap
+      // (thread attivo / once-a-day) perché l'utente l'ha chiesto esplicitamente.
+      if (new URLSearchParams(window.location.search).get('plan') === 'today') {
+        window.history.replaceState({}, '', '/'); // niente ri-trigger al refresh
+        setMode('morning_checkin');
+        try {
+          const res = await fetch('/api/chat/turn', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threadId: null, mode: 'morning_checkin', userMessage: '__auto_start__' }),
+          });
+          if (res.ok) {
+            const data = (await res.json()) as TurnResponse;
+            setThreadId(data.threadId);
+            if (data.mode) setMode(data.mode);
+            setMessages([{
+              id: 'assist-plan-' + Date.now(),
+              role: 'assistant',
+              content: data.assistantMessage || '(nessuna risposta)',
+              toolsExecuted: data.toolsExecuted,
+              quickReplies: data.quickReplies,
+              createdAt: new Date().toISOString(),
+            }]);
+          }
+        } catch (err) {
+          console.error('[ChatView] morning plan start error:', err);
+        } finally {
+          setBootstrapping(false);
+        }
+        return;
+      }
+
       // Tentativo 1: rehydrate thread attivo esistente.
       let rehydrated = false;
 

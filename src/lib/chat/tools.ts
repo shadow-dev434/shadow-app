@@ -73,6 +73,7 @@ import { handleMarkWhatBlockedAsked } from './tools/mark-what-blocked-asked-hand
 import type { PreviewState } from '@/lib/evening-review/apply-overrides';
 import type { BuildDailyPlanPreviewInput } from '@/lib/evening-review/plan-preview';
 import { formatDateInRome } from '@/lib/evening-review/dates';
+import { commitTodayPlan } from '@/lib/daily-plan/commit-today-plan';
 
 export const CHAT_TOOLS: LLMTool[] = [
   {
@@ -180,6 +181,36 @@ export const TASK_MANAGEMENT_TOOLS: LLMTool[] = [
     },
   },
 ];
+
+/**
+ * Task 44 — commit del piano di OGGI dalla chat (morning check-in / planning).
+ * Esposto SOLO in quelle modalità (vedi getToolsForMode): fissa "Le 3 cose di
+ * oggi" + il resto della giornata dopo che l'utente ha confermato, persistendo
+ * il DailyPlan che la schermata Oggi legge. Stateless: nessun PreviewState,
+ * single-call idempotente come create_task.
+ */
+export const COMMIT_TODAY_PLAN_TOOL: LLMTool = {
+  name: 'commit_today_plan',
+  description:
+    "Fissa il piano di OGGI: salva le attività scelte con l'utente come piano del giorno (compare nella schermata Oggi). Chiamalo UNA SOLA VOLTA, SOLO dopo che l'utente ha confermato cosa fare oggi. taskIds = gli id (presi da get_today_tasks) nell'ordine di priorità concordato; i primi 3 diventano 'Le 3 cose di oggi'. Non inventare id: usa solo quelli di get_today_tasks.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      taskIds: {
+        type: 'array',
+        description:
+          "Id dei task di oggi in ordine di priorità (i primi 3 = 'Le 3 cose di oggi'). Solo id da get_today_tasks.",
+        items: { type: 'string' },
+      },
+      pinnedTaskIds: {
+        type: 'array',
+        description: "Opzionale: id dei task 'intoccabili' fissati esplicitamente dall'utente.",
+        items: { type: 'string' },
+      },
+    },
+    required: ['taskIds'],
+  },
+};
 
 export const EVENING_REVIEW_TOOLS: LLMTool[] = [
   {
@@ -329,7 +360,13 @@ export function getToolsForMode(
   triageState?: TriageState,
 ): LLMTool[] {
   if (mode !== 'evening_review') {
-    return [...CHAT_TOOLS, ...TASK_MANAGEMENT_TOOLS];
+    const tools: LLMTool[] = [...CHAT_TOOLS, ...TASK_MANAGEMENT_TOOLS];
+    // Task 44: il commit del piano di oggi vive nelle modalità di pianificazione,
+    // non nella chat libera (evita commit spuri durante una conversazione qualsiasi).
+    if (mode === 'morning_checkin' || mode === 'planning') {
+      tools.push(COMMIT_TODAY_PLAN_TOOL);
+    }
+    return tools;
   }
 
   // Slice 7 V1.x Bug #1 (B1): gating mood/energy per dimensione pending.
@@ -501,6 +538,8 @@ export async function executeTool(
         return await executeUpdateTask(input, userId);
       case 'archive_task':
         return await executeArchiveTask(input, userId);
+      case 'commit_today_plan':
+        return await executeCommitTodayPlan(input, userId);
       case 'record_mood':
         return executeRecordMood(input, context);
       case 'record_energy':
@@ -608,6 +647,41 @@ async function executeCreateTask(
       urgency: task.urgency,
       importance: task.importance,
       category: task.category,
+    },
+  };
+}
+
+async function executeCommitTodayPlan(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const taskIds = (Array.isArray(input.taskIds) ? input.taskIds : [])
+    .map((x) => String(x))
+    .filter(Boolean);
+  if (taskIds.length === 0) {
+    return { kind: 'sideEffect', success: false, error: 'taskIds is required' };
+  }
+  const pinnedTaskIds = (Array.isArray(input.pinnedTaskIds) ? input.pinnedTaskIds : [])
+    .map((x) => String(x))
+    .filter(Boolean);
+
+  const result = await commitTodayPlan(userId, taskIds, pinnedTaskIds);
+  if (!result.ok) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: result.error ?? 'commit_failed',
+      data: { invalidIds: result.invalidIds },
+    };
+  }
+  return {
+    kind: 'sideEffect',
+    success: true,
+    data: {
+      committed: result.doNowIds?.length ?? 0,
+      top3: result.top3Ids,
+      invalidIds: result.invalidIds,
+      note: "Piano di oggi salvato. Conferma all'utente in una frase e, se vuole, invitalo a iniziare dalla prima cosa.",
     },
   };
 }

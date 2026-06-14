@@ -20,8 +20,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Inbox, Sun, Target, ClipboardCheck, Settings, Plus, Trash2,
-  ChevronRight, Timer, Zap, Shield, ArrowLeft, Play, Check,
-  AlertTriangle, Clock, TrendingUp, Brain, Sparkles, LayoutGrid,
+  ChevronRight, Zap, Shield, ArrowLeft, Play, Check,
+  AlertTriangle, Clock, TrendingUp, Brain, Sparkles,
   Flame, Activity, X, RotateCcw, Coffee, Mic, MicOff,
   Users, Bell, BellOff, BarChart3, LogIn, LogOut, UserPlus,
   Download, Share2, RefreshCw, Send, Pencil, ShieldAlert, Lock, Unlock,
@@ -30,7 +30,7 @@ import {
   Palette, Wrench, Eye, EyeOff, MessageCircle, Hand
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { signOut } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { StrictModeExitDialog, type StrictModeExitResult } from '@/features/strict-mode/StrictModeExitDialog';
 import { APP_VERSION } from '@/lib/version';
@@ -141,15 +141,6 @@ async function deleteTaskAPI(id: string): Promise<void> {
   await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
 }
 
-async function generateDailyPlan(energy: number, timeAvailable: number, currentContext: string) {
-  const res = await fetch('/api/daily-plan', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ energy, timeAvailable, currentContext }),
-  });
-  return res.json();
-}
-
 async function decomposeTask(taskId: string, taskTitle: string, taskDescription: string, energy: number, timeAvailable: number, currentContext: string) {
   const res = await fetch('/api/decompose', {
     method: 'POST',
@@ -250,10 +241,20 @@ async function recordSignal(
 
 // ─── Motivational Personalization Helpers ────────────────────────────────────
 
+// Una deadline è "imminente" se esiste ed è entro 48h (o già scaduta).
+function hasImminentDeadline(task: ShadowTask): boolean {
+  if (!task.deadline) return false;
+  const ms = new Date(task.deadline).getTime() - Date.now();
+  return !Number.isNaN(ms) && ms <= 48 * 60 * 60 * 1000;
+}
+
 function getMotivationalFraming(task: ShadowTask, profile: AdaptiveProfileData | null): string {
+  // "Scadenza vicina" SOLO se c'è davvero una deadline imminente; altrimenti un
+  // nudge d'urgenza che non finge una scadenza inesistente (bug sottotitolo).
+  const urgencyFraming = hasImminentDeadline(task) ? 'Scadenza vicina, agisci ora' : 'Prima la fai, prima è fatta';
   if (!profile?.motivationProfile) {
     // Default fallback
-    if (task.urgency >= 4) return 'Scadenza vicina, agisci ora';
+    if (task.urgency >= 4) return urgencyFraming;
     return 'Fai il prossimo passo';
   }
 
@@ -264,7 +265,7 @@ function getMotivationalFraming(task: ShadowTask, profile: AdaptiveProfileData |
 
   switch (topMotivation) {
     case 'urgency':
-      return 'Scadenza vicina, agisci ora';
+      return urgencyFraming;
     case 'relief':
       return 'Fatto questo, ti togli il peso';
     case 'identity':
@@ -276,7 +277,7 @@ function getMotivationalFraming(task: ShadowTask, profile: AdaptiveProfileData |
     case 'curiosity':
       return 'Qualcosa di interessante da scoprire';
     default:
-      if (task.urgency >= 4) return 'Scadenza vicina, agisci ora';
+      if (task.urgency >= 4) return urgencyFraming;
       return 'Fai il prossimo passo';
   }
 }
@@ -547,7 +548,6 @@ export default function ShadowApp() {
         {store.currentView === 'focus' && <FocusView />}
         {store.currentView === 'task' && <TaskDetailView />}
         {store.currentView === 'review' && <ReviewView />}
-        {store.currentView === 'eisenhower' && <EisenhowerView />}
         {store.currentView === 'settings' && <SettingsView onLogout={handleLogout} />}
       </main>
       {!hideHeaderNav && <BottomNav />}
@@ -1746,12 +1746,12 @@ function AppHeader({ onLogout }: {
     <header className={`sticky top-0 z-50 text-white border-b ${strictModeState === 'active_strict' ? 'bg-red-950 border-red-900' : 'bg-zinc-900 dark:bg-zinc-950 border-zinc-800'}`}>
       <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {isExecuting || currentView === 'task' || currentView === 'eisenhower' ? (
+          {isExecuting || currentView === 'task' ? (
             <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white -ml-2" onClick={() => setCurrentView('today')}>
               <ArrowLeft className="w-4 h-4 mr-1" /> Indietro
             </Button>
           ) : null}
-          {!isExecuting && currentView !== 'task' && currentView !== 'eisenhower' && (
+          {!isExecuting && currentView !== 'task' && (
             <div className="flex items-center gap-2">
  <button
     onClick={() => window.location.href = '/'}
@@ -1999,31 +1999,6 @@ function InboxView() {
 
 function TodayView() {
   const store = useShadowStore();
-  const [isGenerating, setIsGenerating] = useState(false);
-
-  const handleGenerate = useCallback(async () => {
-    setIsGenerating(true);
-    try {
-      const result = await generateDailyPlan(store.energy, store.timeAvailable, store.currentContext);
-      if (result.breakdown) {
-        const updatedTasks = await fetchTasks();
-        store.setTasks(updatedTasks);
-        const planTasks = {
-          top3: result.breakdown.top3.map((t: { id: string }) => updatedTasks.find((task: ShadowTask) => task.id === t.id)).filter(Boolean) as ShadowTask[],
-          doNow: result.breakdown.doNow.map((t: { id: string }) => updatedTasks.find((task: ShadowTask) => task.id === t.id)).filter(Boolean) as ShadowTask[],
-          schedule: result.breakdown.schedule.map((t: { id: string }) => updatedTasks.find((task: ShadowTask) => task.id === t.id)).filter(Boolean) as ShadowTask[],
-          delegate: result.breakdown.delegate.map((t: { id: string }) => updatedTasks.find((task: ShadowTask) => task.id === t.id)).filter(Boolean) as ShadowTask[],
-          postpone: result.breakdown.postpone.map((t: { id: string }) => updatedTasks.find((task: ShadowTask) => task.id === t.id)).filter(Boolean) as ShadowTask[],
-        };
-        store.setDailyPlan(planTasks);
-        toast({ title: 'Piano generato' });
-      }
-    } catch {
-      toast({ title: 'Errore', description: 'Impossibile generare il piano', variant: 'destructive' });
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [store]);
 
   const handleTaskClick = useCallback((taskId: string) => {
     store.setSelectedTaskId(taskId);
@@ -2048,6 +2023,53 @@ function TodayView() {
     }, 3000);
   }, [store]);
 
+  // Idrata il piano committato di oggi all'apertura: lo store non ha persist,
+  // quindi senza questo il Top 3 sparirebbe a ogni refresh. La GET non ri-scora,
+  // restituisce lo snapshot dell'ultima generazione / commit conversazionale.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (store.dailyPlan) return;
+      try {
+        const res = await fetch('/api/daily-plan');
+        const data = await res.json();
+        if (cancelled || !data?.breakdown) return;
+        const all = await fetchTasks();
+        if (cancelled) return;
+        store.setTasks(all);
+        const pick = (arr: { id: string }[]): ShadowTask[] =>
+          arr.map((t) => all.find((x) => x.id === t.id)).filter(Boolean) as ShadowTask[];
+        store.setDailyPlan({
+          top3: pick(data.breakdown.top3),
+          doNow: pick(data.breakdown.doNow),
+          schedule: pick(data.breakdown.schedule),
+          delegate: pick(data.breakdown.delegate),
+          postpone: pick(data.breakdown.postpone),
+        });
+      } catch {
+        // silenzioso: nessun piano o errore di rete → resta lo stato vuoto
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Tutto ciò che non è tra "Le 3 cose di oggi" confluisce in un'unica lista
+  // "Altro" collassata: niente più quadranti/sezioni multiple per l'utente.
+  const altroTasks: ShadowTask[] = (() => {
+    const dp = store.dailyPlan;
+    if (!dp) return [];
+    const top3Ids = new Set(dp.top3.map((t) => t.id));
+    const seen = new Set<string>();
+    const out: ShadowTask[] = [];
+    for (const t of [...dp.doNow, ...dp.schedule, ...dp.delegate, ...dp.postpone]) {
+      if (top3Ids.has(t.id) || seen.has(t.id)) continue;
+      seen.add(t.id);
+      out.push(t);
+    }
+    return out;
+  })();
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
       {/* Context bar */}
@@ -2055,7 +2077,6 @@ function TodayView() {
         <CardContent className="p-4 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-sm">Il tuo contesto ora</h3>
-            <Button variant="outline" size="sm" onClick={() => store.setCurrentView('eisenhower')} className="text-xs"><LayoutGrid className="w-3 h-3 mr-1" /> Matrice</Button>
           </div>
           <div className="space-y-3">
             <div>
@@ -2084,8 +2105,8 @@ function TodayView() {
               <Brain className="w-3 h-3 inline mr-1" /> Profilo: carico cognitivo {store.userProfile.cognitiveLoad}/5, sessione consigliata {store.userProfile.preferredSessionLength}min
             </div>
           )}
-          <Button onClick={handleGenerate} disabled={isGenerating} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
-            {isGenerating ? <><Activity className="w-4 h-4 mr-2 animate-spin" /> Generazione...</> : <><Brain className="w-4 h-4 mr-2" /> Genera Piano Giornaliero</>}
+          <Button onClick={() => { window.location.href = '/?plan=today'; }} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
+            <MessageCircle className="w-4 h-4 mr-2" /> Pianifica con Shadow
           </Button>
         </CardContent>
       </Card>
@@ -2100,7 +2121,7 @@ function TodayView() {
       {store.dailyPlan ? (
         <div className="space-y-4">
           <div>
-            <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2 flex items-center gap-1"><Flame className="w-3 h-3" /> Top 3 di oggi</h3>
+            <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2 flex items-center gap-1"><Flame className="w-3 h-3" /> Le 3 cose di oggi</h3>
             <div className="space-y-2">
               {store.dailyPlan.top3.map((task, idx) => (
                 <Card key={task.id} className="border-amber-200 dark:border-amber-900/50 cursor-pointer hover:shadow-md transition-shadow" onClick={() => handleTaskClick(task.id)}>
@@ -2127,17 +2148,14 @@ function TodayView() {
               ))}
             </div>
           </div>
-          {store.dailyPlan!.doNow.filter((t) => !store.dailyPlan!.top3.find((t3) => t3.id === t.id)).length > 0 && (
-            <TaskSection title="Da fare ora" icon={<Zap className="w-3 h-3" />} tasks={store.dailyPlan!.doNow.filter((t) => !store.dailyPlan!.top3.find((t3) => t3.id === t.id))} onTaskClick={handleTaskClick} onStartFocus={handleStartFocus} colorClass="text-rose-600" />
+          {altroTasks.length > 0 && (
+            <TaskSection title="Altro" icon={null} tasks={altroTasks} onTaskClick={handleTaskClick} onStartFocus={handleStartFocus} colorClass="text-zinc-500" defaultExpanded={false} />
           )}
-          {store.dailyPlan!.schedule.length > 0 && <TaskSection title="Da pianificare" icon={<Clock className="w-3 h-3" />} tasks={store.dailyPlan!.schedule} onTaskClick={handleTaskClick} onStartFocus={handleStartFocus} colorClass="text-teal-600" />}
-          {store.dailyPlan!.delegate.length > 0 && <TaskSection title="Da delegare" icon={<Users className="w-3 h-3" />} tasks={store.dailyPlan!.delegate} onTaskClick={handleTaskClick} onStartFocus={handleStartFocus} colorClass="text-amber-600" />}
-          {store.dailyPlan!.postpone.length > 0 && <TaskSection title="Da posticipare" icon={<Timer className="w-3 h-3" />} tasks={store.dailyPlan!.postpone} onTaskClick={handleTaskClick} onStartFocus={handleStartFocus} colorClass="text-zinc-400" />}
         </div>
       ) : (
         <div className="text-center py-12 space-y-3">
           <Sun className="w-12 h-12 text-zinc-300 mx-auto" />
-          <p className="text-zinc-400 text-sm">Imposta il tuo contesto e genera il piano</p>
+          <p className="text-zinc-400 text-sm">Nessun piano per oggi. Costruiamone uno insieme con “Pianifica con Shadow”.</p>
         </div>
       )}
     </div>
@@ -2146,26 +2164,24 @@ function TodayView() {
 
 // ─── Task Section Component ─────────────────────────────────────────────────
 
-function TaskSection({ title, icon, tasks, onTaskClick, onStartFocus, colorClass }: {
-  title: string; icon: React.ReactNode; tasks: ShadowTask[]; onTaskClick: (id: string) => void; onStartFocus: (id: string, mode: 'launch' | 'hold' | 'recovery') => void; colorClass: string;
+function TaskSection({ title, icon, tasks, onTaskClick, onStartFocus, colorClass, defaultExpanded = true }: {
+  title: string; icon: React.ReactNode; tasks: ShadowTask[]; onTaskClick: (id: string) => void; onStartFocus: (id: string, mode: 'launch' | 'hold' | 'recovery') => void; colorClass: string; defaultExpanded?: boolean;
 }) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   return (
     <div>
       <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-1 mb-2 w-full">
         <span className={`text-xs font-semibold uppercase tracking-wider ${colorClass} flex items-center gap-1`}>{icon} {title} ({tasks.length})</span>
+        <ChevronRight className={`w-3 h-3 ${colorClass} transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
       </button>
       {isExpanded && (
         <div className="space-y-1.5">
           {tasks.map((task) => (
             <Card key={task.id} className="border-zinc-200 dark:border-zinc-800 cursor-pointer hover:border-zinc-300 dark:hover:border-zinc-700" onClick={() => onTaskClick(task.id)}>
               <CardContent className="p-2.5 flex items-center gap-2">
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 flex items-center gap-1.5">
                   <p className="text-sm truncate">{task.title}</p>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-zinc-400">{QUADRANT_CONFIG[task.quadrant]?.label}</span>
-                    {task.aiClassified && <Sparkles className="w-2.5 h-2.5 text-amber-500" />}
-                  </div>
+                  {task.aiClassified && <Sparkles className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
                 </div>
                 <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onStartFocus(task.id, 'launch'); }}><Play className="w-3 h-3" /></Button>
               </CardContent>
@@ -2907,48 +2923,13 @@ function ReviewView() {
   );
 }
 
-// ─── Eisenhower Matrix View ─────────────────────────────────────────────────
-
-function EisenhowerView() {
-  const store = useShadowStore();
-  const activeTasks = store.tasks.filter(t => t.status !== 'completed' && t.status !== 'abandoned' && t.quadrant !== 'unclassified');
-  const quadrants = ['do_now', 'schedule', 'delegate', 'eliminate'] as const;
-
-  return (
-    <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
-      <h2 className="text-lg font-bold">Matrice di Eisenhower</h2>
-      <div className="grid grid-cols-2 gap-3">
-        {quadrants.map((q) => {
-          const config = QUADRANT_CONFIG[q];
-          const tasks = activeTasks.filter(t => t.quadrant === q);
-          return (
-            <div key={q} className={`${config.bg} rounded-xl p-3 min-h-[120px]`}>
-              <div className={`flex items-center gap-1 mb-2 ${config.color}`}>
-                {config.icon}
-                <span className="text-xs font-bold uppercase">{config.label}</span>
-                <span className="text-[10px] opacity-60">({tasks.length})</span>
-              </div>
-              <div className="space-y-1">
-                {tasks.slice(0, 5).map(t => (
-                  <button key={t.id} onClick={() => { store.setSelectedTaskId(t.id); store.setCurrentView('task'); }} className="w-full text-left p-1.5 rounded bg-white/50 dark:bg-black/20 text-xs hover:bg-white/70 dark:hover:bg-black/30 transition-colors truncate">
-                    {t.title}
-                  </button>
-                ))}
-                {tasks.length > 5 && <p className="text-[10px] opacity-60">+{tasks.length - 5} altri</p>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 // ─── Settings View (with Profile) ───────────────────────────────────────────
 
 function SettingsView({ onLogout }: { onLogout: () => void }) {
   const store = useShadowStore();
   const router = useRouter();
+  const { data: session } = useSession();
+  const isBetaTester = session?.user?.isBetaTester ?? false;
   const profile = store.userProfile;
   const authUser = store.authUser;
 
@@ -3065,8 +3046,12 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
             <div className="flex justify-between text-sm"><span className="text-zinc-500">Sessione consigliata</span><span>{profile.preferredSessionLength} min</span></div>
             <div className="flex justify-between text-sm"><span className="text-zinc-500">Focus mode</span><span>{profile.focusModeDefault}</span></div>
             {profile.executionStyle && <p className="text-xs text-zinc-400 italic mt-1">{profile.executionStyle}</p>}
-            <Separator />
-            <Button variant="outline" size="sm" className="w-full" onClick={handleResetOnboarding}>Rifai il profilo</Button>
+            {isBetaTester && (
+              <>
+                <Separator />
+                <Button variant="outline" size="sm" className="w-full" onClick={handleResetOnboarding}>Rifai il profilo</Button>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
@@ -3086,22 +3071,24 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
         </CardContent>
       </Card>
 
-      {/* Export */}
-      <Card className="border-zinc-200 dark:border-zinc-800">
-        <CardHeader className="p-4 pb-2"><CardTitle className="text-base">Esporta dati</CardTitle></CardHeader>
-        <CardContent className="p-4 pt-0">
-          <Button variant="outline" className="w-full" onClick={async () => {
-            try {
-              const res = await fetch('/api/export?format=json');
-              const blob = await res.blob();
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a'); a.href = url; a.download = 'shadow-export.json'; a.click();
-              URL.revokeObjectURL(url);
-              toast({ title: 'Esportazione completata' });
-            } catch { toast({ title: 'Errore', variant: 'destructive' }); }
-          }}><Download className="w-4 h-4 mr-2" /> Esporta JSON</Button>
-        </CardContent>
-      </Card>
+      {/* Export — affordance beta-only (dump JSON con cronologia chat) */}
+      {isBetaTester && (
+        <Card className="border-zinc-200 dark:border-zinc-800">
+          <CardHeader className="p-4 pb-2"><CardTitle className="text-base">Esporta dati</CardTitle></CardHeader>
+          <CardContent className="p-4 pt-0">
+            <Button variant="outline" className="w-full" onClick={async () => {
+              try {
+                const res = await fetch('/api/export?format=json');
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = 'shadow-export.json'; a.click();
+                URL.revokeObjectURL(url);
+                toast({ title: 'Esportazione completata' });
+              } catch { toast({ title: 'Errore', variant: 'destructive' }); }
+            }}><Download className="w-4 h-4 mr-2" /> Esporta JSON</Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Versione app (Task 23: allegata anche a bug report e Sentry) */}
       <p className="text-center text-[11px] text-zinc-500 pb-2">Shadow v{APP_VERSION}</p>
