@@ -157,30 +157,39 @@ export async function setTaskRecurrence(
   }
 
   const today = formatTodayInRome();
-  const tmpl = await db.recurringTask.create({
-    data: {
-      userId,
-      title: task.title,
-      description: task.description,
-      category: task.category,
-      urgency: task.urgency,
-      importance: task.importance,
-      size: task.size,
-      frequency,
-      weekdays: JSON.stringify(weekdays),
-      monthDay,
-      active: true,
-      startDate: today,
-      endDate,
-    },
-  });
-  await db.task.update({
-    where: { id: task.id },
-    data: {
-      recurringTemplateId: tmpl.id,
-      occurrenceDate: task.occurrenceDate ?? today,
-      source: task.source === 'manual' ? 'recurring' : task.source,
-    },
+  // Atomico: creare il template e legarlo al task sono due write che devono
+  // riuscire insieme. Senza transazione, un fallimento del secondo write (drop
+  // di connessione, task cancellato nel frattempo) lascerebbe un template orfano
+  // active=true che materializza istanze "zombie" senza che stopTaskRecurrence
+  // possa raggiungerlo (nessun task lo referenzia). Stesso pattern di
+  // commit-today-plan.ts / close-review.ts.
+  const tmpl = await db.$transaction(async (tx) => {
+    const created = await tx.recurringTask.create({
+      data: {
+        userId,
+        title: task.title,
+        description: task.description,
+        category: task.category,
+        urgency: task.urgency,
+        importance: task.importance,
+        size: task.size,
+        frequency,
+        weekdays: JSON.stringify(weekdays),
+        monthDay,
+        active: true,
+        startDate: today,
+        endDate,
+      },
+    });
+    await tx.task.update({
+      where: { id: task.id },
+      data: {
+        recurringTemplateId: created.id,
+        occurrenceDate: task.occurrenceDate ?? today,
+        source: task.source === 'manual' ? 'recurring' : task.source,
+      },
+    });
+    return created;
   });
   const rule = ruleFromTemplate(tmpl);
   return { ok: true, templateId: tmpl.id, rule, description: describeRuleIt(rule), updated: false };
