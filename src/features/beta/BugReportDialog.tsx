@@ -123,7 +123,6 @@ function guessArea(): BugArea {
       case 'task':
         return 'inbox_task';
       case 'today':
-      case 'eisenhower':
         return 'today_plan';
       case 'focus':
         return 'focus_strict';

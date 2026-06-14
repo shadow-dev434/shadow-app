@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   Inbox, Sun, Target, ClipboardCheck, Settings, Plus, Trash2,
   ChevronRight, Timer, Zap, Shield, ArrowLeft, Play, Check,
-  AlertTriangle, Clock, TrendingUp, Brain, Sparkles, LayoutGrid,
+  AlertTriangle, Clock, TrendingUp, Brain, Sparkles,
   Flame, Activity, X, RotateCcw, Coffee, Mic, MicOff,
   Users, Bell, BellOff, BarChart3, LogIn, LogOut, UserPlus,
   Download, Share2, RefreshCw, Send, Pencil, ShieldAlert, Lock, Unlock,
@@ -547,7 +547,6 @@ export default function ShadowApp() {
         {store.currentView === 'focus' && <FocusView />}
         {store.currentView === 'task' && <TaskDetailView />}
         {store.currentView === 'review' && <ReviewView />}
-        {store.currentView === 'eisenhower' && <EisenhowerView />}
         {store.currentView === 'settings' && <SettingsView onLogout={handleLogout} />}
       </main>
       {!hideHeaderNav && <BottomNav />}
@@ -1746,12 +1745,12 @@ function AppHeader({ onLogout }: {
     <header className={`sticky top-0 z-50 text-white border-b ${strictModeState === 'active_strict' ? 'bg-red-950 border-red-900' : 'bg-zinc-900 dark:bg-zinc-950 border-zinc-800'}`}>
       <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          {isExecuting || currentView === 'task' || currentView === 'eisenhower' ? (
+          {isExecuting || currentView === 'task' ? (
             <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white -ml-2" onClick={() => setCurrentView('today')}>
               <ArrowLeft className="w-4 h-4 mr-1" /> Indietro
             </Button>
           ) : null}
-          {!isExecuting && currentView !== 'task' && currentView !== 'eisenhower' && (
+          {!isExecuting && currentView !== 'task' && (
             <div className="flex items-center gap-2">
  <button
     onClick={() => window.location.href = '/'}
@@ -2055,7 +2054,6 @@ function TodayView() {
         <CardContent className="p-4 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-sm">Il tuo contesto ora</h3>
-            <Button variant="outline" size="sm" onClick={() => store.setCurrentView('eisenhower')} className="text-xs"><LayoutGrid className="w-3 h-3 mr-1" /> Matrice</Button>
           </div>
           <div className="space-y-3">
             <div>
@@ -2903,43 +2901,6 @@ function ReviewView() {
           </CardContent>
         </Card>
       )}
-    </div>
-  );
-}
-
-// ─── Eisenhower Matrix View ─────────────────────────────────────────────────
-
-function EisenhowerView() {
-  const store = useShadowStore();
-  const activeTasks = store.tasks.filter(t => t.status !== 'completed' && t.status !== 'abandoned' && t.quadrant !== 'unclassified');
-  const quadrants = ['do_now', 'schedule', 'delegate', 'eliminate'] as const;
-
-  return (
-    <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
-      <h2 className="text-lg font-bold">Matrice di Eisenhower</h2>
-      <div className="grid grid-cols-2 gap-3">
-        {quadrants.map((q) => {
-          const config = QUADRANT_CONFIG[q];
-          const tasks = activeTasks.filter(t => t.quadrant === q);
-          return (
-            <div key={q} className={`${config.bg} rounded-xl p-3 min-h-[120px]`}>
-              <div className={`flex items-center gap-1 mb-2 ${config.color}`}>
-                {config.icon}
-                <span className="text-xs font-bold uppercase">{config.label}</span>
-                <span className="text-[10px] opacity-60">({tasks.length})</span>
-              </div>
-              <div className="space-y-1">
-                {tasks.slice(0, 5).map(t => (
-                  <button key={t.id} onClick={() => { store.setSelectedTaskId(t.id); store.setCurrentView('task'); }} className="w-full text-left p-1.5 rounded bg-white/50 dark:bg-black/20 text-xs hover:bg-white/70 dark:hover:bg-black/30 transition-colors truncate">
-                    {t.title}
-                  </button>
-                ))}
-                {tasks.length > 5 && <p className="text-[10px] opacity-60">+{tasks.length - 5} altri</p>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }

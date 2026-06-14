@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { AdaptiveProfileData, LearningSignalData, AIInsight, ProactiveTrigger, NudgeMessage, TaskRecommendation, ConversationalOnboardingResponse } from '@/lib/types/shadow';
 
-export type ViewMode = 'onboarding' | 'inbox' | 'today' | 'focus' | 'task' | 'review' | 'eisenhower' | 'settings' | 'auth' | 'tour';
+export type ViewMode = 'onboarding' | 'inbox' | 'today' | 'focus' | 'task' | 'review' | 'settings' | 'auth' | 'tour';
 
 export interface ShadowTask {
   id: string;
