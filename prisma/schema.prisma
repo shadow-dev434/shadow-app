@@ -39,6 +39,7 @@ model User {
   memories           UserMemory[]
   dailyPlans         DailyPlan[]
   reviews            Review[]
+  recurringTasks     RecurringTask[]
 
   // Beta (Task 23)
   bugReports          BugReport[]
@@ -141,11 +142,56 @@ model Task {
 
   // Review serale
   postponedCount Int    @default(0)
-  source         String @default("manual") // manual | gmail | review_carryover
+  source         String @default("manual") // manual | gmail | review_carryover | recurring
+
+  // Ricorrenza (Task 46) — un'istanza materializzata da un RecurringTask template.
+  recurringTemplateId String?
+  recurringTemplate   RecurringTask? @relation("RecurringInstances", fields: [recurringTemplateId], references: [id], onDelete: SetNull)
+  occurrenceDate      String?        // YYYY-MM-DD (Europe/Rome) per cui l'istanza e' stata materializzata
 
   // Relations
   dailyPlans DailyPlanTask[]
   reviews    ReviewTask[]
+
+  // Guardia anti-doppia-materializzazione: max un'istanza per (template, giorno).
+  // I task non ricorrenti hanno entrambi i campi null; in Postgres i NULL sono
+  // distinti negli unique index, quindi non collidono mai tra loro.
+  @@unique([recurringTemplateId, occurrenceDate])
+}
+
+// Task 46 — Template di task ricorrente. NON e' un task: non entra mai in inbox,
+// liste o piano. Genera istanze Task (vedi materializeRecurringForDate) quando il
+// piano del giorno viene costruito: review serale per domani, check-in / Today per
+// oggi. Niente scheduler: materializzazione lazy on-read.
+model RecurringTask {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Contenuto ereditato dalle istanze.
+  title       String
+  description String @default("")
+  category    String @default("general")
+  urgency     Int    @default(3)
+  importance  Int    @default(3)
+  size        Int    @default(3)
+
+  // Regola di ricorrenza (modello semplice, NON RRULE).
+  frequency String // 'daily' | 'weekdays' | 'weekly' | 'monthly'
+  weekdays  String @default("[]") // JSON int[] 0=dom..6=sab, usato da 'weekly'
+  monthDay  Int? // 1-31, usato da 'monthly' (clamp a fine mese se eccede)
+
+  // Stato e finestra di validita' (date YYYY-MM-DD Europe/Rome).
+  active    Boolean @default(true)
+  startDate String
+  endDate   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  instances Task[] @relation("RecurringInstances")
+
+  @@index([userId, active])
 }
 
 model Contact {

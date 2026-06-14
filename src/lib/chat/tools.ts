@@ -72,8 +72,13 @@ import { MARK_WHAT_BLOCKED_ASKED_TOOL } from './tools/mark-what-blocked-asked-to
 import { handleMarkWhatBlockedAsked } from './tools/mark-what-blocked-asked-handler';
 import type { PreviewState } from '@/lib/evening-review/apply-overrides';
 import type { BuildDailyPlanPreviewInput } from '@/lib/evening-review/plan-preview';
-import { formatDateInRome } from '@/lib/evening-review/dates';
+import { formatDateInRome, formatTodayInRome } from '@/lib/evening-review/dates';
 import { commitTodayPlan } from '@/lib/daily-plan/commit-today-plan';
+import {
+  setTaskRecurrence,
+  stopTaskRecurrence,
+  materializeRecurringForDate,
+} from '@/lib/recurring/materialize';
 
 export const CHAT_TOOLS: LLMTool[] = [
   {
@@ -176,6 +181,60 @@ export const TASK_MANAGEMENT_TOOLS: LLMTool[] = [
       type: 'object',
       properties: {
         taskId: { type: 'string', description: 'ID del task da archiviare' },
+      },
+      required: ['taskId'],
+    },
+  },
+];
+
+/**
+ * Task 46 — Ricorrenza. Esposti SOLO fuori da evening_review (come
+ * TASK_MANAGEMENT_TOOLS). Rendono un task ricorrente: l'istanza del giorno viene
+ * rigenerata da sola quando il piano si costruisce (review serale per domani,
+ * check-in / Today per oggi). Single-call idempotenti.
+ */
+export const RECURRENCE_TOOLS: LLMTool[] = [
+  {
+    name: 'set_task_recurrence',
+    description:
+      "Rende RICORRENTE un task: ricomparirà da solo ogni giorno/periodo, senza doverlo ricreare. Usa quando l'utente esprime una cadenza ('ogni giorno', 'tutti i giorni', 'al giorno', 'ogni lunedì', 'ogni mese il 15'). taskId = l'id del task (da create_task o get_today_tasks): per un task nuovo, prima create_task e poi questo. Conferma sempre la cadenza all'utente. Ri-chiamalo per cambiare la regola di un task già ricorrente.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: 'ID del task da rendere ricorrente' },
+        frequency: {
+          type: 'string',
+          enum: ['daily', 'weekdays', 'weekly', 'monthly'],
+          description:
+            "daily=ogni giorno; weekdays=ogni giorno feriale (lun-ven); weekly=in giorni scelti della settimana (vedi weekdays); monthly=un giorno del mese (vedi monthDay)",
+        },
+        weekdays: {
+          type: 'array',
+          items: { type: 'number' },
+          description:
+            'Solo per frequency=weekly: giorni della settimana, 0=domenica..6=sabato. Es. lunedì e giovedì = [1,4].',
+        },
+        monthDay: {
+          type: 'number',
+          description:
+            "Solo per frequency=monthly: giorno del mese 1-31 (se eccede i giorni del mese, scatta l'ultimo giorno).",
+        },
+        endDate: {
+          type: 'string',
+          description: 'Opzionale: data ISO YYYY-MM-DD oltre la quale smettere. Vuoto = senza fine.',
+        },
+      },
+      required: ['taskId', 'frequency'],
+    },
+  },
+  {
+    name: 'stop_task_recurrence',
+    description:
+      "Ferma la ricorrenza di un task: non verranno più generate istanze nei giorni futuri (quelle già in lista restano). Usa quando l'utente dice 'non più ogni giorno', 'basta ripeterlo', 'toglilo dai ricorrenti'. taskId = l'id dell'istanza visibile (da get_today_tasks). Reversibile.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string', description: "ID del task ricorrente (istanza visibile)" },
       },
       required: ['taskId'],
     },
@@ -360,7 +419,7 @@ export function getToolsForMode(
   triageState?: TriageState,
 ): LLMTool[] {
   if (mode !== 'evening_review') {
-    const tools: LLMTool[] = [...CHAT_TOOLS, ...TASK_MANAGEMENT_TOOLS];
+    const tools: LLMTool[] = [...CHAT_TOOLS, ...TASK_MANAGEMENT_TOOLS, ...RECURRENCE_TOOLS];
     // Task 44: il commit del piano di oggi vive nelle modalità di pianificazione,
     // non nella chat libera (evita commit spuri durante una conversazione qualsiasi).
     if (mode === 'morning_checkin' || mode === 'planning') {
@@ -540,6 +599,10 @@ export async function executeTool(
         return await executeArchiveTask(input, userId);
       case 'commit_today_plan':
         return await executeCommitTodayPlan(input, userId);
+      case 'set_task_recurrence':
+        return await executeSetTaskRecurrence(input, userId);
+      case 'stop_task_recurrence':
+        return await executeStopTaskRecurrence(input, userId);
       case 'record_mood':
         return executeRecordMood(input, context);
       case 'record_energy':
@@ -686,7 +749,60 @@ async function executeCommitTodayPlan(
   };
 }
 
+async function executeSetTaskRecurrence(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const taskId = String(input.taskId ?? '').trim();
+  if (!taskId) return { kind: 'sideEffect', success: false, error: 'taskId is required' };
+
+  const result = await setTaskRecurrence(userId, taskId, {
+    frequency: input.frequency,
+    weekdays: input.weekdays,
+    monthDay: input.monthDay,
+    endDate: input.endDate,
+  });
+  if (!result.ok) {
+    return { kind: 'sideEffect', success: false, error: result.error };
+  }
+  return {
+    kind: 'sideEffect',
+    success: true,
+    data: {
+      templateId: result.templateId,
+      recurrence: result.description,
+      updated: result.updated,
+      note: `Ricorrenza ${result.updated ? 'aggiornata' : 'impostata'}: ${result.description}. Conferma all'utente in una frase che il task tornerà da solo ${result.description}, senza doverlo ricreare.`,
+    },
+  };
+}
+
+async function executeStopTaskRecurrence(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const taskId = String(input.taskId ?? '').trim();
+  if (!taskId) return { kind: 'sideEffect', success: false, error: 'taskId is required' };
+
+  const result = await stopTaskRecurrence(userId, taskId);
+  if (!result.ok) {
+    return { kind: 'sideEffect', success: false, error: result.error };
+  }
+  return {
+    kind: 'sideEffect',
+    success: true,
+    data: {
+      templateId: result.templateId,
+      note: `Ricorrenza fermata per "${result.title}". Le istanze già in lista restano; non se ne creeranno di nuove. Conferma all'utente.`,
+    },
+  };
+}
+
 async function executeGetTodayTasks(userId: string): Promise<ToolExecutionResult> {
+  // Task 46: materializza le istanze ricorrenti di oggi prima di leggere la lista,
+  // così un'abitudine resa ricorrente compare nel piano del mattino senza ricrearla.
+  await materializeRecurringForDate(userId, formatTodayInRome());
+
   const tasks = await db.task.findMany({
     where: {
       userId,
@@ -710,6 +826,7 @@ async function executeGetTodayTasks(userId: string): Promise<ToolExecutionResult
       category: t.category,
       status: t.status,
       deadline: t.deadline ? formatDateInRome(t.deadline) : null,
+      recurring: t.recurringTemplateId !== null,
     })),
   };
 }

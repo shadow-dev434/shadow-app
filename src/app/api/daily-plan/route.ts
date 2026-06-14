@@ -248,6 +248,8 @@ export async function GET(req: NextRequest) {
       completedAt: t.completedAt ? new Date(t.completedAt).toISOString() : null,
       createdAt: new Date(t.createdAt).toISOString(),
       updatedAt: new Date(t.updatedAt).toISOString(),
+      // Task 46: per il badge "ricorrente" nella schermata Oggi.
+      isRecurring: t.recurringTemplateId !== null,
     });
 
     const getTasks = (ids: string[]) => ids.map(id => taskMap.get(id)).filter((t): t is NonNullable<typeof t> => Boolean(t)).map(serializeTask);

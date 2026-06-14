@@ -27,7 +27,7 @@ import {
   Download, Share2, RefreshCw, Send, Pencil, ShieldAlert, Lock, Unlock,
   Loader2, ChevronLeft, CheckCircle2, AlertCircle, User, Baby,
   Home, Briefcase, GraduationCap, Heart, BookOpen, FileText,
-  Palette, Wrench, Eye, EyeOff, MessageCircle, Hand
+  Palette, Wrench, Eye, EyeOff, MessageCircle, Hand, Repeat
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { signOut, useSession } from 'next-auth/react';
@@ -2132,6 +2132,7 @@ function TodayView() {
                       <div className="flex items-center gap-2 mt-0.5">
                         <Badge className={`text-[10px] h-4 ${DECISION_CONFIG[task.decision]?.bg || ''} ${DECISION_CONFIG[task.decision]?.color || ''}`}>{DECISION_CONFIG[task.decision]?.label || task.decision}</Badge>
                         {task.aiClassified && <Sparkles className="w-3 h-3 text-amber-500" />}
+                        {task.recurringTemplateId && <span className="text-[10px] text-zinc-500 dark:text-zinc-400 flex items-center gap-0.5"><Repeat className="w-2.5 h-2.5" /> ricorrente</span>}
                       </div>
                       {/* Motivational personalization */}
                       {store.adaptiveProfile && (
@@ -2182,6 +2183,7 @@ function TaskSection({ title, icon, tasks, onTaskClick, onStartFocus, colorClass
                 <div className="flex-1 min-w-0 flex items-center gap-1.5">
                   <p className="text-sm truncate">{task.title}</p>
                   {task.aiClassified && <Sparkles className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
+                  {task.recurringTemplateId && <Repeat className="w-2.5 h-2.5 text-zinc-400 shrink-0" />}
                 </div>
                 <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onStartFocus(task.id, 'launch'); }}><Play className="w-3 h-3" /></Button>
               </CardContent>
