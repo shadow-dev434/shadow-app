@@ -102,6 +102,34 @@ function getTimeSlot(): string {
   return 'night';
 }
 
+// ── Cooldown trigger proattivi (Task 43, fix loop check-in) ──────────────────
+// Quando l'utente risponde o chiude un popup proattivo, il client registra un
+// signal 'proactive_ack:<triggerType>'. Qui rileggiamo gli ack recenti e
+// sopprimiamo quei tipi di trigger per la durata del cooldown: senza, la
+// condizione del trigger (es. >=3 task completati) resta vera e il popup
+// ri-comparirebbe in loop a ogni re-fetch. Cooldown PER-TIPO: un ack di
+// success_milestone non zittisce avoidance_pattern. Query dedicata (non i 20
+// signal generici) per robustezza sotto completamenti rapidi.
+const PROACTIVE_COOLDOWN_MS = 30 * 60 * 1000;
+const PROACTIVE_ACK_PREFIX = 'proactive_ack:';
+
+async function getAckedTriggerTypes(userId: string): Promise<Set<string>> {
+  try {
+    const since = new Date(Date.now() - PROACTIVE_COOLDOWN_MS);
+    const acks = await db.learningSignal.findMany({
+      where: {
+        userId,
+        signalType: { startsWith: PROACTIVE_ACK_PREFIX },
+        createdAt: { gte: since },
+      },
+      select: { signalType: true },
+    });
+    return new Set(acks.map((s) => s.signalType.slice(PROACTIVE_ACK_PREFIX.length)));
+  } catch {
+    return new Set();
+  }
+}
+
 // ── POST: AI Assistant Interaction ───────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -252,8 +280,10 @@ export async function POST(request: NextRequest) {
         }));
 
         const triggers = detectProactiveTriggers(profile, taskSummaries, signalSummaries, currentTimeSlot);
+        const ackedTypes = await getAckedTriggerTypes(userId);
+        const filteredTriggers = triggers.filter((t) => !ackedTypes.has(t.type));
 
-        return NextResponse.json({ triggers });
+        return NextResponse.json({ triggers: filteredTriggers });
       }
 
       // ── Micro-Feedback: process with AI ──
@@ -429,8 +459,10 @@ export async function GET(request: NextRequest) {
     }));
 
     const triggers = detectProactiveTriggers(profile, taskSummaries, signalSummaries, currentTimeSlot);
+    const ackedTypes = await getAckedTriggerTypes(userId);
+    const filteredTriggers = triggers.filter((t) => !ackedTypes.has(t.type));
 
-    return NextResponse.json({ insights, triggers });
+    return NextResponse.json({ insights, triggers: filteredTriggers });
   } catch (error) {
     console.error('AI Assistant GET error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

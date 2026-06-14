@@ -231,6 +231,10 @@ interface ShadowState {
   setProactiveChatbotOptions: (o: { value: string; label: string }[]) => void;
   proactiveChatbotAllowFreeText: boolean;
   setProactiveChatbotAllowFreeText: (v: boolean) => void;
+  // Task 43: tipo del trigger proattivo attualmente mostrato, per registrare
+  // l'ack 'proactive_ack:<type>' alla risposta/chiusura (cooldown anti-loop).
+  proactiveChatbotTriggerType: string | null;
+  setProactiveChatbotTriggerType: (t: string | null) => void;
   currentTaskRecommendation: TaskRecommendation | null;
   setCurrentTaskRecommendation: (r: TaskRecommendation | null) => void;
   onboardingAIQuestion: ConversationalOnboardingResponse | null;
@@ -378,6 +382,8 @@ export const useShadowStore = create<ShadowState>((set) => ({
   setProactiveChatbotOptions: (proactiveChatbotOptions) => set({ proactiveChatbotOptions }),
   proactiveChatbotAllowFreeText: true,
   setProactiveChatbotAllowFreeText: (proactiveChatbotAllowFreeText) => set({ proactiveChatbotAllowFreeText }),
+  proactiveChatbotTriggerType: null,
+  setProactiveChatbotTriggerType: (proactiveChatbotTriggerType) => set({ proactiveChatbotTriggerType }),
   currentTaskRecommendation: null,
   setCurrentTaskRecommendation: (currentTaskRecommendation) => set({ currentTaskRecommendation }),
   onboardingAIQuestion: null,

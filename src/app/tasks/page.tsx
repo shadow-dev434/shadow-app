@@ -387,6 +387,10 @@ export default function ShadowApp() {
     if (!store.isAuthenticated || !store.adaptiveProfile) return;
     
     const checkTriggers = async () => {
+      // Task 43 (loop check-in): se un popup proattivo e' gia' aperto, non rifare
+      // il fetch ne' ri-mostrarlo. Evita il flicker quando l'effetto rigira su
+      // cambio di adaptiveProfile (dep dell'effetto). Lettura fresca via getState.
+      if (useShadowStore.getState().showProactiveChatbot) return;
       try {
         const res = await fetch('/api/ai-assistant');
         const data = await res.json();
@@ -411,6 +415,9 @@ export default function ShadowApp() {
             });
             const chatData = await chatRes.json();
             if (chatData.response) {
+              // Task 43: memorizza il tipo del trigger mostrato per registrare
+              // l'ack 'proactive_ack:<type>' alla risposta/chiusura (cooldown).
+              store.setProactiveChatbotTriggerType(topTrigger.type ?? null);
               store.setProactiveChatbotMessage(chatData.response.message);
               store.setProactiveChatbotOptions(chatData.response.followUpOptions || []);
               store.setProactiveChatbotAllowFreeText(chatData.response.allowFreeText !== false);
@@ -1338,9 +1345,22 @@ function ProactiveChatbotPopup() {
   const [freeTextResponse, setFreeTextResponse] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Task 43 (loop check-in): registra l'ack del trigger PRIMA di tutto (awaited),
+  // cosi' e' persistito prima di ogni re-run di checkTriggers. Il server sopprime
+  // quel tipo di trigger per 30 min (cooldown anti-loop). Idempotente: no-op se il
+  // tipo non e' noto.
+  const ackTrigger = useCallback(async () => {
+    const triggerType = store.proactiveChatbotTriggerType;
+    if (triggerType) {
+      await recordSignal('proactive_ack:' + triggerType);
+    }
+  }, [store]);
+
   const handleOptionClick = useCallback(async (value: string) => {
     setIsProcessing(true);
     try {
+      await ackTrigger();
+
       // Record as learning signal
       await recordSignal('micro_feedback', store.microFeedbackTaskId, {
         feedbackType: 'proactive_chatbot',
@@ -1365,15 +1385,18 @@ function ProactiveChatbotPopup() {
     store.setShowProactiveChatbot(false);
     store.setProactiveChatbotMessage('');
     store.setProactiveChatbotOptions([]);
+    store.setProactiveChatbotTriggerType(null);
     setFreeTextResponse('');
     setIsProcessing(false);
     toast({ title: 'Grazie!', description: 'Shadow ha imparato qualcosa di nuovo su di te.' });
-  }, [store]);
+  }, [store, ackTrigger]);
 
   const handleFreeTextSubmit = useCallback(async () => {
     if (!freeTextResponse.trim()) return;
     setIsProcessing(true);
     try {
+      await ackTrigger();
+
       await recordSignal('micro_feedback', store.microFeedbackTaskId, {
         feedbackType: 'proactive_chatbot',
         response: freeTextResponse.trim(),
@@ -1383,12 +1406,18 @@ function ProactiveChatbotPopup() {
     store.setShowProactiveChatbot(false);
     store.setProactiveChatbotMessage('');
     store.setProactiveChatbotOptions([]);
+    store.setProactiveChatbotTriggerType(null);
     setFreeTextResponse('');
     setIsProcessing(false);
     toast({ title: 'Grazie!', description: 'Shadow ha imparato qualcosa di nuovo su di te.' });
-  }, [freeTextResponse, store]);
+  }, [freeTextResponse, store, ackTrigger]);
 
   const handleDismiss = useCallback(async () => {
+    // Anche la chiusura con la X conta come ack: senza, il popup tornerebbe ogni
+    // 5 min (refuter Task 43). Registriamo prima dell'eventuale nudge_outcome.
+    try {
+      await ackTrigger();
+    } catch {}
     if (store.activeNudge) {
       try {
         await fetch('/api/ai-assistant', {
@@ -1405,8 +1434,9 @@ function ProactiveChatbotPopup() {
     store.setShowProactiveChatbot(false);
     store.setProactiveChatbotMessage('');
     store.setProactiveChatbotOptions([]);
+    store.setProactiveChatbotTriggerType(null);
     setFreeTextResponse('');
-  }, [store]);
+  }, [store, ackTrigger]);
 
   if (!store.showProactiveChatbot) return null;
 
