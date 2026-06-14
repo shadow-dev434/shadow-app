@@ -317,6 +317,19 @@ export function buildDailyPlan(
     top3.push(schedule.shift()!);
   }
 
+  // Fallback finale (Task 45): se top3 e' ancora sotto 3, riempi dal pool
+  // ordinato per finalScore a prescindere da decision/quadrante. Con la soglia
+  // Eisenhower >=4 un utente i cui task sono tutti sotto soglia (es. legacy 3/3
+  // non ancora backfillati) avrebbe altrimenti do_now E schedule vuoti -> la
+  // superficie "Top 3" resterebbe vuota. priorityScore e' continuo e ordina
+  // comunque in modo sensato. prioritizedTasks arriva gia' ordinato dal caller.
+  if (top3.length < 3) {
+    for (const task of prioritizedTasks) {
+      if (top3.length >= 3) break;
+      if (!top3.some((t) => t.id === task.id)) top3.push(task);
+    }
+  }
+
   return { top3, doNow, schedule, delegate, postpone };
 }
 
