@@ -86,7 +86,7 @@ export const CHAT_TOOLS: LLMTool[] = [
         title: { type: 'string', description: 'Titolo conciso del task (max 80 caratteri)' },
         description: { type: 'string', description: 'Dettagli extra se utili, altrimenti stringa vuota' },
         urgency: { type: 'number', description: 'Urgenza 1-5: 5=oggi, 4=questa settimana, 3=questo mese, 2=nel trimestre, 1=quando capita' },
-        importance: { type: 'number', description: 'Importanza 1-5: quanto pesa nella vita dell\'utente' },
+        importance: { type: 'number', description: 'Importanza 1-5 (peso nella vita dell\'utente, indipendente dal tempo): 5=cardine, conseguenze gravi se salti; 4=molto importante; 3=conta ma rimandabile senza danni; 2=marginale; 1=opzionale. Non mettere tutto a 3.' },
         category: {
           type: 'string',
           enum: ['work', 'personal', 'health', 'admin', 'creative', 'study', 'household', 'general'],

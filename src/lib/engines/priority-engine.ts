@@ -13,9 +13,12 @@ import type {
 // ── Step 1: Eisenhower Quadrant Classification ──────────────────────────
 
 export function classifyEisenhower(importance: number, urgency: number): Quadrant {
-  // Threshold: 3 is the midpoint on 1-5 scale
-  const imp = importance >= 3;
-  const urg = urgency >= 3;
+  // Task 45: soglia ">=4" (era ">=3"). Su scala 1-5 il punto medio 3 NON conta
+  // piu' come "alto": urgenza alta = oggi/questa settimana (4-5), importanza alta
+  // = molto importante/cardine (4-5). Cosi' "do_now" torna selettivo e il
+  // segnale (riancorato dal classificatore LLM) si distribuisce sui 4 quadranti.
+  const imp = importance >= 4;
+  const urg = urgency >= 4;
 
   if (imp && urg) return 'do_now';
   if (imp && !urg) return 'schedule';
@@ -296,8 +299,9 @@ export function prioritizeAll(
 // ── Eisenhower Q value ──────────────────────────────────────────────────
 
 export function classifyEisenhowerQ(importance: number, urgency: number): number {
-  const imp = importance >= 3;
-  const urg = urgency >= 3;
+  // Task 45: soglia allineata a classifyEisenhower (">=4", era ">=3").
+  const imp = importance >= 4;
+  const urg = urgency >= 4;
   if (imp && urg) return 1.00;
   if (imp && !urg) return 0.82;
   if (!imp && urg) return 0.58;
