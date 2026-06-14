@@ -20,7 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Inbox, Sun, Target, ClipboardCheck, Settings, Plus, Trash2,
-  ChevronRight, Timer, Zap, Shield, ArrowLeft, Play, Check,
+  ChevronRight, Zap, Shield, ArrowLeft, Play, Check,
   AlertTriangle, Clock, TrendingUp, Brain, Sparkles,
   Flame, Activity, X, RotateCcw, Coffee, Mic, MicOff,
   Users, Bell, BellOff, BarChart3, LogIn, LogOut, UserPlus,
@@ -250,10 +250,20 @@ async function recordSignal(
 
 // ─── Motivational Personalization Helpers ────────────────────────────────────
 
+// Una deadline è "imminente" se esiste ed è entro 48h (o già scaduta).
+function hasImminentDeadline(task: ShadowTask): boolean {
+  if (!task.deadline) return false;
+  const ms = new Date(task.deadline).getTime() - Date.now();
+  return !Number.isNaN(ms) && ms <= 48 * 60 * 60 * 1000;
+}
+
 function getMotivationalFraming(task: ShadowTask, profile: AdaptiveProfileData | null): string {
+  // "Scadenza vicina" SOLO se c'è davvero una deadline imminente; altrimenti un
+  // nudge d'urgenza che non finge una scadenza inesistente (bug sottotitolo).
+  const urgencyFraming = hasImminentDeadline(task) ? 'Scadenza vicina, agisci ora' : 'Prima la fai, prima è fatta';
   if (!profile?.motivationProfile) {
     // Default fallback
-    if (task.urgency >= 4) return 'Scadenza vicina, agisci ora';
+    if (task.urgency >= 4) return urgencyFraming;
     return 'Fai il prossimo passo';
   }
 
@@ -264,7 +274,7 @@ function getMotivationalFraming(task: ShadowTask, profile: AdaptiveProfileData |
 
   switch (topMotivation) {
     case 'urgency':
-      return 'Scadenza vicina, agisci ora';
+      return urgencyFraming;
     case 'relief':
       return 'Fatto questo, ti togli il peso';
     case 'identity':
@@ -276,7 +286,7 @@ function getMotivationalFraming(task: ShadowTask, profile: AdaptiveProfileData |
     case 'curiosity':
       return 'Qualcosa di interessante da scoprire';
     default:
-      if (task.urgency >= 4) return 'Scadenza vicina, agisci ora';
+      if (task.urgency >= 4) return urgencyFraming;
       return 'Fai il prossimo passo';
   }
 }
@@ -2047,6 +2057,53 @@ function TodayView() {
     }, 3000);
   }, [store]);
 
+  // Idrata il piano committato di oggi all'apertura: lo store non ha persist,
+  // quindi senza questo il Top 3 sparirebbe a ogni refresh. La GET non ri-scora,
+  // restituisce lo snapshot dell'ultima generazione / commit conversazionale.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (store.dailyPlan) return;
+      try {
+        const res = await fetch('/api/daily-plan');
+        const data = await res.json();
+        if (cancelled || !data?.breakdown) return;
+        const all = await fetchTasks();
+        if (cancelled) return;
+        store.setTasks(all);
+        const pick = (arr: { id: string }[]): ShadowTask[] =>
+          arr.map((t) => all.find((x) => x.id === t.id)).filter(Boolean) as ShadowTask[];
+        store.setDailyPlan({
+          top3: pick(data.breakdown.top3),
+          doNow: pick(data.breakdown.doNow),
+          schedule: pick(data.breakdown.schedule),
+          delegate: pick(data.breakdown.delegate),
+          postpone: pick(data.breakdown.postpone),
+        });
+      } catch {
+        // silenzioso: nessun piano o errore di rete → resta lo stato vuoto
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Tutto ciò che non è tra "Le 3 cose di oggi" confluisce in un'unica lista
+  // "Altro" collassata: niente più quadranti/sezioni multiple per l'utente.
+  const altroTasks: ShadowTask[] = (() => {
+    const dp = store.dailyPlan;
+    if (!dp) return [];
+    const top3Ids = new Set(dp.top3.map((t) => t.id));
+    const seen = new Set<string>();
+    const out: ShadowTask[] = [];
+    for (const t of [...dp.doNow, ...dp.schedule, ...dp.delegate, ...dp.postpone]) {
+      if (top3Ids.has(t.id) || seen.has(t.id)) continue;
+      seen.add(t.id);
+      out.push(t);
+    }
+    return out;
+  })();
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
       {/* Context bar */}
@@ -2098,7 +2155,7 @@ function TodayView() {
       {store.dailyPlan ? (
         <div className="space-y-4">
           <div>
-            <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2 flex items-center gap-1"><Flame className="w-3 h-3" /> Top 3 di oggi</h3>
+            <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2 flex items-center gap-1"><Flame className="w-3 h-3" /> Le 3 cose di oggi</h3>
             <div className="space-y-2">
               {store.dailyPlan.top3.map((task, idx) => (
                 <Card key={task.id} className="border-amber-200 dark:border-amber-900/50 cursor-pointer hover:shadow-md transition-shadow" onClick={() => handleTaskClick(task.id)}>
@@ -2125,12 +2182,9 @@ function TodayView() {
               ))}
             </div>
           </div>
-          {store.dailyPlan!.doNow.filter((t) => !store.dailyPlan!.top3.find((t3) => t3.id === t.id)).length > 0 && (
-            <TaskSection title="Da fare ora" icon={<Zap className="w-3 h-3" />} tasks={store.dailyPlan!.doNow.filter((t) => !store.dailyPlan!.top3.find((t3) => t3.id === t.id))} onTaskClick={handleTaskClick} onStartFocus={handleStartFocus} colorClass="text-rose-600" />
+          {altroTasks.length > 0 && (
+            <TaskSection title="Altro" icon={null} tasks={altroTasks} onTaskClick={handleTaskClick} onStartFocus={handleStartFocus} colorClass="text-zinc-500" defaultExpanded={false} />
           )}
-          {store.dailyPlan!.schedule.length > 0 && <TaskSection title="Da pianificare" icon={<Clock className="w-3 h-3" />} tasks={store.dailyPlan!.schedule} onTaskClick={handleTaskClick} onStartFocus={handleStartFocus} colorClass="text-teal-600" />}
-          {store.dailyPlan!.delegate.length > 0 && <TaskSection title="Da delegare" icon={<Users className="w-3 h-3" />} tasks={store.dailyPlan!.delegate} onTaskClick={handleTaskClick} onStartFocus={handleStartFocus} colorClass="text-amber-600" />}
-          {store.dailyPlan!.postpone.length > 0 && <TaskSection title="Da posticipare" icon={<Timer className="w-3 h-3" />} tasks={store.dailyPlan!.postpone} onTaskClick={handleTaskClick} onStartFocus={handleStartFocus} colorClass="text-zinc-400" />}
         </div>
       ) : (
         <div className="text-center py-12 space-y-3">
@@ -2144,26 +2198,24 @@ function TodayView() {
 
 // ─── Task Section Component ─────────────────────────────────────────────────
 
-function TaskSection({ title, icon, tasks, onTaskClick, onStartFocus, colorClass }: {
-  title: string; icon: React.ReactNode; tasks: ShadowTask[]; onTaskClick: (id: string) => void; onStartFocus: (id: string, mode: 'launch' | 'hold' | 'recovery') => void; colorClass: string;
+function TaskSection({ title, icon, tasks, onTaskClick, onStartFocus, colorClass, defaultExpanded = true }: {
+  title: string; icon: React.ReactNode; tasks: ShadowTask[]; onTaskClick: (id: string) => void; onStartFocus: (id: string, mode: 'launch' | 'hold' | 'recovery') => void; colorClass: string; defaultExpanded?: boolean;
 }) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   return (
     <div>
       <button onClick={() => setIsExpanded(!isExpanded)} className="flex items-center gap-1 mb-2 w-full">
         <span className={`text-xs font-semibold uppercase tracking-wider ${colorClass} flex items-center gap-1`}>{icon} {title} ({tasks.length})</span>
+        <ChevronRight className={`w-3 h-3 ${colorClass} transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
       </button>
       {isExpanded && (
         <div className="space-y-1.5">
           {tasks.map((task) => (
             <Card key={task.id} className="border-zinc-200 dark:border-zinc-800 cursor-pointer hover:border-zinc-300 dark:hover:border-zinc-700" onClick={() => onTaskClick(task.id)}>
               <CardContent className="p-2.5 flex items-center gap-2">
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 flex items-center gap-1.5">
                   <p className="text-sm truncate">{task.title}</p>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-zinc-400">{QUADRANT_CONFIG[task.quadrant]?.label}</span>
-                    {task.aiClassified && <Sparkles className="w-2.5 h-2.5 text-amber-500" />}
-                  </div>
+                  {task.aiClassified && <Sparkles className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
                 </div>
                 <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onStartFocus(task.id, 'launch'); }}><Play className="w-3 h-3" /></Button>
               </CardContent>
