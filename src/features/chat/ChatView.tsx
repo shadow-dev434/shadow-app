@@ -306,6 +306,11 @@ export function ChatView() {
     // general (review mai partita). Il thread orfano resta com'era.
     setThreadId(null);
     setMode('evening_review');
+    // Task 43: dal banner la review parte con messaggi gia' in lista (thread
+    // general riattivato). Puliamo lo schermo per partire dalla review pulita;
+    // a chat vuota (path card) e' un no-op. Il thread general resta 'active' in
+    // DB e si riprende dopo la review (decisione di prodotto: lo riprendi dopo).
+    setMessages([]);
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
@@ -391,12 +396,24 @@ export function ChatView() {
         )}
       </div>
 
+      {/* Task 43 (bug review serale): quando il server segnala shouldStart ma la
+          chat ha gia' messaggi (thread attivo riattivato), la EveningReviewCard a
+          schermo vuoto non compare. Mostriamo un banner non bloccante sopra
+          l'input come punto d'ingresso. Soppresso se la review e' gia' in corso. */}
+      {eveningReviewShouldStart &&
+        messages.length > 0 &&
+        mode !== 'evening_review' &&
+        !sending &&
+        !bootstrapping && (
+          <EveningReviewBanner onStart={handleStartEveningReview} />
+        )}
+
       {/* Check-in beta (Task 23): soppresso solo finché la card della review
           serale occupa la schermata vuota (niente due card impilate). Appena
           l'utente interagisce — fa la review o chatta — il pulse torna
           disponibile come banner non bloccante sopra l'input. */}
       <BetaCheckin
-        suppress={messages.length === 0 && (eveningReviewShouldStart || mode === 'evening_review')}
+        suppress={eveningReviewShouldStart || (messages.length === 0 && mode === 'evening_review')}
       />
 
       <form
@@ -469,6 +486,24 @@ function EveningReviewCard({ onStart }: { onStart: () => void }) {
           Inizia la review
         </button>
       </div>
+    </div>
+  );
+}
+
+// Task 43: punto d'ingresso non bloccante alla review serale quando la chat ha
+// gia' messaggi (la EveningReviewCard a schermo vuoto non comparirebbe). Riga
+// compatta sopra l'input; l'avvio riusa handleStartEveningReview (thread nuovo).
+function EveningReviewBanner({ onStart }: { onStart: () => void }) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 border-t border-amber-900/40 bg-amber-950/30 flex-shrink-0">
+      <p className="flex-1 text-sm text-amber-100">È ora della review serale.</p>
+      <button
+        type="button"
+        onClick={onStart}
+        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white rounded-md text-sm font-medium transition-colors flex-shrink-0"
+      >
+        Inizia la review
+      </button>
     </div>
   );
 }

@@ -362,6 +362,16 @@ export async function GET(req: NextRequest) {
       }))
       .reverse();
 
+    // Task 43 (bug review serale): un thread NON-serale sopravvissuto alla spina
+    // 8c (gap < 3gg, es. chat usata la sera stessa) prima cadeva su
+    // shouldStart:false hardcoded, rendendo la review irraggiungibile per chi ha
+    // un thread attivo. Ora calcoliamo comunque il segnale: computeEveningReview
+    // e' read-only e ritorna shouldStart:false se esiste gia' una Review-oggi o un
+    // thread evening_review attivo/in-pausa -> nessun banner durante una review in
+    // corso. Il client mostra un banner d'ingresso (ChatView EveningReviewBanner)
+    // e avvia SEMPRE su threadId=null (vincolo F7, vedi commento riga 278-281).
+    const eveningReview = await computeEveningReview(userId, validatedNowHHMM, clientDate);
+
     const body: ActiveThreadResponse = {
       activeThread: {
         threadId: thread.id,
@@ -369,7 +379,7 @@ export async function GET(req: NextRequest) {
         messages,
         hasMore,
       },
-      eveningReview: { shouldStart: false },
+      eveningReview,
     };
     return NextResponse.json(body);
   } catch (err) {
