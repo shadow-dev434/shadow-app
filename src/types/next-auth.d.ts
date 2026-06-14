@@ -7,6 +7,7 @@ declare module 'next-auth' {
       tourCompleted: boolean;
       onboardingComplete: boolean;
       consentGiven: boolean;
+      isBetaTester: boolean;
     } & DefaultSession['user'];
   }
 }
@@ -17,5 +18,6 @@ declare module 'next-auth/jwt' {
     tourCompleted?: boolean;
     onboardingComplete?: boolean;
     consentGiven?: boolean;
+    isBetaTester?: boolean;
   }
 }

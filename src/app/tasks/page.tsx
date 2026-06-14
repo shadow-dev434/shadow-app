@@ -30,7 +30,7 @@ import {
   Palette, Wrench, Eye, EyeOff, MessageCircle, Hand
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { signOut } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { StrictModeExitDialog, type StrictModeExitResult } from '@/features/strict-mode/StrictModeExitDialog';
 import { APP_VERSION } from '@/lib/version';
@@ -2910,6 +2910,8 @@ function ReviewView() {
 function SettingsView({ onLogout }: { onLogout: () => void }) {
   const store = useShadowStore();
   const router = useRouter();
+  const { data: session } = useSession();
+  const isBetaTester = session?.user?.isBetaTester ?? false;
   const profile = store.userProfile;
   const authUser = store.authUser;
 
@@ -3026,8 +3028,12 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
             <div className="flex justify-between text-sm"><span className="text-zinc-500">Sessione consigliata</span><span>{profile.preferredSessionLength} min</span></div>
             <div className="flex justify-between text-sm"><span className="text-zinc-500">Focus mode</span><span>{profile.focusModeDefault}</span></div>
             {profile.executionStyle && <p className="text-xs text-zinc-400 italic mt-1">{profile.executionStyle}</p>}
-            <Separator />
-            <Button variant="outline" size="sm" className="w-full" onClick={handleResetOnboarding}>Rifai il profilo</Button>
+            {isBetaTester && (
+              <>
+                <Separator />
+                <Button variant="outline" size="sm" className="w-full" onClick={handleResetOnboarding}>Rifai il profilo</Button>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
@@ -3047,22 +3053,24 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
         </CardContent>
       </Card>
 
-      {/* Export */}
-      <Card className="border-zinc-200 dark:border-zinc-800">
-        <CardHeader className="p-4 pb-2"><CardTitle className="text-base">Esporta dati</CardTitle></CardHeader>
-        <CardContent className="p-4 pt-0">
-          <Button variant="outline" className="w-full" onClick={async () => {
-            try {
-              const res = await fetch('/api/export?format=json');
-              const blob = await res.blob();
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a'); a.href = url; a.download = 'shadow-export.json'; a.click();
-              URL.revokeObjectURL(url);
-              toast({ title: 'Esportazione completata' });
-            } catch { toast({ title: 'Errore', variant: 'destructive' }); }
-          }}><Download className="w-4 h-4 mr-2" /> Esporta JSON</Button>
-        </CardContent>
-      </Card>
+      {/* Export — affordance beta-only (dump JSON con cronologia chat) */}
+      {isBetaTester && (
+        <Card className="border-zinc-200 dark:border-zinc-800">
+          <CardHeader className="p-4 pb-2"><CardTitle className="text-base">Esporta dati</CardTitle></CardHeader>
+          <CardContent className="p-4 pt-0">
+            <Button variant="outline" className="w-full" onClick={async () => {
+              try {
+                const res = await fetch('/api/export?format=json');
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = 'shadow-export.json'; a.click();
+                URL.revokeObjectURL(url);
+                toast({ title: 'Esportazione completata' });
+              } catch { toast({ title: 'Errore', variant: 'destructive' }); }
+            }}><Download className="w-4 h-4 mr-2" /> Esporta JSON</Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Versione app (Task 23: allegata anche a bug report e Sentry) */}
       <p className="text-center text-[11px] text-zinc-500 pb-2">Shadow v{APP_VERSION}</p>

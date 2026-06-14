@@ -4,6 +4,7 @@ import { PrismaAdapter } from '@next-auth/prisma-adapter';
 import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { getAuthSecret } from '@/lib/auth-secret';
+import { isAdminEmail } from '@/lib/beta/admin-guard';
 
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(db),
@@ -43,6 +44,10 @@ export const authOptions: NextAuthOptions = {
       // Primo sign-in: popola id + carica i flag onboarding dal DB.
       if (user) {
         token.id = user.id;
+        // Tester beta = email nell'allowlist ADMIN_EMAILS (stessa lista del
+        // gate /admin/beta). Solo il booleano risolto finisce nel JWT/sessione,
+        // mai la lista email.
+        token.isBetaTester = isAdminEmail(user.email);
         const profile = await db.userProfile.findUnique({
           where: { userId: user.id },
           select: { tourCompleted: true, onboardingComplete: true, consentGivenAt: true },
@@ -55,6 +60,7 @@ export const authOptions: NextAuthOptions = {
       // ricarica i flag dal DB in modo che il middleware veda subito il
       // nuovo stato.
       if (trigger === 'update' && typeof token.id === 'string') {
+        token.isBetaTester = isAdminEmail(typeof token.email === 'string' ? token.email : null);
         const profile = await db.userProfile.findUnique({
           where: { userId: token.id },
           select: { tourCompleted: true, onboardingComplete: true, consentGivenAt: true },
@@ -71,6 +77,7 @@ export const authOptions: NextAuthOptions = {
         session.user.tourCompleted = token.tourCompleted ?? false;
         session.user.onboardingComplete = token.onboardingComplete ?? false;
         session.user.consentGiven = token.consentGiven ?? false;
+        session.user.isBetaTester = token.isBetaTester ?? false;
       }
       return session;
     },

@@ -6,6 +6,7 @@
 // screen di src/app/error.tsx.
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { Bug, CheckCircle2, Loader2 } from 'lucide-react';
 import {
   Dialog,
@@ -426,14 +427,21 @@ export function BugReportButton({
   area?: BugArea;
   className?: string;
 }) {
+  const { data: session } = useSession();
+  const isBetaTester = session?.user?.isBetaTester ?? false;
   const [open, setOpen] = useState(false);
 
   // Il bottone è presente su entrambe le superfici (chat e /tasks): è il
   // punto giusto per agganciare i breadcrumb e il check "risolto" una volta.
+  // Solo per i tester beta: l'icona bug è strumentazione di test (Task 23/44).
   useEffect(() => {
+    if (!isBetaTester) return;
     wireBreadcrumbs();
     void notifyResolvedReports();
-  }, []);
+  }, [isBetaTester]);
+
+  // Affordance beta-only: invisibile agli utenti finali.
+  if (!isBetaTester) return null;
 
   return (
     <>
