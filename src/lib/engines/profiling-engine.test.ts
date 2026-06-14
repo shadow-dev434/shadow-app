@@ -47,7 +47,7 @@ describe('classifyTaskWithAI — ramo LLM', () => {
         resistance: 2,
         size: 2,
         delegable: true,
-        context: 'work',
+        context: 'office',
         category: 'work',
         confidence: 0.9,
         reason: 'scadenza lavorativa',
@@ -59,7 +59,7 @@ describe('classifyTaskWithAI — ramo LLM', () => {
     expect(r.importance).toBe(5);
     expect(r.urgency).toBe(4);
     expect(r.delegable).toBe(true);
-    expect(r.suggestedContext).toBe('work');
+    expect(r.suggestedContext).toBe('office');
     expect(r.category).toBe('work');
     expect(r.confidence).toBeCloseTo(0.9);
     expect(r.estimatedMinutes).toBe(2 * 15);

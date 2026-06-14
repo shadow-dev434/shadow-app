@@ -5,10 +5,12 @@
 
 import type { LLMTool } from '@/lib/llm/client';
 
-// Categorie allineate a heuristicClassification (fallback) e al resto dell'app.
+// Categorie allineate al tipo Category dell'app (src/lib/types/shadow.ts) e
+// all'enum di create_task. Il fallback euristico ne assegna un sottoinsieme.
 export const TASK_CATEGORIES = [
   'general',
   'work',
+  'personal',
   'household',
   'study',
   'health',
@@ -16,7 +18,10 @@ export const TASK_CATEGORIES = [
   'creative',
 ] as const;
 
-export const TASK_CONTEXTS = ['any', 'home', 'work', 'outside'] as const;
+// Allineato al tipo Context dell'app (src/lib/types/shadow.ts): i valori devono
+// poter combaciare con currentContext, altrimenti contextModifier penalizza
+// sempre il task (-4) nel ranking. NON usare un vocabolario divergente.
+export const TASK_CONTEXTS = ['any', 'home', 'office', 'phone', 'computer', 'errand'] as const;
 
 // Strumento a output forzato: garantisce JSON valido senza parsing di testo.
 export const EMIT_CLASSIFICATION_TOOL: LLMTool = {
@@ -54,7 +59,7 @@ export const EMIT_CLASSIFICATION_TOOL: LLMTool = {
         type: 'string',
         enum: [...TASK_CONTEXTS],
         description:
-          'Dove/come si svolge: any (indifferente), home, work, outside (commissioni fuori).',
+          'Dove/come si svolge: any (indifferente), home (casa), office (lavoro/ufficio), phone (al telefono), computer (al pc), errand (commissioni fuori).',
       },
       category: {
         type: 'string',

@@ -31,9 +31,20 @@ import {
 } from '../src/lib/types/shadow';
 
 const APPLY = process.argv.includes('--apply');
+
+// --limit N: validazione esplicita. Number(x)||undefined trattava 0 e i valori
+// non numerici (es. "--limit --apply") come "nessun limite" -> processava TUTTO.
 const limitArgIdx = process.argv.indexOf('--limit');
-const LIMIT =
-  limitArgIdx >= 0 ? Number(process.argv[limitArgIdx + 1]) || undefined : undefined;
+let LIMIT: number | undefined;
+if (limitArgIdx >= 0) {
+  const rawLimit = process.argv[limitArgIdx + 1];
+  const n = Number(rawLimit);
+  if (rawLimit === undefined || rawLimit.startsWith('--') || !Number.isInteger(n) || n < 0) {
+    console.error('[backfill-45] --limit richiede un intero >= 0 (es. --limit 8).');
+    process.exit(1);
+  }
+  LIMIT = n;
+}
 
 // Costo medio stimato per chiamata Haiku di classificazione (~300 in / ~120 out).
 const EST_COST_PER_CLASSIFY = 0.0008;
@@ -107,10 +118,23 @@ async function loadProfile(userId: string): Promise<Record<string, unknown> | nu
 }
 
 async function main(): Promise<void> {
+  // Guard anti-scrittura accidentale: --apply scrive in massa e (memoria
+  // vercel-deploy-shadow) Preview/Dev puntano alla DATABASE_URL di PROD.
+  if (APPLY) {
+    const masked = (process.env.DATABASE_URL ?? '(non impostata)').replace(/\/\/[^@]*@/, '//***@');
+    if (process.env.BACKFILL_CONFIRM !== 'yes') {
+      console.error('[backfill-45] --apply richiede BACKFILL_CONFIRM=yes (doppia conferma esplicita).');
+      console.error(`[backfill-45] DB target: ${masked}`);
+      console.error('[backfill-45] Rilancia con: BACKFILL_CONFIRM=yes bun run dotenv -e .env.local -- bun run scripts/backfill-priority-45.ts --apply');
+      process.exit(1);
+    }
+    console.log(`[backfill-45] APPLY confermato (BACKFILL_CONFIRM=yes). DB target: ${masked}`);
+  }
+
   const tasks = await db.task.findMany({
     where: { status: { notIn: terminalTaskStatuses() } },
     orderBy: { createdAt: 'asc' },
-    ...(LIMIT ? { take: LIMIT } : {}),
+    ...(LIMIT !== undefined ? { take: LIMIT } : {}),
   });
 
   console.log(
@@ -124,6 +148,12 @@ async function main(): Promise<void> {
   let estCost = 0;
 
   for (const t of tasks) {
+    // "Flat" = il segnale di ranking (importance/urgency) e' al default no-op 3/3,
+    // quindi privo di significato e da ri-derivare. NON restringiamo anche a
+    // resistance/size/context al default: lo farebbe saltare i veri task legacy
+    // che hanno quei campi non-default (visto in dry-run). La protezione contro
+    // la sovrascrittura di segnali deliberati (finding review) e' sotto, nel
+    // ramo reclassify: i campi secondari non-default vengono PRESERVATI.
     const isFlat = t.importance === 3 && t.urgency === 3;
 
     let importance = t.importance;
@@ -146,13 +176,17 @@ async function main(): Promise<void> {
           currentContext: 'any',
           deadline: t.deadline ? t.deadline.toISOString() : null,
         });
+        // importance/urgency: sempre dall'LLM (erano il 3/3 no-op da rifare).
         importance = cls.importance;
         urgency = cls.urgency;
-        resistance = cls.resistance;
-        size = cls.size;
-        delegable = cls.delegable;
-        category = cls.category;
-        context = cls.suggestedContext;
+        // Campi secondari: adotta l'LLM solo se erano al default (= probabilmente
+        // mai impostati); altrimenti PRESERVA il valore esistente, che potrebbe
+        // essere un segnale deliberato dell'utente o dell'era pre-no-op.
+        resistance = t.resistance === 3 ? cls.resistance : t.resistance;
+        size = t.size === 3 ? cls.size : t.size;
+        delegable = t.delegable === true ? true : cls.delegable;
+        category = t.category === 'general' ? cls.category : t.category;
+        context = t.context === 'any' ? cls.suggestedContext : t.context;
         reclassified++;
         estCost += EST_COST_PER_CLASSIFY;
       } catch (e) {

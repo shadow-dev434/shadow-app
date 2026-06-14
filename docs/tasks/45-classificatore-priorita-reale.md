@@ -162,3 +162,37 @@ lavoro non è sprecato: l'euristica migliorata resta il fallback di W3.
 **NON toccati**: `prisma/schema.prisma` (nessuna migration; default 3 resta solo
 come safety net, i percorsi di creazione diventano autorevoli), `orchestrator.ts`,
 `prompts.ts`, `.env*`.
+
+## 7. Modifiche post-review (review adversariale multi-agente, 2026-06-14)
+Review con 6 dimensioni + verifica adversariale (24 rilievi, 7 confermati, 17
+falsi positivi scartati). Fix applicati:
+1. **[HIGH] Vocabolario context disallineato.** `TASK_CONTEXTS` usava `work`/`outside`,
+   non presenti nel tipo `Context` dell'app (`office`/`errand`…): in `prioritizeTask`
+   non combaciavano mai con `currentContext` → penalita' `-4` permanente sui task di
+   lavoro/commissioni nel ranking, persistita. Fix: `TASK_CONTEXTS` allineato a
+   `Context` (`any,home,office,phone,computer,errand`) + descrizione tool aggiornata.
+2. **[LOW] Categoria `personal` mancante** da `TASK_CATEGORIES` (valida nel tipo
+   `Category` e in `create_task`). Fix: aggiunta.
+3. **[HIGH] `buildDailyPlan` svuotava il Top3** se tutti i task erano sotto soglia
+   (`>=4`): il ripiego "pesca da schedule" non bastava nel caso tutto-eliminate
+   (utenti legacy non backfillati). Fix: fallback finale in
+   `execution-engine.ts` che riempie il Top3 dal pool ordinato per `finalScore` a
+   prescindere dal `decision`. + `execution-engine.test.ts` (caso all-eliminate).
+4. **[MED] daily-plan degrada i 3/3 legacy** al primo POST post-deploy (legge dal DB
+   senza riclassificare). Mitigato dal fix #3 (il piano non resta vuoto) + dalla
+   raccomandazione di lanciare il backfill `--apply` in prossimita' del deploy.
+5. **[HIGH] Backfill sovrascriveva segnali deliberati.** Fix: `isFlat` resta su
+   `importance===3 && urgency===3` (per non saltare i veri legacy), ma in reclassify
+   i campi secondari non-default (resistance/size/category/context/delegable)
+   vengono **preservati** (adottati dall'LLM solo se al default). NB: il fix
+   `aiClassified===false` suggerito da un agente era invertito (il no-op legacy
+   scriveva `aiClassified=true`) — scartato correttamente in verifica.
+6. **[MED] `--limit 0`/`--limit --apply`** processavano TUTTO (quirk `Number()||undefined`).
+   Fix: validazione esplicita (`Number.isInteger && >=0`, altrimenti exit).
+7. **[LOW] Nessun guard su `--apply` vs DB PROD.** Fix: `--apply` richiede
+   `BACKFILL_CONFIRM=yes` e stampa l'host DB (credenziali mascherate).
+
+File aggiunti dai fix: `src/lib/engines/execution-engine.ts` (fallback) +
+`src/lib/engines/execution-engine.test.ts`. Evening review (`buildDailyPlanPreview`)
+verificata immune: opera su `candidateTasks` conversazionali e `priorityScore`, non
+sulla soglia Eisenhower.
