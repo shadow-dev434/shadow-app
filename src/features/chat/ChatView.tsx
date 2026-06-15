@@ -6,10 +6,11 @@ import { Archive, Info, List, Pencil, Send, Loader2, CheckCircle2 } from 'lucide
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { BetaCheckin } from '@/features/beta/BetaCheckinCard';
 
-interface QuickReply {
-  label: string;
-  value: string;
-}
+// Task 51: unione discriminata. Il ramo body_double apre /focus?taskId=…
+// (deep-link body doubling) invece di re-inviare il valore come messaggio.
+type QuickReply =
+  | { label: string; value: string }
+  | { label: string; action: 'body_double'; taskId: string };
 
 interface ToolExecution {
   name: string;
@@ -387,7 +388,16 @@ export function ChatView() {
               {isLastAssistant && msg.quickReplies && msg.quickReplies.length > 0 && (
                 <QuickReplyButtons
                   replies={msg.quickReplies}
-                  onSelect={(value) => sendMessage(value)}
+                  onSelect={(reply) => {
+                    // Task 51: il ramo body_double (unico con `action`) naviga
+                    // al deep-link Focus, senza re-inviare un turno (niente user
+                    // bubble spuria). Gli altri re-inviano il valore come messaggio.
+                    if ('action' in reply) {
+                      router.push(`/focus?taskId=${encodeURIComponent(reply.taskId)}`);
+                      return;
+                    }
+                    sendMessage(reply.value);
+                  }}
                   disabled={sending}
                 />
               )}
@@ -586,7 +596,7 @@ function QuickReplyButtons({
   disabled,
 }: {
   replies: QuickReply[];
-  onSelect: (value: string) => void;
+  onSelect: (reply: QuickReply) => void;
   disabled: boolean;
 }) {
   return (
@@ -594,7 +604,7 @@ function QuickReplyButtons({
       {replies.map((reply, i) => (
         <button
           key={i}
-          onClick={() => onSelect(reply.value)}
+          onClick={() => onSelect(reply)}
           disabled={disabled}
           className="px-3 py-1.5 bg-amber-950/40 hover:bg-amber-900/40 active:bg-amber-900/60 border border-amber-800/50 rounded-full text-sm text-amber-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
