@@ -35,9 +35,13 @@ export type TaskProjection = {
   // prima di passarli ad applyPreviewOverrides come pool per `adds`.
   status: string;        // 'inbox' | 'planned' | 'active' | 'in_progress'
                          // (dopo filter terminalTaskStatuses; valori da shadow.ts)
+  // Task 46: non-null se il task e' un'istanza di un template ricorrente. Le
+  // istanze materializzate per il giorno del piano entrano sempre fra i candidati
+  // (reason 'recurring'), così un'abitudine ricorrente finisce nel piano di domani.
+  recurringTemplateId: string | null;
 };
 
-export type CandidateReason = 'deadline' | 'new' | 'carryover';
+export type CandidateReason = 'deadline' | 'recurring' | 'new' | 'carryover';
 
 export type Candidate = TaskProjection & {
   reason: CandidateReason;
@@ -56,8 +60,11 @@ export type SelectCandidatesInput = {
  * - tasks created on clientDate (zone-local "today"),
  * - tasks with avoidanceCount >= 1 (carry-over, spec 2.2 reading the counter only).
  *
+ * Plus (Task 46): tasks that are instances of a recurring template
+ * (recurringTemplateId != null) -- materialized for the plan day.
+ *
  * Sorting: deadline ASC NULLS LAST, avoidanceCount DESC, createdAt DESC.
- * Reason precedence on multi-qualification: deadline > carryover > new.
+ * Reason precedence on multi-qualification: deadline > recurring > carryover > new.
  *
  * Pure function: no Prisma, no Date.now(), no Math.random(). Same input -> same output.
  *
@@ -90,9 +97,15 @@ export function selectCandidates(input: SelectCandidatesInput): Candidate[] {
 
 function pickReason(task: TaskProjection, clientDate: string, cutoffMs: number): CandidateReason | null {
   // Deadline within cutoff: includes overdue tasks (deadline in the past) -- they're
-  // still relevant for tonight's review. Reason precedence: deadline > carryover > new.
+  // still relevant for tonight's review. Reason precedence: deadline > recurring >
+  // carryover > new.
   if (task.deadline !== null && task.deadline.getTime() <= cutoffMs) {
     return 'deadline';
+  }
+  // Task 46: un'istanza ricorrente materializzata per il giorno del piano entra
+  // sempre fra i candidati (l'utente l'ha resa ricorrente apposta).
+  if (task.recurringTemplateId !== null) {
+    return 'recurring';
   }
   if (task.avoidanceCount >= 1) {
     return 'carryover';

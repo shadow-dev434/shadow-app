@@ -45,6 +45,9 @@ export interface ShadowTask {
   reminderSent: boolean;
   // Calendar
   calendarEventId: string;
+  // Ricorrenza (Task 46): valorizzato se il task è un'istanza di un template ricorrente.
+  recurringTemplateId?: string | null;
+  occurrenceDate?: string | null;
 }
 
 export interface MicroStep {

@@ -58,7 +58,8 @@ import {
   SUMMARY_HARD_CAP,
   SUMMARY_WINDOW,
 } from './summary';
-import { formatDeadlineLabel, formatTodayInRome } from '@/lib/evening-review/dates';
+import { formatDeadlineLabel, formatTodayInRome, addDaysIso } from '@/lib/evening-review/dates';
+import { materializeRecurringForDate } from '@/lib/recurring/materialize';
 import { computeInactivityGapDays, type InactivityGap } from '@/lib/evening-review/inactivity-gap';
 
 export type ChatMode =
@@ -1005,7 +1006,7 @@ function safeParseJSON<T>(json: string, fallback: T): T {
 async function loadAllNonTerminalTasks(userId: string): Promise<TaskProjection[]> {
   return db.task.findMany({
     where: { userId, status: { notIn: terminalTaskStatuses() } },
-    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true, source: true, postponedCount: true, microSteps: true, size: true, priorityScore: true, status: true },
+    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true, source: true, postponedCount: true, microSteps: true, size: true, priorityScore: true, status: true, recurringTemplateId: true },
   });
 }
 
@@ -1013,6 +1014,11 @@ async function initEveningReview(
   userId: string,
   clientDate: string,
 ): Promise<{ triageState: TriageState; allTasks: TaskProjection[] }> {
+  // Task 46: la review serale costruisce il piano di DOMANI. Materializza prima le
+  // istanze ricorrenti di domani, così entrano fra i candidati (reason 'recurring')
+  // e finiscono nel piano. Idempotente (guardia unique template+giorno).
+  await materializeRecurringForDate(userId, addDaysIso(clientDate, 1));
+
   const allTasks = await loadAllNonTerminalTasks(userId);
 
   const candidates = selectCandidates({
