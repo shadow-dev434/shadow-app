@@ -78,6 +78,14 @@ export interface OrchestratorInput {
   relatedTaskId?: string | null;
   /** YYYY-MM-DD, used by evening_review mode for the deadline cutoff in Europe/Rome. */
   clientDate?: string;
+  /**
+   * Task 47: fascia oraria all'apertura (calcolata in Europe/Rome dal bootstrap).
+   * 'morning' = ora < 14:00, 'afternoon' = ora >= 14:00. Usata SOLO per la
+   * formulazione del saluto nel morning_checkin (vedi MORNING_CHECKIN_PROMPT):
+   * mattina -> "Buongiorno", pomeriggio -> "Ciao" + "oggi" invece di "stamattina".
+   * Assente sui turni successivi e fuori dal morning checkin.
+   */
+  partOfDay?: 'morning' | 'afternoon';
 }
 
 export interface OrchestratorOutput {
@@ -235,7 +243,7 @@ export async function orchestrate(
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: SUMMARY_HARD_CAP,
     }),
-    buildContextAndVoice(input.userId),
+    buildContextAndVoice(input.userId, input.partOfDay),
     summaryEligible ? loadLatestSummary(thread.id) : Promise.resolve(null),
   ]);
   const previousMessages = windowDesc.reverse();
@@ -944,10 +952,28 @@ export async function orchestrate(
 
 // ── User context builder ──────────────────────────────────────────────────
 
+/**
+ * Task 47: estrae il primo nome "vero" dell'utente per il saluto, con la prima
+ * lettera maiuscola. Ritorna null (-> saluto generico) se il name e' assente o
+ * NON sembra un nome proprio: cifre/punti/underscore/@ sono tipici del fallback
+ * email-prefix che il register usa quando l'utente non dichiara un nome
+ * (register/route.ts: name || email.split('@')[0]). Antonio: "il nome non deve
+ * essere la mail". NB: un nome reale che coincide col prefisso email (giulia /
+ * giulia@...) resta valido — il filtro guarda la forma, non l'uguaglianza.
+ */
+function resolveFirstName(name?: string | null): string | null {
+  const trimmed = (name ?? '').trim();
+  if (!trimmed) return null;
+  const first = trimmed.split(/\s+/)[0];
+  if (!first || /[\d._@]/.test(first)) return null;
+  return first.charAt(0).toUpperCase() + first.slice(1);
+}
+
 async function buildContextAndVoice(
   userId: string,
+  partOfDay?: 'morning' | 'afternoon',
 ): Promise<{ userContext: string; voiceProfile: string }> {
-  const [profile, memories] = await Promise.all([
+  const [profile, memories, user] = await Promise.all([
     db.adaptiveProfile.findUnique({ where: { userId } }).catch(() => null),
     db.userMemory
       .findMany({
@@ -956,9 +982,29 @@ async function buildContextAndVoice(
         take: 8,
       })
       .catch(() => []),
+    db.user
+      .findUnique({ where: { id: userId }, select: { name: true } })
+      .catch(() => null),
   ]);
 
   const parts: string[] = [];
+
+  // Task 47: nome reale dell'utente per il saluto (vedi resolveFirstName per il
+  // filtro anti email-prefix).
+  const firstName = resolveFirstName(user?.name);
+  if (firstName) {
+    parts.push(`Nome utente: ${firstName} (usalo nel saluto, senza esagerare)`);
+  }
+
+  // Task 47: fascia oraria per la formulazione del saluto nel morning checkin.
+  if (partOfDay === 'afternoon') {
+    parts.push(
+      'Momento della giornata: POMERIGGIO. Saluta con "Ciao", parla di "oggi" ' +
+        '(NON "stamattina"). L\'utente ha gia\' perso parte della giornata.',
+    );
+  } else if (partOfDay === 'morning') {
+    parts.push('Momento della giornata: MATTINA. Saluta con "Buongiorno".');
+  }
 
   if (profile) {
     parts.push(

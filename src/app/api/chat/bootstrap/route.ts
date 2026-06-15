@@ -12,7 +12,7 @@ import { db } from '@/lib/db';
 import { orchestrate } from '@/lib/chat/orchestrator';
 import { isInsideEveningWindow } from '@/lib/evening-review/window';
 import { eveningReviewHasPriority } from '@/lib/evening-review/priority';
-import { formatTodayInRome } from '@/lib/evening-review/dates';
+import { formatTodayInRome, formatDateInRome } from '@/lib/evening-review/dates';
 
 export async function POST(req: NextRequest) {
   const { error, userId } = await requireSession(req);
@@ -65,9 +65,9 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const shouldTrigger = await shouldTriggerMorningCheckin(userId);
+    const morning = await shouldTriggerMorningCheckin(userId);
 
-    if (!shouldTrigger) {
+    if (!morning.trigger) {
       return NextResponse.json({ triggered: false });
     }
 
@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
       threadId: null,
       mode: 'morning_checkin',
       userMessage: '__auto_start__',
+      partOfDay: morning.partOfDay,
     });
 
     return NextResponse.json({
@@ -143,30 +144,50 @@ async function shouldEveningReviewTakePriority(userId: string): Promise<boolean>
   });
 }
 
-async function shouldTriggerMorningCheckin(userId: string): Promise<boolean> {
-  const now = new Date();
+// Task 47: soglie orarie del checkin di apertura, in ORA DI ROMA.
+// - Prima delle 5: notte, niente checkin.
+// - Dalle 14 in poi: il checkin parte comunque ma riformulato
+//   (partOfDay='afternoon' -> saluto "Ciao"/"oggi", niente "stamattina";
+//   vedi MORNING_CHECKIN_PROMPT in prompts.ts).
+const MORNING_EARLY_HOUR = 5;
+const AFTERNOON_CUTOFF_HOUR = 14;
 
-  if (now.getHours() < 5) {
-    return false;
+async function shouldTriggerMorningCheckin(
+  userId: string,
+): Promise<{ trigger: boolean; partOfDay: 'morning' | 'afternoon' }> {
+  // Ora di Roma (coerente con shouldEveningReviewTakePriority qui accanto, che
+  // usa nowHHMMInRome): fixa lo skew del vecchio new Date().getHours(), che su
+  // Vercel girava in UTC e sfalsava la "mattina".
+  const hour = nowHourInRome();
+  const partOfDay: 'morning' | 'afternoon' =
+    hour < AFTERNOON_CUTOFF_HOUR ? 'morning' : 'afternoon';
+
+  if (hour < MORNING_EARLY_HOUR) {
+    return { trigger: false, partOfDay };
   }
 
-  const startOfDay = new Date(now);
-  startOfDay.setHours(0, 0, 0, 0);
-
-  const existingCheckin = await db.chatThread.findFirst({
-    where: {
-      userId,
-      mode: 'morning_checkin',
-      startedAt: { gte: startOfDay },
-    },
-    select: { id: true, startedAt: true },
+  // Dedup: un solo checkin di apertura per giorno-calendario (Europe/Rome).
+  // Confronto sulla data Rome-locale dell'ultimo checkin (DST-safe via
+  // formatDateInRome), non su una mezzanotte server-locale.
+  const lastCheckin = await db.chatThread.findFirst({
+    where: { userId, mode: 'morning_checkin' },
+    orderBy: { startedAt: 'desc' },
+    select: { startedAt: true },
   });
 
-  if (existingCheckin) {
-    return false;
+  if (
+    lastCheckin &&
+    formatDateInRome(lastCheckin.startedAt) === formatTodayInRome()
+  ) {
+    return { trigger: false, partOfDay };
   }
 
-  return true;
+  return { trigger: true, partOfDay };
+}
+
+/** Ora corrente (0-23) in Europe/Rome, derivata da nowHHMMInRome. */
+function nowHourInRome(): number {
+  return parseInt(nowHHMMInRome().split(':')[0], 10);
 }
 
 /**

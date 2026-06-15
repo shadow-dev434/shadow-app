@@ -130,6 +130,21 @@ export const CHAT_TOOLS: LLMTool[] = [
       required: ['level'],
     },
   },
+  {
+    name: 'set_user_mood',
+    description:
+      "Registra il livello di UMORE dichiarato dall'utente per oggi (1-5). " +
+      "PARAMETRO: 'level'. Esempio: { level: 4 }. Usa SOLO durante il morning " +
+      "checkin, sulla prima domanda (umore). Distinto da set_user_energy " +
+      "(energia) e da record_mood della review serale (che usa 'value').",
+    input_schema: {
+      type: 'object',
+      properties: {
+        level: { type: 'number', description: 'Livello umore 1-5 (1=giù, 5=alla grande)' },
+      },
+      required: ['level'],
+    },
+  },
 ];
 
 /**
@@ -591,6 +606,8 @@ export async function executeTool(
         return await executeGetTodayTasks(userId);
       case 'set_user_energy':
         return await executeSetUserEnergy(input, userId);
+      case 'set_user_mood':
+        return await executeSetUserMood(input, userId);
       case 'complete_task':
         return await executeCompleteTask(input, userId);
       case 'update_task':
@@ -849,6 +866,26 @@ async function executeSetUserEnergy(
     data: {
       userId,
       signalType: 'energy_declared',
+      metadata: JSON.stringify({ level, timestamp: new Date().toISOString() }),
+    },
+  });
+
+  return { kind: 'sideEffect', success: true, data: { level } };
+}
+
+// Task 47: cattura dell'umore mattutino, gemello di executeSetUserEnergy.
+// Telemetria di profilazione (LearningSignal 'mood_declared'); l'energia resta
+// la dimensione che guida il piano.
+async function executeSetUserMood(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const level = clampInt(input.level, 1, 5, 3);
+
+  await db.learningSignal.create({
+    data: {
+      userId,
+      signalType: 'mood_declared',
       metadata: JSON.stringify({ level, timestamp: new Date().toISOString() }),
     },
   });

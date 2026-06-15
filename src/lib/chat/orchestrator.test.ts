@@ -22,6 +22,8 @@ vi.mock('@/lib/db', () => ({
     },
     adaptiveProfile: { findUnique: vi.fn() },
     userMemory: { findMany: vi.fn() },
+    // Task 47: buildContextAndVoice carica User.name per il saluto col nome.
+    user: { findUnique: vi.fn() },
     settings: { findFirst: vi.fn() },
     task: { findMany: vi.fn(), create: vi.fn() },
     // Task 46: materializeRecurringForDate (chiamato da initEveningReview) legge i
@@ -106,6 +108,8 @@ beforeEach(() => {
   vi.mocked(loadLatestSummary).mockResolvedValue(null);
   vi.mocked(db.adaptiveProfile.findUnique).mockResolvedValue(null);
   vi.mocked(db.userMemory.findMany).mockResolvedValue([]);
+  // Task 47: default senza nome -> saluto generico (resolveFirstName ritorna null).
+  vi.mocked(db.user.findUnique).mockResolvedValue(null);
   vi.mocked(db.settings.findFirst).mockResolvedValue(null);
   vi.mocked(db.task.findMany).mockResolvedValue([]);
   vi.mocked(db.recurringTask.findMany).mockResolvedValue([]);
@@ -158,6 +162,71 @@ describe('TERMINAL_THREAD_STATES', () => {
     expect(TERMINAL_THREAD_STATES.has('active')).toBe(false);
     expect(TERMINAL_THREAD_STATES.has('paused')).toBe(false);
     expect(TERMINAL_THREAD_STATES.size).toBe(2);
+  });
+});
+
+describe('Task 47: saluto col nome + fascia oraria nel system prompt', () => {
+  function systemStaticOfFirstCall(): string {
+    return vi.mocked(callLLM).mock.calls[0][0].systemPrompt.static;
+  }
+
+  it('inietta solo il PRIMO nome e la fascia POMERIGGIO quando partOfDay=afternoon', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(null);
+    vi.mocked(db.user.findUnique).mockResolvedValue(
+      { name: 'Marco Rossi', email: 'marco@example.com' } as any,
+    );
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: null,
+      mode: 'morning_checkin',
+      userMessage: '__auto_start__',
+      partOfDay: 'afternoon',
+    });
+
+    const sys = systemStaticOfFirstCall();
+    expect(sys).toContain('Nome utente: Marco');
+    // solo il primo nome, non l'intero "Marco Rossi"
+    expect(sys).not.toContain('Nome utente: Marco Rossi');
+    expect(sys).toContain('POMERIGGIO');
+  });
+
+  it('usa la fascia MATTINA quando partOfDay=morning', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(null);
+    vi.mocked(db.user.findUnique).mockResolvedValue(
+      { name: 'Giulia', email: 'giulia@example.com' } as any,
+    );
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: null,
+      mode: 'morning_checkin',
+      userMessage: '__auto_start__',
+      partOfDay: 'morning',
+    });
+
+    const sys = systemStaticOfFirstCall();
+    expect(sys).toContain('Nome utente: Giulia');
+    expect(sys).toContain('Momento della giornata: MATTINA');
+  });
+
+  it('niente "Nome utente:" se il name sembra un email-prefix (cifre/punti)', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(null);
+    vi.mocked(db.user.findUnique).mockResolvedValue(
+      { name: 'egiulio.psi', email: 'egiulio.psi@example.com' } as any,
+    );
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: null,
+      mode: 'morning_checkin',
+      userMessage: '__auto_start__',
+      partOfDay: 'morning',
+    });
+
+    // NB: il PROMPT contiene l'istruzione letterale 'Nome utente: X' per il
+    // modello; qui verifichiamo che NON sia stato iniettato il nome derivato.
+    expect(systemStaticOfFirstCall()).not.toContain('Nome utente: Egiulio');
   });
 });
 
