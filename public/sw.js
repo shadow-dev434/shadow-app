@@ -8,9 +8,10 @@
 // Tailwind nuove assenti → layout rotto, visto in QA W7).
 // v5 (2026-06-12, Task 42): card tool gestione task + error UX in ChatView.
 // v6 (2026-06-14, Task 43): banner review serale in ChatView + fix loop check-in.
+// v7→v8 (2026-06-16, Task 55): gamification "Il tuo cielo" (SkyView + tab nav).
 const CACHE_NAME = 'shadow-v2';
-const STATIC_CACHE = 'shadow-static-v7';
-const DYNAMIC_CACHE = 'shadow-dynamic-v7';
+const STATIC_CACHE = 'shadow-static-v8';
+const DYNAMIC_CACHE = 'shadow-dynamic-v8';
 
 const STATIC_ASSETS = [
   '/',

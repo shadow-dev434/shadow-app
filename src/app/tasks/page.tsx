@@ -33,6 +33,7 @@ import { toast } from '@/hooks/use-toast';
 import { signOut, useSession } from 'next-auth/react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { StrictModeExitDialog, type StrictModeExitResult } from '@/features/strict-mode/StrictModeExitDialog';
+import { SkyView } from '@/features/sky/SkyView';
 import { APP_VERSION } from '@/lib/version';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -631,6 +632,7 @@ export default function ShadowApp() {
         {store.currentView === 'focus' && <FocusView />}
         {store.currentView === 'task' && <TaskDetailView />}
         {store.currentView === 'review' && <ReviewView />}
+        {store.currentView === 'sky' && <SkyView />}
         {store.currentView === 'settings' && <SettingsView onLogout={handleLogout} />}
       </main>
       {!hideHeaderNav && <BottomNav />}
@@ -1888,6 +1890,7 @@ function BottomNav() {
     { view: 'today', icon: <Sun className="w-5 h-5" />, label: 'Today' },
     { view: 'focus', icon: <Target className="w-5 h-5" />, label: 'Focus' },
     { view: 'review', icon: <ClipboardCheck className="w-5 h-5" />, label: 'Review' },
+    { view: 'sky', icon: <Sparkles className="w-5 h-5" />, label: 'Cielo' },
     { view: 'settings', icon: <Settings className="w-5 h-5" />, label: 'Impost.' },
   ];
 
