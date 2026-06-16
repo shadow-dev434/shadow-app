@@ -21,12 +21,18 @@ import type {
 } from './plan-preview';
 import type { SlotName } from './slot-allocation';
 
+/** Task 50: dove sarà l'utente in una fascia oraria del giorno pianificato. */
+export type SlotLocation = 'home' | 'office' | 'out';
+export type SlotLocations = Partial<Record<SlotName, SlotLocation>>;
+
 export type PreviewState = {
   pinnedTaskIds: string[];
   removedTaskIds: string[];
   addedTaskIds: string[];
   blockedSlots: SlotName[];
   perTaskOverrides: Record<string, PerTaskOverride>;
+  // Task 50: opzionale per retro-compatibilità con gli state già persistiti.
+  slotLocations?: SlotLocations;
 };
 
 export const EMPTY_PREVIEW_STATE: PreviewState = {
@@ -35,6 +41,7 @@ export const EMPTY_PREVIEW_STATE: PreviewState = {
   addedTaskIds: [],
   blockedSlots: [],
   perTaskOverrides: {},
+  slotLocations: {},
 };
 
 /**
@@ -141,6 +148,13 @@ const VALID_SLOT_NAMES: ReadonlySet<string> = new Set([
   'evening',
 ]);
 
+/** Task 50: location valide per fascia. */
+const VALID_SLOT_LOCATIONS: ReadonlySet<string> = new Set([
+  'home',
+  'office',
+  'out',
+]);
+
 /**
  * Type guard runtime per PreviewState. Bug #5 V1.x: previene la propagazione
  * di uno stato corrotto a valle (es. .removedTaskIds.includes su non-array
@@ -200,6 +214,16 @@ function isValidPreviewState(value: unknown): value is PreviewState {
       !(typeof o.forcedSlot === 'string' && VALID_SLOT_NAMES.has(o.forcedSlot))
     ) {
       return false;
+    }
+  }
+
+  // slotLocations: opzionale (Task 50). Se presente, mappa SlotName -> location.
+  if (v.slotLocations !== undefined) {
+    const sl = v.slotLocations;
+    if (sl === null || typeof sl !== 'object' || Array.isArray(sl)) return false;
+    for (const [slot, loc] of Object.entries(sl as Record<string, unknown>)) {
+      if (!VALID_SLOT_NAMES.has(slot)) return false;
+      if (typeof loc !== 'string' || !VALID_SLOT_LOCATIONS.has(loc)) return false;
     }
   }
 

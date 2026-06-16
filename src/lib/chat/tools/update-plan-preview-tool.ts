@@ -12,7 +12,7 @@
  */
 
 import type { LLMTool } from '@/lib/llm/client';
-import type { PreviewState } from '@/lib/evening-review/apply-overrides';
+import type { PreviewState, SlotLocations } from '@/lib/evening-review/apply-overrides';
 import type { SlotName } from '@/lib/evening-review/slot-allocation';
 import type { DurationLabel } from '@/lib/evening-review/duration-estimation';
 
@@ -23,6 +23,8 @@ export type UpdatePlanPreviewArgs = {
   blockSlot?: SlotName;
   durationOverride?: { taskId: string; label: DurationLabel };
   pin?: { taskIds: string[] };
+  // Task 50: dove sarà l'utente per fascia (orienta il piano + salvato per Today).
+  slotLocations?: SlotLocations;
 };
 
 // Bozza minimale 3e: description sostanziale ma stringata, raffinata in 3h
@@ -95,6 +97,17 @@ export const UPDATE_PLAN_PREVIEW_TOOL: LLMTool = {
         },
         required: ['taskIds'],
       },
+      slotLocations: {
+        type: 'object',
+        description:
+          "Dove sarà l'utente nelle fasce di domani (casa/ufficio/fuori), per " +
+          'orientare il piano. Indica solo le fasce che l\'utente dichiara.',
+        properties: {
+          morning: { type: 'string', enum: ['home', 'office', 'out'] },
+          afternoon: { type: 'string', enum: ['home', 'office', 'out'] },
+          evening: { type: 'string', enum: ['home', 'office', 'out'] },
+        },
+      },
     },
   },
 };
@@ -163,6 +176,11 @@ export function applyToolCallToState(
     const { taskId, label } = args.durationOverride;
     next.perTaskOverrides[taskId] ??= {};
     next.perTaskOverrides[taskId].durationLabel = label;
+  }
+
+  // Task 50: merge per-fascia (sostituisce le fasce dichiarate, conserva le altre).
+  if (args.slotLocations) {
+    next.slotLocations = { ...(next.slotLocations ?? {}), ...args.slotLocations };
   }
 
   return next;

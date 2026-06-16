@@ -32,12 +32,19 @@ import { terminalTaskStatuses } from '@/lib/types/shadow';
  */
 export async function upsertTodayContext(
   userId: string,
-  fields: { energyLevel?: number; timeAvailable?: number; currentContext?: string },
+  fields: {
+    energyLevel?: number;
+    timeAvailable?: number;
+    currentContext?: string;
+    // Task 50: JSON { morning?, afternoon?, evening?: 'home'|'office'|'out' }.
+    slotContextsJson?: string;
+  },
 ): Promise<void> {
   if (
     fields.energyLevel === undefined &&
     fields.timeAvailable === undefined &&
-    fields.currentContext === undefined
+    fields.currentContext === undefined &&
+    fields.slotContextsJson === undefined
   ) {
     return;
   }

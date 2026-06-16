@@ -26,12 +26,12 @@ function makeArgs(overrides: Partial<UpdatePlanPreviewArgs> = {}): UpdatePlanPre
 }
 
 describe('UPDATE_PLAN_PREVIEW_TOOL definition', () => {
-  it('expose name update_plan_preview con input_schema object e 6 properties', () => {
+  it('expose name update_plan_preview con input_schema object e 7 properties', () => {
     expect(UPDATE_PLAN_PREVIEW_TOOL.name).toBe('update_plan_preview');
     expect(UPDATE_PLAN_PREVIEW_TOOL.input_schema.type).toBe('object');
     const props = UPDATE_PLAN_PREVIEW_TOOL.input_schema.properties;
     expect(Object.keys(props).sort()).toEqual(
-      ['adds', 'blockSlot', 'durationOverride', 'moves', 'pin', 'removes'].sort(),
+      ['adds', 'blockSlot', 'durationOverride', 'moves', 'pin', 'removes', 'slotLocations'].sort(),
     );
     expect(UPDATE_PLAN_PREVIEW_TOOL.input_schema.required).toBeUndefined();
   });
@@ -102,6 +102,27 @@ describe('applyToolCallToState - moves', () => {
     const args = makeArgs({ moves: [{ taskId: 'A', to: 'evening' as SlotName }] });
     const next = applyToolCallToState(state, args);
     expect(next.perTaskOverrides.A).toEqual({ forcedSlot: 'evening' });
+  });
+});
+
+describe('applyToolCallToState - slotLocations (Task 50)', () => {
+  it('empty + slotLocations={morning:home} -> slotLocations={morning:home}', () => {
+    const args = makeArgs({ slotLocations: { morning: 'home' } });
+    const next = applyToolCallToState(EMPTY_PREVIEW_STATE, args);
+    expect(next.slotLocations).toEqual({ morning: 'home' });
+  });
+
+  it('merge: conserva le fasce esistenti e sostituisce solo quelle dichiarate', () => {
+    const state = makeState({ slotLocations: { morning: 'home', afternoon: 'office' } });
+    const args = makeArgs({ slotLocations: { afternoon: 'out', evening: 'home' } });
+    const next = applyToolCallToState(state, args);
+    expect(next.slotLocations).toEqual({ morning: 'home', afternoon: 'out', evening: 'home' });
+  });
+
+  it('non muta lo state in input', () => {
+    const state = makeState({ slotLocations: { morning: 'home' } });
+    applyToolCallToState(state, makeArgs({ slotLocations: { morning: 'office' } }));
+    expect(state.slotLocations).toEqual({ morning: 'home' });
   });
 });
 

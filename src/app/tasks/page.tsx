@@ -57,6 +57,31 @@ const CONTEXTS = [
   { value: 'errand', label: 'Commissione' },
 ];
 
+// Task 50: contesto per fascia oraria nella schermata Today.
+const TODAY_SLOTS: { key: 'morning' | 'afternoon' | 'evening'; label: string }[] = [
+  { key: 'morning', label: 'Mattina' },
+  { key: 'afternoon', label: 'Pomeriggio' },
+  { key: 'evening', label: 'Sera' },
+];
+const SLOT_LOCATION_OPTIONS = [
+  { value: 'home', label: 'Casa' },
+  { value: 'office', label: 'Ufficio' },
+  { value: 'out', label: 'Fuori' },
+];
+// Mappa la location della fascia corrente sul contesto scalare dell'engine.
+function slotLocationToContext(loc: string | undefined): string | null {
+  if (loc === 'home') return 'home';
+  if (loc === 'office') return 'office';
+  if (loc === 'out') return 'errand';
+  return null;
+}
+function currentSlotKey(): 'morning' | 'afternoon' | 'evening' {
+  const h = new Date().getHours();
+  if (h < 12) return 'morning';
+  if (h < 17) return 'afternoon';
+  return 'evening';
+}
+
 const TIME_OPTIONS = [
   { value: 30, label: '30 min' },
   { value: 60, label: '1 ora' },
@@ -2010,25 +2035,45 @@ function InboxView() {
 function TodayView() {
   const store = useShadowStore();
   const [regenerating, setRegenerating] = useState(false);
+  // Task 50: location per fascia (mattina/pomeriggio/sera -> casa/ufficio/fuori).
+  const [slotLocations, setSlotLocations] = useState<Record<string, string>>({});
 
   const handleTaskClick = useCallback((taskId: string) => {
     store.setSelectedTaskId(taskId);
     store.setCurrentView('task');
   }, [store]);
 
+  // Task 50: salva la location di una fascia (PATCH) + aggiorna lo stato locale.
+  const handleSlotLocationChange = useCallback(async (slot: string, loc: string) => {
+    const next = { ...slotLocations, [slot]: loc };
+    setSlotLocations(next);
+    try {
+      await fetch('/api/daily-plan', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotContexts: next }),
+      });
+    } catch {
+      // silenzioso: errore di rete → resta lo stato locale
+    }
+  }, [slotLocations]);
+
   // Task 49: rigenera il piano al volo dalle condizioni correnti (energia /
   // tempo / contesto) impostate qui. Riusa il generatore euristico esistente,
-  // che preserva i task fissati (pin).
+  // che preserva i task fissati (pin). Task 50: il contesto deriva da dove sarai
+  // nella fascia corrente, se l'hai indicato.
   const handleRegenerate = useCallback(async () => {
     setRegenerating(true);
     try {
+      const currentContext =
+        slotLocationToContext(slotLocations[currentSlotKey()]) ?? store.currentContext;
       const res = await fetch('/api/daily-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           energy: store.energy,
           timeAvailable: store.timeAvailable,
-          currentContext: store.currentContext,
+          currentContext,
         }),
       });
       const data = await res.json();
@@ -2050,7 +2095,7 @@ function TodayView() {
     } finally {
       setRegenerating(false);
     }
-  }, [store]);
+  }, [store, slotLocations]);
 
   const handleStartFocus = useCallback((taskId: string, mode: 'launch' | 'hold' | 'recovery') => {
     store.setSelectedTaskId(taskId);
@@ -2085,6 +2130,15 @@ function TodayView() {
         if (typeof data.plan.energyLevel === 'number') store.setEnergy(data.plan.energyLevel);
         if (typeof data.plan.timeAvailable === 'number') store.setTimeAvailable(data.plan.timeAvailable);
         if (typeof data.plan.currentContext === 'string') store.setCurrentContext(data.plan.currentContext);
+        // Task 50: idrata le location per fascia salvate (review serale / Today).
+        if (typeof data.plan.slotContextsJson === 'string') {
+          try {
+            const parsed = JSON.parse(data.plan.slotContextsJson);
+            if (parsed && typeof parsed === 'object') setSlotLocations(parsed);
+          } catch {
+            // ignora JSON malformato
+          }
+        }
         // Idrata il piano solo se ci sono task e non è già caricato: una riga di
         // solo contesto (energia/tempo senza piano committato) non è un piano.
         const b = data.breakdown;
@@ -2148,20 +2202,26 @@ function TodayView() {
               <Label className="text-xs text-zinc-500">Energia: {getEnergyLabel(store.energy)} {getEnergyEmoji(store.energy)}</Label>
               <Slider value={[store.energy]} onValueChange={([v]) => store.setEnergy(v)} min={1} max={5} step={1} className="mt-1" />
             </div>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <Label className="text-xs text-zinc-500">Tempo disponibile</Label>
-                <Select value={String(store.timeAvailable)} onValueChange={(v) => store.setTimeAvailable(Number(v))}>
-                  <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>{timeOptions.map((opt) => <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="flex-1">
-                <Label className="text-xs text-zinc-500">Contesto</Label>
-                <Select value={store.currentContext} onValueChange={store.setCurrentContext}>
-                  <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>{CONTEXTS.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
-                </Select>
+            <div>
+              <Label className="text-xs text-zinc-500">Tempo disponibile</Label>
+              <Select value={String(store.timeAvailable)} onValueChange={(v) => store.setTimeAvailable(Number(v))}>
+                <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>{timeOptions.map((opt) => <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            {/* Task 50: dove sarai per fascia oraria (orienta il piano + sync con la review). */}
+            <div>
+              <Label className="text-xs text-zinc-500">Dove sarai oggi</Label>
+              <div className="flex gap-2 mt-1">
+                {TODAY_SLOTS.map(({ key, label }) => (
+                  <div key={key} className="flex-1 min-w-0">
+                    <span className="text-[10px] text-zinc-400 block mb-0.5">{label}</span>
+                    <Select value={slotLocations[key]} onValueChange={(v) => handleSlotLocationChange(key, v)}>
+                      <SelectTrigger className="h-8"><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>{SLOT_LOCATION_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

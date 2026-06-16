@@ -8,6 +8,26 @@ import { buildDailyPlan, getCurrentTimeSlot } from '@/lib/engines/execution-engi
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses, type ExecutionContext, type TaskRecord } from '@/lib/types/shadow';
 import { formatTodayInRome } from '@/lib/evening-review/dates';
+import { upsertTodayContext } from '@/lib/daily-plan/commit-today-plan';
+
+const SLOT_NAMES = ['morning', 'afternoon', 'evening'] as const;
+const SLOT_LOCATIONS = ['home', 'office', 'out'] as const;
+
+/** Task 50: ripulisce l'input slotContexts a { slot: location } valido. */
+function sanitizeSlotContexts(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [slot, loc] of Object.entries(raw as Record<string, unknown>)) {
+    if (
+      (SLOT_NAMES as readonly string[]).includes(slot) &&
+      typeof loc === 'string' &&
+      (SLOT_LOCATIONS as readonly string[]).includes(loc)
+    ) {
+      out[slot] = loc;
+    }
+  }
+  return out;
+}
 
 function toTaskRecord(t: Awaited<ReturnType<typeof db.task.findMany>>[0]): TaskRecord {
   return {
@@ -287,5 +307,24 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error('GET /api/daily-plan error:', error);
     return NextResponse.json({ error: 'Failed to fetch daily plan' }, { status: 500 });
+  }
+}
+
+// PATCH /api/daily-plan — Task 50: salva le location per fascia del giorno di
+// oggi (modificate dalla schermata Today). Non tocca i task del piano.
+export async function PATCH(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
+  try {
+    const body = await req.json();
+    const slotContexts = sanitizeSlotContexts(body?.slotContexts);
+    await upsertTodayContext(userId, {
+      slotContextsJson: JSON.stringify(slotContexts),
+    });
+    return NextResponse.json({ ok: true, slotContexts });
+  } catch (error) {
+    console.error('PATCH /api/daily-plan error:', error);
+    return NextResponse.json({ error: 'Failed to update slot contexts' }, { status: 500 });
   }
 }
