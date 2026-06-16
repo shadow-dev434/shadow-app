@@ -58,7 +58,7 @@ import {
   SUMMARY_HARD_CAP,
   SUMMARY_WINDOW,
 } from './summary';
-import { formatDeadlineLabel, formatTodayInRome, addDaysIso } from '@/lib/evening-review/dates';
+import { formatDeadlineLabel, formatTodayInRome, formatDateInRome, addDaysIso } from '@/lib/evening-review/dates';
 import { materializeRecurringForDate } from '@/lib/recurring/materialize';
 import { computeInactivityGapDays, type InactivityGap } from '@/lib/evening-review/inactivity-gap';
 
@@ -296,9 +296,25 @@ export async function orchestrate(
   // buildEveningReviewModeContext) sia da un eventuale rebuild systemPrompt
   // mid-loop. Evita drift a cavallo mezzanotte e divergenza dell'immunita'
   // deadline (<=48h da now) tra pre-call e rebuild dello stesso turno.
-  // Scope come sopra: mai letti in path non-evening_review.
+  // Scope: turnNowMs e' letto solo in path evening_review; turnNow e' usato
+  // anche da todayDateLine (sotto) in tutte le modalita'.
   const turnNow = new Date();
   const turnNowMs = turnNow.getTime();
+
+  // Bug fix "tra N giorni": ancoraggio temporale per il modello. In chat
+  // generale/morning il system prompt non conteneva MAI la data di oggi, quindi
+  // il modello risolveva "tra 3 giorni" partendo dal proprio knowledge cutoff
+  // -> deadline sballate (es. 20 luglio invece del 19 giugno). Calcolata da
+  // turnNow (coerenza intra-turno) in Europe/Rome e iniettata nel dynamicSuffix
+  // (non cachato, niente invalidazione del prefisso cache) per TUTTE le
+  // modalita'. evening_review ha gia' clientDate via formatDeadlineLabel: qui
+  // la riga e' additiva e innocua.
+  const todayDateLine =
+    `Data di oggi: ${formatDateInRome(turnNow)} (` +
+    `${new Intl.DateTimeFormat('it-IT', { weekday: 'long', timeZone: 'Europe/Rome' }).format(turnNow)}), ` +
+    `fuso Europe/Rome. Usa SEMPRE questa data per risolvere riferimenti temporali relativi ` +
+    `("oggi", "domani", "tra N giorni", "lunedì prossimo") in date assolute YYYY-MM-DD. ` +
+    `Non dedurre la data dalle tue conoscenze pregresse.`;
 
   if (mode === 'evening_review') {
     const loaded = loadTriageStateFromContext(thread.contextJson);
@@ -488,6 +504,12 @@ export async function orchestrate(
   const systemParts = buildSystemPromptParts(mode, userContext, modeContext, voiceProfile);
   const staticPrefix = systemParts.staticPrefix;
   let dynamicSuffix = systemParts.dynamicSuffix;
+
+  // Bug fix "tra N giorni": la riga data va nel dynamicSuffix (non cachato),
+  // davanti al modeContext, in tutte le modalita'. dynamicSuffix non-vuoto
+  // inizia gia' con '\n\n' (vedi buildSystemPromptParts): qui prependiamo con
+  // lo stesso separatore.
+  dynamicSuffix = `\n\n${todayDateLine}${dynamicSuffix}`;
 
   // Task 54 (vision): guida di estrazione SOLO nei turni con allegati. Va in
   // dynamicSuffix (non cachato): non gonfia i turni senza allegati e cambia per
@@ -859,7 +881,8 @@ export async function orchestrate(
         if (phasePost === 'closing') {
           modeContextPost += '\n\nPHASE_MARKER: closing';
         }
-        dynamicSuffix = buildSystemPromptParts(mode, userContext, modeContextPost, voiceProfile).dynamicSuffix;
+        // Bug fix data: re-iniettiamo la riga data anche nel rebuild mid-loop.
+        dynamicSuffix = `\n\n${todayDateLine}${buildSystemPromptParts(mode, userContext, modeContextPost, voiceProfile).dynamicSuffix}`;
       }
       if (
         phasePost === 'closing' &&

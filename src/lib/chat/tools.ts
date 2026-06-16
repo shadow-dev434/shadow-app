@@ -99,7 +99,7 @@ export const CHAT_TOOLS: LLMTool[] = [
           enum: ['work', 'personal', 'health', 'admin', 'creative', 'study', 'household', 'general'],
           description: 'Categoria del task',
         },
-        deadline: { type: 'string', description: 'Scadenza in formato ISO YYYY-MM-DD se specificata, altrimenti stringa vuota' },
+        deadline: { type: 'string', description: 'Scadenza in formato ISO YYYY-MM-DD se specificata, altrimenti stringa vuota. Risolvi i riferimenti relativi ("oggi", "domani", "tra N giorni") rispetto alla "Data di oggi" fornita nel contesto (Europe/Rome) prima di emettere la data assoluta.' },
         allowDuplicate: {
           type: 'boolean',
           description: 'Default false. Metti true SOLO se l\'utente ha confermato esplicitamente di volere un secondo task con lo stesso titolo di uno già aperto in lista.',
@@ -205,7 +205,7 @@ export const TASK_MANAGEMENT_TOOLS: LLMTool[] = [
           enum: ['work', 'personal', 'health', 'admin', 'creative', 'study', 'household', 'general'],
           description: 'Nuova categoria',
         },
-        deadline: { type: 'string', description: 'Nuova scadenza ISO YYYY-MM-DD, oppure stringa vuota per rimuoverla' },
+        deadline: { type: 'string', description: 'Nuova scadenza ISO YYYY-MM-DD, oppure stringa vuota per rimuoverla. Risolvi i riferimenti relativi ("oggi", "domani", "tra N giorni") rispetto alla "Data di oggi" fornita nel contesto (Europe/Rome) prima di emettere la data assoluta.' },
       },
       required: ['taskId'],
     },
