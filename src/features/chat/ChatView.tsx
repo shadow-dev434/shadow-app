@@ -183,6 +183,19 @@ const SUGGESTED_PROMPTS = [
   { label: 'Come funziona Shadow?', prompt: 'Spiegami come funziona Shadow e cosa puoi fare per me.' },
 ];
 
+// Ora/data locali del client nel formato atteso dagli endpoint serali
+// (clientTime=HH:MM, clientDate=YYYY-MM-DD). Ricalcolate ad ogni chiamata
+// (NON memoizzate): il polling del segnale serale deve vedere l'ora che avanza.
+function localEveningParams(): { clientDate: string; clientTime: string } {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mi = String(now.getMinutes()).padStart(2, '0');
+  return { clientDate: `${yyyy}-${mm}-${dd}`, clientTime: `${hh}:${mi}` };
+}
+
 export function ChatView() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -207,6 +220,11 @@ export function ChatView() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mountInitCalled = useRef(false);
+  // Bug fix (recidiva banner review serale): data (YYYY-MM-DD client) per cui
+  // l'utente ha gia' avviato la review, così il polling del segnale serale non
+  // ripropone card/banner nello stesso giorno. Ref e non state: serve solo agli
+  // handler, non deve causare re-render.
+  const eveningDismissedDateRef = useRef<string | null>(null);
   // Ultimo turno utente fallito, per il Riprova (Task 42). Ref e non state:
   // serve solo al click handler. Task 54: porta anche gli allegati.
   const lastFailedRef = useRef<{ text: string; attachments: PendingAttachment[] } | null>(null);
@@ -257,14 +275,7 @@ export function ChatView() {
       // Tentativo 1: rehydrate thread attivo esistente.
       let rehydrated = false;
 
-      const now = new Date();
-      const yyyy = now.getFullYear();
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const dd = String(now.getDate()).padStart(2, '0');
-      const hh = String(now.getHours()).padStart(2, '0');
-      const mi = String(now.getMinutes()).padStart(2, '0');
-      const clientDate = `${yyyy}-${mm}-${dd}`;
-      const clientTime = `${hh}:${mi}`;
+      const { clientDate, clientTime } = localEveningParams();
 
       try {
         const url = `/api/chat/active-thread?clientTime=${encodeURIComponent(clientTime)}&clientDate=${encodeURIComponent(clientDate)}`;
@@ -340,6 +351,44 @@ export function ChatView() {
       }
     })();
   }, []);
+
+  // Bug fix (recidiva "banner review serale non parte dopo le 20:00"):
+  // ricalcola il segnale serale a intervalli e quando la tab torna visibile. Il
+  // segnale al mount (active-thread) è calcolato UNA sola volta, con l'ora
+  // catturata al mount: se l'app resta aperta da prima delle 20:00 (PWA/TWA o
+  // tab), senza questo refresh il banner/card non comparirebbero mai. Endpoint
+  // read-only dedicato (/api/chat/evening-signal) che NON muta lo stato dei thread.
+  const refreshEveningSignal = useCallback(async () => {
+    // Durante una review in corso non rinfreschiamo: il segnale server resta
+    // true finché non esiste una Review-oggi, e ribaltarlo creerebbe flicker.
+    if (mode === 'evening_review') return;
+    const { clientDate, clientTime } = localEveningParams();
+    // Review già avviata oggi: non riproporre card/banner.
+    if (eveningDismissedDateRef.current === clientDate) return;
+    try {
+      const url = `/api/chat/evening-signal?clientTime=${encodeURIComponent(clientTime)}&clientDate=${encodeURIComponent(clientDate)}`;
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data = (await res.json()) as { shouldStart: boolean };
+      setEveningReviewShouldStart(data.shouldStart);
+    } catch (err) {
+      console.error('[ChatView] evening-signal refresh error:', err);
+    }
+  }, [mode]);
+
+  // Polling del segnale serale: tick ~60s + ricontrollo al ritorno in
+  // foreground. Non gateato da mountInitCalled (deve vivere quanto il componente).
+  useEffect(() => {
+    const id = setInterval(refreshEveningSignal, 60_000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refreshEveningSignal();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [refreshEveningSignal]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -484,6 +533,10 @@ export function ChatView() {
 
   const handleStartEveningReview = () => {
     setEveningReviewShouldStart(false);
+    // Bug fix banner: marca oggi come "review avviata" così il polling del
+    // segnale serale non ripropone card/banner dopo l'avvio (il server torna
+    // shouldStart:true finché non esiste una Review-oggi).
+    eveningDismissedDateRef.current = localEveningParams().clientDate;
     // La review parte SEMPRE su un thread nuovo. La card e' visibile solo a
     // chat vuota, ma threadId puo' essere non-null se il rehydrate ha trovato
     // un thread attivo SENZA messaggi (orfano di un primo turno fallito):

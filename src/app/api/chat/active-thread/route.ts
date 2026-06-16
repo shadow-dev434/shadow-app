@@ -64,7 +64,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { isInsideEveningWindow } from '@/lib/evening-review/window';
-import { eveningReviewHasPriority } from '@/lib/evening-review/priority';
+import { computeEveningReviewSignal } from '@/lib/evening-review/compute-signal';
 import { INACTIVITY_PAUSE_MINUTES } from '@/lib/evening-review/config';
 import { normalizeThreadState } from '@/lib/evening-review/normalize';
 import { computeInactivityGapDays } from '@/lib/evening-review/inactivity-gap';
@@ -72,7 +72,6 @@ import { shouldRollOverThread } from '@/lib/chat/day-rollover';
 
 const MESSAGE_LIMIT = 200;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 interface ActiveThreadMessage {
   id: string;
@@ -98,80 +97,16 @@ interface ActiveThreadResponse {
 }
 
 /**
- * Helper privato: fetch dei campi di Settings rilevanti per evening review.
- * Estratto per uniformare le due call site (normalize flow + computeEveningReview).
+ * Helper privato: fetch dei campi di Settings rilevanti per il normalize flow e
+ * la spina 8c. Il segnale eveningReview è ora delegato a
+ * computeEveningReviewSignal (lib/evening-review/compute-signal.ts), riusato
+ * anche dall'endpoint read-only /api/chat/evening-signal per il polling client.
  */
 async function loadSettings(userId: string) {
   return db.settings.findFirst({
     where: { userId },
     select: { eveningWindowStart: true, eveningWindowEnd: true },
   });
-}
-
-async function computeEveningReview(
-  userId: string,
-  validatedNowHHMM: string | null,
-  clientDate: string | null,
-): Promise<EveningReviewPayload> {
-  // Validation locale al caller: helper accetta clientDate gia' validato
-  // (null se invalido). Rename clientDate -> validatedClientDate per
-  // simmetria con validatedNowHHMM gia' nel parametro.
-  const validatedClientDate =
-    clientDate && DATE_PATTERN.test(clientDate) ? clientDate : null;
-
-  if (!validatedNowHHMM || !validatedClientDate) {
-    console.warn(
-      '[active-thread] missing or invalid clientTime/clientDate, defaulting to shouldStart=false',
-    );
-    return { shouldStart: false };
-  }
-
-  const settings = await loadSettings(userId);
-  if (!settings) return { shouldStart: false };
-
-  // Fast-path: skippa query DB review/eveningThread se non in finestra.
-  // Il helper rifa lo stesso check come safety net (vedi priority.ts), ma
-  // qui evitiamo 2 round-trip DB: active-thread e' chiamato a ogni mount
-  // di ChatView, frequenza alta. Duplicazione voluta, vedi commento helper.
-  if (!isInsideEveningWindow(validatedNowHHMM, settings)) {
-    return { shouldStart: false };
-  }
-
-  // Pattern sequenziale con short-circuit (invariato da pre-refactor):
-  // se reviewToday esiste, evitiamo la query eveningThread. Decisione
-  // delegata al helper solo nel caso entrambe null, dove il helper aggiunge
-  // valore come centro per estensioni Slice 6.
-  const reviewToday = await db.review.findFirst({
-    where: { userId, date: validatedClientDate },
-    select: { id: true },
-  });
-  if (reviewToday) return { shouldStart: false };
-
-  // Defensive: dopo lazy archive in GET, un evening_review orfano non
-  // dovrebbe piu' esistere qui. Lasciato come safety net contro race
-  // tra chiamate concorrenti dello stesso utente.
-  const eveningThread = await db.chatThread.findFirst({
-    where: {
-      userId,
-      mode: 'evening_review',
-      state: { in: ['active', 'paused'] },
-    },
-    select: { id: true },
-  });
-  if (eveningThread) return { shouldStart: false };
-
-  // Entrambi null + tutti i pre-check passati: delego al helper la
-  // decisione finale. Tautologico oggi (helper ritorna true), valore
-  // strutturale per Slice 6 quando si aggiungeranno nuovi booleani.
-  const hasPriority = eveningReviewHasPriority({
-    clientTime: validatedNowHHMM,
-    clientDate: validatedClientDate,
-    settings,
-    reviewExists: false,
-    eveningThreadExists: false,
-  });
-
-  return { shouldStart: hasPriority };
 }
 
 export async function GET(req: NextRequest) {
@@ -354,7 +289,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (!thread) {
-      const eveningReview = await computeEveningReview(userId, validatedNowHHMM, clientDate);
+      const eveningReview = await computeEveningReviewSignal(userId, validatedNowHHMM, clientDate);
       const body: ActiveThreadResponse = { activeThread: null, eveningReview };
       return NextResponse.json(body);
     }
@@ -394,7 +329,7 @@ export async function GET(req: NextRequest) {
     // thread evening_review attivo/in-pausa -> nessun banner durante una review in
     // corso. Il client mostra un banner d'ingresso (ChatView EveningReviewBanner)
     // e avvia SEMPRE su threadId=null (vincolo F7, vedi commento riga 278-281).
-    const eveningReview = await computeEveningReview(userId, validatedNowHHMM, clientDate);
+    const eveningReview = await computeEveningReviewSignal(userId, validatedNowHHMM, clientDate);
 
     const body: ActiveThreadResponse = {
       activeThread: {
