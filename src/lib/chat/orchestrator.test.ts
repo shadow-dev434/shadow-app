@@ -1043,3 +1043,95 @@ describe('buildEveningReviewModeContext — blocco RE_ENTRY (Slice 8c, contratto
     expect(out).not.toContain('RE_ENTRY');
   });
 });
+
+describe('orchestrate: allegati vision (Task 54)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function llmResp(text: string, model = 'mock'): any {
+    return {
+      text,
+      toolCalls: [],
+      stopReason: 'end_turn',
+      model,
+      tokensIn: 0,
+      tokensOut: 0,
+      costUsd: 0,
+      latencyMs: 0,
+    };
+  }
+
+  it('costruisce il turno utente come content-block [image] e persiste il placeholder', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 't-gen', state: 'active', mode: 'general' }),
+    );
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: 't-gen',
+      mode: 'general',
+      userMessage: '',
+      attachments: [{ kind: 'image', mediaType: 'image/jpeg', data: 'AAAA' }],
+    });
+
+    const llmArg = vi.mocked(callLLM).mock.calls[0][0];
+    const lastMsg = llmArg.messages[llmArg.messages.length - 1];
+    expect(lastMsg.role).toBe('user');
+    expect(lastMsg.content).toEqual([
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } },
+    ]);
+
+    // Placeholder testo persistito (inline-only, no replay).
+    const userCreate = vi
+      .mocked(db.chatMessage.create)
+      .mock.calls.find(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (c) => (c[0] as any)?.data?.role === 'user',
+      );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((userCreate?.[0] as any).data.content).toBe('[1 allegato]');
+
+    // La guida vision e' nel system dynamic (non cachato).
+    expect((llmArg.systemPrompt as { dynamic?: string }).dynamic).toContain('FLUSSO OBBLIGATORIO');
+  });
+
+  it('escalation Haiku -> Sonnet su [[VISION_ESCALATE]] (D2): seconda call tier smart, marker rimosso', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 't-gen', state: 'active', mode: 'general' }),
+    );
+    vi.mocked(callLLM)
+      .mockResolvedValueOnce(llmResp('[[VISION_ESCALATE]]', 'haiku'))
+      .mockResolvedValueOnce(llmResp('1. Dentista lunedi 10:00', 'sonnet'));
+
+    const result = await orchestrate({
+      userId: 'u1',
+      threadId: 't-gen',
+      mode: 'general',
+      userMessage: '',
+      attachments: [{ kind: 'image', mediaType: 'image/jpeg', data: 'BBBB' }],
+    });
+
+    expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(callLLM).mock.calls[0][0].tier).toBe('fast');
+    expect(vi.mocked(callLLM).mock.calls[1][0].tier).toBe('smart');
+    expect(result.assistantMessage).not.toContain('[[VISION_ESCALATE]]');
+    expect(result.assistantMessage).toContain('Dentista');
+  });
+
+  it('se anche Sonnet non legge: marker rimosso, fallback gentile', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 't-gen', state: 'active', mode: 'general' }),
+    );
+    vi.mocked(callLLM).mockResolvedValue(llmResp('[[VISION_ESCALATE]]'));
+
+    const result = await orchestrate({
+      userId: 'u1',
+      threadId: 't-gen',
+      mode: 'general',
+      userMessage: '',
+      attachments: [{ kind: 'image', mediaType: 'image/jpeg', data: 'CCCC' }],
+    });
+
+    expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(2); // una sola escalation
+    expect(result.assistantMessage).not.toContain('[[VISION_ESCALATE]]');
+    expect(result.assistantMessage).toContain('Non riesco a leggere');
+  });
+});

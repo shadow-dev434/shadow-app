@@ -21,6 +21,18 @@ vi.mock('@/lib/chat/orchestrator', () => ({
   orchestrate: vi.fn(),
 }));
 
+// Task 53: la route ora legge db.chatThread per il rollover giorno-calendario
+// PRIMA di orchestrate. Mock di default (findFirst -> null) = nessun thread
+// risolto -> nessun rollover, cosi' i test di passthrough restano invariati.
+vi.mock('@/lib/db', () => ({
+  db: {
+    chatThread: {
+      findFirst: vi.fn(),
+      update: vi.fn(),
+    },
+  },
+}));
+
 // after() di next/server (Task 40: fold del rolling summary post-risposta)
 // lancia se invocato fuori da un request scope Next, com'e' inevitabile in
 // vitest: qui diventa un no-op. Il modulo summary e' mockato per non
@@ -37,6 +49,7 @@ vi.mock('@/lib/chat/summary', () => ({
 import type { NextRequest } from 'next/server';
 import { POST } from './route';
 import { requireSession } from '@/lib/auth-guard';
+import { db } from '@/lib/db';
 import { orchestrate, type OrchestratorOutput } from '@/lib/chat/orchestrator';
 
 const BASE_RESULT: OrchestratorOutput = {
@@ -64,6 +77,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(requireSession).mockResolvedValue({ error: null, userId: 'user-1' });
   vi.mocked(orchestrate).mockResolvedValue({ ...BASE_RESULT });
+  // Default: nessun thread risolto -> il rollover (Task 53) non scatta.
+  vi.mocked(db.chatThread.findFirst).mockResolvedValue(null as never);
 });
 
 describe('POST /api/chat/turn — passthrough di OrchestratorOutput (Task 41 follow-up)', () => {
@@ -103,5 +118,110 @@ describe('POST /api/chat/turn — passthrough di OrchestratorOutput (Task 41 fol
 
     expect(res.status).toBe(400);
     expect(orchestrate).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/chat/turn — rollover giorno-calendario (Task 53)', () => {
+  // 2020: chiaramente un giorno-calendario Roma precedente a oggi.
+  const PREV_DAY = new Date('2020-01-01T12:00:00Z');
+
+  it('thread non-evening del giorno precedente -> archiviato; orchestrate riceve threadId=null e mode=general', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValueOnce({
+      id: 'thread-old', startedAt: PREV_DAY, mode: 'general', state: 'active',
+    } as never);
+
+    await POST(makeReq({ threadId: 'thread-old', mode: 'evening_review', userMessage: 'ciao' }));
+
+    expect(vi.mocked(db.chatThread.update)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'thread-old' },
+        data: expect.objectContaining({ state: 'archived' }),
+      }),
+    );
+    const call = vi.mocked(orchestrate).mock.calls[0][0];
+    expect(call.threadId).toBeNull();
+    expect(call.mode).toBe('general');
+  });
+
+  it('evening_review del giorno precedente -> NON archiviato (ciclo di vita proprio)', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValueOnce({
+      id: 'thread-ev', startedAt: PREV_DAY, mode: 'evening_review', state: 'paused',
+    } as never);
+
+    await POST(makeReq({ threadId: 'thread-ev', mode: 'evening_review', userMessage: 'ciao' }));
+
+    expect(vi.mocked(db.chatThread.update)).not.toHaveBeenCalled();
+    expect(vi.mocked(orchestrate).mock.calls[0][0].threadId).toBe('thread-ev');
+  });
+
+  it('thread dello stesso giorno -> nessun rollover, threadId inoltrato', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValueOnce({
+      id: 'thread-today', startedAt: new Date(), mode: 'general', state: 'active',
+    } as never);
+
+    await POST(makeReq({ threadId: 'thread-today', mode: 'general', userMessage: 'ciao' }));
+
+    expect(vi.mocked(db.chatThread.update)).not.toHaveBeenCalled();
+    expect(vi.mocked(orchestrate).mock.calls[0][0].threadId).toBe('thread-today');
+  });
+
+  it('thread terminale (archived) del giorno precedente -> nessun nuovo archive', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValueOnce({
+      id: 'thread-arch', startedAt: PREV_DAY, mode: 'general', state: 'archived',
+    } as never);
+
+    await POST(makeReq({ threadId: 'thread-arch', mode: 'general', userMessage: 'ciao' }));
+
+    expect(vi.mocked(db.chatThread.update)).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/chat/turn — allegati vision (Task 54)', () => {
+  const img = (data = 'AAAA') => ({ kind: 'image', mediaType: 'image/jpeg', data });
+
+  it('solo allegato (userMessage vuoto) -> 200, orchestrate riceve attachments', async () => {
+    const res = await POST(makeReq({ mode: 'general', userMessage: '', attachments: [img()] }));
+    expect(res.status).toBe(200);
+    const call = vi.mocked(orchestrate).mock.calls[0][0];
+    expect(call.attachments).toHaveLength(1);
+    expect(call.attachments?.[0]).toMatchObject({ kind: 'image', mediaType: 'image/jpeg' });
+  });
+
+  it('niente testo e niente allegati -> 400', async () => {
+    const res = await POST(makeReq({ mode: 'general', userMessage: '' }));
+    expect(res.status).toBe(400);
+    expect(orchestrate).not.toHaveBeenCalled();
+  });
+
+  it('tipo media non supportato -> 400', async () => {
+    const res = await POST(
+      makeReq({ mode: 'general', userMessage: 'x', attachments: [{ kind: 'image', mediaType: 'image/tiff', data: 'AAAA' }] }),
+    );
+    expect(res.status).toBe(400);
+    expect(orchestrate).not.toHaveBeenCalled();
+  });
+
+  it('troppi allegati (>4) -> 400', async () => {
+    const res = await POST(
+      makeReq({ mode: 'general', userMessage: 'x', attachments: [img(), img(), img(), img(), img()] }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('allegato troppo grande -> 400', async () => {
+    const big = 'A'.repeat(6 * 1024 * 1024); // ~4.5MB decodificati, oltre il cap 4MB/item
+    const res = await POST(makeReq({ mode: 'general', userMessage: 'x', attachments: [img(big)] }));
+    expect(res.status).toBe(400);
+  });
+
+  it('PDF valido -> 200, orchestrate riceve il document', async () => {
+    const res = await POST(
+      makeReq({ mode: 'general', userMessage: '', attachments: [{ kind: 'document', mediaType: 'application/pdf', data: 'JVBER' }] }),
+    );
+    expect(res.status).toBe(200);
+    expect(vi.mocked(orchestrate).mock.calls[0][0].attachments?.[0]).toMatchObject({
+      kind: 'document',
+      mediaType: 'application/pdf',
+    });
   });
 });

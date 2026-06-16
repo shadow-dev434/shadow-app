@@ -2,9 +2,19 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, Info, List, Pencil, Send, Loader2, CheckCircle2 } from 'lucide-react';
+import { Archive, Info, List, Pencil, Send, Loader2, CheckCircle2, History, ArrowLeft, Lock, MessageSquare, Paperclip, X, FileText } from 'lucide-react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { BetaCheckin } from '@/features/beta/BetaCheckinCard';
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarInset,
+  SidebarHeader,
+  SidebarContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  useSidebar,
+} from '@/components/ui/sidebar';
 
 // Task 51: unione discriminata. Il ramo body_double apre /focus?taskId=…
 // (deep-link body doubling) invece di re-inviare il valore come messaggio.
@@ -25,6 +35,9 @@ interface Message {
   toolsExecuted?: ToolExecution[];
   quickReplies?: QuickReply[];
   createdAt: string;
+  // Task 54 (vision): allegati mostrati nella bolla utente ottimistica (solo
+  // display, client-side — non rehydratati: inline-only in v1).
+  attachments?: { name: string; previewUrl?: string }[];
 }
 
 interface TurnResponse {
@@ -66,6 +79,102 @@ interface ActiveThreadResponse {
   };
 }
 
+// Task 53 — voce della sidebar storica (GET /api/chat/threads).
+interface ThreadSummary {
+  id: string;
+  mode: string;
+  state: string;
+  label: string;
+  isActive: boolean;
+  startedAt: string;
+  lastTurnAt: string;
+  messageCount: number;
+}
+
+// Task 53 — metadati di un thread aperto in sola lettura (GET /api/chat/threads/[id]).
+interface ArchivedThreadMeta {
+  id: string;
+  mode: string;
+  state: string;
+  label: string;
+  isActive: boolean;
+  startedAt: string;
+  lastTurnAt: string;
+}
+
+// ── Task 54 (vision) — allegati lato client ─────────────────────────────────
+const MAX_CLIENT_ATTACHMENTS = 4;
+const IMAGE_MAX_DIM = 1536; // Anthropic consiglia <=1568px; tiene il body sotto i limiti Vercel
+const IMAGE_JPEG_QUALITY = 0.85;
+
+interface PendingAttachment {
+  id: string;
+  kind: 'image' | 'document';
+  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' | 'application/pdf';
+  data: string; // base64 senza prefisso data:
+  name: string;
+  previewUrl?: string; // data URL per la miniatura (solo immagini)
+}
+
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = () => reject(r.error ?? new Error('read failed'));
+    r.readAsDataURL(file);
+  });
+}
+
+// Ridimensiona un'immagine a IMAGE_MAX_DIM e la ricodifica JPEG: il base64 resta
+// piccolo (sotto i limiti del body Vercel) e la lettura del modello migliora.
+function downscaleImageToJpeg(file: File): Promise<{ data: string; dataUrl: string }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > IMAGE_MAX_DIM || height > IMAGE_MAX_DIM) {
+        const scale = Math.min(IMAGE_MAX_DIM / width, IMAGE_MAX_DIM / height);
+        width = Math.max(1, Math.round(width * scale));
+        height = Math.max(1, Math.round(height * scale));
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('canvas non disponibile'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', IMAGE_JPEG_QUALITY);
+      resolve({ data: dataUrl.split(',')[1] ?? '', dataUrl });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('immagine non caricata'));
+    };
+    img.src = url;
+  });
+}
+
+async function fileToPendingAttachment(file: File): Promise<PendingAttachment | null> {
+  const id = 'att-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  if (file.type === 'application/pdf') {
+    const dataUrl = await readFileAsDataURL(file);
+    const data = dataUrl.split(',')[1] ?? '';
+    if (!data) return null;
+    return { id, kind: 'document', mediaType: 'application/pdf', data, name: file.name };
+  }
+  if (file.type.startsWith('image/')) {
+    const { data, dataUrl } = await downscaleImageToJpeg(file);
+    if (!data) return null;
+    return { id, kind: 'image', mediaType: 'image/jpeg', data, name: file.name, previewUrl: dataUrl };
+  }
+  return null; // tipo non supportato
+}
+
 const SUGGESTED_PROMPTS = [
   { label: 'Pianifichiamo oggi', prompt: 'Aiutami a pianificare la giornata. Cosa devo priorizzare?' },
   { label: 'Ho un task nuovo', prompt: 'Devo aggiungere qualcosa alla lista: ' },
@@ -85,12 +194,22 @@ export function ChatView() {
   const [bootstrapping, setBootstrapping] = useState(true);
   const [eveningReviewShouldStart, setEveningReviewShouldStart] = useState(false);
 
+  // Task 53 — storico chat (sidebar) + vista archiviata read-only.
+  const [threads, setThreads] = useState<ThreadSummary[] | null>(null);
+  const [threadsLoading, setThreadsLoading] = useState(false);
+  const [viewing, setViewing] = useState<{ meta: ArchivedThreadMeta; messages: Message[] } | null>(null);
+  const [viewingLoading, setViewingLoading] = useState(false);
+
+  // Task 54 (vision): allegati in coda nel composer, in attesa di invio.
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const mountInitCalled = useRef(false);
-  // Ultimo messaggio utente fallito, per il Riprova (Task 42). Ref e non
-  // state: serve solo al click handler, nessun re-render necessario.
-  const lastFailedRef = useRef<string | null>(null);
+  // Ultimo turno utente fallito, per il Riprova (Task 42). Ref e non state:
+  // serve solo al click handler. Task 54: porta anche gli allegati.
+  const lastFailedRef = useRef<{ text: string; attachments: PendingAttachment[] } | null>(null);
 
   // Mount init: prima prova a rehydratare un thread attivo esistente
   // via GET /api/chat/active-thread. Se non ce n'e' nessuno (o il
@@ -226,7 +345,9 @@ export function ChatView() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, sending]);
+    // `viewing` in deps: tornando alla chat di oggi (viewing -> null) il div
+    // live si rimonta, qui riportiamo lo scroll in fondo.
+  }, [messages, sending, viewing]);
 
   useEffect(() => {
     if (inputRef.current) {
@@ -235,9 +356,10 @@ export function ChatView() {
     }
   }, [input]);
 
-  const sendMessage = useCallback(async (text: string, opts?: { isRetry?: boolean }) => {
+  const sendMessage = useCallback(async (text: string, opts?: { isRetry?: boolean; attachments?: PendingAttachment[] }) => {
     const trimmed = text.trim();
-    if (!trimmed || sending) return;
+    const atts = opts?.attachments ?? [];
+    if ((!trimmed && atts.length === 0) || sending) return;
 
     setError(null);
     setSending(true);
@@ -249,6 +371,9 @@ export function ChatView() {
         id: 'temp-' + Date.now(),
         role: 'user',
         content: trimmed,
+        ...(atts.length > 0 && {
+          attachments: atts.map(a => ({ name: a.name, previewUrl: a.previewUrl })),
+        }),
         createdAt: new Date().toISOString(),
       };
       setMessages(prev => [...prev, userMsg]);
@@ -263,6 +388,9 @@ export function ChatView() {
           threadId,
           mode,
           userMessage: trimmed,
+          ...(atts.length > 0 && {
+            attachments: atts.map(a => ({ kind: a.kind, mediaType: a.mediaType, data: a.data })),
+          }),
           ...(mode === 'evening_review' && {
             clientDate: new Intl.DateTimeFormat('en-CA').format(new Date()),
           }),
@@ -301,7 +429,7 @@ export function ChatView() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Errore';
       const status = err instanceof Error ? (err as Error & { status?: number }).status : undefined;
-      lastFailedRef.current = trimmed;
+      lastFailedRef.current = { text: trimmed, attachments: atts };
       setError({ message: msg, status });
     } finally {
       setSending(false);
@@ -309,17 +437,41 @@ export function ChatView() {
     }
   }, [threadId, mode, sending]);
 
+  // Task 54: l'invio dal composer porta gli allegati in coda; quick-reply e
+  // suggerimenti restano text-only (chiamano sendMessage senza attachments).
+  const submitComposer = () => {
+    sendMessage(input, { attachments: pendingAttachments });
+    setPendingAttachments([]);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    sendMessage(input);
+    submitComposer();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage(input);
+      submitComposer();
     }
   };
+
+  const handleFilesSelected = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const slots = MAX_CLIENT_ATTACHMENTS - pendingAttachments.length;
+    if (slots <= 0) return;
+    const picked = Array.from(files).slice(0, slots);
+    const converted = (
+      await Promise.all(picked.map(f => fileToPendingAttachment(f).catch(() => null)))
+    ).filter((a): a is PendingAttachment => a !== null);
+    if (converted.length > 0) {
+      setPendingAttachments(prev => [...prev, ...converted].slice(0, MAX_CLIENT_ATTACHMENTS));
+    }
+  }, [pendingAttachments.length]);
+
+  const removeAttachment = useCallback((id: string) => {
+    setPendingAttachments(prev => prev.filter(a => a.id !== id));
+  }, []);
 
   const handleSuggestion = (prompt: string) => {
     if (prompt.endsWith(': ')) {
@@ -348,10 +500,77 @@ export function ChatView() {
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
+  // Task 53 — carica la lista dei thread (lazy, all'apertura della sidebar).
+  const loadThreads = useCallback(async () => {
+    setThreadsLoading(true);
+    try {
+      const res = await fetch('/api/chat/threads');
+      if (res.ok) {
+        const data = (await res.json()) as { threads: ThreadSummary[] };
+        setThreads(data.threads);
+      } else {
+        console.warn('[ChatView] threads fetch failed:', res.status);
+      }
+    } catch (err) {
+      console.error('[ChatView] threads error:', err);
+    } finally {
+      setThreadsLoading(false);
+    }
+  }, []);
+
+  // Task 53 — apre un giorno passato in sola lettura (GET /api/chat/threads/[id]).
+  // Mostra subito l'header con la label (dal summary), poi popola i messaggi.
+  const openArchivedThread = useCallback(async (t: ThreadSummary) => {
+    setViewing({
+      meta: {
+        id: t.id, mode: t.mode, state: t.state, label: t.label,
+        isActive: t.isActive, startedAt: t.startedAt, lastTurnAt: t.lastTurnAt,
+      },
+      messages: [],
+    });
+    setViewingLoading(true);
+    try {
+      const res = await fetch(`/api/chat/threads/${encodeURIComponent(t.id)}`);
+      if (res.ok) {
+        const data = (await res.json()) as { thread: ArchivedThreadMeta; messages: ActiveThreadMessage[] };
+        setViewing({
+          meta: data.thread,
+          messages: data.messages.map(m => ({
+            id: m.id, role: m.role, content: m.content, createdAt: m.createdAt,
+          })),
+        });
+      } else {
+        console.warn('[ChatView] archived thread fetch failed:', res.status);
+      }
+    } catch (err) {
+      console.error('[ChatView] archived thread error:', err);
+    } finally {
+      setViewingLoading(false);
+    }
+  }, []);
+
+  // Task 53 — torna alla chat di oggi (esce dalla vista read-only).
+  const backToToday = useCallback(() => setViewing(null), []);
+
+  const handleSelectThread = useCallback((t: ThreadSummary) => {
+    // Il thread attivo di oggi riapre la chat live; gli altri sono read-only.
+    if (t.isActive) backToToday();
+    else openArchivedThread(t);
+  }, [backToToday, openArchivedThread]);
+
   return (
-    <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100">
+    <SidebarProvider defaultOpen={false}>
+      <ChatHistorySidebar
+        threads={threads}
+        loading={threadsLoading}
+        viewingId={viewing?.meta.id ?? null}
+        onSelect={handleSelectThread}
+        onRequestLoad={loadThreads}
+      />
+      <SidebarInset className="flex flex-col h-screen bg-zinc-950 text-zinc-100 min-w-0">
       <header className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur flex-shrink-0">
-        <div className="flex-1">
+        <HistoryToggleButton />
+        <div className="flex-1 min-w-0">
           <h1 className="text-base font-semibold">Shadow</h1>
           <p className="text-xs text-zinc-500">Sempre qui</p>
         </div>
@@ -366,6 +585,15 @@ export function ChatView() {
         </button>
       </header>
 
+      {viewing ? (
+        <ArchivedThreadView
+          meta={viewing.meta}
+          messages={viewing.messages}
+          loading={viewingLoading}
+          onBack={backToToday}
+        />
+      ) : (
+      <>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
         {messages.length === 0 && !sending && !bootstrapping && (
           eveningReviewShouldStart
@@ -427,7 +655,7 @@ export function ChatView() {
                 type="button"
                 onClick={() => {
                   const failed = lastFailedRef.current;
-                  if (failed) sendMessage(failed, { isRetry: true });
+                  if (failed) sendMessage(failed.text, { isRetry: true, attachments: failed.attachments });
                 }}
                 disabled={sending}
                 className="px-3 py-1 bg-red-900/40 hover:bg-red-900/60 active:bg-red-900 border border-red-800 rounded-md text-xs font-medium text-red-100 disabled:opacity-50 transition-colors"
@@ -461,30 +689,88 @@ export function ChatView() {
 
       <form
         onSubmit={handleSubmit}
-        className="flex items-end gap-2 px-3 py-3 border-t border-zinc-800 bg-zinc-900/50 flex-shrink-0"
+        className="flex flex-col gap-2 px-3 py-3 border-t border-zinc-800 bg-zinc-900/50 flex-shrink-0"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Dimmi cosa ti passa per la testa..."
-          rows={1}
-          disabled={sending}
-          className="flex-1 resize-none bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-2.5 text-base placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600 disabled:opacity-50"
-          style={{ maxHeight: '120px' }}
-        />
-        <button
-          type="submit"
-          disabled={sending || !input.trim()}
-          className="flex items-center justify-center w-11 h-11 rounded-full bg-amber-600 hover:bg-amber-500 active:bg-amber-700 disabled:bg-zinc-700 disabled:text-zinc-500 transition-colors flex-shrink-0"
-          aria-label="Invia"
-        >
-          {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-        </button>
+        {/* Task 54: chip degli allegati in coda */}
+        {pendingAttachments.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {pendingAttachments.map(att => (
+              <div
+                key={att.id}
+                className="relative flex items-center gap-2 bg-zinc-800 border border-zinc-700 rounded-lg pl-1.5 pr-2 py-1 max-w-[210px]"
+              >
+                {att.previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={att.previewUrl}
+                    alt={att.name}
+                    className="w-7 h-7 rounded object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <FileText size={16} className="text-zinc-400 flex-shrink-0" />
+                )}
+                <span className="text-xs text-zinc-300 truncate">{att.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(att.id)}
+                  className="text-zinc-500 hover:text-zinc-200 flex-shrink-0"
+                  aria-label="Rimuovi allegato"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            multiple
+            className="hidden"
+            onChange={e => {
+              handleFilesSelected(e.target.files);
+              e.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending || pendingAttachments.length >= MAX_CLIENT_ATTACHMENTS}
+            className="flex items-center justify-center w-11 h-11 rounded-full hover:bg-zinc-800 active:bg-zinc-700 disabled:opacity-40 transition-colors text-zinc-400 hover:text-zinc-200 flex-shrink-0"
+            aria-label="Allega foto o PDF"
+            title="Allega foto o PDF"
+          >
+            <Paperclip size={20} />
+          </button>
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Dimmi cosa ti passa per la testa..."
+            rows={1}
+            disabled={sending}
+            className="flex-1 resize-none bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-2.5 text-base placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600 disabled:opacity-50"
+            style={{ maxHeight: '120px' }}
+          />
+          <button
+            type="submit"
+            disabled={sending || (!input.trim() && pendingAttachments.length === 0)}
+            className="flex items-center justify-center w-11 h-11 rounded-full bg-amber-600 hover:bg-amber-500 active:bg-amber-700 disabled:bg-zinc-700 disabled:text-zinc-500 transition-colors flex-shrink-0"
+            aria-label="Invia"
+          >
+            {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+          </button>
+        </div>
       </form>
-    </div>
+      </>
+      )}
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 
@@ -568,16 +854,43 @@ function MessageBubble({ message }: { message: Message }) {
 
   return (
     <div className={'flex flex-col gap-1.5 ' + (isUser ? 'items-end' : 'items-start')}>
-      <div
-        className={
-          'max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ' +
-          (isUser
-            ? 'bg-amber-600 text-white rounded-br-md'
-            : 'bg-zinc-800 text-zinc-100 rounded-bl-md')
-        }
-      >
-        {message.content}
-      </div>
+      {/* Task 54 (vision): allegati nella bolla utente ottimistica. */}
+      {message.attachments && message.attachments.length > 0 && (
+        <div className={'flex flex-wrap gap-1.5 max-w-[85%] ' + (isUser ? 'justify-end' : '')}>
+          {message.attachments.map((att, i) =>
+            att.previewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={att.previewUrl}
+                alt={att.name}
+                className="w-16 h-16 rounded-lg object-cover border border-zinc-700"
+              />
+            ) : (
+              <div
+                key={i}
+                className="flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5"
+              >
+                <FileText size={14} className="text-zinc-400 flex-shrink-0" />
+                <span className="text-xs text-zinc-300 truncate max-w-[120px]">{att.name}</span>
+              </div>
+            ),
+          )}
+        </div>
+      )}
+
+      {message.content && (
+        <div
+          className={
+            'max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ' +
+            (isUser
+              ? 'bg-amber-600 text-white rounded-br-md'
+              : 'bg-zinc-800 text-zinc-100 rounded-bl-md')
+          }
+        >
+          {message.content}
+        </div>
+      )}
 
       {message.toolsExecuted && message.toolsExecuted.length > 0 && (
         <div className="max-w-[85%] space-y-1.5 mt-1">
@@ -742,4 +1055,159 @@ function ToolExecutionCard({ tool }: { tool: ToolExecution }) {
   }
 
   return null;
+}
+
+// ─── Task 53 — Storico chat (sidebar a scomparsa) ─────────────────────────────
+
+// Toggle nello header. Usa useSidebar() (gestisce desktop offcanvas + Sheet
+// mobile con un solo handler). Vive dentro SidebarProvider.
+function HistoryToggleButton() {
+  const { toggleSidebar } = useSidebar();
+  return (
+    <button
+      onClick={toggleSidebar}
+      className="-ml-1 p-2 rounded-full hover:bg-zinc-800 active:bg-zinc-700 transition-colors text-zinc-400 hover:text-zinc-200"
+      aria-label="Storico chat"
+      title="Storico chat"
+    >
+      <History size={20} />
+    </button>
+  );
+}
+
+// Sidebar a scomparsa con la lista dei giorni (shadcn ui/sidebar, non
+// modificato — solo composizione). "Oggi" riapre la chat live; i giorni passati
+// si aprono read-only. Carica/aggiorna la lista a ogni apertura.
+function ChatHistorySidebar({
+  threads,
+  loading,
+  viewingId,
+  onSelect,
+  onRequestLoad,
+}: {
+  threads: ThreadSummary[] | null;
+  loading: boolean;
+  viewingId: string | null;
+  onSelect: (t: ThreadSummary) => void;
+  onRequestLoad: () => void;
+}) {
+  const { open, openMobile, isMobile, setOpen, setOpenMobile } = useSidebar();
+  const isOpen = isMobile ? openMobile : open;
+  const wasOpen = useRef(false);
+
+  useEffect(() => {
+    // Fetch a ogni transizione chiuso -> aperto (i conteggi cambiano col tempo).
+    if (isOpen && !wasOpen.current) onRequestLoad();
+    wasOpen.current = isOpen;
+  }, [isOpen, onRequestLoad]);
+
+  const closeSidebar = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+    else setOpen(false);
+  }, [isMobile, setOpen, setOpenMobile]);
+
+  return (
+    <Sidebar side="left" collapsible="offcanvas" className="border-zinc-800">
+      <SidebarHeader className="gap-1 border-b border-zinc-800 px-4 py-3">
+        <h2 className="text-sm font-semibold text-zinc-100">Le tue chat</h2>
+        <p className="text-xs text-zinc-500 leading-snug">
+          Una chat al giorno. I giorni passati sono in sola lettura.
+        </p>
+      </SidebarHeader>
+      <SidebarContent className="px-2 py-2">
+        {loading && (!threads || threads.length === 0) ? (
+          <div className="flex items-center justify-center py-10 text-sm text-zinc-500">
+            <Loader2 size={15} className="mr-2 animate-spin" /> Carico...
+          </div>
+        ) : !threads || threads.length === 0 ? (
+          <div className="px-3 py-10 text-center text-sm text-zinc-500">
+            Nessuna chat ancora. Scrivimi qualcosa per iniziare.
+          </div>
+        ) : (
+          <SidebarMenu>
+            {threads.map((t) => {
+              const active = t.isActive ? viewingId === null : t.id === viewingId;
+              return (
+                <SidebarMenuItem key={t.id}>
+                  <button
+                    onClick={() => {
+                      onSelect(t);
+                      closeSidebar();
+                    }}
+                    className={
+                      'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors ' +
+                      (active
+                        ? 'bg-zinc-800 text-zinc-100'
+                        : 'text-zinc-300 hover:bg-zinc-800/60')
+                    }
+                  >
+                    {t.isActive ? (
+                      <MessageSquare size={15} className="flex-shrink-0 text-amber-400" />
+                    ) : (
+                      <History size={15} className="flex-shrink-0 text-zinc-500" />
+                    )}
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm">{t.label}</span>
+                      <span className="truncate text-[11px] text-zinc-500">
+                        {t.messageCount} messaggi{t.isActive ? ' · in corso' : ''}
+                      </span>
+                    </span>
+                  </button>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        )}
+      </SidebarContent>
+    </Sidebar>
+  );
+}
+
+// Vista di un giorno passato: sola lettura, niente composer. Banner con la label
+// datata + "Torna a oggi". Riusa MessageBubble.
+function ArchivedThreadView({
+  meta,
+  messages,
+  loading,
+  onBack,
+}: {
+  meta: ArchivedThreadMeta;
+  messages: Message[];
+  loading: boolean;
+  onBack: () => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [meta.id]);
+
+  return (
+    <>
+      <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-amber-900/30 bg-amber-950/20 flex-shrink-0">
+        <Lock size={14} className="flex-shrink-0 text-amber-300/80" />
+        <p className="flex-1 truncate text-sm text-amber-100">{meta.label} · sola lettura</p>
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white text-sm font-medium transition-colors flex-shrink-0"
+        >
+          <ArrowLeft size={15} /> Torna a oggi
+        </button>
+      </div>
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+        {loading ? (
+          <div className="flex items-center justify-center py-20 text-sm text-zinc-500">
+            <Loader2 size={16} className="mr-2 animate-spin" /> Carico la chat...
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="py-20 text-center text-sm text-zinc-500">
+            Nessun messaggio in questa chat.
+          </div>
+        ) : (
+          messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
+        )}
+      </div>
+    </>
+  );
 }

@@ -19,6 +19,8 @@ import type {
   ToolUseBlockParam,
   TextBlock,
   TextBlockParam,
+  ImageBlockParam,
+  DocumentBlockParam,
 } from '@anthropic-ai/sdk/resources/messages';
 
 // ── Supported models ──────────────────────────────────────────────────────
@@ -67,7 +69,21 @@ export interface LLMMessage {
 export type LLMContentBlock =
   | { type: 'text'; text: string }
   | { type: 'tool_use'; id: string; name: string; input: unknown }
-  | { type: 'tool_result'; tool_use_id: string; content: string };
+  | { type: 'tool_result'; tool_use_id: string; content: string }
+  // Task 54 (vision): allegati inline base64 nel turno utente corrente. Inline-only:
+  // NON persistiti/replayati in v1 (la history conserva solo un placeholder testo).
+  | {
+      type: 'image';
+      source: {
+        type: 'base64';
+        media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+        data: string;
+      };
+    }
+  | {
+      type: 'document';
+      source: { type: 'base64'; media_type: 'application/pdf'; data: string };
+    };
 
 export interface LLMTool {
   name: string;
@@ -221,8 +237,9 @@ export async function callLLM(params: LLMCallParams): Promise<LLMResponse> {
     // Union ristretta ai 3 block param prodotti dal mapping (tutti accettano
     // cache_control; il ContentBlockParam completo include ThinkingBlockParam
     // che non lo accetta e romperebbe lo spread sotto).
-    const blocks: Array<TextBlockParam | ToolUseBlockParam | ToolResultBlockParam> =
-      m.content.map(block => {
+    const blocks: Array<
+      TextBlockParam | ToolUseBlockParam | ToolResultBlockParam | ImageBlockParam | DocumentBlockParam
+    > = m.content.map(block => {
       if (block.type === 'text') return { type: 'text' as const, text: block.text };
       if (block.type === 'tool_use') return {
         type: 'tool_use' as const,
@@ -235,6 +252,10 @@ export async function callLLM(params: LLMCallParams): Promise<LLMResponse> {
         tool_use_id: block.tool_use_id,
         content: block.content,
       };
+      // Task 54 (vision): blocchi immagine/documento -> ImageBlockParam/
+      // DocumentBlockParam (base64). source e' gia' nella shape SDK.
+      if (block.type === 'image') return { type: 'image' as const, source: block.source };
+      if (block.type === 'document') return { type: 'document' as const, source: block.source };
       throw new Error('Unknown block type');
     });
     if (m.cacheControl === true && blocks.length > 0) {

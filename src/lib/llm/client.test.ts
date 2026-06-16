@@ -213,3 +213,51 @@ describe('callLLM: parsing della response', () => {
     expect(res.stopReason).toBe('tool_use');
   });
 });
+
+describe('callLLM: mapping content blocks immagine/documento (Task 54 vision)', () => {
+  it('blocco image -> ImageBlockParam base64 passato all\'SDK', async () => {
+    await callLLM({
+      systemPrompt: 'S',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } },
+            { type: 'text', text: 'che impegni ci sono?' },
+          ],
+        },
+      ],
+    });
+    expect(createArg().messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } },
+          { type: 'text', text: 'che impegni ci sono?' },
+        ],
+      },
+    ]);
+  });
+
+  it('blocco document -> DocumentBlockParam base64 (PDF)', async () => {
+    await callLLM({
+      systemPrompt: 'S',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'JVBER' } },
+          ],
+        },
+      ],
+    });
+    expect(createArg().messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: 'JVBER' } },
+        ],
+      },
+    ]);
+  });
+});

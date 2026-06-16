@@ -3,8 +3,8 @@
  */
 
 import { db } from '@/lib/db';
-import { callLLM, type LLMMessage, type ToolChoiceParam } from '@/lib/llm/client';
-import { buildSystemPromptParts, buildVoiceProfile } from './prompts';
+import { callLLM, type LLMMessage, type LLMContentBlock, type ToolChoiceParam } from '@/lib/llm/client';
+import { buildSystemPromptParts, buildVoiceProfile, VISION_EXTRACTION_PROMPT } from './prompts';
 import { executeTool, getToolsForMode, type ToolExecutionResult } from './tools';
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses } from '@/lib/types/shadow';
@@ -70,6 +70,18 @@ export type ChatMode =
   | 'evening_review'
   | 'general';
 
+/**
+ * Task 54 (vision): allegato inline base64 nel turno utente corrente. Inline-only
+ * in v1 — non persistito ne' replayato (la history conserva solo un placeholder).
+ */
+export type ChatAttachment =
+  | {
+      kind: 'image';
+      mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+      data: string;
+    }
+  | { kind: 'document'; mediaType: 'application/pdf'; data: string };
+
 export interface OrchestratorInput {
   userId: string;
   threadId: string | null;
@@ -86,6 +98,8 @@ export interface OrchestratorInput {
    * Assente sui turni successivi e fuori dal morning checkin.
    */
   partOfDay?: 'morning' | 'afternoon';
+  /** Task 54: allegati inline (immagini/PDF) letti dal modello in QUESTO turno. */
+  attachments?: ChatAttachment[];
 }
 
 /**
@@ -424,13 +438,42 @@ export async function orchestrate(
     llmMessages[llmMessages.length - 1].cacheControl = true;
   }
 
-  llmMessages.push({ role: 'user', content: input.userMessage });
+  // Task 54 (vision): se il turno ha allegati, il contenuto utente diventa un
+  // array di content-block [image/document..., text?]. Inline-only: gli allegati
+  // viaggiano SOLO in questo turno (non persistiti, non rimessi in history).
+  const hasAttachments = (input.attachments?.length ?? 0) > 0;
+  const trimmedUserMessage = input.userMessage.trim();
+  if (hasAttachments) {
+    const attachmentBlocks: LLMContentBlock[] = input.attachments!.map(a =>
+      a.kind === 'image'
+        ? { type: 'image', source: { type: 'base64', media_type: a.mediaType, data: a.data } }
+        : { type: 'document', source: { type: 'base64', media_type: a.mediaType, data: a.data } },
+    );
+    const content: LLMContentBlock[] = trimmedUserMessage
+      ? [...attachmentBlocks, { type: 'text', text: input.userMessage }]
+      : attachmentBlocks;
+    llmMessages.push({ role: 'user', content });
+  } else {
+    llmMessages.push({ role: 'user', content: input.userMessage });
+  }
+
+  // Persistenza: placeholder testo per gli allegati (inline-only, no replay).
+  const attachmentCount = input.attachments?.length ?? 0;
+  const attachmentPlaceholder =
+    attachmentCount > 0
+      ? `[${attachmentCount} ${attachmentCount > 1 ? 'allegati' : 'allegato'}]`
+      : '';
+  const persistedUserContent = hasAttachments
+    ? trimmedUserMessage
+      ? `${input.userMessage}\n${attachmentPlaceholder}`
+      : attachmentPlaceholder
+    : input.userMessage;
 
   await db.chatMessage.create({
     data: {
       threadId: thread.id,
       role: 'user',
-      content: input.userMessage,
+      content: persistedUserContent,
     },
   });
 
@@ -445,6 +488,15 @@ export async function orchestrate(
   const systemParts = buildSystemPromptParts(mode, userContext, modeContext, voiceProfile);
   const staticPrefix = systemParts.staticPrefix;
   let dynamicSuffix = systemParts.dynamicSuffix;
+
+  // Task 54 (vision): guida di estrazione SOLO nei turni con allegati. Va in
+  // dynamicSuffix (non cachato): non gonfia i turni senza allegati e cambia per
+  // definizione a ogni turno-vision.
+  if (hasAttachments) {
+    dynamicSuffix = dynamicSuffix
+      ? `${dynamicSuffix}\n\n${VISION_EXTRACTION_PROMPT}`
+      : `\n\n${VISION_EXTRACTION_PROMPT}`;
+  }
 
   // Task 40: blocco summary (terzo text block system con cache_control proprio,
   // vedi client.ts). Stabile per tutto il turno — il rebuild mid-loop tocca
@@ -582,6 +634,49 @@ export async function orchestrate(
   totalTokensOut += currentResponse.tokensOut;
   totalLatencyMs += currentResponse.latencyMs;
   lastModel = currentResponse.model;
+
+  // ── 6.5. Task 54 — escalation vision Haiku -> Sonnet (decisione D2) ───
+  // Leggendo l'allegato il modello emette [[VISION_ESCALATE]] quando non riesce
+  // a leggerlo. UNA sola escalation: rilanciamo la PRIMA call con tier 'smart'
+  // (i turni con allegati sono general -> tier 'fast' di default). La risposta
+  // vision e' text-only (estrazione/marker), quindi nessun tool loop intermedio.
+  if (
+    hasAttachments &&
+    modelTier === 'fast' &&
+    currentResponse.text.includes('[[VISION_ESCALATE]]')
+  ) {
+    console.warn('[vision] allegato poco leggibile con Haiku -> escalation a Sonnet');
+    currentResponse = await callLLM({
+      tier: 'smart',
+      systemPrompt: {
+        static: staticPrefix,
+        ...(summaryBlock !== undefined && { summary: summaryBlock }),
+        dynamic: dynamicSuffix,
+      },
+      messages: llmMessages,
+      tools: getToolsForMode(mode, currentPhase, triageState ?? undefined),
+      maxTokens: 500,
+      temperature: 0.5,
+    });
+    totalCost += currentResponse.costUsd;
+    totalTokensIn += currentResponse.tokensIn;
+    totalTokensOut += currentResponse.tokensOut;
+    totalLatencyMs += currentResponse.latencyMs;
+    lastModel = currentResponse.model;
+  }
+  // Pulizia marker: se ancora presente (anche Sonnet non legge) sostituiamo con
+  // un fallback gentile, PRIMA del parse output -> il marker non raggiunge mai
+  // l'utente. Innocuo se assente.
+  if (hasAttachments && currentResponse.text.includes('[[VISION_ESCALATE]]')) {
+    const cleaned = currentResponse.text.replace(/\[\[VISION_ESCALATE\]\]/g, '').trim();
+    currentResponse = {
+      ...currentResponse,
+      text:
+        cleaned.length > 0
+          ? cleaned
+          : 'Non riesco a leggere bene questo allegato. Mandamene una versione piu\' nitida, oppure scrivimi tu gli impegni da salvare.',
+    };
+  }
 
   const toolsExecuted: OrchestratorOutput['toolsExecuted'] = [];
   let finalAssistantMessage = currentResponse.text;
