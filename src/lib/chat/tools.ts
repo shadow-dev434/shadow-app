@@ -73,7 +73,9 @@ import { handleMarkWhatBlockedAsked } from './tools/mark-what-blocked-asked-hand
 import type { PreviewState } from '@/lib/evening-review/apply-overrides';
 import type { BuildDailyPlanPreviewInput } from '@/lib/evening-review/plan-preview';
 import { formatDateInRome, formatTodayInRome } from '@/lib/evening-review/dates';
-import { commitTodayPlan } from '@/lib/daily-plan/commit-today-plan';
+import { estimateDuration } from '@/lib/evening-review/duration-estimation';
+import { commitTodayPlan, upsertTodayContext } from '@/lib/daily-plan/commit-today-plan';
+import { fitTodayPlanToTime } from '@/lib/daily-plan/fit-to-time';
 import {
   setTaskRecurrence,
   stopTaskRecurrence,
@@ -128,6 +130,41 @@ export const CHAT_TOOLS: LLMTool[] = [
         level: { type: 'number', description: 'Livello energia 1-5 (1=a terra, 5=sul pezzo)' },
       },
       required: ['level'],
+    },
+  },
+  {
+    name: 'set_user_mood',
+    description:
+      "Registra il livello di UMORE dichiarato dall'utente per oggi (1-5). " +
+      "PARAMETRO: 'level'. Esempio: { level: 4 }. Usa SOLO durante il morning " +
+      "checkin, sulla prima domanda (umore). Distinto da set_user_energy " +
+      "(energia) e da record_mood della review serale (che usa 'value').",
+    input_schema: {
+      type: 'object',
+      properties: {
+        level: { type: 'number', description: 'Livello umore 1-5 (1=giù, 5=alla grande)' },
+      },
+      required: ['level'],
+    },
+  },
+  {
+    name: 'set_user_time',
+    description:
+      "Registra il tempo disponibile dichiarato dall'utente per OGGI, in MINUTI. " +
+      "PARAMETRO: 'minutes'. Converti la fascia scelta nel suo punto medio: " +
+      "<2h->90, 2-4h->180, 4-6h->300, >6h->420; se l'utente dà un valore preciso " +
+      "(es. 'ho un'ora e mezza') usa quello. Usa SOLO durante il morning checkin, " +
+      "quando l'utente dice quanto tempo ha. Serve poi a fit_today_plan e a " +
+      "commit_today_plan per ricalibrare il piano sul tempo reale.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        minutes: {
+          type: 'number',
+          description: 'Minuti disponibili oggi (es. 180 per la fascia 2-4h)',
+        },
+      },
+      required: ['minutes'],
     },
   },
 ];
@@ -242,6 +279,39 @@ export const RECURRENCE_TOOLS: LLMTool[] = [
 ];
 
 /**
+ * Task 51 (D8) — Body doubling dalla chat. Esposto fuori da evening_review (vedi
+ * getToolsForMode). offer_body_double garantisce un taskId (esistente o creato
+ * al volo) e segnala all'orchestrator di mostrare una quick-action che apre
+ * /focus?taskId=… (sessione di lavoro accompagnata). Niente avvio sessione qui:
+ * il deep-link atterra sul setup. Cfr. orchestrator.ts (capture per nome tool)
+ * + prompts.ts (quando offrirlo).
+ */
+export const BODY_DOUBLE_TOOLS: LLMTool[] = [
+  {
+    name: 'offer_body_double',
+    description:
+      "Offre all'utente di lavorare in body doubling (sessione Focus con Shadow presente, avatar + timer) su un task. Chiamalo quando l'utente sta per METTERSI AL LAVORO su una cosa concreta e una compagnia/avvio guidato aiuterebbe a partire. taskId = id del task da fare (da get_today_tasks o create_task): è la via preferita. Se la cosa NON è ancora in lista, passa invece 'title' e verrà creato al volo. Dopo la chiamata l'app mostra un bottone che apre la sessione: scrivi comunque una frase che invita a iniziare insieme.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: {
+          type: 'string',
+          description: 'ID del task esistente su cui fare body doubling (da get_today_tasks/create_task). Via preferita.',
+        },
+        title: {
+          type: 'string',
+          description: 'Solo se manca taskId: titolo del task da creare al volo per la sessione.',
+        },
+        label: {
+          type: 'string',
+          description: "Opzionale: etichetta del bottone (breve, default 'Fallo con Shadow').",
+        },
+      },
+    },
+  },
+];
+
+/**
  * Task 44 — commit del piano di OGGI dalla chat (morning check-in / planning).
  * Esposto SOLO in quelle modalità (vedi getToolsForMode): fissa "Le 3 cose di
  * oggi" + il resto della giornata dopo che l'utente ha confermato, persistendo
@@ -266,8 +336,49 @@ export const COMMIT_TODAY_PLAN_TOOL: LLMTool = {
         description: "Opzionale: id dei task 'intoccabili' fissati esplicitamente dall'utente.",
         items: { type: 'string' },
       },
+      timeAvailableMinutes: {
+        type: 'number',
+        description:
+          'Opzionale: minuti realmente disponibili oggi (Y, lo stesso passato a ' +
+          'set_user_time / fit_today_plan). Salvato nel piano per la schermata Oggi.',
+      },
     },
     required: ['taskIds'],
+  },
+};
+
+// Task 48: ricalibrazione deterministica del piano di oggi sul tempo disponibile.
+// Read-only (non committa): calcola kept/cut. Esposto solo in planning/morning.
+export const FIT_TODAY_PLAN_TOOL: LLMTool = {
+  name: 'fit_today_plan',
+  description:
+    "Ricalibra il piano di OGGI sul tempo disponibile. Passa gli id dei task " +
+    "candidati (taskIds), i minuti disponibili (timeAvailableMinutes, Y) e gli " +
+    "eventuali id da non tagliare mai (pinnedTaskIds). Ritorna kept/cut + i minuti " +
+    "totali necessari (totalNeededMinutes = X) e disponibili (Y): il taglio è già " +
+    "calcolato (protegge pin, urgenza massima e scadenze di oggi; taglia dal meno " +
+    "prioritario). Usalo DOPO get_today_tasks e DOPO aver tolto i task già fatti, " +
+    "PRIMA di proporre il piano. NON fissa nulla: per salvare usa poi " +
+    "commit_today_plan con gli id 'kept'.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      taskIds: {
+        type: 'array',
+        description: 'Id dei task candidati per oggi (da get_today_tasks).',
+        items: { type: 'string' },
+      },
+      timeAvailableMinutes: {
+        type: 'number',
+        description: 'Minuti disponibili oggi (Y).',
+      },
+      pinnedTaskIds: {
+        type: 'array',
+        description: "Opzionale: id da proteggere sempre dal taglio.",
+        items: { type: 'string' },
+      },
+    },
+    required: ['taskIds', 'timeAvailableMinutes'],
   },
 };
 
@@ -424,6 +535,15 @@ export function getToolsForMode(
     // non nella chat libera (evita commit spuri durante una conversazione qualsiasi).
     if (mode === 'morning_checkin' || mode === 'planning') {
       tools.push(COMMIT_TODAY_PLAN_TOOL);
+      // Task 48: ricalibrazione sul tempo disponibile, solo in pianificazione.
+      tools.push(FIT_TODAY_PLAN_TOOL);
+    }
+    // Task 51 (D8): body doubling offerto dove l'utente "sta per mettersi al
+    // lavoro" — chat libera, pianificazione, focus_companion. Fuori da
+    // morning_checkin (prompt di Sessione A) e evening_review (flusso chiuso).
+    // Inerte finché prompts.ts non istruisce il modello a chiamarlo.
+    if (mode === 'general' || mode === 'planning' || mode === 'focus_companion') {
+      tools.push(...BODY_DOUBLE_TOOLS);
     }
     return tools;
   }
@@ -591,6 +711,12 @@ export async function executeTool(
         return await executeGetTodayTasks(userId);
       case 'set_user_energy':
         return await executeSetUserEnergy(input, userId);
+      case 'set_user_mood':
+        return await executeSetUserMood(input, userId);
+      case 'set_user_time':
+        return await executeSetUserTime(input, userId);
+      case 'fit_today_plan':
+        return await executeFitTodayPlan(input, userId);
       case 'complete_task':
         return await executeCompleteTask(input, userId);
       case 'update_task':
@@ -603,6 +729,8 @@ export async function executeTool(
         return await executeSetTaskRecurrence(input, userId);
       case 'stop_task_recurrence':
         return await executeStopTaskRecurrence(input, userId);
+      case 'offer_body_double':
+        return await executeOfferBodyDouble(input, userId);
       case 'record_mood':
         return executeRecordMood(input, context);
       case 'record_energy':
@@ -727,8 +855,12 @@ async function executeCommitTodayPlan(
   const pinnedTaskIds = (Array.isArray(input.pinnedTaskIds) ? input.pinnedTaskIds : [])
     .map((x) => String(x))
     .filter(Boolean);
+  // Task 48: Y opzionale. undefined se assente -> commitTodayPlan non tocca
+  // timeAvailable; se presente lo clampa la validazione del commit.
+  const timeAvailableMinutes =
+    typeof input.timeAvailableMinutes === 'number' ? input.timeAvailableMinutes : undefined;
 
-  const result = await commitTodayPlan(userId, taskIds, pinnedTaskIds);
+  const result = await commitTodayPlan(userId, taskIds, pinnedTaskIds, timeAvailableMinutes);
   if (!result.ok) {
     return {
       kind: 'sideEffect',
@@ -744,7 +876,7 @@ async function executeCommitTodayPlan(
       committed: result.doNowIds?.length ?? 0,
       top3: result.top3Ids,
       invalidIds: result.invalidIds,
-      note: "Piano di oggi salvato. Conferma all'utente in una frase e, se vuole, invitalo a iniziare dalla prima cosa.",
+      note: "Piano di oggi salvato. Conferma all'utente in una frase e, se vuole, invitalo a iniziare dalla prima cosa. Ricordagli UNA VOLTA, con leggerezza, che può aggiustare il piano al volo dalla sezione Today (energia, tempo, contesto) se cambiano le condizioni.",
     },
   };
 }
@@ -798,30 +930,95 @@ async function executeStopTaskRecurrence(
   };
 }
 
+/**
+ * Task 51 (D8) — body doubling dalla chat. Garantisce un taskId prima di offrire
+ * la quick-action: risolve un task esistente (ownership + stato non terminale)
+ * oppure, se manca, lo crea al volo via executeCreateTask. Ritorna
+ * { taskId, title, label } in data; l'orchestrator legge il risultato per nome
+ * tool e costruisce la quick reply verso /focus?taskId=…. Non avvia la sessione:
+ * il deep-link atterra sul setup (scelta durata), coerente coi bottoni in-app.
+ */
+async function executeOfferBodyDouble(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const label = String(input.label ?? '').trim() || 'Fallo con Shadow';
+  const taskIdInput = String(input.taskId ?? '').trim();
+
+  // 1. taskId fornito: valida ownership + stato non terminale.
+  if (taskIdInput) {
+    const task = await db.task.findFirst({
+      where: { id: taskIdInput, userId },
+      select: { id: true, title: true, status: true },
+    });
+    if (!task) {
+      return { kind: 'sideEffect', success: false, error: `Task ${taskIdInput} not found or not owned by user` };
+    }
+    if ((terminalTaskStatuses() as string[]).includes(task.status)) {
+      return {
+        kind: 'sideEffect',
+        success: false,
+        error: `Task "${task.title}" è '${task.status}' (terminale): non si fa body doubling. Scegli o crea un task attivo.`,
+      };
+    }
+    return { kind: 'sideEffect', success: true, data: { taskId: task.id, title: task.title, label } };
+  }
+
+  // 2. Nessun taskId: crea il task al volo (D8) e usalo. Riusa executeCreateTask
+  //    (dedup omonimi inclusa); richiede almeno un titolo.
+  const title = String(input.title ?? '').trim();
+  if (!title) {
+    return { kind: 'sideEffect', success: false, error: 'offer_body_double richiede taskId (preferito) oppure title' };
+  }
+  const created = await executeCreateTask(
+    { title, urgency: input.urgency, importance: input.importance, category: input.category },
+    userId,
+  );
+  if (!created.success) return created;
+  const createdData = created.data as { id?: string; title?: string } | undefined;
+  if (!createdData?.id) {
+    return { kind: 'sideEffect', success: false, error: 'create_task non ha restituito un id' };
+  }
+  return {
+    kind: 'sideEffect',
+    success: true,
+    data: { taskId: createdData.id, title: createdData.title ?? title, label },
+  };
+}
+
 async function executeGetTodayTasks(userId: string): Promise<ToolExecutionResult> {
   // Task 46: materializza le istanze ricorrenti di oggi prima di leggere la lista,
   // così un'abitudine resa ricorrente compare nel piano del mattino senza ricrearla.
   const today = formatTodayInRome();
   await materializeRecurringForDate(userId, today);
 
-  const tasks = await db.task.findMany({
-    where: {
-      userId,
-      status: { notIn: terminalTaskStatuses() },
-      // Task 46: nascondi le istanze ricorrenti di giorni FUTURI (es. quella di
-      // domani materializzata dalla review serale). I task normali hanno
-      // occurrenceDate null e restano sempre visibili.
-      OR: [
-        { recurringTemplateId: null },
-        { occurrenceDate: { lte: today } },
+  const [tasks, profile] = await Promise.all([
+    db.task.findMany({
+      where: {
+        userId,
+        status: { notIn: terminalTaskStatuses() },
+        // Task 46: nascondi le istanze ricorrenti di giorni FUTURI (es. quella di
+        // domani materializzata dalla review serale). I task normali hanno
+        // occurrenceDate null e restano sempre visibili.
+        OR: [
+          { recurringTemplateId: null },
+          { occurrenceDate: { lte: today } },
+        ],
+      },
+      orderBy: [
+        { priorityScore: 'desc' },
+        { urgency: 'desc' },
       ],
-    },
-    orderBy: [
-      { priorityScore: 'desc' },
-      { urgency: 'desc' },
-    ],
-    take: 15,
-  });
+      take: 15,
+    }),
+    // Task 48: optimalSessionLength per stimare i minuti per-task (stessa fonte
+    // della review serale, niente terzo estimatore).
+    db.adaptiveProfile
+      .findUnique({ where: { userId }, select: { optimalSessionLength: true } })
+      .catch(() => null),
+  ]);
+
+  const optimalSessionLength = profile?.optimalSessionLength ?? 25;
 
   return {
     kind: 'sideEffect',
@@ -835,6 +1032,8 @@ async function executeGetTodayTasks(userId: string): Promise<ToolExecutionResult
       status: t.status,
       deadline: t.deadline ? formatDateInRome(t.deadline) : null,
       recurring: t.recurringTemplateId !== null,
+      // Task 48: stima minuti (da Task.size) per il calcolo "serve X, hai Y".
+      estimatedMinutes: estimateDuration({ size: t.size }, { optimalSessionLength }).minutes,
     })),
   };
 }
@@ -853,7 +1052,131 @@ async function executeSetUserEnergy(
     },
   });
 
+  // Task 49: rifletti l'energia sul piano di oggi così la schermata Today resta
+  // sincronizzata con quanto dichiarato in chat.
+  await upsertTodayContext(userId, { energyLevel: level });
+
   return { kind: 'sideEffect', success: true, data: { level } };
+}
+
+// Task 47: cattura dell'umore mattutino, gemello di executeSetUserEnergy.
+// Telemetria di profilazione (LearningSignal 'mood_declared'); l'energia resta
+// la dimensione che guida il piano.
+async function executeSetUserMood(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const level = clampInt(input.level, 1, 5, 3);
+
+  await db.learningSignal.create({
+    data: {
+      userId,
+      signalType: 'mood_declared',
+      metadata: JSON.stringify({ level, timestamp: new Date().toISOString() }),
+    },
+  });
+
+  return { kind: 'sideEffect', success: true, data: { level } };
+}
+
+// Task 48: cattura del tempo disponibile oggi (Y), in minuti. Telemetria
+// (LearningSignal 'time_declared') + ritorno del valore canonico al modello,
+// che lo riusa per fit_today_plan e commit_today_plan.
+async function executeSetUserTime(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const minutes = clampInt(input.minutes, 15, 1440, 240);
+
+  await db.learningSignal.create({
+    data: {
+      userId,
+      signalType: 'time_declared',
+      metadata: JSON.stringify({ minutes, timestamp: new Date().toISOString() }),
+    },
+  });
+
+  // Task 49: rifletti il tempo disponibile sul piano di oggi (sync con Today).
+  await upsertTodayContext(userId, { timeAvailable: minutes });
+
+  return { kind: 'sideEffect', success: true, data: { minutes } };
+}
+
+// Task 48: ricalibrazione deterministica del piano di oggi sul tempo disponibile.
+// Read-only: carica i task candidati + optimalSessionLength e delega a
+// fitTodayPlanToTime. Non scrive nulla (il commit resta a commit_today_plan).
+async function executeFitTodayPlan(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const taskIds = (Array.isArray(input.taskIds) ? input.taskIds : [])
+    .map((x) => String(x))
+    .filter(Boolean);
+  if (taskIds.length === 0) {
+    return { kind: 'sideEffect', success: false, error: 'taskIds is required' };
+  }
+  const availableMinutes = clampInt(input.timeAvailableMinutes, 15, 1440, 240);
+  const pinnedIds = (Array.isArray(input.pinnedTaskIds) ? input.pinnedTaskIds : [])
+    .map((x) => String(x))
+    .filter(Boolean);
+
+  const [tasks, profile] = await Promise.all([
+    db.task.findMany({
+      where: { id: { in: taskIds }, userId, status: { notIn: terminalTaskStatuses() } },
+      select: {
+        id: true,
+        title: true,
+        size: true,
+        urgency: true,
+        priorityScore: true,
+        deadline: true,
+      },
+    }),
+    db.adaptiveProfile
+      .findUnique({ where: { userId }, select: { optimalSessionLength: true } })
+      .catch(() => null),
+  ]);
+
+  // Preserva l'ordine dei taskIds passati dal modello, scarta gli id non validi.
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const candidates = taskIds
+    .map((id) => byId.get(id))
+    .filter((t): t is NonNullable<typeof t> => Boolean(t))
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      size: t.size,
+      urgency: t.urgency,
+      priorityScore: t.priorityScore,
+      deadline: t.deadline,
+    }));
+
+  if (candidates.length === 0) {
+    return { kind: 'sideEffect', success: false, error: 'no_valid_tasks' };
+  }
+
+  const result = fitTodayPlanToTime({
+    candidates,
+    availableMinutes,
+    optimalSessionLength: profile?.optimalSessionLength ?? 25,
+    pinnedIds,
+    todayRome: formatTodayInRome(),
+  });
+
+  return {
+    kind: 'sideEffect',
+    success: true,
+    data: {
+      ...result,
+      note:
+        "Ricalibrato. Racconta all'utente in modo naturale (ore/minuti, non i numeri " +
+        "grezzi): per fare tutto servirebbero ~totalNeededMinutes, ha availableMinutes. " +
+        "Proponi i task 'kept' come piano di oggi; i 'cut' lasciali a dopo/domani con " +
+        "leggerezza. Se immuneOverflow=true, anche solo le cose con scadenza oggi " +
+        "sforano: dillo con onestà, senza colpevolizzare. Quando l'utente accetta, " +
+        "chiama commit_today_plan con gli id di 'kept' e lo stesso timeAvailableMinutes.",
+    },
+  };
 }
 
 // ── Task 42 executors: gestione task dalla chat ────────────────────────────

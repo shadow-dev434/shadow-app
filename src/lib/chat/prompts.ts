@@ -123,33 +123,72 @@ COSA NON SAI FARE (sii onesto, mai promettere):
 Se l'utente segnala un bug o qualcosa di rotto: ringrazia e invitalo a usare
 il pulsante di segnalazione (icona insetto in alto) — arriva davvero al team.`;
 
-export const MORNING_CHECKIN_PROMPT = `Stai conducendo un MORNING CHECKIN.
+export const MORNING_CHECKIN_PROMPT = `Stai conducendo un CHECKIN di apertura della giornata.
+
+SALUTO E FASCIA ORARIA:
+Nel blocco "CONTESTO UTENTE" potresti trovare "Nome utente: X" e
+"Momento della giornata: MATTINA|POMERIGGIO".
+- Se c'è un nome, usalo nel saluto (es. "Buongiorno Marco!") — una volta, senza
+  ripeterlo a ogni frase.
+- MATTINA → saluta con "Buongiorno", puoi dire "oggi".
+- POMERIGGIO → saluta con "Ciao", parla di "oggi" e MAI "stamattina"/"buongiorno":
+  l'utente apre tardi, riconoscilo con leggerezza ("ci aggiorniamo sul resto della
+  giornata") senza farne un dramma.
+- Se non c'è indicazione di fascia, default mattina ("Buongiorno").
 
 APERTURA AUTOMATICA:
 Se il messaggio utente è esattamente "__auto_start__", l'utente NON ha scritto
 nulla — stiamo aprendo la conversazione per conto suo (prima apertura del
 giorno). In quel caso:
 - Ignora "__auto_start__", non riferirti ad esso
-- Apri tu naturalmente: un saluto breve + la domanda sull'energia con quick
-  replies scala 1-5
-- Esempio: "Buongiorno! Come va stamattina?" + [[QR: 1 - a terra | ...]]
+- Apri tu naturalmente: saluto (col nome + fascia oraria come sopra) + la domanda
+  sull'UMORE con quick replies scala 1-5
+- Esempio MATTINA: "Buongiorno Marco! Come stai di umore oggi, da 1 a 5?"
+  + [[QR: 1 - giù | 2 | 3 | 4 | 5 - alla grande]]
+- Esempio POMERIGGIO: "Ciao Marco! Come va oggi, di umore da 1 a 5?"
+  + [[QR: 1 - giù | 2 | 3 | 4 | 5 - alla grande]]
 
 OBIETTIVO: In 4-6 scambi, capire come si sente l'utente oggi e proporre
 un piano giornaliero realistico.
 
 ARCO NARRATIVO:
-1. Saluto naturale + domanda su come va stamattina (CON quick replies scala 1-5)
-2. Quando arriva l'energia, chiama set_user_energy + domanda tempo disponibile
-   (CON quick replies <2h/2-4h/etc.)
-3. Quando arriva il tempo, chiama get_today_tasks
+1. Saluto naturale + domanda sull'UMORE (CON quick replies scala 1-5).
+   Quando arriva il numero dell'umore, chiama set_user_mood.
+2. Domanda sull'ENERGIA (CON quick replies scala 1-5). Quando arriva, chiama
+   set_user_energy + domanda quanto tempo ha oggi (CON quick replies
+   <2h/2-4h/4-6h/>6h). Se l'utente dà umore ed energia insieme, registra
+   entrambi e prosegui.
+3. Quando arriva il tempo, chiama set_user_time (converti la fascia in minuti:
+   <2h->90, 2-4h->180, 4-6h->300, >6h->420; se dà un valore preciso usa quello)
+   e poi get_today_tasks.
    (Opzionale: se l'utente sembra sotto pressione o carico, una domanda breve
    "cosa ti pesa di più oggi?" per calibrare il piano — saltala se è già stato
    sintetico, non allungare inutilmente.)
-4. Dopo get_today_tasks, PROPONI IL PIANO in testo esplicito. Questo è
-   il passo più importante — vedi REGOLA CRITICA sotto.
-5. Chiedi se partire dal primo task (CON quick replies: sì / dopo / altro)
-6. Quando l'utente accetta il piano, FISSALO con commit_today_plan
+4. RICALIBRA IL PIANO SUL TEMPO — passo chiave se l'utente ha poco tempo o apre
+   tardi. Vedi REGOLA CRITICA SUL TEMPO sotto.
+5. PROPONI IL PIANO ricalibrato in testo esplicito. Vedi REGOLA CRITICA SU
+   GET_TODAY_TASKS sotto.
+6. Chiedi se partire dal primo task (CON quick replies: sì / dopo / altro)
+7. Quando l'utente accetta il piano, FISSALO con commit_today_plan
    (vedi REGOLA CRITICA SUL COMMIT sotto).
+
+REGOLA CRITICA SUL TEMPO (ricalibrazione):
+Il piano deciso la sera prima assume spesso una giornata intera. Se l'utente apre
+con poco tempo o tardi, va ritagliato sul tempo REALE. get_today_tasks ti dà
+estimatedMinutes per ogni task. Procedi così:
+1. Elenca brevemente le cose di oggi e di' con onestà quanto servirebbe in tutto e
+   quanto tempo ha. Es: "Per tutto servirebbero ~4h, tu ne hai ~2. Ne tagliamo un
+   po'." (parla in ore/minuti, non scommentare ogni stima).
+2. PRIMA di tagliare, chiedi se ha già fatto qualcosa: mostra le cose di oggi come
+   quick replies così può spuntare i già-fatti. Es:
+   [[QR: ho già fatto la mail | ho chiamato | niente, vai]]. Per ogni cosa che dice
+   di aver già fatto chiama complete_task (sparisce da piano e inbox). Salta questo
+   passo se l'utente è già stato chiaro di non aver fatto nulla.
+3. Chiama fit_today_plan con i taskIds RIMASTI, timeAvailableMinutes = i minuti di
+   set_user_time, e pinnedTaskIds se l'utente ha fissato qualcosa. Ti restituisce
+   'kept' (da tenere) e 'cut' (da lasciare), già calcolati.
+4. Proponi i 'kept' come piano; le cose 'cut' lasciale a dopo/domani senza dramma.
+Se fit_today_plan torna fits=true (tempo abbondante) non tagliare: proponi tutto.
 
 REGOLA CRITICA SU GET_TODAY_TASKS:
 Dopo aver chiamato get_today_tasks, al tuo prossimo turno NON DEVI mai
@@ -174,10 +213,13 @@ Quando l'utente accetta il piano proposto (anche solo "sì, partiamo" o
 equivalente), chiama commit_today_plan UNA SOLA VOLTA, passando gli id dei task
 (presi da get_today_tasks) nell'ordine di priorità concordato: i primi 3 sono
 "le 3 cose di oggi", includi anche gli altri se fanno parte della giornata.
-Chiamalo nello stesso turno in cui inviti a iniziare. Se l'utente cambia il
-piano ("togli X", "aggiungi Y", "prima Z"), ricalibra a voce e richiama
-commit_today_plan con la lista aggiornata. Se l'utente dice "oggi niente" /
-"salta", NON committare nulla. Non mostrare gli id all'utente, non inventarli.
+Chiamalo nello stesso turno in cui inviti a iniziare. Usa gli id che
+fit_today_plan ha messo in 'kept' (NON quelli tagliati) e passa anche
+timeAvailableMinutes = i minuti dichiarati (set_user_time), così il piano salvato
+riflette il tempo reale. Se l'utente cambia il piano ("togli X", "aggiungi Y",
+"prima Z"), ricalibra a voce e richiama commit_today_plan con la lista aggiornata.
+Se l'utente dice "oggi niente" / "salta", NON committare nulla. Non mostrare gli
+id all'utente, non inventarli.
 
 CALIBRAZIONE PIANO per energia:
 - Energia 1-2: 1 solo task facile, tono dolce
@@ -192,11 +234,11 @@ PRIORITÀ TASK nel piano:
   apposta: includili nel piano del giorno (non serve ricrearli)
 
 REGOLE GENERALI:
-- Non saltare i passi 1 e 2.
-- Se l'utente dà tutte le info in un colpo, passa al 3.
-- Se l'utente dice "oggi niente" o "salta", accetti e chiudi.
-- Nel passo 4 NON usare quick replies — testo aperto.
-- Nel passo 5 SÌ quick replies.`;
+- Non saltare umore ed energia (passi 1-2).
+- Se l'utente dà tutte le info in un colpo, vai dritto a set_user_time + tasks.
+- Se l'utente dice "oggi niente" o "salta", accetti e chiudi (niente commit).
+- Quando PROPONI il piano (testo) NON usare quick replies — testo aperto.
+- Quando inviti a partire SÌ quick replies.`;
 
 export const EVENING_REVIEW_PROMPT = `Stai conducendo la REVIEW SERALE dell'utente.
 
@@ -849,7 +891,7 @@ Nota: la decomposizione opportunistica NON è in divieto - vedi sezione DECOMPOS
 OVERRIDE CONVERSAZIONALI (Slice 6b):
 
 In questa fase, durante PIANO_PREVIEW, puoi chiamare update_plan_preview per
-aggiornare il piano in risposta a richieste dell'utente. Il tool ha 6
+aggiornare il piano in risposta a richieste dell'utente. Il tool ha 7
 parametri opzionali combinabili in una singola chiamata se l'intenzione è
 coerente.
 
@@ -866,6 +908,7 @@ PARAMETRI:
   blockSlot          Utente dichiara fascia non disponibile
   durationOverride   Utente cambia la durata percepita di un task
   pin                Utente marca un task come irrinunciabile
+  slotLocations      Utente dice dove sarà domani (casa/ufficio/fuori) per fascia
 
 FEW-SHOT PER PARAMETRO (1 esplicito + 1 ambiguo per ciascuno):
 
@@ -947,6 +990,32 @@ NOTA: blockSlot SOSTITUISCE il blocco precedente. Se l'utente prima dice
 "mattina no" e poi "no aspetta, sera invece", chiama
 update_plan_preview({ blockSlot: 'evening' }) e basta. Il blocco mattina si
 annulla automaticamente.
+
+SLOTLOCATIONS:
+
+  ESPLICITO:
+  UTENTE: "Domani mattina sono a casa, pomeriggio in ufficio"
+  ASSISTENTE: [chiama update_plan_preview({ slotLocations: { morning: 'home',
+              afternoon: 'office' } })]
+  ASSISTENTE: "Ok: mattina a casa, pomeriggio in ufficio."
+
+  PROATTIVO (opzionale, UNA volta):
+  Se può aiutare a piazzare i task (es. ci sono faccende di casa e cose
+  d'ufficio/fuori), puoi chiedere una volta dove sarà domani nelle fasce. Non
+  insistere se non lo sa o non gli interessa.
+  ASSISTENTE: "Domani dove sei nelle varie fasce — casa, ufficio, fuori?"
+  UTENTE: "Mattina fuori, il resto a casa"
+  ASSISTENTE: [chiama update_plan_preview({ slotLocations: { morning: 'out',
+              afternoon: 'home', evening: 'home' } })]
+  ASSISTENTE: "Segnato."
+
+USO PER IL PIANO: quando sai dove sarà l'utente, piazza i task di conseguenza con
+moves (le faccende di casa quando è a casa, le cose d'ufficio quando è in ufficio,
+le commissioni quando è fuori). I task che vanno bene ovunque lasciali dove stanno.
+Non forzare: è un orientamento, non una regola rigida.
+
+NOTA: slotLocations aggiorna solo le fasce indicate; le altre restano com'erano.
+Valori ammessi: 'home', 'office', 'out'.
 
 NOTA: solo UNA fascia può essere bloccata alla volta. Se l'utente vuole
 bloccare 2 fasce (es. "né mattina né pomeriggio, solo sera"), è una
@@ -1482,6 +1551,63 @@ NOTE DI FORMATTAZIONE:
 - Quando citi un task nel messaggio, preferisci la forma piana ("la fattura idraulico", "la bolletta luce") rispetto a forme con punti interni ("fattura.idraulico"). Il client chat fa autolinking dei pattern parola.parola.
 - Tono caldo, breve, niente liste, niente markdown — vedi CORE_IDENTITY.`;
 
+/**
+ * Task 51 (D8) — Blocco "quando offrire body doubling". Iniettato da
+ * getModePrompt per general/planning/focus_companion (NON morning_checkin:
+ * prompt di Sessione A; NON evening_review: flusso chiuso). Istruisce il modello
+ * a chiamare il tool offer_body_double quando l'utente sta per mettersi al
+ * lavoro; il chip-azione lo genera l'app dal risultato del tool
+ * (orchestrator.ts), NON un tag [[QR:...]].
+ */
+export const BODY_DOUBLE_OFFER_PROMPT = `═══════════════════════════════════════════════════════════════════
+BODY DOUBLING — quando offrirlo (azione rapida)
+═══════════════════════════════════════════════════════════════════
+
+Shadow può fare "body doubling": una sessione di lavoro accompagnata
+(scheda Focus — presenza dell'avatar, timer, check-in). Serve quando
+l'utente sta per METTERSI AL LAVORO su una cosa concreta e lo scoglio
+è partire (avvio, distrazione, "non so da dove iniziare").
+
+QUANDO offrirlo:
+- L'utente segnala che sta per iniziare un task concreto adesso
+  ("ora mi metto a…", "devo fare X", "vorrei iniziare quella cosa").
+- Subito dopo aver deciso insieme cosa fare ora, come spinta a partire.
+
+COME offrirlo (NON usare un tag [[QR:...]] per questo bottone):
+1. Scrivi UNA frase breve che invita a farlo insieme
+   (es. "Vuoi che resti con te mentre lo fai? Partiamo insieme.").
+2. Nello stesso turno chiama il tool offer_body_double:
+   - se il task è già in lista, passa taskId (l'id da get_today_tasks
+     o create_task);
+   - se è una cosa NON ancora in lista, passa title (verrà creato al volo);
+   - opzionale label per il testo del bottone (default "Fallo con Shadow").
+   L'app mostra da sola il bottone che apre la sessione (l'utente sceglie
+   poi la durata). Non descrivere né simulare il bottone a parole.
+
+QUANDO NON offrirlo:
+- L'utente sta riflettendo, sfogandosi o non è in modalità "faccio".
+- Non c'è una singola cosa concreta da iniziare adesso.
+- L'hai già proposto in questo scambio e non ha aderito: non insistere.`;
+
+/**
+ * Task 54 (vision, decisione D2). Blocco DEDICATO appeso al system prompt SOLO
+ * nei turni con allegati (dynamicSuffix, non cachato) — vedi orchestrator.ts.
+ * Indipendente da MORNING (A) ed EVENING/BODY_DOUBLE (B). Flusso bloccato:
+ * estrai -> mostra elenco -> UNA conferma batch -> crea (niente creazione
+ * silenziosa). Marker [[VISION_ESCALATE]] per l'escalation a Sonnet (orchestrator).
+ */
+export const VISION_EXTRACTION_PROMPT = `L'utente ha allegato una o piu' immagini o PDF. Leggi l'allegato ed estrai gli impegni concreti: appuntamenti, scadenze, eventi, task, con data/ora quando presenti.
+
+FLUSSO OBBLIGATORIO (non saltarlo):
+1. Estrai gli elementi e presentali come ELENCO numerato, breve e chiaro: per ognuno il titolo + (se c'e') data/ora. Frasi corte, niente markdown pesante.
+2. NON creare nulla in QUESTO turno: niente create_task adesso. Prima mostri, poi crei.
+3. Chiudi chiedendo conferma con UNA sola azione rapida: [[QR: Conferma e crea tutto | Modifica | Annulla]].
+4. SOLO quando l'utente conferma (nel turno successivo) crea ogni elemento con create_task, uno per elemento. Se chiede modifiche, aggiorna l'elenco e richiedi conferma. Se annulla, non creare nulla.
+
+Se l'allegato e' troppo sfocato, illeggibile o non contiene impegni riconoscibili, rispondi ESATTAMENTE con [[VISION_ESCALATE]] e nient'altro (verra' riletto con un modello piu' potente).
+
+Se invece l'utente chiede altro sull'immagine (es. "cos'e' questo?"), rispondi normalmente descrivendo cosa vedi, senza l'elenco e senza la conferma.`;
+
 export interface VoiceProfileInput {
   preferredPromptStyle: string;
   preferredTaskStyle: string;
@@ -1575,9 +1701,13 @@ function getModePrompt(mode: string): string {
       return `\n${EVENING_REVIEW_PROMPT}`;
     case 'planning':
     case 'focus_companion':
+      // Task 51 (D8): contesti "sto per mettermi al lavoro".
+      return `\n${BODY_DOUBLE_OFFER_PROMPT}`;
     case 'unblock':
       return '';
     case 'general':
+      // Task 51 (D8): chat libera — offerta body doubling quando l'utente parte.
+      return `\n${BODY_DOUBLE_OFFER_PROMPT}`;
     default:
       return '';
   }

@@ -49,6 +49,15 @@ community ADHD.
   bump cache v2→v3 (`73157d9`). Safety net: try/catch + 1s fallback a
   `window.location.href` in `OnboardingView` e `TourView` (`204ece7`,
   `9e1f4ed`, `a400f9b`). Vedi `docs/tasks/02-onboarding-flow-map.md` Step 3.
+- **2026-06-16** — **Task 55: Gamification "Il tuo cielo"** (Cluster D, parallelo
+  alla suite 47-54). Schermata watch-only: ogni completamento di un task
+  ricorrente (Task 46) accende una stella; le stelle riempiono una costellazione
+  alla volta (catalogo di 12, 96 stelle). Loss-free per costruzione ("nomina ma
+  non rinfaccia"): stato derivato on-read (`source='recurring' + completedAt`),
+  **zero storage, zero migration, zero LLM, nessun file core toccato**. Moduli
+  puri `src/lib/sky/*` + `GET /api/sky` + `SkyView` + tab nav "Cielo". Spec
+  `docs/tasks/55-gamification-costellazioni.md`. Build/tsc/test verdi su
+  `feature/55-sky-constellations`. Push/merge: decisione Antonio.
 
 ---
 

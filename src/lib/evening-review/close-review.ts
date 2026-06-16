@@ -29,6 +29,7 @@ import { db as defaultDb } from '@/lib/db';
 import type { DailyPlanPreview } from './plan-preview';
 import type { OriginalPlanSnapshot } from '@/lib/types/evening-review-snapshot';
 import { selectLearningSignalsForDate } from './learning-signals-today';
+import { loadPreviewStateFromContext } from './apply-overrides';
 
 export type CloseReviewInput = {
   userId: string;
@@ -62,7 +63,8 @@ export async function closeReview(
   // Pre-check 1: thread esiste e appartiene all'utente.
   const thread = await db.chatThread.findUnique({
     where: { id: input.threadId },
-    select: { id: true, userId: true, state: true },
+    // Task 50: contextJson per leggere le slotLocations dichiarate in review.
+    select: { id: true, userId: true, state: true, contextJson: true },
   });
   if (!thread) {
     return { ok: false, error: 'thread_missing' };
@@ -130,6 +132,13 @@ export async function closeReview(
   };
   const snapshotJson = JSON.stringify(snapshot);
 
+  // Task 50: location per fascia dichiarate in review (PreviewState) ->
+  // DailyPlan.slotContextsJson del giorno pianificato. La schermata Today le
+  // legge e le può modificare.
+  const slotContextsJson = JSON.stringify(
+    loadPreviewStateFromContext(thread.contextJson).slotLocations ?? {},
+  );
+
   const result = await db.$transaction(async (tx) => {
     const review = await tx.review.upsert({
       where: {
@@ -173,12 +182,14 @@ export async function closeReview(
       doNowIds: string;
       pinnedIds: string;
       threadId: string;
+      slotContextsJson: string;
       originalPlanJson?: string;
     } = {
       top3Ids: JSON.stringify(top3Ids),
       doNowIds: JSON.stringify(doNowIds),
       pinnedIds: JSON.stringify(input.pinnedTaskIds),
       threadId: input.threadId,
+      slotContextsJson,
     };
     if (!preserveOriginalPlanJson) {
       planUpdateData.originalPlanJson = snapshotJson;
@@ -196,6 +207,7 @@ export async function closeReview(
         pinnedIds: JSON.stringify(input.pinnedTaskIds),
         originalPlanJson: snapshotJson,
         threadId: input.threadId,
+        slotContextsJson,
       },
       update: planUpdateData,
     });

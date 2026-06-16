@@ -1921,3 +1921,92 @@ describe('executeTool: create_task dedup (Task 42)', () => {
     expect(db.task.create).toHaveBeenCalledTimes(1);
   });
 });
+
+// ── offer_body_double (Task 51, D8) ────────────────────────────────────────
+
+describe('getToolsForMode: offer_body_double exposure (Task 51)', () => {
+  const names = (tools: ReturnType<typeof getToolsForMode>) => tools.map((t) => t.name);
+
+  it('esposto in general / planning / focus_companion (contesti "sto per lavorare")', () => {
+    for (const mode of ['general', 'planning', 'focus_companion']) {
+      expect(names(getToolsForMode(mode))).toContain('offer_body_double');
+    }
+  });
+
+  it('NON esposto in morning_checkin (zona prompt A) né unblock', () => {
+    for (const mode of ['morning_checkin', 'unblock']) {
+      expect(names(getToolsForMode(mode))).not.toContain('offer_body_double');
+    }
+  });
+
+  it('NON esposto in evening_review, in nessuna fase (flusso chiuso)', () => {
+    const phases = ['per_entry', 'plan_preview', 'closing', undefined] as const;
+    for (const phase of phases) {
+      expect(names(getToolsForMode('evening_review', phase, makeState()))).not.toContain('offer_body_double');
+    }
+  });
+});
+
+describe('executeTool: offer_body_double (Task 51, D8 — garantisce un taskId)', () => {
+  it('task esistente non terminale: sideEffect success con taskId + label default', async () => {
+    mockTaskWithStatus('t1', 'Relazione', 'inbox');
+    const result = await executeTool('offer_body_double', { taskId: 't1' }, 'user1');
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual({ taskId: 't1', title: 'Relazione', label: 'Fallo con Shadow' });
+    expect(db.task.create).not.toHaveBeenCalled();
+  });
+
+  it('label custom passata in data', async () => {
+    mockTaskWithStatus('t1', 'Relazione', 'in_progress');
+    const result = await executeTool('offer_body_double', { taskId: 't1', label: 'Iniziamo insieme' }, 'user1');
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect((result.data as { label: string }).label).toBe('Iniziamo insieme');
+  });
+
+  it('task non posseduto (findFirst null): sideEffect failure, nessun task creato', async () => {
+    vi.mocked(db.task.findFirst).mockResolvedValue(null);
+    const result = await executeTool('offer_body_double', { taskId: 'nope' }, 'user1');
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/not found|not owned/);
+    expect(db.task.create).not.toHaveBeenCalled();
+  });
+
+  it('task terminale (completed): sideEffect failure — niente body doubling su task chiuso', async () => {
+    mockTaskWithStatus('t1', 'Fatto', 'completed');
+    const result = await executeTool('offer_body_double', { taskId: 't1' }, 'user1');
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/terminale/);
+    expect(db.task.create).not.toHaveBeenCalled();
+  });
+
+  it("senza taskId ma con title: crea il task al volo (D8) e ne ritorna l'id", async () => {
+    // Dedup di executeCreateTask: findFirst -> null (nessun omonimo), poi create.
+    vi.mocked(db.task.findFirst).mockResolvedValue(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.task.create).mockResolvedValue({ id: 'new1', title: 'Lavatrice', urgency: 3, importance: 3, category: 'general' } as any);
+    const result = await executeTool('offer_body_double', { title: 'Lavatrice' }, 'user1');
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(true);
+    expect((result.data as { taskId: string }).taskId).toBe('new1');
+    expect((result.data as { title: string }).title).toBe('Lavatrice');
+    expect(db.task.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('senza taskId né title: sideEffect failure', async () => {
+    const result = await executeTool('offer_body_double', {}, 'user1');
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/taskId|title/);
+    expect(db.task.findFirst).not.toHaveBeenCalled();
+    expect(db.task.create).not.toHaveBeenCalled();
+  });
+});

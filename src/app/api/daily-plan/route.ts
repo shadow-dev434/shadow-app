@@ -8,6 +8,26 @@ import { buildDailyPlan, getCurrentTimeSlot } from '@/lib/engines/execution-engi
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses, type ExecutionContext, type TaskRecord } from '@/lib/types/shadow';
 import { formatTodayInRome } from '@/lib/evening-review/dates';
+import { upsertTodayContext } from '@/lib/daily-plan/commit-today-plan';
+
+const SLOT_NAMES = ['morning', 'afternoon', 'evening'] as const;
+const SLOT_LOCATIONS = ['home', 'office', 'out'] as const;
+
+/** Task 50: ripulisce l'input slotContexts a { slot: location } valido. */
+function sanitizeSlotContexts(raw: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [slot, loc] of Object.entries(raw as Record<string, unknown>)) {
+    if (
+      (SLOT_NAMES as readonly string[]).includes(slot) &&
+      typeof loc === 'string' &&
+      (SLOT_LOCATIONS as readonly string[]).includes(loc)
+    ) {
+      out[slot] = loc;
+    }
+  }
+  return out;
+}
 
 function toTaskRecord(t: Awaited<ReturnType<typeof db.task.findMany>>[0]): TaskRecord {
   return {
@@ -96,50 +116,57 @@ export async function POST(req: NextRequest) {
       await db.dailyPlanTask.deleteMany({ where: { dailyPlanId: existingPlan.id } });
     }
 
+    // D10 (Task 49): la rigenerazione da Today preserva i task fissati (pin).
+    // I pin del piano precedente restano nel piano (in testa al Top 3 e nel
+    // doNow) anche se l'engine li deprioritizzerebbe, e vengono tolti dagli
+    // altri bucket per non duplicarli.
+    const prioritizedById = new Map(prioritized.map((t) => [t.id, t]));
+    let existingPinned: string[] = [];
+    if (existingPlan) {
+      try {
+        existingPinned = (JSON.parse(existingPlan.pinnedIds) as string[]).filter(
+          (id) => prioritizedById.has(id),
+        );
+      } catch {
+        existingPinned = [];
+      }
+    }
+    const pinnedSet = new Set(existingPinned);
+    const dedup = (ids: string[]): string[] => [...new Set(ids)];
+
+    const top3Ids = dedup([...existingPinned, ...plan.top3.map((t) => t.id)]).slice(0, 3);
+    const doNowIds = dedup([...existingPinned, ...plan.doNow.map((t) => t.id)]);
+    const scheduleIds = plan.schedule.map((t) => t.id).filter((id) => !pinnedSet.has(id));
+    const delegateIds = plan.delegate.map((t) => t.id).filter((id) => !pinnedSet.has(id));
+    const postponeIds = plan.postpone.map((t) => t.id).filter((id) => !pinnedSet.has(id));
+
+    const planIdFields = {
+      top3Ids: JSON.stringify(top3Ids),
+      doNowIds: JSON.stringify(doNowIds),
+      scheduleIds: JSON.stringify(scheduleIds),
+      delegateIds: JSON.stringify(delegateIds),
+      postponeIds: JSON.stringify(postponeIds),
+      pinnedIds: JSON.stringify(existingPinned),
+    };
+
     const dailyPlan = await db.dailyPlan.upsert({
       where: { userId_date: { userId, date: today } },
-      update: {
-        energyLevel: energy,
-        timeAvailable,
-        currentContext,
-        top3Ids: JSON.stringify(plan.top3.map((t) => t.id)),
-        doNowIds: JSON.stringify(plan.doNow.map((t) => t.id)),
-        scheduleIds: JSON.stringify(plan.schedule.map((t) => t.id)),
-        delegateIds: JSON.stringify(plan.delegate.map((t) => t.id)),
-        postponeIds: JSON.stringify(plan.postpone.map((t) => t.id)),
-      },
-      create: {
-        userId,
-        date: today,
-        energyLevel: energy,
-        timeAvailable,
-        currentContext,
-        top3Ids: JSON.stringify(plan.top3.map((t) => t.id)),
-        doNowIds: JSON.stringify(plan.doNow.map((t) => t.id)),
-        scheduleIds: JSON.stringify(plan.schedule.map((t) => t.id)),
-        delegateIds: JSON.stringify(plan.delegate.map((t) => t.id)),
-        postponeIds: JSON.stringify(plan.postpone.map((t) => t.id)),
-      },
+      update: { energyLevel: energy, timeAvailable, currentContext, ...planIdFields },
+      create: { userId, date: today, energyLevel: energy, timeAvailable, currentContext, ...planIdFields },
     });
 
-    const allSlots = [
-      { tasks: plan.top3, slot: 'top3' },
-      { tasks: plan.doNow, slot: 'doNow' },
-      { tasks: plan.schedule, slot: 'schedule' },
-      { tasks: plan.delegate, slot: 'delegate' },
-      { tasks: plan.postpone, slot: 'postpone' },
+    const slotEntries: Array<{ taskId: string; slot: string }> = [
+      ...top3Ids.map((id) => ({ taskId: id, slot: 'top3' })),
+      ...doNowIds.map((id) => ({ taskId: id, slot: 'doNow' })),
+      ...scheduleIds.map((id) => ({ taskId: id, slot: 'schedule' })),
+      ...delegateIds.map((id) => ({ taskId: id, slot: 'delegate' })),
+      ...postponeIds.map((id) => ({ taskId: id, slot: 'postpone' })),
     ];
 
-    for (const { tasks: slotTasks, slot } of allSlots) {
-      for (const task of slotTasks) {
-        await db.dailyPlanTask.create({
-          data: {
-            dailyPlanId: dailyPlan.id,
-            taskId: task.id,
-            slot,
-          },
-        });
-      }
+    for (const { taskId, slot } of slotEntries) {
+      await db.dailyPlanTask.create({
+        data: { dailyPlanId: dailyPlan.id, taskId, slot },
+      });
     }
 
     const serializeTask = (t: TaskRecord & { finalScore?: number; executionFit?: number; reason?: string }) => ({
@@ -173,14 +200,20 @@ export async function POST(req: NextRequest) {
       executionFit: t.executionFit,
     });
 
+    const serializeIds = (ids: string[]) =>
+      ids
+        .map((id) => prioritizedById.get(id))
+        .filter((t): t is NonNullable<typeof t> => Boolean(t))
+        .map(serializeTask);
+
     return NextResponse.json({
       plan: dailyPlan,
       breakdown: {
-        top3: plan.top3.map(serializeTask),
-        doNow: plan.doNow.map(serializeTask),
-        schedule: plan.schedule.map(serializeTask),
-        delegate: plan.delegate.map(serializeTask),
-        postpone: plan.postpone.map(serializeTask),
+        top3: serializeIds(top3Ids),
+        doNow: serializeIds(doNowIds),
+        schedule: serializeIds(scheduleIds),
+        delegate: serializeIds(delegateIds),
+        postpone: serializeIds(postponeIds),
       },
     });
   } catch (error) {
@@ -274,5 +307,24 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error('GET /api/daily-plan error:', error);
     return NextResponse.json({ error: 'Failed to fetch daily plan' }, { status: 500 });
+  }
+}
+
+// PATCH /api/daily-plan — Task 50: salva le location per fascia del giorno di
+// oggi (modificate dalla schermata Today). Non tocca i task del piano.
+export async function PATCH(req: NextRequest) {
+  const { error, userId } = await requireSession(req);
+  if (error) return error;
+
+  try {
+    const body = await req.json();
+    const slotContexts = sanitizeSlotContexts(body?.slotContexts);
+    await upsertTodayContext(userId, {
+      slotContextsJson: JSON.stringify(slotContexts),
+    });
+    return NextResponse.json({ ok: true, slotContexts });
+  } catch (error) {
+    console.error('PATCH /api/daily-plan error:', error);
+    return NextResponse.json({ error: 'Failed to update slot contexts' }, { status: 500 });
   }
 }

@@ -33,6 +33,7 @@ import { toast } from '@/hooks/use-toast';
 import { signOut, useSession } from 'next-auth/react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { StrictModeExitDialog, type StrictModeExitResult } from '@/features/strict-mode/StrictModeExitDialog';
+import { SkyView } from '@/features/sky/SkyView';
 import { APP_VERSION } from '@/lib/version';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -57,6 +58,31 @@ const CONTEXTS = [
   { value: 'errand', label: 'Commissione' },
 ];
 
+// Task 50: contesto per fascia oraria nella schermata Today.
+const TODAY_SLOTS: { key: 'morning' | 'afternoon' | 'evening'; label: string }[] = [
+  { key: 'morning', label: 'Mattina' },
+  { key: 'afternoon', label: 'Pomeriggio' },
+  { key: 'evening', label: 'Sera' },
+];
+const SLOT_LOCATION_OPTIONS = [
+  { value: 'home', label: 'Casa' },
+  { value: 'office', label: 'Ufficio' },
+  { value: 'out', label: 'Fuori' },
+];
+// Mappa la location della fascia corrente sul contesto scalare dell'engine.
+function slotLocationToContext(loc: string | undefined): string | null {
+  if (loc === 'home') return 'home';
+  if (loc === 'office') return 'office';
+  if (loc === 'out') return 'errand';
+  return null;
+}
+function currentSlotKey(): 'morning' | 'afternoon' | 'evening' {
+  const h = new Date().getHours();
+  if (h < 12) return 'morning';
+  if (h < 17) return 'afternoon';
+  return 'evening';
+}
+
 const TIME_OPTIONS = [
   { value: 30, label: '30 min' },
   { value: 60, label: '1 ora' },
@@ -64,6 +90,16 @@ const TIME_OPTIONS = [
   { value: 240, label: '4 ore' },
   { value: 480, label: '8 ore' },
 ];
+
+// Task 49: etichetta leggibile per un valore di minuti arbitrario (la chat usa
+// punti medii 90/180/300/420 che non stanno in TIME_OPTIONS — il Select li deve
+// comunque mostrare quando arrivano dal piano sincronizzato).
+function formatMinutesLabel(min: number): string {
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m === 0 ? `${h} ${h === 1 ? 'ora' : 'ore'}` : `${h}h ${m}min`;
+}
 
 const QUADRANT_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   do_now: { label: 'FAI ORA', color: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-950/30', icon: <Zap className="w-3 h-3" /> },
@@ -307,6 +343,10 @@ export default function ShadowApp() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  // Task 52 (D1): id del task di una sessione body doubling attiva (o '' se la
+  // sessione non ha taskId) → banner "riprendi"; null = nessuna sessione attiva.
+  const [activeBdTaskId, setActiveBdTaskId] = useState<string | null>(null);
+  const router = useRouter();
 
   // On mount: inizializza auth state e carica dati. Il gating
   // tour/onboarding ora vive nel middleware (src/middleware.ts) e legge
@@ -486,6 +526,31 @@ export default function ShadowApp() {
     return () => clearTimeout(timer);
   }, [store.currentView, store.adaptiveProfile, store.isAuthenticated, store.dailyPlan?.top3?.[0]?.id]);
 
+  // Task 52 (D1): rileva una sessione body doubling attiva (GET /api/strict-mode)
+  // per offrire "riprendi". Il deep-link /focus recupera già la sessione da solo;
+  // questo è solo il punto d'ingresso. Re-check quando l'auth è pronta e a ogni
+  // mount di /tasks (navigare verso/da /focus rimonta la pagina).
+  useEffect(() => {
+    if (!store.isAuthenticated) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/strict-mode');
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          session?: { triggerType?: string; taskId?: string | null } | null;
+        };
+        const s = data.session;
+        if (!cancelled) {
+          setActiveBdTaskId(s && s.triggerType === 'body_double' ? s.taskId ?? '' : null);
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [store.isAuthenticated]);
+
   const handleInstall = useCallback(async () => {
     if (!installPrompt) return;
     installPrompt.prompt();
@@ -542,12 +607,32 @@ export default function ShadowApp() {
           </div>
         )}
 
+        {/* Task 52 (D1): banner globale "riprendi" sessione body doubling attiva.
+            Si auto-azzera quando la sessione finisce (re-check al mount di /tasks). */}
+        {activeBdTaskId !== null && !hideHeaderNav && (
+          <div className="bg-violet-700 text-white px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 shrink-0" />
+              <span className="text-sm font-medium">Hai una sessione body doubling in corso</span>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7 text-xs"
+              onClick={() => router.push(activeBdTaskId ? `/focus?taskId=${encodeURIComponent(activeBdTaskId)}` : '/focus')}
+            >
+              Riprendi
+            </Button>
+          </div>
+        )}
+
         {store.currentView === 'auth' && <AuthGateView />}
         {store.currentView === 'inbox' && <InboxView />}
         {store.currentView === 'today' && <TodayView />}
         {store.currentView === 'focus' && <FocusView />}
         {store.currentView === 'task' && <TaskDetailView />}
         {store.currentView === 'review' && <ReviewView />}
+        {store.currentView === 'sky' && <SkyView />}
         {store.currentView === 'settings' && <SettingsView onLogout={handleLogout} />}
       </main>
       {!hideHeaderNav && <BottomNav />}
@@ -1805,6 +1890,7 @@ function BottomNav() {
     { view: 'today', icon: <Sun className="w-5 h-5" />, label: 'Today' },
     { view: 'focus', icon: <Target className="w-5 h-5" />, label: 'Focus' },
     { view: 'review', icon: <ClipboardCheck className="w-5 h-5" />, label: 'Review' },
+    { view: 'sky', icon: <Sparkles className="w-5 h-5" />, label: 'Cielo' },
     { view: 'settings', icon: <Settings className="w-5 h-5" />, label: 'Impost.' },
   ];
 
@@ -1999,11 +2085,68 @@ function InboxView() {
 
 function TodayView() {
   const store = useShadowStore();
+  const [regenerating, setRegenerating] = useState(false);
+  // Task 50: location per fascia (mattina/pomeriggio/sera -> casa/ufficio/fuori).
+  const [slotLocations, setSlotLocations] = useState<Record<string, string>>({});
 
   const handleTaskClick = useCallback((taskId: string) => {
     store.setSelectedTaskId(taskId);
     store.setCurrentView('task');
   }, [store]);
+
+  // Task 50: salva la location di una fascia (PATCH) + aggiorna lo stato locale.
+  const handleSlotLocationChange = useCallback(async (slot: string, loc: string) => {
+    const next = { ...slotLocations, [slot]: loc };
+    setSlotLocations(next);
+    try {
+      await fetch('/api/daily-plan', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotContexts: next }),
+      });
+    } catch {
+      // silenzioso: errore di rete → resta lo stato locale
+    }
+  }, [slotLocations]);
+
+  // Task 49: rigenera il piano al volo dalle condizioni correnti (energia /
+  // tempo / contesto) impostate qui. Riusa il generatore euristico esistente,
+  // che preserva i task fissati (pin). Task 50: il contesto deriva da dove sarai
+  // nella fascia corrente, se l'hai indicato.
+  const handleRegenerate = useCallback(async () => {
+    setRegenerating(true);
+    try {
+      const currentContext =
+        slotLocationToContext(slotLocations[currentSlotKey()]) ?? store.currentContext;
+      const res = await fetch('/api/daily-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          energy: store.energy,
+          timeAvailable: store.timeAvailable,
+          currentContext,
+        }),
+      });
+      const data = await res.json();
+      if (data?.breakdown) {
+        const all = await fetchTasks();
+        store.setTasks(all);
+        const pick = (arr: { id: string }[]): ShadowTask[] =>
+          arr.map((t) => all.find((x) => x.id === t.id)).filter(Boolean) as ShadowTask[];
+        store.setDailyPlan({
+          top3: pick(data.breakdown.top3),
+          doNow: pick(data.breakdown.doNow),
+          schedule: pick(data.breakdown.schedule),
+          delegate: pick(data.breakdown.delegate),
+          postpone: pick(data.breakdown.postpone),
+        });
+      }
+    } catch {
+      // silenzioso: errore di rete → resta il piano corrente
+    } finally {
+      setRegenerating(false);
+    }
+  }, [store, slotLocations]);
 
   const handleStartFocus = useCallback((taskId: string, mode: 'launch' | 'hold' | 'recovery') => {
     store.setSelectedTaskId(taskId);
@@ -2029,23 +2172,42 @@ function TodayView() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (store.dailyPlan) return;
       try {
         const res = await fetch('/api/daily-plan');
         const data = await res.json();
-        if (cancelled || !data?.breakdown) return;
-        const all = await fetchTasks();
-        if (cancelled) return;
-        store.setTasks(all);
-        const pick = (arr: { id: string }[]): ShadowTask[] =>
-          arr.map((t) => all.find((x) => x.id === t.id)).filter(Boolean) as ShadowTask[];
-        store.setDailyPlan({
-          top3: pick(data.breakdown.top3),
-          doNow: pick(data.breakdown.doNow),
-          schedule: pick(data.breakdown.schedule),
-          delegate: pick(data.breakdown.delegate),
-          postpone: pick(data.breakdown.postpone),
-        });
+        if (cancelled || !data?.plan) return;
+        // Task 49: sincronizza energia/tempo/contesto dichiarati in chat con la
+        // schermata Today (lo store non ha persist → senza questo non li vedresti).
+        if (typeof data.plan.energyLevel === 'number') store.setEnergy(data.plan.energyLevel);
+        if (typeof data.plan.timeAvailable === 'number') store.setTimeAvailable(data.plan.timeAvailable);
+        if (typeof data.plan.currentContext === 'string') store.setCurrentContext(data.plan.currentContext);
+        // Task 50: idrata le location per fascia salvate (review serale / Today).
+        if (typeof data.plan.slotContextsJson === 'string') {
+          try {
+            const parsed = JSON.parse(data.plan.slotContextsJson);
+            if (parsed && typeof parsed === 'object') setSlotLocations(parsed);
+          } catch {
+            // ignora JSON malformato
+          }
+        }
+        // Idrata il piano solo se ci sono task e non è già caricato: una riga di
+        // solo contesto (energia/tempo senza piano committato) non è un piano.
+        const b = data.breakdown;
+        const hasTasks = !!b && ((b.top3?.length ?? 0) > 0 || (b.doNow?.length ?? 0) > 0);
+        if (!store.dailyPlan && hasTasks) {
+          const all = await fetchTasks();
+          if (cancelled) return;
+          store.setTasks(all);
+          const pick = (arr: { id: string }[]): ShadowTask[] =>
+            arr.map((t) => all.find((x) => x.id === t.id)).filter(Boolean) as ShadowTask[];
+          store.setDailyPlan({
+            top3: pick(b.top3),
+            doNow: pick(b.doNow),
+            schedule: pick(b.schedule),
+            delegate: pick(b.delegate),
+            postpone: pick(b.postpone),
+          });
+        }
       } catch {
         // silenzioso: nessun piano o errore di rete → resta lo stato vuoto
       }
@@ -2070,6 +2232,14 @@ function TodayView() {
     return out;
   })();
 
+  // Task 49: il Select "Tempo disponibile" deve mostrare anche valori che non
+  // stanno in TIME_OPTIONS (es. 90/180 sincronizzati dalla chat), altrimenti
+  // resterebbe vuoto.
+  const timeOptions = TIME_OPTIONS.some((o) => o.value === store.timeAvailable)
+    ? TIME_OPTIONS
+    : [...TIME_OPTIONS, { value: store.timeAvailable, label: formatMinutesLabel(store.timeAvailable) }]
+        .sort((a, b) => a.value - b.value);
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
       {/* Context bar */}
@@ -2083,20 +2253,26 @@ function TodayView() {
               <Label className="text-xs text-zinc-500">Energia: {getEnergyLabel(store.energy)} {getEnergyEmoji(store.energy)}</Label>
               <Slider value={[store.energy]} onValueChange={([v]) => store.setEnergy(v)} min={1} max={5} step={1} className="mt-1" />
             </div>
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <Label className="text-xs text-zinc-500">Tempo disponibile</Label>
-                <Select value={String(store.timeAvailable)} onValueChange={(v) => store.setTimeAvailable(Number(v))}>
-                  <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>{TIME_OPTIONS.map((opt) => <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="flex-1">
-                <Label className="text-xs text-zinc-500">Contesto</Label>
-                <Select value={store.currentContext} onValueChange={store.setCurrentContext}>
-                  <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>{CONTEXTS.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
-                </Select>
+            <div>
+              <Label className="text-xs text-zinc-500">Tempo disponibile</Label>
+              <Select value={String(store.timeAvailable)} onValueChange={(v) => store.setTimeAvailable(Number(v))}>
+                <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>{timeOptions.map((opt) => <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            {/* Task 50: dove sarai per fascia oraria (orienta il piano + sync con la review). */}
+            <div>
+              <Label className="text-xs text-zinc-500">Dove sarai oggi</Label>
+              <div className="flex gap-2 mt-1">
+                {TODAY_SLOTS.map(({ key, label }) => (
+                  <div key={key} className="flex-1 min-w-0">
+                    <span className="text-[10px] text-zinc-400 block mb-0.5">{label}</span>
+                    <Select value={slotLocations[key]} onValueChange={(v) => handleSlotLocationChange(key, v)}>
+                      <SelectTrigger className="h-8"><SelectValue placeholder="—" /></SelectTrigger>
+                      <SelectContent>{SLOT_LOCATION_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -2107,6 +2283,11 @@ function TodayView() {
           )}
           <Button onClick={() => { window.location.href = '/?plan=today'; }} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
             <MessageCircle className="w-4 h-4 mr-2" /> Pianifica con Shadow
+          </Button>
+          <Button onClick={handleRegenerate} disabled={regenerating} variant="outline" className="w-full">
+            {regenerating
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Rigenero…</>
+              : <><RefreshCw className="w-4 h-4 mr-2" /> Rigenera piano ora</>}
           </Button>
         </CardContent>
       </Card>

@@ -264,6 +264,10 @@ model DailyPlan {
   energyLevel    Int      @default(3)
   timeAvailable  Int      @default(480)
   currentContext String   @default("any")
+  // Task 50: dove sarà l'utente per fascia oraria, JSON
+  // { morning?, afternoon?, evening?: 'home'|'office'|'out' }. Raccolto in
+  // review serale (per il giorno dopo) e modificabile dalla schermata Today.
+  slotContextsJson String @default("{}")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

@@ -22,6 +22,8 @@ vi.mock('@/lib/db', () => ({
     },
     adaptiveProfile: { findUnique: vi.fn() },
     userMemory: { findMany: vi.fn() },
+    // Task 47: buildContextAndVoice carica User.name per il saluto col nome.
+    user: { findUnique: vi.fn() },
     settings: { findFirst: vi.fn() },
     task: { findMany: vi.fn(), create: vi.fn() },
     // Task 46: materializeRecurringForDate (chiamato da initEveningReview) legge i
@@ -106,6 +108,8 @@ beforeEach(() => {
   vi.mocked(loadLatestSummary).mockResolvedValue(null);
   vi.mocked(db.adaptiveProfile.findUnique).mockResolvedValue(null);
   vi.mocked(db.userMemory.findMany).mockResolvedValue([]);
+  // Task 47: default senza nome -> saluto generico (resolveFirstName ritorna null).
+  vi.mocked(db.user.findUnique).mockResolvedValue(null);
   vi.mocked(db.settings.findFirst).mockResolvedValue(null);
   vi.mocked(db.task.findMany).mockResolvedValue([]);
   vi.mocked(db.recurringTask.findMany).mockResolvedValue([]);
@@ -158,6 +162,72 @@ describe('TERMINAL_THREAD_STATES', () => {
     expect(TERMINAL_THREAD_STATES.has('active')).toBe(false);
     expect(TERMINAL_THREAD_STATES.has('paused')).toBe(false);
     expect(TERMINAL_THREAD_STATES.size).toBe(2);
+  });
+});
+
+describe('Task 47: saluto col nome + fascia oraria nel system prompt', () => {
+  function systemStaticOfFirstCall(): string {
+    const sp = vi.mocked(callLLM).mock.calls[0][0].systemPrompt;
+    return typeof sp === 'string' ? sp : sp.static;
+  }
+
+  it('inietta solo il PRIMO nome e la fascia POMERIGGIO quando partOfDay=afternoon', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(null);
+    vi.mocked(db.user.findUnique).mockResolvedValue(
+      { name: 'Marco Rossi', email: 'marco@example.com' } as any,
+    );
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: null,
+      mode: 'morning_checkin',
+      userMessage: '__auto_start__',
+      partOfDay: 'afternoon',
+    });
+
+    const sys = systemStaticOfFirstCall();
+    expect(sys).toContain('Nome utente: Marco');
+    // solo il primo nome, non l'intero "Marco Rossi"
+    expect(sys).not.toContain('Nome utente: Marco Rossi');
+    expect(sys).toContain('POMERIGGIO');
+  });
+
+  it('usa la fascia MATTINA quando partOfDay=morning', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(null);
+    vi.mocked(db.user.findUnique).mockResolvedValue(
+      { name: 'Giulia', email: 'giulia@example.com' } as any,
+    );
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: null,
+      mode: 'morning_checkin',
+      userMessage: '__auto_start__',
+      partOfDay: 'morning',
+    });
+
+    const sys = systemStaticOfFirstCall();
+    expect(sys).toContain('Nome utente: Giulia');
+    expect(sys).toContain('Momento della giornata: MATTINA');
+  });
+
+  it('niente "Nome utente:" se il name sembra un email-prefix (cifre/punti)', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(null);
+    vi.mocked(db.user.findUnique).mockResolvedValue(
+      { name: 'egiulio.psi', email: 'egiulio.psi@example.com' } as any,
+    );
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: null,
+      mode: 'morning_checkin',
+      userMessage: '__auto_start__',
+      partOfDay: 'morning',
+    });
+
+    // NB: il PROMPT contiene l'istruzione letterale 'Nome utente: X' per il
+    // modello; qui verifichiamo che NON sia stato iniettato il nome derivato.
+    expect(systemStaticOfFirstCall()).not.toContain('Nome utente: Egiulio');
   });
 });
 
@@ -971,5 +1041,97 @@ describe('buildEveningReviewModeContext — blocco RE_ENTRY (Slice 8c, contratto
       baseTriage, true, [], NOW_MS, '2026-06-08', null,
     );
     expect(out).not.toContain('RE_ENTRY');
+  });
+});
+
+describe('orchestrate: allegati vision (Task 54)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function llmResp(text: string, model = 'mock'): any {
+    return {
+      text,
+      toolCalls: [],
+      stopReason: 'end_turn',
+      model,
+      tokensIn: 0,
+      tokensOut: 0,
+      costUsd: 0,
+      latencyMs: 0,
+    };
+  }
+
+  it('costruisce il turno utente come content-block [image] e persiste il placeholder', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 't-gen', state: 'active', mode: 'general' }),
+    );
+
+    await orchestrate({
+      userId: 'u1',
+      threadId: 't-gen',
+      mode: 'general',
+      userMessage: '',
+      attachments: [{ kind: 'image', mediaType: 'image/jpeg', data: 'AAAA' }],
+    });
+
+    const llmArg = vi.mocked(callLLM).mock.calls[0][0];
+    const lastMsg = llmArg.messages[llmArg.messages.length - 1];
+    expect(lastMsg.role).toBe('user');
+    expect(lastMsg.content).toEqual([
+      { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: 'AAAA' } },
+    ]);
+
+    // Placeholder testo persistito (inline-only, no replay).
+    const userCreate = vi
+      .mocked(db.chatMessage.create)
+      .mock.calls.find(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (c) => (c[0] as any)?.data?.role === 'user',
+      );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((userCreate?.[0] as any).data.content).toBe('[1 allegato]');
+
+    // La guida vision e' nel system dynamic (non cachato).
+    expect((llmArg.systemPrompt as { dynamic?: string }).dynamic).toContain('FLUSSO OBBLIGATORIO');
+  });
+
+  it('escalation Haiku -> Sonnet su [[VISION_ESCALATE]] (D2): seconda call tier smart, marker rimosso', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 't-gen', state: 'active', mode: 'general' }),
+    );
+    vi.mocked(callLLM)
+      .mockResolvedValueOnce(llmResp('[[VISION_ESCALATE]]', 'haiku'))
+      .mockResolvedValueOnce(llmResp('1. Dentista lunedi 10:00', 'sonnet'));
+
+    const result = await orchestrate({
+      userId: 'u1',
+      threadId: 't-gen',
+      mode: 'general',
+      userMessage: '',
+      attachments: [{ kind: 'image', mediaType: 'image/jpeg', data: 'BBBB' }],
+    });
+
+    expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(callLLM).mock.calls[0][0].tier).toBe('fast');
+    expect(vi.mocked(callLLM).mock.calls[1][0].tier).toBe('smart');
+    expect(result.assistantMessage).not.toContain('[[VISION_ESCALATE]]');
+    expect(result.assistantMessage).toContain('Dentista');
+  });
+
+  it('se anche Sonnet non legge: marker rimosso, fallback gentile', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 't-gen', state: 'active', mode: 'general' }),
+    );
+    vi.mocked(callLLM).mockResolvedValue(llmResp('[[VISION_ESCALATE]]'));
+
+    const result = await orchestrate({
+      userId: 'u1',
+      threadId: 't-gen',
+      mode: 'general',
+      userMessage: '',
+      attachments: [{ kind: 'image', mediaType: 'image/jpeg', data: 'CCCC' }],
+    });
+
+    expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(2); // una sola escalation
+    expect(result.assistantMessage).not.toContain('[[VISION_ESCALATE]]');
+    expect(result.assistantMessage).toContain('Non riesco a leggere');
   });
 });

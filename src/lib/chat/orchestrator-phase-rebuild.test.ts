@@ -37,6 +37,8 @@ vi.mock('@/lib/db', () => ({
     },
     adaptiveProfile: { findUnique: vi.fn() },
     userMemory: { findMany: vi.fn() },
+    // Task 47: buildContextAndVoice carica User.name per il saluto col nome.
+    user: { findUnique: vi.fn() },
     settings: { findFirst: vi.fn() },
     task: { findMany: vi.fn() },
     review: { upsert: vi.fn(), findUnique: vi.fn() },
@@ -185,6 +187,8 @@ beforeEach(() => {
   vi.mocked(db.chatMessage.create).mockResolvedValue({ id: 'msg1' } as any);
   vi.mocked(db.adaptiveProfile.findUnique).mockResolvedValue(null);
   vi.mocked(db.userMemory.findMany).mockResolvedValue([]);
+  // Task 47: default senza nome -> saluto generico (resolveFirstName ritorna null).
+  vi.mocked(db.user.findUnique).mockResolvedValue(null);
   vi.mocked(db.settings.findFirst).mockResolvedValue(null);
   vi.mocked(db.task.findMany).mockResolvedValue([TASK_T1]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

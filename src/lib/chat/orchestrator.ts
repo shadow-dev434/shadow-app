@@ -3,8 +3,8 @@
  */
 
 import { db } from '@/lib/db';
-import { callLLM, type LLMMessage, type ToolChoiceParam } from '@/lib/llm/client';
-import { buildSystemPromptParts, buildVoiceProfile } from './prompts';
+import { callLLM, type LLMMessage, type LLMContentBlock, type ToolChoiceParam } from '@/lib/llm/client';
+import { buildSystemPromptParts, buildVoiceProfile, VISION_EXTRACTION_PROMPT } from './prompts';
 import { executeTool, getToolsForMode, type ToolExecutionResult } from './tools';
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses } from '@/lib/types/shadow';
@@ -70,6 +70,18 @@ export type ChatMode =
   | 'evening_review'
   | 'general';
 
+/**
+ * Task 54 (vision): allegato inline base64 nel turno utente corrente. Inline-only
+ * in v1 — non persistito ne' replayato (la history conserva solo un placeholder).
+ */
+export type ChatAttachment =
+  | {
+      kind: 'image';
+      mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+      data: string;
+    }
+  | { kind: 'document'; mediaType: 'application/pdf'; data: string };
+
 export interface OrchestratorInput {
   userId: string;
   threadId: string | null;
@@ -78,7 +90,26 @@ export interface OrchestratorInput {
   relatedTaskId?: string | null;
   /** YYYY-MM-DD, used by evening_review mode for the deadline cutoff in Europe/Rome. */
   clientDate?: string;
+  /**
+   * Task 47: fascia oraria all'apertura (calcolata in Europe/Rome dal bootstrap).
+   * 'morning' = ora < 14:00, 'afternoon' = ora >= 14:00. Usata SOLO per la
+   * formulazione del saluto nel morning_checkin (vedi MORNING_CHECKIN_PROMPT):
+   * mattina -> "Buongiorno", pomeriggio -> "Ciao" + "oggi" invece di "stamattina".
+   * Assente sui turni successivi e fuori dal morning checkin.
+   */
+  partOfDay?: 'morning' | 'afternoon';
+  /** Task 54: allegati inline (immagini/PDF) letti dal modello in QUESTO turno. */
+  attachments?: ChatAttachment[];
 }
+
+/**
+ * Task 51: quick reply. Il ramo body_double porta l'utente in /focus?taskId=…
+ * (deep-link body doubling) invece di re-inviare il valore come messaggio.
+ * Mirror lato client in features/chat/ChatView.tsx.
+ */
+export type QuickReply =
+  | { label: string; value: string }
+  | { label: string; action: 'body_double'; taskId: string };
 
 export interface OrchestratorOutput {
   threadId: string;
@@ -97,7 +128,7 @@ export interface OrchestratorOutput {
     input: Record<string, unknown>;
     result: unknown;
   }>;
-  quickReplies: Array<{ label: string; value: string }>;
+  quickReplies: QuickReply[];
   costUsd: number;
   tokensIn: number;
   tokensOut: number;
@@ -235,7 +266,7 @@ export async function orchestrate(
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: SUMMARY_HARD_CAP,
     }),
-    buildContextAndVoice(input.userId),
+    buildContextAndVoice(input.userId, input.partOfDay),
     summaryEligible ? loadLatestSummary(thread.id) : Promise.resolve(null),
   ]);
   const previousMessages = windowDesc.reverse();
@@ -407,13 +438,42 @@ export async function orchestrate(
     llmMessages[llmMessages.length - 1].cacheControl = true;
   }
 
-  llmMessages.push({ role: 'user', content: input.userMessage });
+  // Task 54 (vision): se il turno ha allegati, il contenuto utente diventa un
+  // array di content-block [image/document..., text?]. Inline-only: gli allegati
+  // viaggiano SOLO in questo turno (non persistiti, non rimessi in history).
+  const hasAttachments = (input.attachments?.length ?? 0) > 0;
+  const trimmedUserMessage = input.userMessage.trim();
+  if (hasAttachments) {
+    const attachmentBlocks: LLMContentBlock[] = input.attachments!.map(a =>
+      a.kind === 'image'
+        ? { type: 'image', source: { type: 'base64', media_type: a.mediaType, data: a.data } }
+        : { type: 'document', source: { type: 'base64', media_type: a.mediaType, data: a.data } },
+    );
+    const content: LLMContentBlock[] = trimmedUserMessage
+      ? [...attachmentBlocks, { type: 'text', text: input.userMessage }]
+      : attachmentBlocks;
+    llmMessages.push({ role: 'user', content });
+  } else {
+    llmMessages.push({ role: 'user', content: input.userMessage });
+  }
+
+  // Persistenza: placeholder testo per gli allegati (inline-only, no replay).
+  const attachmentCount = input.attachments?.length ?? 0;
+  const attachmentPlaceholder =
+    attachmentCount > 0
+      ? `[${attachmentCount} ${attachmentCount > 1 ? 'allegati' : 'allegato'}]`
+      : '';
+  const persistedUserContent = hasAttachments
+    ? trimmedUserMessage
+      ? `${input.userMessage}\n${attachmentPlaceholder}`
+      : attachmentPlaceholder
+    : input.userMessage;
 
   await db.chatMessage.create({
     data: {
       threadId: thread.id,
       role: 'user',
-      content: input.userMessage,
+      content: persistedUserContent,
     },
   });
 
@@ -428,6 +488,15 @@ export async function orchestrate(
   const systemParts = buildSystemPromptParts(mode, userContext, modeContext, voiceProfile);
   const staticPrefix = systemParts.staticPrefix;
   let dynamicSuffix = systemParts.dynamicSuffix;
+
+  // Task 54 (vision): guida di estrazione SOLO nei turni con allegati. Va in
+  // dynamicSuffix (non cachato): non gonfia i turni senza allegati e cambia per
+  // definizione a ogni turno-vision.
+  if (hasAttachments) {
+    dynamicSuffix = dynamicSuffix
+      ? `${dynamicSuffix}\n\n${VISION_EXTRACTION_PROMPT}`
+      : `\n\n${VISION_EXTRACTION_PROMPT}`;
+  }
 
   // Task 40: blocco summary (terzo text block system con cache_control proprio,
   // vedi client.ts). Stabile per tutto il turno — il rebuild mid-loop tocca
@@ -566,6 +635,49 @@ export async function orchestrate(
   totalLatencyMs += currentResponse.latencyMs;
   lastModel = currentResponse.model;
 
+  // ── 6.5. Task 54 — escalation vision Haiku -> Sonnet (decisione D2) ───
+  // Leggendo l'allegato il modello emette [[VISION_ESCALATE]] quando non riesce
+  // a leggerlo. UNA sola escalation: rilanciamo la PRIMA call con tier 'smart'
+  // (i turni con allegati sono general -> tier 'fast' di default). La risposta
+  // vision e' text-only (estrazione/marker), quindi nessun tool loop intermedio.
+  if (
+    hasAttachments &&
+    modelTier === 'fast' &&
+    currentResponse.text.includes('[[VISION_ESCALATE]]')
+  ) {
+    console.warn('[vision] allegato poco leggibile con Haiku -> escalation a Sonnet');
+    currentResponse = await callLLM({
+      tier: 'smart',
+      systemPrompt: {
+        static: staticPrefix,
+        ...(summaryBlock !== undefined && { summary: summaryBlock }),
+        dynamic: dynamicSuffix,
+      },
+      messages: llmMessages,
+      tools: getToolsForMode(mode, currentPhase, triageState ?? undefined),
+      maxTokens: 500,
+      temperature: 0.5,
+    });
+    totalCost += currentResponse.costUsd;
+    totalTokensIn += currentResponse.tokensIn;
+    totalTokensOut += currentResponse.tokensOut;
+    totalLatencyMs += currentResponse.latencyMs;
+    lastModel = currentResponse.model;
+  }
+  // Pulizia marker: se ancora presente (anche Sonnet non legge) sostituiamo con
+  // un fallback gentile, PRIMA del parse output -> il marker non raggiunge mai
+  // l'utente. Innocuo se assente.
+  if (hasAttachments && currentResponse.text.includes('[[VISION_ESCALATE]]')) {
+    const cleaned = currentResponse.text.replace(/\[\[VISION_ESCALATE\]\]/g, '').trim();
+    currentResponse = {
+      ...currentResponse,
+      text:
+        cleaned.length > 0
+          ? cleaned
+          : 'Non riesco a leggere bene questo allegato. Mandamene una versione piu\' nitida, oppure scrivimi tu gli impegni da salvare.',
+    };
+  }
+
   const toolsExecuted: OrchestratorOutput['toolsExecuted'] = [];
   let finalAssistantMessage = currentResponse.text;
   // pendingTriageState !== null is the signal that we're in evening_review
@@ -582,6 +694,10 @@ export async function orchestrate(
     dailyPlanId: string;
     alreadyClosed: boolean;
   } | null = null;
+
+  // Task 51 (D8): catturato dal risultato del tool offer_body_double nel loop;
+  // l'orchestrator garantisce così il taskId prima di emettere la quick-action.
+  let pendingBodyDouble: { taskId: string; label: string } | null = null;
 
   // Anomalia B Blocco 3: traccia la phase all'inizio di ogni iter per rilevare
   // transizione per_entry -> !per_entry (rebuild systemPrompt con preview) o
@@ -672,6 +788,16 @@ export async function orchestrate(
         }),
       );
       toolResults.push(...parallelResults);
+      // Task 51 (D8): cattura il taskId garantito dal tool offer_body_double
+      // (kind sideEffect → identifico per nome). Last-write-wins se chiamato due volte.
+      for (const { toolCall, result } of parallelResults) {
+        if (toolCall.name === 'offer_body_double' && result.success && result.data) {
+          const d = result.data as { taskId?: string; label?: string };
+          if (d.taskId) {
+            pendingBodyDouble = { taskId: d.taskId, label: d.label ?? 'Fallo con Shadow' };
+          }
+        }
+      }
     }
 
     llmMessages.push({
@@ -787,7 +913,7 @@ export async function orchestrate(
   }
 
   // ── 8. Parse [[QR:...]] tag from text ───────────────────────────────
-  const quickReplies: Array<{ label: string; value: string }> = [];
+  const quickReplies: QuickReply[] = [];
   const qrMatch = finalAssistantMessage.match(QR_REGEX);
   if (qrMatch) {
     const rawOptions = qrMatch[1];
@@ -817,6 +943,19 @@ export async function orchestrate(
     finalAssistantMessage = toolsExecuted.length > 0
       ? 'Fatto. Dimmi tu come proseguiamo.'
       : 'Mi sono perso un attimo — puoi ripetere?';
+  }
+
+  // ── 8c. Task 51 (D8): quick-action body doubling ────────────────────
+  // taskId garantito dal tool offer_body_double (capturato nel loop). Va in
+  // coda alle quick replies: il client lo riconosce dal campo `action` e apre
+  // /focus?taskId=… invece di re-inviare un turno. Aggiunto qui (prima del
+  // payloadJson) per parità di persistenza con le quick replies di testo.
+  if (pendingBodyDouble) {
+    quickReplies.push({
+      label: pendingBodyDouble.label,
+      action: 'body_double',
+      taskId: pendingBodyDouble.taskId,
+    });
   }
 
   // ── 9. Atomic commit: assistant message + thread update (lastTurnAt + optional contextJson)
@@ -944,10 +1083,28 @@ export async function orchestrate(
 
 // ── User context builder ──────────────────────────────────────────────────
 
+/**
+ * Task 47: estrae il primo nome "vero" dell'utente per il saluto, con la prima
+ * lettera maiuscola. Ritorna null (-> saluto generico) se il name e' assente o
+ * NON sembra un nome proprio: cifre/punti/underscore/@ sono tipici del fallback
+ * email-prefix che il register usa quando l'utente non dichiara un nome
+ * (register/route.ts: name || email.split('@')[0]). Antonio: "il nome non deve
+ * essere la mail". NB: un nome reale che coincide col prefisso email (giulia /
+ * giulia@...) resta valido — il filtro guarda la forma, non l'uguaglianza.
+ */
+function resolveFirstName(name?: string | null): string | null {
+  const trimmed = (name ?? '').trim();
+  if (!trimmed) return null;
+  const first = trimmed.split(/\s+/)[0];
+  if (!first || /[\d._@]/.test(first)) return null;
+  return first.charAt(0).toUpperCase() + first.slice(1);
+}
+
 async function buildContextAndVoice(
   userId: string,
+  partOfDay?: 'morning' | 'afternoon',
 ): Promise<{ userContext: string; voiceProfile: string }> {
-  const [profile, memories] = await Promise.all([
+  const [profile, memories, user] = await Promise.all([
     db.adaptiveProfile.findUnique({ where: { userId } }).catch(() => null),
     db.userMemory
       .findMany({
@@ -956,9 +1113,29 @@ async function buildContextAndVoice(
         take: 8,
       })
       .catch(() => []),
+    db.user
+      .findUnique({ where: { id: userId }, select: { name: true } })
+      .catch(() => null),
   ]);
 
   const parts: string[] = [];
+
+  // Task 47: nome reale dell'utente per il saluto (vedi resolveFirstName per il
+  // filtro anti email-prefix).
+  const firstName = resolveFirstName(user?.name);
+  if (firstName) {
+    parts.push(`Nome utente: ${firstName} (usalo nel saluto, senza esagerare)`);
+  }
+
+  // Task 47: fascia oraria per la formulazione del saluto nel morning checkin.
+  if (partOfDay === 'afternoon') {
+    parts.push(
+      'Momento della giornata: POMERIGGIO. Saluta con "Ciao", parla di "oggi" ' +
+        '(NON "stamattina"). L\'utente ha gia\' perso parte della giornata.',
+    );
+  } else if (partOfDay === 'morning') {
+    parts.push('Momento della giornata: MATTINA. Saluta con "Buongiorno".');
+  }
 
   if (profile) {
     parts.push(

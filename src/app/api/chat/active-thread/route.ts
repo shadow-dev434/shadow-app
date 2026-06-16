@@ -68,6 +68,7 @@ import { eveningReviewHasPriority } from '@/lib/evening-review/priority';
 import { INACTIVITY_PAUSE_MINUTES } from '@/lib/evening-review/config';
 import { normalizeThreadState } from '@/lib/evening-review/normalize';
 import { computeInactivityGapDays } from '@/lib/evening-review/inactivity-gap';
+import { shouldRollOverThread } from '@/lib/chat/day-rollover';
 
 const MESSAGE_LIMIT = 200;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -193,7 +194,7 @@ export async function GET(req: NextRequest) {
         ],
       },
       orderBy: { lastTurnAt: 'desc' },
-      select: { id: true, mode: true, state: true, lastTurnAt: true, contextJson: true },
+      select: { id: true, mode: true, state: true, startedAt: true, lastTurnAt: true, contextJson: true },
     });
 
     // Lazy archive / state normalization per thread evening_review.
@@ -262,6 +263,29 @@ export async function GET(req: NextRequest) {
       } else {
         console.warn('[active-thread] evening_review thread found but settings missing, skipping normalize');
       }
+    }
+
+    // Task 53 — Rollover a giorno-calendario (ora di Roma). Decisione D3 (BLOCCATA).
+    // Se il candidato e' un thread NON-evening (general / morning_checkin) iniziato
+    // in un giorno-calendario Roma PRECEDENTE, lo archiviamo e cadiamo nel ramo
+    // !thread: una chat pulita ogni giorno. La sidebar storica lo ripresenta
+    // read-only come "chat del GG/MM/AAAA" (GET /api/chat/threads[/[id]]).
+    // shouldRollOverThread esclude gli evening_review (ciclo di vita proprio:
+    // normalize.ts qui sopra + close-review.ts), quindi una review lasciata
+    // aperta a cavallo della mezzanotte NON viene mai archiviata da qui.
+    // Posizione: DOPO il normalize evening-gated e PRIMA della spina 8c. Con
+    // thread=null la 8c si salta (suo guard `thread !== null`), ma e' innocuo:
+    // per i thread non-evening il rollover quotidiano e' un superset del caso 8c
+    // (gap>=3gg => giorno-Roma diverso), quindi la pulizia resta garantita.
+    // Single-writer: archiviamo il SOLO candidato (update mirato, non updateMany),
+    // niente race con la 8c. endedAt:now allineato a normalize / close-review.
+    if (thread !== null && shouldRollOverThread(thread)) {
+      console.warn('[rollover] archived previous-day thread on mount, threadId=' + thread.id);
+      await db.chatThread.update({
+        where: { id: thread.id },
+        data: { state: 'archived', endedAt: now },
+      });
+      thread = null; // cade nel ramo `if (!thread)` -> computeEveningReview / chat vuota.
     }
 
     // Slice 8c — spina di raggiungibilita' del re-entry.

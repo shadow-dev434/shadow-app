@@ -9,8 +9,10 @@
 
 import { NextRequest, NextResponse, after } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
-import { orchestrate, type ChatMode } from '@/lib/chat/orchestrator';
+import { db } from '@/lib/db';
+import { orchestrate, type ChatMode, type ChatAttachment } from '@/lib/chat/orchestrator';
 import { rollSummaryIfNeeded } from '@/lib/chat/summary';
+import { shouldRollOverThread } from '@/lib/chat/day-rollover';
 
 /**
  * Task 40: after() gira DENTRO il budget di durata residuo della stessa
@@ -32,24 +34,93 @@ const VALID_MODES: ChatMode[] = [
   'general',
 ];
 
+// ── Task 54 (vision) — validazione allegati inline ──────────────────────────
+// Inline-only in v1: gli allegati viaggiano base64 NEL body. Limite di fatto:
+// il body delle serverless function Vercel (~4.5MB) -> cap totale conservativo,
+// non i 32MB "ideali" della spec (servirebbe un upload diretto a blob, non v1).
+// Il client ridimensiona le immagini, quindi questi cap colpiscono solo i casi
+// estremi (PDF grossi / molte immagini).
+const MAX_ATTACHMENTS = 4;
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as const;
+const MAX_ITEM_BYTES = 4 * 1024 * 1024; // 4MB per allegato
+const MAX_TOTAL_BYTES = Math.floor(4.5 * 1024 * 1024); // safety body Vercel
+
+function approxBase64Bytes(s: string): number {
+  return Math.floor((s.length * 3) / 4);
+}
+
+type AttachmentValidation =
+  | { attachments: ChatAttachment[]; error?: undefined }
+  | { attachments?: undefined; error: string };
+
+function validateAttachments(raw: unknown): AttachmentValidation {
+  if (raw === undefined || raw === null) return { attachments: [] };
+  if (!Array.isArray(raw)) return { error: 'attachments must be an array' };
+  if (raw.length === 0) return { attachments: [] };
+  if (raw.length > MAX_ATTACHMENTS) {
+    return { error: `too many attachments (max ${MAX_ATTACHMENTS})` };
+  }
+
+  const out: ChatAttachment[] = [];
+  let total = 0;
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) return { error: 'invalid attachment' };
+    const { kind, mediaType, data } = item as {
+      kind?: unknown;
+      mediaType?: unknown;
+      data?: unknown;
+    };
+    if (typeof data !== 'string' || data.length === 0) return { error: 'attachment data missing' };
+    const bytes = approxBase64Bytes(data);
+    if (bytes > MAX_ITEM_BYTES) return { error: 'attachment too large (max 4MB)' };
+    total += bytes;
+    if (total > MAX_TOTAL_BYTES) return { error: 'attachments total too large' };
+
+    if (
+      kind === 'image' &&
+      typeof mediaType === 'string' &&
+      (IMAGE_TYPES as readonly string[]).includes(mediaType)
+    ) {
+      out.push({ kind: 'image', mediaType: mediaType as (typeof IMAGE_TYPES)[number], data });
+    } else if (kind === 'document' && mediaType === 'application/pdf') {
+      out.push({ kind: 'document', mediaType: 'application/pdf', data });
+    } else {
+      return { error: 'unsupported attachment type' };
+    }
+  }
+  return { attachments: out };
+}
+
 export async function POST(req: NextRequest) {
   const { error, userId } = await requireSession(req);
   if (error) return error;
 
   try {
     const body = await req.json();
-    const { threadId, mode, userMessage, relatedTaskId, clientDate } = body as {
+    const { threadId, mode, userMessage, relatedTaskId, clientDate, attachments } = body as {
       threadId?: string;
       mode?: string;
       userMessage?: string;
       relatedTaskId?: string;
       clientDate?: string;
+      attachments?: unknown;
     };
 
-    if (!userMessage || typeof userMessage !== 'string' || !userMessage.trim()) {
-      return NextResponse.json({ error: 'userMessage is required' }, { status: 400 });
+    // Task 54: valida gli allegati. Errore -> 400 con messaggio.
+    const attResult = validateAttachments(attachments);
+    if (attResult.error) {
+      return NextResponse.json({ error: attResult.error }, { status: 400 });
     }
-    if (userMessage.length > 4000) {
+    const validAttachments = attResult.attachments ?? [];
+    const hasAttachments = validAttachments.length > 0;
+
+    // Task 54: userMessage obbligatorio SOLO se non ci sono allegati (consenti
+    // l'invio con solo allegato).
+    const trimmedMessage = typeof userMessage === 'string' ? userMessage.trim() : '';
+    if (!trimmedMessage && !hasAttachments) {
+      return NextResponse.json({ error: 'userMessage or attachment is required' }, { status: 400 });
+    }
+    if (typeof userMessage === 'string' && userMessage.length > 4000) {
       return NextResponse.json({ error: 'userMessage too long' }, { status: 400 });
     }
 
@@ -67,13 +138,46 @@ export async function POST(req: NextRequest) {
         ? clientDate
         : undefined;
 
+    // Task 53 — Rollover a giorno-calendario sul turno (decisione D3, BLOCCATA).
+    // Copre la tab lasciata aperta a cavallo della mezzanotte (ora di Roma) SENZA
+    // remount: senza questo, il turno post-mezzanotte finirebbe sul thread di
+    // ieri. Se il thread inviato dal client e' non-terminale, non-evening e
+    // iniziato in un giorno-Roma precedente, lo archiviamo e ripartiamo da zero
+    // (threadId=null -> l'orchestrator crea un thread 'general' pulito riusando il
+    // suo path di create, cosi' non tocchiamo orchestrator.ts). evening_review
+    // escluso da shouldRollOverThread: la review serale ha ciclo di vita proprio.
+    // Decisione di rollover SERVER-side (Rome), non dal clientDate (skew-proof).
+    let effectiveThreadId: string | null = threadId ?? null;
+    let effectiveMode: ChatMode = chatMode;
+    if (effectiveThreadId) {
+      const existing = await db.chatThread.findFirst({
+        where: { id: effectiveThreadId, userId },
+        select: { id: true, startedAt: true, mode: true, state: true },
+      });
+      if (
+        existing &&
+        existing.state !== 'completed' &&
+        existing.state !== 'archived' &&
+        shouldRollOverThread(existing)
+      ) {
+        console.warn('[rollover] archived previous-day thread on turn, threadId=' + existing.id);
+        await db.chatThread.update({
+          where: { id: existing.id },
+          data: { state: 'archived', endedAt: new Date() },
+        });
+        effectiveThreadId = null;
+        effectiveMode = 'general';
+      }
+    }
+
     const result = await orchestrate({
       userId,
-      threadId: threadId ?? null,
-      mode: chatMode,
-      userMessage: userMessage.trim(),
+      threadId: effectiveThreadId,
+      mode: effectiveMode,
+      userMessage: trimmedMessage,
       relatedTaskId: relatedTaskId ?? null,
       clientDate: validClientDate,
+      attachments: hasAttachments ? validAttachments : undefined,
     });
 
     // Task 40: fold del rolling summary DOPO la risposta (0ms percepiti).
