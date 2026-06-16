@@ -9,8 +9,10 @@
 
 import { NextRequest, NextResponse, after } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
+import { db } from '@/lib/db';
 import { orchestrate, type ChatMode } from '@/lib/chat/orchestrator';
 import { rollSummaryIfNeeded } from '@/lib/chat/summary';
+import { shouldRollOverThread } from '@/lib/chat/day-rollover';
 
 /**
  * Task 40: after() gira DENTRO il budget di durata residuo della stessa
@@ -67,10 +69,42 @@ export async function POST(req: NextRequest) {
         ? clientDate
         : undefined;
 
+    // Task 53 — Rollover a giorno-calendario sul turno (decisione D3, BLOCCATA).
+    // Copre la tab lasciata aperta a cavallo della mezzanotte (ora di Roma) SENZA
+    // remount: senza questo, il turno post-mezzanotte finirebbe sul thread di
+    // ieri. Se il thread inviato dal client e' non-terminale, non-evening e
+    // iniziato in un giorno-Roma precedente, lo archiviamo e ripartiamo da zero
+    // (threadId=null -> l'orchestrator crea un thread 'general' pulito riusando il
+    // suo path di create, cosi' non tocchiamo orchestrator.ts). evening_review
+    // escluso da shouldRollOverThread: la review serale ha ciclo di vita proprio.
+    // Decisione di rollover SERVER-side (Rome), non dal clientDate (skew-proof).
+    let effectiveThreadId: string | null = threadId ?? null;
+    let effectiveMode: ChatMode = chatMode;
+    if (effectiveThreadId) {
+      const existing = await db.chatThread.findFirst({
+        where: { id: effectiveThreadId, userId },
+        select: { id: true, startedAt: true, mode: true, state: true },
+      });
+      if (
+        existing &&
+        existing.state !== 'completed' &&
+        existing.state !== 'archived' &&
+        shouldRollOverThread(existing)
+      ) {
+        console.warn('[rollover] archived previous-day thread on turn, threadId=' + existing.id);
+        await db.chatThread.update({
+          where: { id: existing.id },
+          data: { state: 'archived', endedAt: new Date() },
+        });
+        effectiveThreadId = null;
+        effectiveMode = 'general';
+      }
+    }
+
     const result = await orchestrate({
       userId,
-      threadId: threadId ?? null,
-      mode: chatMode,
+      threadId: effectiveThreadId,
+      mode: effectiveMode,
       userMessage: userMessage.trim(),
       relatedTaskId: relatedTaskId ?? null,
       clientDate: validClientDate,

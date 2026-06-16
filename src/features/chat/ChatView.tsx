@@ -2,9 +2,19 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, Info, List, Pencil, Send, Loader2, CheckCircle2 } from 'lucide-react';
+import { Archive, Info, List, Pencil, Send, Loader2, CheckCircle2, History, ArrowLeft, Lock, MessageSquare } from 'lucide-react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { BetaCheckin } from '@/features/beta/BetaCheckinCard';
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarInset,
+  SidebarHeader,
+  SidebarContent,
+  SidebarMenu,
+  SidebarMenuItem,
+  useSidebar,
+} from '@/components/ui/sidebar';
 
 interface QuickReply {
   label: string;
@@ -65,6 +75,29 @@ interface ActiveThreadResponse {
   };
 }
 
+// Task 53 — voce della sidebar storica (GET /api/chat/threads).
+interface ThreadSummary {
+  id: string;
+  mode: string;
+  state: string;
+  label: string;
+  isActive: boolean;
+  startedAt: string;
+  lastTurnAt: string;
+  messageCount: number;
+}
+
+// Task 53 — metadati di un thread aperto in sola lettura (GET /api/chat/threads/[id]).
+interface ArchivedThreadMeta {
+  id: string;
+  mode: string;
+  state: string;
+  label: string;
+  isActive: boolean;
+  startedAt: string;
+  lastTurnAt: string;
+}
+
 const SUGGESTED_PROMPTS = [
   { label: 'Pianifichiamo oggi', prompt: 'Aiutami a pianificare la giornata. Cosa devo priorizzare?' },
   { label: 'Ho un task nuovo', prompt: 'Devo aggiungere qualcosa alla lista: ' },
@@ -83,6 +116,12 @@ export function ChatView() {
   const [error, setError] = useState<{ message: string; status?: number } | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [eveningReviewShouldStart, setEveningReviewShouldStart] = useState(false);
+
+  // Task 53 — storico chat (sidebar) + vista archiviata read-only.
+  const [threads, setThreads] = useState<ThreadSummary[] | null>(null);
+  const [threadsLoading, setThreadsLoading] = useState(false);
+  const [viewing, setViewing] = useState<{ meta: ArchivedThreadMeta; messages: Message[] } | null>(null);
+  const [viewingLoading, setViewingLoading] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -225,7 +264,9 @@ export function ChatView() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, sending]);
+    // `viewing` in deps: tornando alla chat di oggi (viewing -> null) il div
+    // live si rimonta, qui riportiamo lo scroll in fondo.
+  }, [messages, sending, viewing]);
 
   useEffect(() => {
     if (inputRef.current) {
@@ -347,10 +388,77 @@ export function ChatView() {
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
+  // Task 53 — carica la lista dei thread (lazy, all'apertura della sidebar).
+  const loadThreads = useCallback(async () => {
+    setThreadsLoading(true);
+    try {
+      const res = await fetch('/api/chat/threads');
+      if (res.ok) {
+        const data = (await res.json()) as { threads: ThreadSummary[] };
+        setThreads(data.threads);
+      } else {
+        console.warn('[ChatView] threads fetch failed:', res.status);
+      }
+    } catch (err) {
+      console.error('[ChatView] threads error:', err);
+    } finally {
+      setThreadsLoading(false);
+    }
+  }, []);
+
+  // Task 53 — apre un giorno passato in sola lettura (GET /api/chat/threads/[id]).
+  // Mostra subito l'header con la label (dal summary), poi popola i messaggi.
+  const openArchivedThread = useCallback(async (t: ThreadSummary) => {
+    setViewing({
+      meta: {
+        id: t.id, mode: t.mode, state: t.state, label: t.label,
+        isActive: t.isActive, startedAt: t.startedAt, lastTurnAt: t.lastTurnAt,
+      },
+      messages: [],
+    });
+    setViewingLoading(true);
+    try {
+      const res = await fetch(`/api/chat/threads/${encodeURIComponent(t.id)}`);
+      if (res.ok) {
+        const data = (await res.json()) as { thread: ArchivedThreadMeta; messages: ActiveThreadMessage[] };
+        setViewing({
+          meta: data.thread,
+          messages: data.messages.map(m => ({
+            id: m.id, role: m.role, content: m.content, createdAt: m.createdAt,
+          })),
+        });
+      } else {
+        console.warn('[ChatView] archived thread fetch failed:', res.status);
+      }
+    } catch (err) {
+      console.error('[ChatView] archived thread error:', err);
+    } finally {
+      setViewingLoading(false);
+    }
+  }, []);
+
+  // Task 53 — torna alla chat di oggi (esce dalla vista read-only).
+  const backToToday = useCallback(() => setViewing(null), []);
+
+  const handleSelectThread = useCallback((t: ThreadSummary) => {
+    // Il thread attivo di oggi riapre la chat live; gli altri sono read-only.
+    if (t.isActive) backToToday();
+    else openArchivedThread(t);
+  }, [backToToday, openArchivedThread]);
+
   return (
-    <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100">
+    <SidebarProvider defaultOpen={false}>
+      <ChatHistorySidebar
+        threads={threads}
+        loading={threadsLoading}
+        viewingId={viewing?.meta.id ?? null}
+        onSelect={handleSelectThread}
+        onRequestLoad={loadThreads}
+      />
+      <SidebarInset className="flex flex-col h-screen bg-zinc-950 text-zinc-100 min-w-0">
       <header className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800 bg-zinc-900/50 backdrop-blur flex-shrink-0">
-        <div className="flex-1">
+        <HistoryToggleButton />
+        <div className="flex-1 min-w-0">
           <h1 className="text-base font-semibold">Shadow</h1>
           <p className="text-xs text-zinc-500">Sempre qui</p>
         </div>
@@ -365,6 +473,15 @@ export function ChatView() {
         </button>
       </header>
 
+      {viewing ? (
+        <ArchivedThreadView
+          meta={viewing.meta}
+          messages={viewing.messages}
+          loading={viewingLoading}
+          onBack={backToToday}
+        />
+      ) : (
+      <>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
         {messages.length === 0 && !sending && !bootstrapping && (
           eveningReviewShouldStart
@@ -474,7 +591,10 @@ export function ChatView() {
           {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
         </button>
       </form>
-    </div>
+      </>
+      )}
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 
@@ -732,4 +852,159 @@ function ToolExecutionCard({ tool }: { tool: ToolExecution }) {
   }
 
   return null;
+}
+
+// ─── Task 53 — Storico chat (sidebar a scomparsa) ─────────────────────────────
+
+// Toggle nello header. Usa useSidebar() (gestisce desktop offcanvas + Sheet
+// mobile con un solo handler). Vive dentro SidebarProvider.
+function HistoryToggleButton() {
+  const { toggleSidebar } = useSidebar();
+  return (
+    <button
+      onClick={toggleSidebar}
+      className="-ml-1 p-2 rounded-full hover:bg-zinc-800 active:bg-zinc-700 transition-colors text-zinc-400 hover:text-zinc-200"
+      aria-label="Storico chat"
+      title="Storico chat"
+    >
+      <History size={20} />
+    </button>
+  );
+}
+
+// Sidebar a scomparsa con la lista dei giorni (shadcn ui/sidebar, non
+// modificato — solo composizione). "Oggi" riapre la chat live; i giorni passati
+// si aprono read-only. Carica/aggiorna la lista a ogni apertura.
+function ChatHistorySidebar({
+  threads,
+  loading,
+  viewingId,
+  onSelect,
+  onRequestLoad,
+}: {
+  threads: ThreadSummary[] | null;
+  loading: boolean;
+  viewingId: string | null;
+  onSelect: (t: ThreadSummary) => void;
+  onRequestLoad: () => void;
+}) {
+  const { open, openMobile, isMobile, setOpen, setOpenMobile } = useSidebar();
+  const isOpen = isMobile ? openMobile : open;
+  const wasOpen = useRef(false);
+
+  useEffect(() => {
+    // Fetch a ogni transizione chiuso -> aperto (i conteggi cambiano col tempo).
+    if (isOpen && !wasOpen.current) onRequestLoad();
+    wasOpen.current = isOpen;
+  }, [isOpen, onRequestLoad]);
+
+  const closeSidebar = useCallback(() => {
+    if (isMobile) setOpenMobile(false);
+    else setOpen(false);
+  }, [isMobile, setOpen, setOpenMobile]);
+
+  return (
+    <Sidebar side="left" collapsible="offcanvas" className="border-zinc-800">
+      <SidebarHeader className="gap-1 border-b border-zinc-800 px-4 py-3">
+        <h2 className="text-sm font-semibold text-zinc-100">Le tue chat</h2>
+        <p className="text-xs text-zinc-500 leading-snug">
+          Una chat al giorno. I giorni passati sono in sola lettura.
+        </p>
+      </SidebarHeader>
+      <SidebarContent className="px-2 py-2">
+        {loading && (!threads || threads.length === 0) ? (
+          <div className="flex items-center justify-center py-10 text-sm text-zinc-500">
+            <Loader2 size={15} className="mr-2 animate-spin" /> Carico...
+          </div>
+        ) : !threads || threads.length === 0 ? (
+          <div className="px-3 py-10 text-center text-sm text-zinc-500">
+            Nessuna chat ancora. Scrivimi qualcosa per iniziare.
+          </div>
+        ) : (
+          <SidebarMenu>
+            {threads.map((t) => {
+              const active = t.isActive ? viewingId === null : t.id === viewingId;
+              return (
+                <SidebarMenuItem key={t.id}>
+                  <button
+                    onClick={() => {
+                      onSelect(t);
+                      closeSidebar();
+                    }}
+                    className={
+                      'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors ' +
+                      (active
+                        ? 'bg-zinc-800 text-zinc-100'
+                        : 'text-zinc-300 hover:bg-zinc-800/60')
+                    }
+                  >
+                    {t.isActive ? (
+                      <MessageSquare size={15} className="flex-shrink-0 text-amber-400" />
+                    ) : (
+                      <History size={15} className="flex-shrink-0 text-zinc-500" />
+                    )}
+                    <span className="flex min-w-0 flex-col">
+                      <span className="truncate text-sm">{t.label}</span>
+                      <span className="truncate text-[11px] text-zinc-500">
+                        {t.messageCount} messaggi{t.isActive ? ' · in corso' : ''}
+                      </span>
+                    </span>
+                  </button>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        )}
+      </SidebarContent>
+    </Sidebar>
+  );
+}
+
+// Vista di un giorno passato: sola lettura, niente composer. Banner con la label
+// datata + "Torna a oggi". Riusa MessageBubble.
+function ArchivedThreadView({
+  meta,
+  messages,
+  loading,
+  onBack,
+}: {
+  meta: ArchivedThreadMeta;
+  messages: Message[];
+  loading: boolean;
+  onBack: () => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [meta.id]);
+
+  return (
+    <>
+      <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-amber-900/30 bg-amber-950/20 flex-shrink-0">
+        <Lock size={14} className="flex-shrink-0 text-amber-300/80" />
+        <p className="flex-1 truncate text-sm text-amber-100">{meta.label} · sola lettura</p>
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white text-sm font-medium transition-colors flex-shrink-0"
+        >
+          <ArrowLeft size={15} /> Torna a oggi
+        </button>
+      </div>
+
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+        {loading ? (
+          <div className="flex items-center justify-center py-20 text-sm text-zinc-500">
+            <Loader2 size={16} className="mr-2 animate-spin" /> Carico la chat...
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="py-20 text-center text-sm text-zinc-500">
+            Nessun messaggio in questa chat.
+          </div>
+        ) : (
+          messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
+        )}
+      </div>
+    </>
+  );
 }

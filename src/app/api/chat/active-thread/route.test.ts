@@ -52,6 +52,10 @@ const MAIN_THREAD = {
   id: 't1',
   mode: 'general',
   state: 'active',
+  // Task 53: la GET ora seleziona startedAt per il rollover giorno-calendario.
+  // startedAt = oggi -> nessun rollover, il thread general attivo sopravvive
+  // (e' proprio il caso testato qui: review raggiungibile col thread attivo).
+  startedAt: NOW,
   lastTurnAt: NOW,
   contextJson: null,
 };
