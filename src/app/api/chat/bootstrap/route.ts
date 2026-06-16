@@ -12,7 +12,7 @@ import { db } from '@/lib/db';
 import { orchestrate } from '@/lib/chat/orchestrator';
 import { isInsideEveningWindow } from '@/lib/evening-review/window';
 import { eveningReviewHasPriority } from '@/lib/evening-review/priority';
-import { formatTodayInRome, formatDateInRome } from '@/lib/evening-review/dates';
+import { formatTodayInRome, formatDateInRome, nowHHMMInRome } from '@/lib/evening-review/dates';
 
 export async function POST(req: NextRequest) {
   const { error, userId } = await requireSession(req);
@@ -185,29 +185,8 @@ async function shouldTriggerMorningCheckin(
   return { trigger: true, partOfDay };
 }
 
-/** Ora corrente (0-23) in Europe/Rome, derivata da nowHHMMInRome. */
+/** Ora corrente (0-23) in Europe/Rome, derivata da nowHHMMInRome (lib/dates). */
 function nowHourInRome(): number {
   return parseInt(nowHHMMInRome().split(':')[0], 10);
-}
-
-/**
- * Helper locali di formattazione tempo/data nel timezone Europe/Rome.
- * Forma robusta via formatToParts (pattern simile a formatDateInZone in
- * triage.ts) per garantire formato HH:MM e YYYY-MM-DD validi rispetto ai
- * regex TIME_PATTERN/DATE_PATTERN dei consumer (vedi window.ts e
- * active-thread/route.ts).
- *
- */
-function nowHHMMInRome(): string {
-  const fmt = new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Europe/Rome',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-  const parts = Object.fromEntries(
-    fmt.formatToParts(new Date()).map((p) => [p.type, p.value]),
-  );
-  return `${parts.hour}:${parts.minute}`;
 }
 

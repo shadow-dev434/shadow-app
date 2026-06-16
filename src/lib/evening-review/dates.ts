@@ -179,3 +179,25 @@ export function formatDateInRome(date: Date): string {
 export function formatTodayInRome(): string {
   return formatDateInRome(new Date());
 }
+
+/**
+ * Ora corrente "HH:MM" (24h) in Europe/Rome. Forma robusta via formatToParts per
+ * garantire il formato accettato da TIME_PATTERN dei consumer (window.ts,
+ * active-thread, compute-signal). Impuro per costruzione (legge il clock).
+ *
+ * Casa canonica dell'helper: prima viveva locale in chat/bootstrap/route.ts
+ * (che ora lo importa da qui). Use case aggiuntivo: il cron della review serale
+ * (Task 58) deve calcolare l'ora Rome server-side per tutti gli utenti.
+ */
+export function nowHHMMInRome(): string {
+  const fmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Rome',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = Object.fromEntries(
+    fmt.formatToParts(new Date()).map((p) => [p.type, p.value]),
+  );
+  return `${parts.hour}:${parts.minute}`;
+}
