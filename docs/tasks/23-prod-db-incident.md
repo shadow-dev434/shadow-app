@@ -4,6 +4,9 @@
 > Questo documento è il verbale dell'incidente + raccomandazioni. Nessuna
 > modifica a codice o pipeline è stata applicata da questo task (solo proposte,
 > vedi §Raccomandazioni).
+>
+> **Aggiornamento 2026-06-12**: dopo una **recidiva di drift** (v. Cronologia),
+> la raccomandazione 2 è stata applicata in pipeline — vedi §Raccomandazioni.
 
 ---
 
@@ -23,6 +26,7 @@ tocca Prisma: il DB puntato dalla produzione non aveva **nessuna tabella**.
 | 2026-06-10 | Scoperta durante la preparazione beta. Diagnosi: `prisma migrate diff` contro il DB di produzione restituisce l'intero script create-everything; `migrate status` = 3 migration pending, nessuna applicata. |
 | 2026-06-10 | Primo tentativo di fix: un `migrate deploy` riesce ma su **bersaglio sbagliato** — la connection string era stata presa dal widget "Connect" del dashboard Neon, che era posizionato su un altro progetto/database. Il DB di produzione resta vuoto. |
 | 2026-06-11 | Fix definitivo: `migrate deploy` mirato sull'host di produzione verificato con gate read-only preliminari (vedi §Verifiche). Probe end-to-end di registrazione → **200**. Incidente chiuso. |
+| 2026-06-12 | **Recidiva, stessa causa di processo**: il merge di Shadow v3 W1 arriva in produzione con una migration nuova non applicata al DB di prod → route Prisma in errore. Fix manuale: `migrate deploy` mirato su `purple-paper`, endpoint e login tornati 200. In giornata viene applicata la raccomandazione 2 (migrate automatico in pipeline, gate `VERCEL_ENV=production`). |
 
 ## Causa
 
@@ -90,22 +94,38 @@ con `connectionString` esplicita, per cui `directUrl` è irrilevante anche lì.
    Non urgente per il runtime (vedi sopra), ma prerequisito della
    raccomandazione 2 e rete di sicurezza per qualunque comando CLI Prisma
    eseguito contro la produzione.
+   *Aggiornamento 2026-06-12*: non più bloccante — lo script della racc. 2
+   deriva la URL diretta quando `DIRECT_URL` manca. Resta consigliata come
+   configurazione esplicita (in carico ad Antonio).
 
-2. **`prisma migrate deploy` nella pipeline di deploy** — PROPOSTA, **non
-   applicata**. Diff su `package.json`:
+2. **`prisma migrate deploy` nella pipeline di deploy** — ✅ **APPLICATA il
+   2026-06-12** (branch `feature/23-migrate-on-deploy`), dopo la recidiva di
+   pari data, nella variante "chirurgica" già indicata dal caveat: script
+   wrapper `scripts/migrate-on-deploy.ts` agganciato allo script `build` di
+   `package.json`, prima di `next build`:
 
    ```diff
    -    "build": "prisma generate && next build && cp -R .next/static .next/standalone/.next/ && cp -R public .next/standalone/",
-   +    "build": "prisma generate && prisma migrate deploy && next build && cp -R .next/static .next/standalone/.next/ && cp -R public .next/standalone/",
+   +    "build": "prisma generate && bun scripts/migrate-on-deploy.ts && next build && cp -R .next/static .next/standalone/.next/ && cp -R public .next/standalone/",
    ```
 
-   Caveat da decidere con Antonio prima di applicare:
-   - richiede `DIRECT_URL` (e `DATABASE_URL`) nelle env Vercel del relativo
-     ambiente — senza, il build fallisce;
-   - su Vercel lo stesso script `build` gira anche per i **preview deploy**:
-     così com'è applicherebbe le migration al DB puntato dalle env Preview.
-     Alternativa più chirurgica: script wrapper che esegue `migrate deploy`
-     solo se `VERCEL_ENV=production`.
+   Comportamento dello script:
+   - esegue `prisma migrate deploy` **solo** se `VERCEL_ENV === "production"`;
+     build locali, preview e development sono no-op. I preview condividono la
+     `DATABASE_URL` di produzione, quindi il gate non protegge il database (è
+     lo stesso): garantisce che a migrare sia **solo il codice di `main`**,
+     mai un branch non mergiato;
+   - se `DIRECT_URL` manca nelle env (racc. 1), la deriva da `DATABASE_URL`
+     rimuovendo `-pooler` dall'host Neon (stesso pattern del fix manuale);
+   - se `migrate deploy` fallisce, **il build fallisce** → meglio nessun
+     deploy che codice nuovo su schema vecchio;
+   - non logga mai le connection string.
+
+   Probe: `scripts/e2e/probe-migrate-on-deploy.ts` (gate, derivazione,
+   precedenza della `DIRECT_URL` esplicita, propagazione del fallimento —
+   tutto su URL fittizie irraggiungibili, nessun DB reale toccato). Il
+   success path si verifica al primo deploy di produzione: cercare
+   `[migrate-on-deploy]` nel build log Vercel.
 
 3. **Consolidare i progetti Vercel/Neon.** I nomi attuali
    ("shadow-production" vs "shadow" / "shadow production") sono una trappola:
