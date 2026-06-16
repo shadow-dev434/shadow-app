@@ -88,6 +88,15 @@ export interface OrchestratorInput {
   partOfDay?: 'morning' | 'afternoon';
 }
 
+/**
+ * Task 51: quick reply. Il ramo body_double porta l'utente in /focus?taskId=…
+ * (deep-link body doubling) invece di re-inviare il valore come messaggio.
+ * Mirror lato client in features/chat/ChatView.tsx.
+ */
+export type QuickReply =
+  | { label: string; value: string }
+  | { label: string; action: 'body_double'; taskId: string };
+
 export interface OrchestratorOutput {
   threadId: string;
   /**
@@ -105,7 +114,7 @@ export interface OrchestratorOutput {
     input: Record<string, unknown>;
     result: unknown;
   }>;
-  quickReplies: Array<{ label: string; value: string }>;
+  quickReplies: QuickReply[];
   costUsd: number;
   tokensIn: number;
   tokensOut: number;
@@ -591,6 +600,10 @@ export async function orchestrate(
     alreadyClosed: boolean;
   } | null = null;
 
+  // Task 51 (D8): catturato dal risultato del tool offer_body_double nel loop;
+  // l'orchestrator garantisce così il taskId prima di emettere la quick-action.
+  let pendingBodyDouble: { taskId: string; label: string } | null = null;
+
   // Anomalia B Blocco 3: traccia la phase all'inizio di ogni iter per rilevare
   // transizione per_entry -> !per_entry (rebuild systemPrompt con preview) o
   // !closing -> closing senza passare da per_entry (append PHASE_MARKER puro).
@@ -680,6 +693,16 @@ export async function orchestrate(
         }),
       );
       toolResults.push(...parallelResults);
+      // Task 51 (D8): cattura il taskId garantito dal tool offer_body_double
+      // (kind sideEffect → identifico per nome). Last-write-wins se chiamato due volte.
+      for (const { toolCall, result } of parallelResults) {
+        if (toolCall.name === 'offer_body_double' && result.success && result.data) {
+          const d = result.data as { taskId?: string; label?: string };
+          if (d.taskId) {
+            pendingBodyDouble = { taskId: d.taskId, label: d.label ?? 'Fallo con Shadow' };
+          }
+        }
+      }
     }
 
     llmMessages.push({
@@ -795,7 +818,7 @@ export async function orchestrate(
   }
 
   // ── 8. Parse [[QR:...]] tag from text ───────────────────────────────
-  const quickReplies: Array<{ label: string; value: string }> = [];
+  const quickReplies: QuickReply[] = [];
   const qrMatch = finalAssistantMessage.match(QR_REGEX);
   if (qrMatch) {
     const rawOptions = qrMatch[1];
@@ -825,6 +848,19 @@ export async function orchestrate(
     finalAssistantMessage = toolsExecuted.length > 0
       ? 'Fatto. Dimmi tu come proseguiamo.'
       : 'Mi sono perso un attimo — puoi ripetere?';
+  }
+
+  // ── 8c. Task 51 (D8): quick-action body doubling ────────────────────
+  // taskId garantito dal tool offer_body_double (capturato nel loop). Va in
+  // coda alle quick replies: il client lo riconosce dal campo `action` e apre
+  // /focus?taskId=… invece di re-inviare un turno. Aggiunto qui (prima del
+  // payloadJson) per parità di persistenza con le quick replies di testo.
+  if (pendingBodyDouble) {
+    quickReplies.push({
+      label: pendingBodyDouble.label,
+      action: 'body_double',
+      taskId: pendingBodyDouble.taskId,
+    });
   }
 
   // ── 9. Atomic commit: assistant message + thread update (lastTurnAt + optional contextJson)

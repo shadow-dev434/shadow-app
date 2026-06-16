@@ -279,6 +279,39 @@ export const RECURRENCE_TOOLS: LLMTool[] = [
 ];
 
 /**
+ * Task 51 (D8) — Body doubling dalla chat. Esposto fuori da evening_review (vedi
+ * getToolsForMode). offer_body_double garantisce un taskId (esistente o creato
+ * al volo) e segnala all'orchestrator di mostrare una quick-action che apre
+ * /focus?taskId=… (sessione di lavoro accompagnata). Niente avvio sessione qui:
+ * il deep-link atterra sul setup. Cfr. orchestrator.ts (capture per nome tool)
+ * + prompts.ts (quando offrirlo).
+ */
+export const BODY_DOUBLE_TOOLS: LLMTool[] = [
+  {
+    name: 'offer_body_double',
+    description:
+      "Offre all'utente di lavorare in body doubling (sessione Focus con Shadow presente, avatar + timer) su un task. Chiamalo quando l'utente sta per METTERSI AL LAVORO su una cosa concreta e una compagnia/avvio guidato aiuterebbe a partire. taskId = id del task da fare (da get_today_tasks o create_task): è la via preferita. Se la cosa NON è ancora in lista, passa invece 'title' e verrà creato al volo. Dopo la chiamata l'app mostra un bottone che apre la sessione: scrivi comunque una frase che invita a iniziare insieme.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        taskId: {
+          type: 'string',
+          description: 'ID del task esistente su cui fare body doubling (da get_today_tasks/create_task). Via preferita.',
+        },
+        title: {
+          type: 'string',
+          description: 'Solo se manca taskId: titolo del task da creare al volo per la sessione.',
+        },
+        label: {
+          type: 'string',
+          description: "Opzionale: etichetta del bottone (breve, default 'Fallo con Shadow').",
+        },
+      },
+    },
+  },
+];
+
+/**
  * Task 44 — commit del piano di OGGI dalla chat (morning check-in / planning).
  * Esposto SOLO in quelle modalità (vedi getToolsForMode): fissa "Le 3 cose di
  * oggi" + il resto della giornata dopo che l'utente ha confermato, persistendo
@@ -505,6 +538,13 @@ export function getToolsForMode(
       // Task 48: ricalibrazione sul tempo disponibile, solo in pianificazione.
       tools.push(FIT_TODAY_PLAN_TOOL);
     }
+    // Task 51 (D8): body doubling offerto dove l'utente "sta per mettersi al
+    // lavoro" — chat libera, pianificazione, focus_companion. Fuori da
+    // morning_checkin (prompt di Sessione A) e evening_review (flusso chiuso).
+    // Inerte finché prompts.ts non istruisce il modello a chiamarlo.
+    if (mode === 'general' || mode === 'planning' || mode === 'focus_companion') {
+      tools.push(...BODY_DOUBLE_TOOLS);
+    }
     return tools;
   }
 
@@ -689,6 +729,8 @@ export async function executeTool(
         return await executeSetTaskRecurrence(input, userId);
       case 'stop_task_recurrence':
         return await executeStopTaskRecurrence(input, userId);
+      case 'offer_body_double':
+        return await executeOfferBodyDouble(input, userId);
       case 'record_mood':
         return executeRecordMood(input, context);
       case 'record_energy':
@@ -885,6 +927,62 @@ async function executeStopTaskRecurrence(
       templateId: result.templateId,
       note: `Ricorrenza fermata per "${result.title}". Le istanze già in lista restano; non se ne creeranno di nuove. Conferma all'utente.`,
     },
+  };
+}
+
+/**
+ * Task 51 (D8) — body doubling dalla chat. Garantisce un taskId prima di offrire
+ * la quick-action: risolve un task esistente (ownership + stato non terminale)
+ * oppure, se manca, lo crea al volo via executeCreateTask. Ritorna
+ * { taskId, title, label } in data; l'orchestrator legge il risultato per nome
+ * tool e costruisce la quick reply verso /focus?taskId=…. Non avvia la sessione:
+ * il deep-link atterra sul setup (scelta durata), coerente coi bottoni in-app.
+ */
+async function executeOfferBodyDouble(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const label = String(input.label ?? '').trim() || 'Fallo con Shadow';
+  const taskIdInput = String(input.taskId ?? '').trim();
+
+  // 1. taskId fornito: valida ownership + stato non terminale.
+  if (taskIdInput) {
+    const task = await db.task.findFirst({
+      where: { id: taskIdInput, userId },
+      select: { id: true, title: true, status: true },
+    });
+    if (!task) {
+      return { kind: 'sideEffect', success: false, error: `Task ${taskIdInput} not found or not owned by user` };
+    }
+    if ((terminalTaskStatuses() as string[]).includes(task.status)) {
+      return {
+        kind: 'sideEffect',
+        success: false,
+        error: `Task "${task.title}" è '${task.status}' (terminale): non si fa body doubling. Scegli o crea un task attivo.`,
+      };
+    }
+    return { kind: 'sideEffect', success: true, data: { taskId: task.id, title: task.title, label } };
+  }
+
+  // 2. Nessun taskId: crea il task al volo (D8) e usalo. Riusa executeCreateTask
+  //    (dedup omonimi inclusa); richiede almeno un titolo.
+  const title = String(input.title ?? '').trim();
+  if (!title) {
+    return { kind: 'sideEffect', success: false, error: 'offer_body_double richiede taskId (preferito) oppure title' };
+  }
+  const created = await executeCreateTask(
+    { title, urgency: input.urgency, importance: input.importance, category: input.category },
+    userId,
+  );
+  if (!created.success) return created;
+  const createdData = created.data as { id?: string; title?: string } | undefined;
+  if (!createdData?.id) {
+    return { kind: 'sideEffect', success: false, error: 'create_task non ha restituito un id' };
+  }
+  return {
+    kind: 'sideEffect',
+    success: true,
+    data: { taskId: createdData.id, title: createdData.title ?? title, label },
   };
 }
 

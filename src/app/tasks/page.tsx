@@ -342,6 +342,10 @@ export default function ShadowApp() {
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  // Task 52 (D1): id del task di una sessione body doubling attiva (o '' se la
+  // sessione non ha taskId) → banner "riprendi"; null = nessuna sessione attiva.
+  const [activeBdTaskId, setActiveBdTaskId] = useState<string | null>(null);
+  const router = useRouter();
 
   // On mount: inizializza auth state e carica dati. Il gating
   // tour/onboarding ora vive nel middleware (src/middleware.ts) e legge
@@ -521,6 +525,31 @@ export default function ShadowApp() {
     return () => clearTimeout(timer);
   }, [store.currentView, store.adaptiveProfile, store.isAuthenticated, store.dailyPlan?.top3?.[0]?.id]);
 
+  // Task 52 (D1): rileva una sessione body doubling attiva (GET /api/strict-mode)
+  // per offrire "riprendi". Il deep-link /focus recupera già la sessione da solo;
+  // questo è solo il punto d'ingresso. Re-check quando l'auth è pronta e a ogni
+  // mount di /tasks (navigare verso/da /focus rimonta la pagina).
+  useEffect(() => {
+    if (!store.isAuthenticated) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/strict-mode');
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          session?: { triggerType?: string; taskId?: string | null } | null;
+        };
+        const s = data.session;
+        if (!cancelled) {
+          setActiveBdTaskId(s && s.triggerType === 'body_double' ? s.taskId ?? '' : null);
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [store.isAuthenticated]);
+
   const handleInstall = useCallback(async () => {
     if (!installPrompt) return;
     installPrompt.prompt();
@@ -574,6 +603,25 @@ export default function ShadowApp() {
               <Button size="sm" variant="secondary" className="h-7 text-xs" onClick={handleInstall}>Installa</Button>
               <button onClick={() => setShowInstallBanner(false)} className="p-1 hover:bg-amber-700 rounded"><X className="w-4 h-4" /></button>
             </div>
+          </div>
+        )}
+
+        {/* Task 52 (D1): banner globale "riprendi" sessione body doubling attiva.
+            Si auto-azzera quando la sessione finisce (re-check al mount di /tasks). */}
+        {activeBdTaskId !== null && !hideHeaderNav && (
+          <div className="bg-violet-700 text-white px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 shrink-0" />
+              <span className="text-sm font-medium">Hai una sessione body doubling in corso</span>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7 text-xs"
+              onClick={() => router.push(activeBdTaskId ? `/focus?taskId=${encodeURIComponent(activeBdTaskId)}` : '/focus')}
+            >
+              Riprendi
+            </Button>
           </div>
         )}
 
