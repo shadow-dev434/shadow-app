@@ -46,6 +46,7 @@ import type { NextRequest } from 'next/server';
 import { GET } from './route';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { normalizeThreadState } from '@/lib/evening-review/normalize';
 
 const NOW = new Date();
 const MAIN_THREAD = {
@@ -104,5 +105,49 @@ describe('GET /api/chat/active-thread — eveningReview con thread attivo (Task 
 
     expect(body.activeThread?.threadId).toBe('t1');
     expect(body.eveningReview.shouldStart).toBe(false);
+  });
+});
+
+describe('GET /api/chat/active-thread — rollover giorno-calendario (Task 53)', () => {
+  it('thread general del giorno precedente -> archiviato, activeThread=null', async () => {
+    const prevDay = new Date('2020-01-01T12:00:00Z'); // giorno-Roma chiaramente passato
+    (db.chatThread.findFirst as unknown as Mock).mockImplementation(async (args: unknown) => {
+      const where = (args as { where?: { mode?: string } } | undefined)?.where;
+      if (where?.mode === 'evening_review') return null; // query di computeEveningReview
+      return { ...MAIN_THREAD, startedAt: prevDay };
+    });
+    vi.mocked(db.review.findFirst).mockResolvedValue(null as never);
+
+    const res = await GET(getReq());
+    const body = await res.json();
+
+    // Il rollover archivia il SOLO candidato (update mirato) e azzera il thread.
+    expect(db.chatThread.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 't1' },
+        data: expect.objectContaining({ state: 'archived' }),
+      }),
+    );
+    expect(body.activeThread).toBeNull();
+  });
+
+  it('evening_review del giorno precedente -> NON archiviato dal rollover', async () => {
+    const prevDay = new Date('2020-01-01T12:00:00Z');
+    (db.chatThread.findFirst as unknown as Mock).mockImplementation(async (args: unknown) => {
+      const where = (args as { where?: { mode?: string } } | undefined)?.where;
+      if (where?.mode === 'evening_review') return null;
+      return { ...MAIN_THREAD, mode: 'evening_review', state: 'paused', startedAt: prevDay };
+    });
+    // normalize no-op: isoliamo il comportamento del rollover (escluso per evening).
+    vi.mocked(normalizeThreadState).mockReturnValue({
+      desiredState: 'paused',
+      shouldPersist: false,
+    } as never);
+    vi.mocked(db.review.findFirst).mockResolvedValue(null as never);
+
+    const res = await GET(getReq());
+    await res.json();
+
+    expect(db.chatThread.update).not.toHaveBeenCalled();
   });
 });
