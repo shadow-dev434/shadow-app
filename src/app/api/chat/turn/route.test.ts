@@ -175,3 +175,53 @@ describe('POST /api/chat/turn — rollover giorno-calendario (Task 53)', () => {
     expect(vi.mocked(db.chatThread.update)).not.toHaveBeenCalled();
   });
 });
+
+describe('POST /api/chat/turn — allegati vision (Task 54)', () => {
+  const img = (data = 'AAAA') => ({ kind: 'image', mediaType: 'image/jpeg', data });
+
+  it('solo allegato (userMessage vuoto) -> 200, orchestrate riceve attachments', async () => {
+    const res = await POST(makeReq({ mode: 'general', userMessage: '', attachments: [img()] }));
+    expect(res.status).toBe(200);
+    const call = vi.mocked(orchestrate).mock.calls[0][0];
+    expect(call.attachments).toHaveLength(1);
+    expect(call.attachments?.[0]).toMatchObject({ kind: 'image', mediaType: 'image/jpeg' });
+  });
+
+  it('niente testo e niente allegati -> 400', async () => {
+    const res = await POST(makeReq({ mode: 'general', userMessage: '' }));
+    expect(res.status).toBe(400);
+    expect(orchestrate).not.toHaveBeenCalled();
+  });
+
+  it('tipo media non supportato -> 400', async () => {
+    const res = await POST(
+      makeReq({ mode: 'general', userMessage: 'x', attachments: [{ kind: 'image', mediaType: 'image/tiff', data: 'AAAA' }] }),
+    );
+    expect(res.status).toBe(400);
+    expect(orchestrate).not.toHaveBeenCalled();
+  });
+
+  it('troppi allegati (>4) -> 400', async () => {
+    const res = await POST(
+      makeReq({ mode: 'general', userMessage: 'x', attachments: [img(), img(), img(), img(), img()] }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('allegato troppo grande -> 400', async () => {
+    const big = 'A'.repeat(6 * 1024 * 1024); // ~4.5MB decodificati, oltre il cap 4MB/item
+    const res = await POST(makeReq({ mode: 'general', userMessage: 'x', attachments: [img(big)] }));
+    expect(res.status).toBe(400);
+  });
+
+  it('PDF valido -> 200, orchestrate riceve il document', async () => {
+    const res = await POST(
+      makeReq({ mode: 'general', userMessage: '', attachments: [{ kind: 'document', mediaType: 'application/pdf', data: 'JVBER' }] }),
+    );
+    expect(res.status).toBe(200);
+    expect(vi.mocked(orchestrate).mock.calls[0][0].attachments?.[0]).toMatchObject({
+      kind: 'document',
+      mediaType: 'application/pdf',
+    });
+  });
+});

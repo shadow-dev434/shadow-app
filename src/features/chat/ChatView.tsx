@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, Info, List, Pencil, Send, Loader2, CheckCircle2, History, ArrowLeft, Lock, MessageSquare } from 'lucide-react';
+import { Archive, Info, List, Pencil, Send, Loader2, CheckCircle2, History, ArrowLeft, Lock, MessageSquare, Paperclip, X, FileText } from 'lucide-react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { BetaCheckin } from '@/features/beta/BetaCheckinCard';
 import {
@@ -34,6 +34,9 @@ interface Message {
   toolsExecuted?: ToolExecution[];
   quickReplies?: QuickReply[];
   createdAt: string;
+  // Task 54 (vision): allegati mostrati nella bolla utente ottimistica (solo
+  // display, client-side — non rehydratati: inline-only in v1).
+  attachments?: { name: string; previewUrl?: string }[];
 }
 
 interface TurnResponse {
@@ -98,6 +101,79 @@ interface ArchivedThreadMeta {
   lastTurnAt: string;
 }
 
+// ── Task 54 (vision) — allegati lato client ─────────────────────────────────
+const MAX_CLIENT_ATTACHMENTS = 4;
+const IMAGE_MAX_DIM = 1536; // Anthropic consiglia <=1568px; tiene il body sotto i limiti Vercel
+const IMAGE_JPEG_QUALITY = 0.85;
+
+interface PendingAttachment {
+  id: string;
+  kind: 'image' | 'document';
+  mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' | 'application/pdf';
+  data: string; // base64 senza prefisso data:
+  name: string;
+  previewUrl?: string; // data URL per la miniatura (solo immagini)
+}
+
+function readFileAsDataURL(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = () => reject(r.error ?? new Error('read failed'));
+    r.readAsDataURL(file);
+  });
+}
+
+// Ridimensiona un'immagine a IMAGE_MAX_DIM e la ricodifica JPEG: il base64 resta
+// piccolo (sotto i limiti del body Vercel) e la lettura del modello migliora.
+function downscaleImageToJpeg(file: File): Promise<{ data: string; dataUrl: string }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > IMAGE_MAX_DIM || height > IMAGE_MAX_DIM) {
+        const scale = Math.min(IMAGE_MAX_DIM / width, IMAGE_MAX_DIM / height);
+        width = Math.max(1, Math.round(width * scale));
+        height = Math.max(1, Math.round(height * scale));
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('canvas non disponibile'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', IMAGE_JPEG_QUALITY);
+      resolve({ data: dataUrl.split(',')[1] ?? '', dataUrl });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('immagine non caricata'));
+    };
+    img.src = url;
+  });
+}
+
+async function fileToPendingAttachment(file: File): Promise<PendingAttachment | null> {
+  const id = 'att-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  if (file.type === 'application/pdf') {
+    const dataUrl = await readFileAsDataURL(file);
+    const data = dataUrl.split(',')[1] ?? '';
+    if (!data) return null;
+    return { id, kind: 'document', mediaType: 'application/pdf', data, name: file.name };
+  }
+  if (file.type.startsWith('image/')) {
+    const { data, dataUrl } = await downscaleImageToJpeg(file);
+    if (!data) return null;
+    return { id, kind: 'image', mediaType: 'image/jpeg', data, name: file.name, previewUrl: dataUrl };
+  }
+  return null; // tipo non supportato
+}
+
 const SUGGESTED_PROMPTS = [
   { label: 'Pianifichiamo oggi', prompt: 'Aiutami a pianificare la giornata. Cosa devo priorizzare?' },
   { label: 'Ho un task nuovo', prompt: 'Devo aggiungere qualcosa alla lista: ' },
@@ -123,12 +199,16 @@ export function ChatView() {
   const [viewing, setViewing] = useState<{ meta: ArchivedThreadMeta; messages: Message[] } | null>(null);
   const [viewingLoading, setViewingLoading] = useState(false);
 
+  // Task 54 (vision): allegati in coda nel composer, in attesa di invio.
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const mountInitCalled = useRef(false);
-  // Ultimo messaggio utente fallito, per il Riprova (Task 42). Ref e non
-  // state: serve solo al click handler, nessun re-render necessario.
-  const lastFailedRef = useRef<string | null>(null);
+  // Ultimo turno utente fallito, per il Riprova (Task 42). Ref e non state:
+  // serve solo al click handler. Task 54: porta anche gli allegati.
+  const lastFailedRef = useRef<{ text: string; attachments: PendingAttachment[] } | null>(null);
 
   // Mount init: prima prova a rehydratare un thread attivo esistente
   // via GET /api/chat/active-thread. Se non ce n'e' nessuno (o il
@@ -275,9 +355,10 @@ export function ChatView() {
     }
   }, [input]);
 
-  const sendMessage = useCallback(async (text: string, opts?: { isRetry?: boolean }) => {
+  const sendMessage = useCallback(async (text: string, opts?: { isRetry?: boolean; attachments?: PendingAttachment[] }) => {
     const trimmed = text.trim();
-    if (!trimmed || sending) return;
+    const atts = opts?.attachments ?? [];
+    if ((!trimmed && atts.length === 0) || sending) return;
 
     setError(null);
     setSending(true);
@@ -289,6 +370,9 @@ export function ChatView() {
         id: 'temp-' + Date.now(),
         role: 'user',
         content: trimmed,
+        ...(atts.length > 0 && {
+          attachments: atts.map(a => ({ name: a.name, previewUrl: a.previewUrl })),
+        }),
         createdAt: new Date().toISOString(),
       };
       setMessages(prev => [...prev, userMsg]);
@@ -303,6 +387,9 @@ export function ChatView() {
           threadId,
           mode,
           userMessage: trimmed,
+          ...(atts.length > 0 && {
+            attachments: atts.map(a => ({ kind: a.kind, mediaType: a.mediaType, data: a.data })),
+          }),
           ...(mode === 'evening_review' && {
             clientDate: new Intl.DateTimeFormat('en-CA').format(new Date()),
           }),
@@ -341,7 +428,7 @@ export function ChatView() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Errore';
       const status = err instanceof Error ? (err as Error & { status?: number }).status : undefined;
-      lastFailedRef.current = trimmed;
+      lastFailedRef.current = { text: trimmed, attachments: atts };
       setError({ message: msg, status });
     } finally {
       setSending(false);
@@ -349,17 +436,41 @@ export function ChatView() {
     }
   }, [threadId, mode, sending]);
 
+  // Task 54: l'invio dal composer porta gli allegati in coda; quick-reply e
+  // suggerimenti restano text-only (chiamano sendMessage senza attachments).
+  const submitComposer = () => {
+    sendMessage(input, { attachments: pendingAttachments });
+    setPendingAttachments([]);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    sendMessage(input);
+    submitComposer();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage(input);
+      submitComposer();
     }
   };
+
+  const handleFilesSelected = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const slots = MAX_CLIENT_ATTACHMENTS - pendingAttachments.length;
+    if (slots <= 0) return;
+    const picked = Array.from(files).slice(0, slots);
+    const converted = (
+      await Promise.all(picked.map(f => fileToPendingAttachment(f).catch(() => null)))
+    ).filter((a): a is PendingAttachment => a !== null);
+    if (converted.length > 0) {
+      setPendingAttachments(prev => [...prev, ...converted].slice(0, MAX_CLIENT_ATTACHMENTS));
+    }
+  }, [pendingAttachments.length]);
+
+  const removeAttachment = useCallback((id: string) => {
+    setPendingAttachments(prev => prev.filter(a => a.id !== id));
+  }, []);
 
   const handleSuggestion = (prompt: string) => {
     if (prompt.endsWith(': ')) {
@@ -534,7 +645,7 @@ export function ChatView() {
                 type="button"
                 onClick={() => {
                   const failed = lastFailedRef.current;
-                  if (failed) sendMessage(failed, { isRetry: true });
+                  if (failed) sendMessage(failed.text, { isRetry: true, attachments: failed.attachments });
                 }}
                 disabled={sending}
                 className="px-3 py-1 bg-red-900/40 hover:bg-red-900/60 active:bg-red-900 border border-red-800 rounded-md text-xs font-medium text-red-100 disabled:opacity-50 transition-colors"
@@ -568,28 +679,83 @@ export function ChatView() {
 
       <form
         onSubmit={handleSubmit}
-        className="flex items-end gap-2 px-3 py-3 border-t border-zinc-800 bg-zinc-900/50 flex-shrink-0"
+        className="flex flex-col gap-2 px-3 py-3 border-t border-zinc-800 bg-zinc-900/50 flex-shrink-0"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Dimmi cosa ti passa per la testa..."
-          rows={1}
-          disabled={sending}
-          className="flex-1 resize-none bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-2.5 text-base placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600 disabled:opacity-50"
-          style={{ maxHeight: '120px' }}
-        />
-        <button
-          type="submit"
-          disabled={sending || !input.trim()}
-          className="flex items-center justify-center w-11 h-11 rounded-full bg-amber-600 hover:bg-amber-500 active:bg-amber-700 disabled:bg-zinc-700 disabled:text-zinc-500 transition-colors flex-shrink-0"
-          aria-label="Invia"
-        >
-          {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-        </button>
+        {/* Task 54: chip degli allegati in coda */}
+        {pendingAttachments.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {pendingAttachments.map(att => (
+              <div
+                key={att.id}
+                className="relative flex items-center gap-2 bg-zinc-800 border border-zinc-700 rounded-lg pl-1.5 pr-2 py-1 max-w-[210px]"
+              >
+                {att.previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={att.previewUrl}
+                    alt={att.name}
+                    className="w-7 h-7 rounded object-cover flex-shrink-0"
+                  />
+                ) : (
+                  <FileText size={16} className="text-zinc-400 flex-shrink-0" />
+                )}
+                <span className="text-xs text-zinc-300 truncate">{att.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(att.id)}
+                  className="text-zinc-500 hover:text-zinc-200 flex-shrink-0"
+                  aria-label="Rimuovi allegato"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,application/pdf"
+            multiple
+            className="hidden"
+            onChange={e => {
+              handleFilesSelected(e.target.files);
+              e.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending || pendingAttachments.length >= MAX_CLIENT_ATTACHMENTS}
+            className="flex items-center justify-center w-11 h-11 rounded-full hover:bg-zinc-800 active:bg-zinc-700 disabled:opacity-40 transition-colors text-zinc-400 hover:text-zinc-200 flex-shrink-0"
+            aria-label="Allega foto o PDF"
+            title="Allega foto o PDF"
+          >
+            <Paperclip size={20} />
+          </button>
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Dimmi cosa ti passa per la testa..."
+            rows={1}
+            disabled={sending}
+            className="flex-1 resize-none bg-zinc-800 border border-zinc-700 rounded-2xl px-4 py-2.5 text-base placeholder:text-zinc-500 focus:outline-none focus:border-zinc-600 disabled:opacity-50"
+            style={{ maxHeight: '120px' }}
+          />
+          <button
+            type="submit"
+            disabled={sending || (!input.trim() && pendingAttachments.length === 0)}
+            className="flex items-center justify-center w-11 h-11 rounded-full bg-amber-600 hover:bg-amber-500 active:bg-amber-700 disabled:bg-zinc-700 disabled:text-zinc-500 transition-colors flex-shrink-0"
+            aria-label="Invia"
+          >
+            {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+          </button>
+        </div>
       </form>
       </>
       )}
@@ -678,16 +844,43 @@ function MessageBubble({ message }: { message: Message }) {
 
   return (
     <div className={'flex flex-col gap-1.5 ' + (isUser ? 'items-end' : 'items-start')}>
-      <div
-        className={
-          'max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ' +
-          (isUser
-            ? 'bg-amber-600 text-white rounded-br-md'
-            : 'bg-zinc-800 text-zinc-100 rounded-bl-md')
-        }
-      >
-        {message.content}
-      </div>
+      {/* Task 54 (vision): allegati nella bolla utente ottimistica. */}
+      {message.attachments && message.attachments.length > 0 && (
+        <div className={'flex flex-wrap gap-1.5 max-w-[85%] ' + (isUser ? 'justify-end' : '')}>
+          {message.attachments.map((att, i) =>
+            att.previewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={att.previewUrl}
+                alt={att.name}
+                className="w-16 h-16 rounded-lg object-cover border border-zinc-700"
+              />
+            ) : (
+              <div
+                key={i}
+                className="flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5"
+              >
+                <FileText size={14} className="text-zinc-400 flex-shrink-0" />
+                <span className="text-xs text-zinc-300 truncate max-w-[120px]">{att.name}</span>
+              </div>
+            ),
+          )}
+        </div>
+      )}
+
+      {message.content && (
+        <div
+          className={
+            'max-w-[85%] rounded-2xl px-4 py-2.5 text-[15px] leading-relaxed ' +
+            (isUser
+              ? 'bg-amber-600 text-white rounded-br-md'
+              : 'bg-zinc-800 text-zinc-100 rounded-bl-md')
+          }
+        >
+          {message.content}
+        </div>
+      )}
 
       {message.toolsExecuted && message.toolsExecuted.length > 0 && (
         <div className="max-w-[85%] space-y-1.5 mt-1">

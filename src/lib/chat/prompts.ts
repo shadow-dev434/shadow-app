@@ -1482,6 +1482,25 @@ NOTE DI FORMATTAZIONE:
 - Quando citi un task nel messaggio, preferisci la forma piana ("la fattura idraulico", "la bolletta luce") rispetto a forme con punti interni ("fattura.idraulico"). Il client chat fa autolinking dei pattern parola.parola.
 - Tono caldo, breve, niente liste, niente markdown — vedi CORE_IDENTITY.`;
 
+/**
+ * Task 54 (vision, decisione D2). Blocco DEDICATO appeso al system prompt SOLO
+ * nei turni con allegati (dynamicSuffix, non cachato) — vedi orchestrator.ts.
+ * Indipendente da MORNING (A) ed EVENING/BODY_DOUBLE (B). Flusso bloccato:
+ * estrai -> mostra elenco -> UNA conferma batch -> crea (niente creazione
+ * silenziosa). Marker [[VISION_ESCALATE]] per l'escalation a Sonnet (orchestrator).
+ */
+export const VISION_EXTRACTION_PROMPT = `L'utente ha allegato una o piu' immagini o PDF. Leggi l'allegato ed estrai gli impegni concreti: appuntamenti, scadenze, eventi, task, con data/ora quando presenti.
+
+FLUSSO OBBLIGATORIO (non saltarlo):
+1. Estrai gli elementi e presentali come ELENCO numerato, breve e chiaro: per ognuno il titolo + (se c'e') data/ora. Frasi corte, niente markdown pesante.
+2. NON creare nulla in QUESTO turno: niente create_task adesso. Prima mostri, poi crei.
+3. Chiudi chiedendo conferma con UNA sola azione rapida: [[QR: Conferma e crea tutto | Modifica | Annulla]].
+4. SOLO quando l'utente conferma (nel turno successivo) crea ogni elemento con create_task, uno per elemento. Se chiede modifiche, aggiorna l'elenco e richiedi conferma. Se annulla, non creare nulla.
+
+Se l'allegato e' troppo sfocato, illeggibile o non contiene impegni riconoscibili, rispondi ESATTAMENTE con [[VISION_ESCALATE]] e nient'altro (verra' riletto con un modello piu' potente).
+
+Se invece l'utente chiede altro sull'immagine (es. "cos'e' questo?"), rispondi normalmente descrivendo cosa vedi, senza l'elenco e senza la conferma.`;
+
 export interface VoiceProfileInput {
   preferredPromptStyle: string;
   preferredTaskStyle: string;
