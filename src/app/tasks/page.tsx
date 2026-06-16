@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useShadowStore, type ViewMode, type ShadowTask, type MicroStep, type UserProfileData, type AIClassifyResult } from '@/store/shadow-store';
+import { stepProgressFromJson, type StepProgress } from '@/lib/tasks/step-progress';
 import { type AdaptiveProfileData, type LearningSignalData, type AIInsight, type ProactiveTrigger, type NudgeMessage, type TaskRecommendation, type ProactiveChatbotResponse } from '@/lib/types/shadow';
 import { formatDateInRome } from '@/lib/evening-review/dates';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -129,6 +130,23 @@ const MODE_CONFIG = {
 
 function parseMicroSteps(json: string): MicroStep[] {
   try { return JSON.parse(json); } catch { return []; }
+}
+
+// Task 56 (fix beta body doubling): progresso micro-step, logica pura ed
+// estratta in lib/tasks/step-progress (con unit test). Wrapper locale per i
+// call site di questo file (filtro inbox + badge).
+function stepProgress(task: { microSteps: string }): StepProgress | null {
+  return stepProgressFromJson(task.microSteps);
+}
+
+function StepProgressBadge({ task }: { task: { microSteps: string } }) {
+  const p = stepProgress(task);
+  if (!p) return null;
+  return (
+    <Badge variant="secondary" className="text-[10px] h-5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 shrink-0">
+      completato {p.done}/{p.total} step
+    </Badge>
+  );
 }
 
 function formatTimer(seconds: number): string {
@@ -1958,7 +1976,18 @@ function InboxView() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { isListening, transcript, setTranscript, startListening, stopListening } = useVoiceCapture();
 
-  const inboxTasks = store.tasks.filter((t) => t.status === 'inbox');
+  // Task 56 (fix beta): l'inbox mostra le catture grezze (status 'inbox') E i
+  // task già pianificati ma INIZIATI (almeno 1 micro-step fatto, es. lasciato a
+  // metà in body doubling), finché non sono completati — così un task in corso
+  // non "sparisce" dall'inbox. I terminali restano sempre fuori.
+  const inboxTasks = store.tasks.filter(
+    (t) =>
+      t.status === 'inbox' ||
+      (t.status !== 'completed' &&
+        t.status !== 'archived' &&
+        t.status !== 'abandoned' &&
+        stepProgress(t) !== null),
+  );
 
   useEffect(() => {
     if (transcript && !isListening) setNewTask(transcript);
@@ -2066,12 +2095,15 @@ function InboxView() {
                   <div className="flex items-center gap-2 mt-1">
                     <Badge variant="secondary" className="text-[10px] h-5">{CATEGORIES.find((c) => c.value === task.category)?.label || task.category}</Badge>
                     {task.aiClassified && <Badge className="text-[10px] h-5 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"><Sparkles className="w-2.5 h-2.5 mr-0.5" /> AI</Badge>}
+                    <StepProgressBadge task={task} />
                   </div>
                 </div>
                 <Button variant="outline" size="sm" className="text-xs h-8 shrink-0" onClick={() => { store.setSelectedTaskId(task.id); store.setCurrentView('task'); }}>
-                  Classifica <ChevronRight className="w-3 h-3 ml-1" />
+                  {task.status === 'inbox' ? 'Classifica' : 'Riprendi'} <ChevronRight className="w-3 h-3 ml-1" />
                 </Button>
-                <Button variant="ghost" size="sm" className="text-zinc-400 h-8 shrink-0" onClick={() => handleDelete(task.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                {task.status === 'inbox' && (
+                  <Button variant="ghost" size="sm" className="text-zinc-400 h-8 shrink-0" onClick={() => handleDelete(task.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -2314,6 +2346,7 @@ function TodayView() {
                         <Badge className={`text-[10px] h-4 ${DECISION_CONFIG[task.decision]?.bg || ''} ${DECISION_CONFIG[task.decision]?.color || ''}`}>{DECISION_CONFIG[task.decision]?.label || task.decision}</Badge>
                         {task.aiClassified && <Sparkles className="w-3 h-3 text-amber-500" />}
                         {task.recurringTemplateId && <span className="text-[10px] text-zinc-500 dark:text-zinc-400 flex items-center gap-0.5"><Repeat className="w-2.5 h-2.5" /> ricorrente</span>}
+                        <StepProgressBadge task={task} />
                       </div>
                       {/* Motivational personalization */}
                       {store.adaptiveProfile && (
@@ -2365,6 +2398,7 @@ function TaskSection({ title, icon, tasks, onTaskClick, onStartFocus, colorClass
                   <p className="text-sm truncate">{task.title}</p>
                   {task.aiClassified && <Sparkles className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
                   {task.recurringTemplateId && <Repeat className="w-2.5 h-2.5 text-zinc-400 shrink-0" />}
+                  <StepProgressBadge task={task} />
                 </div>
                 <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onStartFocus(task.id, 'launch'); }}><Play className="w-3 h-3" /></Button>
               </CardContent>

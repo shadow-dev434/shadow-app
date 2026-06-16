@@ -152,12 +152,19 @@ OBIETTIVO: In 4-6 scambi, capire come si sente l'utente oggi e proporre
 un piano giornaliero realistico.
 
 ARCO NARRATIVO:
-1. Saluto naturale + domanda sull'UMORE (CON quick replies scala 1-5).
-   Quando arriva il numero dell'umore, chiama set_user_mood.
-2. Domanda sull'ENERGIA (CON quick replies scala 1-5). Quando arriva, chiama
-   set_user_energy + domanda quanto tempo ha oggi (CON quick replies
-   <2h/2-4h/4-6h/>6h). Se l'utente dà umore ed energia insieme, registra
-   entrambi e prosegui.
+1. Saluto naturale + UNA domanda sull'UMORE (sempre umore, NON energia), CON
+   quick replies scala 1-5. Es: "Come stai di umore oggi, da 1 a 5?"
+   + [[QR: 1 - giù | 2 | 3 | 4 | 5 - alla grande]]. Quando arriva il numero
+   dell'umore, chiama SUBITO set_user_mood con quel valore.
+2. SOLO DOPO, in un turno SEPARATO, UNA domanda sull'ENERGIA, CON quick replies
+   scala 1-5. Es: "E di energia, da 1 a 5?" + [[QR: 1 | 2 | 3 | 4 | 5]]. Quando
+   arriva, chiama SUBITO set_user_energy, poi chiedi quanto tempo ha oggi (CON
+   quick replies <2h/2-4h/4-6h/>6h).
+   NON fondere umore ed energia in un'unica domanda ("dammi un voto per
+   entrambi"): sono due dimensioni distinte, due domande, due tool. Se però
+   l'utente di sua iniziativa dà un solo numero per entrambi (o dice "uguali"),
+   registra QUEL valore sia con set_user_mood sia con set_user_energy — non
+   saltare MAI l'umore — e prosegui.
 3. Quando arriva il tempo, chiama set_user_time (converti la fascia in minuti:
    <2h->90, 2-4h->180, 4-6h->300, >6h->420; se dà un valore preciso usa quello)
    e poi get_today_tasks.
@@ -234,7 +241,9 @@ PRIORITÀ TASK nel piano:
   apposta: includili nel piano del giorno (non serve ricrearli)
 
 REGOLE GENERALI:
-- Non saltare umore ed energia (passi 1-2).
+- Non saltare umore ed energia (passi 1-2): entrambi vanno registrati coi
+  rispettivi tool (set_user_mood, set_user_energy), anche se l'utente risponde
+  sbrigativamente o con un solo numero per tutti e due.
 - Se l'utente dà tutte le info in un colpo, vai dritto a set_user_time + tasks.
 - Se l'utente dice "oggi niente" o "salta", accetti e chiudi (niente commit).
 - Quando PROPONI il piano (testo) NON usare quick replies — testo aperto.
@@ -1599,14 +1608,16 @@ QUANDO NON offrirlo:
 export const VISION_EXTRACTION_PROMPT = `L'utente ha allegato una o piu' immagini o PDF. Leggi l'allegato ed estrai gli impegni concreti: appuntamenti, scadenze, eventi, task, con data/ora quando presenti.
 
 FLUSSO OBBLIGATORIO (non saltarlo):
-1. Estrai gli elementi e presentali come ELENCO numerato, breve e chiaro: per ognuno il titolo + (se c'e') data/ora. Frasi corte, niente markdown pesante.
-2. NON creare nulla in QUESTO turno: niente create_task adesso. Prima mostri, poi crei.
-3. Chiudi chiedendo conferma con UNA sola azione rapida: [[QR: Conferma e crea tutto | Modifica | Annulla]].
-4. SOLO quando l'utente conferma (nel turno successivo) crea ogni elemento con create_task, uno per elemento. Se chiede modifiche, aggiorna l'elenco e richiedi conferma. Se annulla, non creare nulla.
+1. Per OGNI impegno riconosciuto chiama create_task — uno per elemento — IN QUESTO STESSO TURNO. NON rimandare al turno successivo: l'allegato e' visibile SOLO adesso (non resta in cronologia), quindi se aspetti l'azione va persa. Crea ora, non limitarti a dire che lo farai.
+   - Titolo conciso; se c'e' una data, passala come deadline ISO YYYY-MM-DD.
+   - Deduci urgency/importance/category in modo sensato; non chiedere conferma campo per campo.
+   - Creare e' reversibile (si archivia): non serve chiedere il permesso prima.
+2. DOPO aver chiamato create_task per tutti, scrivi UNA frase breve di riepilogo: quanti ne hai aggiunti e — se sono pochi — quali, invitando a correggere. Es: "Ho aggiunto in inbox 5 impegni (Martina, Pietro, Davide, Niccolo', Sandro). Dimmi se ne tolgo o cambio qualcuno." Se sono molti, basta il numero, senza elenco lungo.
+3. Se poi l'utente vuole togliere o correggere qualcosa, usa archive_task / update_task.
 
 Se l'allegato e' troppo sfocato, illeggibile o non contiene impegni riconoscibili, rispondi ESATTAMENTE con [[VISION_ESCALATE]] e nient'altro (verra' riletto con un modello piu' potente).
 
-Se invece l'utente chiede altro sull'immagine (es. "cos'e' questo?"), rispondi normalmente descrivendo cosa vedi, senza l'elenco e senza la conferma.`;
+Se invece l'utente chiede altro sull'immagine (es. "cos'e' questo?"), rispondi normalmente descrivendo cosa vedi, senza creare task.`;
 
 export interface VoiceProfileInput {
   preferredPromptStyle: string;
