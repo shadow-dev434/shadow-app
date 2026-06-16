@@ -22,6 +22,33 @@ import { db } from '@/lib/db';
 import { formatTodayInRome } from '@/lib/evening-review/dates';
 import { terminalTaskStatuses } from '@/lib/types/shadow';
 
+/**
+ * Task 49: aggiorna SOLO i campi di contesto del piano di OGGI (energia/tempo/
+ * contesto) senza toccare i task. Serve a far fluire verso la schermata Oggi i
+ * valori che l'utente dichiara in chat (set_user_energy / set_user_time), anche
+ * prima/senza un commit del piano. Se il piano del giorno non esiste, crea una
+ * riga minima (task vuoti via default schema); la schermata Oggi non la mostra
+ * come piano finché non ci sono task.
+ */
+export async function upsertTodayContext(
+  userId: string,
+  fields: { energyLevel?: number; timeAvailable?: number; currentContext?: string },
+): Promise<void> {
+  if (
+    fields.energyLevel === undefined &&
+    fields.timeAvailable === undefined &&
+    fields.currentContext === undefined
+  ) {
+    return;
+  }
+  const date = formatTodayInRome();
+  await db.dailyPlan.upsert({
+    where: { userId_date: { userId, date } },
+    create: { userId, date, ...fields },
+    update: fields,
+  });
+}
+
 export interface CommitTodayPlanResult {
   ok: boolean;
   error?: string;

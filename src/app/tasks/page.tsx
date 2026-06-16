@@ -65,6 +65,16 @@ const TIME_OPTIONS = [
   { value: 480, label: '8 ore' },
 ];
 
+// Task 49: etichetta leggibile per un valore di minuti arbitrario (la chat usa
+// punti medii 90/180/300/420 che non stanno in TIME_OPTIONS — il Select li deve
+// comunque mostrare quando arrivano dal piano sincronizzato).
+function formatMinutesLabel(min: number): string {
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m === 0 ? `${h} ${h === 1 ? 'ora' : 'ore'}` : `${h}h ${m}min`;
+}
+
 const QUADRANT_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   do_now: { label: 'FAI ORA', color: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-950/30', icon: <Zap className="w-3 h-3" /> },
   schedule: { label: 'PIANIFICA', color: 'text-teal-600', bg: 'bg-teal-50 dark:bg-teal-950/30', icon: <Clock className="w-3 h-3" /> },
@@ -1999,10 +2009,47 @@ function InboxView() {
 
 function TodayView() {
   const store = useShadowStore();
+  const [regenerating, setRegenerating] = useState(false);
 
   const handleTaskClick = useCallback((taskId: string) => {
     store.setSelectedTaskId(taskId);
     store.setCurrentView('task');
+  }, [store]);
+
+  // Task 49: rigenera il piano al volo dalle condizioni correnti (energia /
+  // tempo / contesto) impostate qui. Riusa il generatore euristico esistente,
+  // che preserva i task fissati (pin).
+  const handleRegenerate = useCallback(async () => {
+    setRegenerating(true);
+    try {
+      const res = await fetch('/api/daily-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          energy: store.energy,
+          timeAvailable: store.timeAvailable,
+          currentContext: store.currentContext,
+        }),
+      });
+      const data = await res.json();
+      if (data?.breakdown) {
+        const all = await fetchTasks();
+        store.setTasks(all);
+        const pick = (arr: { id: string }[]): ShadowTask[] =>
+          arr.map((t) => all.find((x) => x.id === t.id)).filter(Boolean) as ShadowTask[];
+        store.setDailyPlan({
+          top3: pick(data.breakdown.top3),
+          doNow: pick(data.breakdown.doNow),
+          schedule: pick(data.breakdown.schedule),
+          delegate: pick(data.breakdown.delegate),
+          postpone: pick(data.breakdown.postpone),
+        });
+      }
+    } catch {
+      // silenzioso: errore di rete → resta il piano corrente
+    } finally {
+      setRegenerating(false);
+    }
   }, [store]);
 
   const handleStartFocus = useCallback((taskId: string, mode: 'launch' | 'hold' | 'recovery') => {
@@ -2029,23 +2076,33 @@ function TodayView() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (store.dailyPlan) return;
       try {
         const res = await fetch('/api/daily-plan');
         const data = await res.json();
-        if (cancelled || !data?.breakdown) return;
-        const all = await fetchTasks();
-        if (cancelled) return;
-        store.setTasks(all);
-        const pick = (arr: { id: string }[]): ShadowTask[] =>
-          arr.map((t) => all.find((x) => x.id === t.id)).filter(Boolean) as ShadowTask[];
-        store.setDailyPlan({
-          top3: pick(data.breakdown.top3),
-          doNow: pick(data.breakdown.doNow),
-          schedule: pick(data.breakdown.schedule),
-          delegate: pick(data.breakdown.delegate),
-          postpone: pick(data.breakdown.postpone),
-        });
+        if (cancelled || !data?.plan) return;
+        // Task 49: sincronizza energia/tempo/contesto dichiarati in chat con la
+        // schermata Today (lo store non ha persist → senza questo non li vedresti).
+        if (typeof data.plan.energyLevel === 'number') store.setEnergy(data.plan.energyLevel);
+        if (typeof data.plan.timeAvailable === 'number') store.setTimeAvailable(data.plan.timeAvailable);
+        if (typeof data.plan.currentContext === 'string') store.setCurrentContext(data.plan.currentContext);
+        // Idrata il piano solo se ci sono task e non è già caricato: una riga di
+        // solo contesto (energia/tempo senza piano committato) non è un piano.
+        const b = data.breakdown;
+        const hasTasks = !!b && ((b.top3?.length ?? 0) > 0 || (b.doNow?.length ?? 0) > 0);
+        if (!store.dailyPlan && hasTasks) {
+          const all = await fetchTasks();
+          if (cancelled) return;
+          store.setTasks(all);
+          const pick = (arr: { id: string }[]): ShadowTask[] =>
+            arr.map((t) => all.find((x) => x.id === t.id)).filter(Boolean) as ShadowTask[];
+          store.setDailyPlan({
+            top3: pick(b.top3),
+            doNow: pick(b.doNow),
+            schedule: pick(b.schedule),
+            delegate: pick(b.delegate),
+            postpone: pick(b.postpone),
+          });
+        }
       } catch {
         // silenzioso: nessun piano o errore di rete → resta lo stato vuoto
       }
@@ -2070,6 +2127,14 @@ function TodayView() {
     return out;
   })();
 
+  // Task 49: il Select "Tempo disponibile" deve mostrare anche valori che non
+  // stanno in TIME_OPTIONS (es. 90/180 sincronizzati dalla chat), altrimenti
+  // resterebbe vuoto.
+  const timeOptions = TIME_OPTIONS.some((o) => o.value === store.timeAvailable)
+    ? TIME_OPTIONS
+    : [...TIME_OPTIONS, { value: store.timeAvailable, label: formatMinutesLabel(store.timeAvailable) }]
+        .sort((a, b) => a.value - b.value);
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
       {/* Context bar */}
@@ -2088,7 +2153,7 @@ function TodayView() {
                 <Label className="text-xs text-zinc-500">Tempo disponibile</Label>
                 <Select value={String(store.timeAvailable)} onValueChange={(v) => store.setTimeAvailable(Number(v))}>
                   <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>{TIME_OPTIONS.map((opt) => <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>)}</SelectContent>
+                  <SelectContent>{timeOptions.map((opt) => <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="flex-1">
@@ -2107,6 +2172,11 @@ function TodayView() {
           )}
           <Button onClick={() => { window.location.href = '/?plan=today'; }} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
             <MessageCircle className="w-4 h-4 mr-2" /> Pianifica con Shadow
+          </Button>
+          <Button onClick={handleRegenerate} disabled={regenerating} variant="outline" className="w-full">
+            {regenerating
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Rigenero…</>
+              : <><RefreshCw className="w-4 h-4 mr-2" /> Rigenera piano ora</>}
           </Button>
         </CardContent>
       </Card>

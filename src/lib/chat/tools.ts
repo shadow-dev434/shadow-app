@@ -74,7 +74,7 @@ import type { PreviewState } from '@/lib/evening-review/apply-overrides';
 import type { BuildDailyPlanPreviewInput } from '@/lib/evening-review/plan-preview';
 import { formatDateInRome, formatTodayInRome } from '@/lib/evening-review/dates';
 import { estimateDuration } from '@/lib/evening-review/duration-estimation';
-import { commitTodayPlan } from '@/lib/daily-plan/commit-today-plan';
+import { commitTodayPlan, upsertTodayContext } from '@/lib/daily-plan/commit-today-plan';
 import { fitTodayPlanToTime } from '@/lib/daily-plan/fit-to-time';
 import {
   setTaskRecurrence,
@@ -834,7 +834,7 @@ async function executeCommitTodayPlan(
       committed: result.doNowIds?.length ?? 0,
       top3: result.top3Ids,
       invalidIds: result.invalidIds,
-      note: "Piano di oggi salvato. Conferma all'utente in una frase e, se vuole, invitalo a iniziare dalla prima cosa.",
+      note: "Piano di oggi salvato. Conferma all'utente in una frase e, se vuole, invitalo a iniziare dalla prima cosa. Ricordagli UNA VOLTA, con leggerezza, che può aggiustare il piano al volo dalla sezione Today (energia, tempo, contesto) se cambiano le condizioni.",
     },
   };
 }
@@ -954,6 +954,10 @@ async function executeSetUserEnergy(
     },
   });
 
+  // Task 49: rifletti l'energia sul piano di oggi così la schermata Today resta
+  // sincronizzata con quanto dichiarato in chat.
+  await upsertTodayContext(userId, { energyLevel: level });
+
   return { kind: 'sideEffect', success: true, data: { level } };
 }
 
@@ -993,6 +997,9 @@ async function executeSetUserTime(
       metadata: JSON.stringify({ minutes, timestamp: new Date().toISOString() }),
     },
   });
+
+  // Task 49: rifletti il tempo disponibile sul piano di oggi (sync con Today).
+  await upsertTodayContext(userId, { timeAvailable: minutes });
 
   return { kind: 'sideEffect', success: true, data: { minutes } };
 }
