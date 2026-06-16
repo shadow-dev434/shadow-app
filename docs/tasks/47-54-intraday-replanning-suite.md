@@ -223,3 +223,29 @@ core protetti e coordinare il timing. Per la memoria *shadow-concurrent-sessions
 8. **Drift DB prod**: mergiare `migrate-on-deploy` prima di shippare 50.
 9. **Qualità stime**: il recut (48) usa durata grezza da `size`; standardizzare su
    `estimateDuration` o i numeri divergono tra schermate.
+
+---
+
+## 6. Stato implementazione (Cluster A, 2026-06-16)
+
+**47-48-49-50 COMPLETI** su branch stacked `feature/50-per-slot-location`
+(`f6ed84c` 50, `d6a3d0a` 49, `a44d5b0` 48, `14c0dc4` 47). Build verde, 724 test.
+In attesa di review/merge di Antonio.
+
+Decisioni RAFFINATE in implementazione (rispetto alla tabella §1):
+- **D5 → ora di Roma in bootstrap** (non orologio client): coerente con la
+  evening-priority adiacente, fixa lo skew server-UTC, zero plumbing nuovo.
+- **D11 (nuova)**: il morning check-in cattura **umore poi energia** (1-5 ciascuno,
+  come la review serale) per onorare "come stai di umore oggi 1-5". Nuovo tool
+  `set_user_mood` (LearningSignal `mood_declared`). Reversibile se Antonio preferisce
+  una domanda sola.
+- **D7 → LLM-driven (v1)**: il piano rispetta la location via l'LLM (che sposta i task
+  con `moves` durante PIANO_PREVIEW), NON via penalità deterministica nell'allocatore
+  (`allocateTasks` lasciato intatto: basso payoff finché i task non sono taggati, alto
+  rischio regressione sui test). Penalità engine **differita**.
+
+⚠️ **Prerequisito merge Task 50**: la migration `add_slot_contexts` è applicata solo a
+DEV (royal-feather). Prima di mergiare 50 in prod (purple-paper): applicarla a mano,
+oppure mergiare prima `migrate-on-deploy`. Altrimenti outage come Task 46.
+
+Cluster B (51-52) e C (53-54): in carico alle sessioni parallele.
