@@ -479,6 +479,20 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
       const s = sessionRef.current;
       if (!s) return;
       const all = stepsRef.current;
+      // Task 52 (D1): "Ho finito" (reason='completed') segna il task come
+      // completato → soft-remove dall'inbox/Today, storico fasi preservato, MAI
+      // delete. timer-end ('timer_completed') ed early-exit (confirmExit)
+      // lasciano il task APERTO: il PATCH status vive solo nel ramo 'completed'.
+      if (reason === 'completed') {
+        const t = taskRef.current;
+        if (t) {
+          await fetch(`/api/tasks/${t.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'completed', completedAt: new Date().toISOString() }),
+          }).catch(() => {});
+        }
+      }
       const closed = await patchSession({
         sessionId: s.id,
         status: 'exited',
