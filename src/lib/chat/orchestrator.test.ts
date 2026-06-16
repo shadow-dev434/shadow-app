@@ -167,7 +167,8 @@ describe('TERMINAL_THREAD_STATES', () => {
 
 describe('Task 47: saluto col nome + fascia oraria nel system prompt', () => {
   function systemStaticOfFirstCall(): string {
-    return vi.mocked(callLLM).mock.calls[0][0].systemPrompt.static;
+    const sp = vi.mocked(callLLM).mock.calls[0][0].systemPrompt;
+    return typeof sp === 'string' ? sp : sp.static;
   }
 
   it('inietta solo il PRIMO nome e la fascia POMERIGGIO quando partOfDay=afternoon', async () => {

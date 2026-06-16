@@ -36,6 +36,13 @@ export async function commitTodayPlan(
   userId: string,
   taskIds: string[],
   pinnedTaskIds: string[] = [],
+  /**
+   * Task 48: minuti realmente disponibili oggi (Y). Persistito su
+   * DailyPlan.timeAvailable (default schema 480) così la schermata Oggi e le
+   * analitiche riflettono il budget effettivo, non il giorno intero. Se omesso
+   * la colonna NON viene toccata (resta il valore esistente / default).
+   */
+  timeAvailableMinutes?: number,
 ): Promise<CommitTodayPlanResult> {
   // Validazione ownership + stato non terminale: gli id arrivano dal modello
   // (presi da get_today_tasks) ma vanno verificati prima di scriverli nel piano.
@@ -72,6 +79,14 @@ export async function commitTodayPlan(
   const doNowIds = validIds;
   const date = formatTodayInRome();
 
+  // Task 48: includi timeAvailable solo se fornito e valido (15min..24h), così
+  // un commit senza Y non sovrascrive un valore precedente con il default.
+  const hasTime =
+    typeof timeAvailableMinutes === 'number' &&
+    Number.isFinite(timeAvailableMinutes) &&
+    timeAvailableMinutes >= 15 &&
+    timeAvailableMinutes <= 1440;
+
   const planFields = {
     top3Ids: JSON.stringify(top3Ids),
     doNowIds: JSON.stringify(doNowIds),
@@ -79,6 +94,7 @@ export async function commitTodayPlan(
     delegateIds: JSON.stringify([]),
     postponeIds: JSON.stringify([]),
     pinnedIds: JSON.stringify(pinned),
+    ...(hasTime ? { timeAvailable: Math.round(timeAvailableMinutes as number) } : {}),
   };
 
   const dailyPlanId = await db.$transaction(async (tx) => {
