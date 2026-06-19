@@ -6,6 +6,7 @@ import { useShadowStore, type ViewMode, type ShadowTask, type MicroStep, type Us
 import { stepProgressFromJson, type StepProgress } from '@/lib/tasks/step-progress';
 import { type AdaptiveProfileData, type LearningSignalData, type AIInsight, type ProactiveTrigger, type NudgeMessage, type TaskRecommendation, type ProactiveChatbotResponse } from '@/lib/types/shadow';
 import { formatDateInRome } from '@/lib/evening-review/dates';
+import { isNative } from '@/lib/native/platform';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -423,9 +424,11 @@ export default function ShadowApp() {
     init();
   }, []);
 
-  // Register Service Worker
+  // Register Service Worker — solo sul web. Nella WebView nativa il SW è
+  // disabilitato (Capacitor.isNativePlatform()): eviterebbe solo di servire
+  // bundle staleati dalla cache del SW nel guscio nativo (Task 59).
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
+    if (!isNative() && 'serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
   }, []);

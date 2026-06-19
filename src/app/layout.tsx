@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import AuthProvider from "@/components/auth-provider";
 import { SentryInit } from "@/components/sentry-init";
+import { NativeBootstrap } from "@/components/native/native-bootstrap";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -73,6 +74,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         <SentryInit />
+        <NativeBootstrap />
         <AuthProvider>
           {children}
         </AuthProvider>
