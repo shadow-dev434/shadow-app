@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { isNative } from '@/lib/native/platform';
+import { ShieldPermissionGate } from './shield-permission-gate';
 
 /**
  * Inizializzazioni che hanno senso solo dentro il guscio nativo (Task 59).
@@ -27,5 +28,5 @@ export function NativeBootstrap() {
     return () => cleanup?.();
   }, []);
 
-  return null;
+  return <ShieldPermissionGate />;
 }

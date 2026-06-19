@@ -7,6 +7,7 @@ import { stepProgressFromJson, type StepProgress } from '@/lib/tasks/step-progre
 import { type AdaptiveProfileData, type LearningSignalData, type AIInsight, type ProactiveTrigger, type NudgeMessage, type TaskRecommendation, type ProactiveChatbotResponse } from '@/lib/types/shadow';
 import { formatDateInRome } from '@/lib/evening-review/dates';
 import { isNative } from '@/lib/native/platform';
+import { startNativeShield, stopNativeShield } from '@/lib/native/focus-shield';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -238,14 +239,31 @@ async function startStrictModeSession(mode: 'soft' | 'strict', taskId: string | 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mode, triggerType: 'manual', taskId, durationMinutes, blockedApps }),
   });
-  return res.json();
+  const data = await res.json();
+  // Scudo nativo (Android): blocca le app per tutta la sessione. No-op su web.
+  if (data?.session?.id) {
+    void startNativeShield({
+      sessionId: data.session.id,
+      blockedAppPackages: blockedApps,
+      endsAt: data.session.endsAt ? new Date(data.session.endsAt).getTime() : null,
+    });
+  }
+  return data;
 }
 
 async function endStrictModeSession(sessionId: string, exitReason: string, exitConfirmationText: string) {
+  // Ferma lo scudo nativo e recupera i tentativi bloccati (null su web).
+  const blockedAttempts = await stopNativeShield();
   const res = await fetch('/api/strict-mode', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, status: 'exited', exitReason, exitConfirmationText }),
+    body: JSON.stringify({
+      sessionId,
+      status: 'exited',
+      exitReason,
+      exitConfirmationText,
+      ...(blockedAttempts != null ? { distractionsBlocked: blockedAttempts } : {}),
+    }),
   });
   return res.json();
 }

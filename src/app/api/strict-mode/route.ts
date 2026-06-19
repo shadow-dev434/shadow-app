@@ -90,7 +90,7 @@ export async function PATCH(req: NextRequest) {
   if (error) return error;
 
   try {
-    const { sessionId, status, exitReason, exitConfirmationText, taskCompleted, action, minutes } = await req.json();
+    const { sessionId, status, exitReason, exitConfirmationText, taskCompleted, action, minutes, distractionsBlocked } = await req.json();
 
     if (!sessionId) {
       return NextResponse.json({ error: 'sessionId è obbligatorio' }, { status: 400 });
@@ -131,6 +131,10 @@ export async function PATCH(req: NextRequest) {
     if (exitReason) updateData.exitReason = exitReason;
     if (exitConfirmationText) updateData.exitConfirmationText = exitConfirmationText;
     if (taskCompleted !== undefined) updateData.taskCompletedDuringSession = taskCompleted;
+    // Task 59 / W5-M5: tentativi di apertura app bloccati dallo scudo nativo.
+    if (typeof distractionsBlocked === 'number' && Number.isFinite(distractionsBlocked)) {
+      updateData.distractionsBlocked = Math.max(0, Math.round(distractionsBlocked));
+    }
 
     // Track exit attempts
     if (status === 'pending_exit' || status === 'exited') {

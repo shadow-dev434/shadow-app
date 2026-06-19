@@ -312,3 +312,50 @@ test manuale per Antonio, cosa resta gate-umano.
    (carica prod, autonomo) → 4. guscio web-side su `feature/59-…` →
 5. Fase 2 plugin blocco → APK con blocco → 6. report. Push/merge e occhio sul
    telefono: tu. Fasi 3–6 quando sblocchi le risorse esterne.
+
+---
+
+## 12. Stato esecuzione (2026-06-19) — Fasi 0–2 COMPLETE
+
+Eseguito in autonomia su `feature/59-app-nativa-android`. Tutti i gate verdi:
+`tsc --noEmit` OK, `vitest` 797/797, `gradlew assembleDebug` BUILD SUCCESSFUL,
+`bun run build` OK.
+
+**Fase 0** — SDK Android in `%LOCALAPPDATA%\Android\Sdk` (cmdline-tools/latest,
+platform-tools, android-34, build-tools 34.0.0); `adb` 1.0.41; `ANDROID_HOME` persistito.
+
+**Fase 1 (M1)** — `app-debug.apk` (16 MB) in
+`android/app/build/outputs/apk/debug/`. Package runtime `com.shadow.adhd.executor.debug`
+(suffix .debug → convive con la TWA), minSdk 26, targetSdk 34, label "Shadow".
+Carica `https://shadow-app2.vercel.app`. Commit `e7ac065`.
+
+**Fase 2 (M5)** — plugin nativo `ShadowAppBlocker` compilato nell'APK:
+FGS specialUse + polling UsageStats (~900ms) + overlay TYPE_APPLICATION_OVERLAY
+"Torna a Shadow" + whitelist sistema + auto-stop a endsAt. Permessi nel manifest
+(PACKAGE_USAGE_STATS, SYSTEM_ALERT_WINDOW, FOREGROUND_SERVICE_SPECIAL_USE,
+POST_NOTIFICATIONS), `<queries>` MAIN/LAUNCHER (no QUERY_ALL_PACKAGES).
+Facade `focus-shield.ts` agganciata a start/end strict mode; PATCH `/api/strict-mode`
+persiste `distractionsBlocked`; disclosure+permessi via `ShieldPermissionGate`.
+
+**Deviazioni dalla spec 35 (motivate, annotate qui):**
+- **Java, non Kotlin** — l'app module Capacitor è Java (come `MainActivity.java`):
+  niente plugin Gradle Kotlin da aggiungere → build verde garantita, zero rischio
+  toolchain. Coerente con la regola "match the surrounding code".
+- **Plugin embeddato nell'app module** (`…/blocker/`), non in `plugins/shadow-app-blocker/`
+  con bun workspaces: runtime identico, zero plumbing workspace. Riusabilità persa
+  (irrilevante per app singola; iOS = W6 avrà il suo).
+- **Default "blocca tutto tranne whitelist"** quando `packages` è vuoto (oggi lo
+  strict mode non ha un picker di app). `getInstalledApps()` è già pronto per un
+  picker futuro.
+- **Batteria**: aperta la lista `ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS` (niente
+  permesso `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, sensibile su Play).
+
+**Cosa resta a te (Antonio):**
+1. **Occhio reale sul telefono**: installare l'APK (`adb install -r app-debug.apk`,
+   o copiarlo sul device) — login, e verifica del blocco avviando uno strict mode
+   (il blocco vero non è verificabile headless). Nota: se hai la TWA installata,
+   l'APK debug si installa a fianco (package `.debug`).
+2. **Deploy del guscio web-side**: push/merge di `feature/59-…` → Vercel, perché le
+   modifiche web (gate SW, scudo, disclosure) abbiano effetto nella WebView (il
+   binario carica il remoto). Regola "web prima, binario poi".
+3. **Fasi differite** (M2 Play / M3 auth bridge / M4 push / M6 IAP): vedi §1 e §8.
