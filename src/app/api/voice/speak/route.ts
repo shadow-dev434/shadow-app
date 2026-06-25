@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { getTtsProvider } from '@/lib/voice/provider';
 import { recordAiUsage, getDailyCalls } from '@/lib/llm/usage';
-import { captureApiError } from '@/lib/observability';
 
 export const maxDuration = 30;
 
@@ -54,7 +53,10 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    captureApiError(error, 'POST /api/voice/speak');
+    // 502 = fallimento upstream del provider TTS (atteso, operativo): resta su
+    // console.error, NON a Sentry (evita rumore su flap del provider). Le route
+    // che inghiottono errori INTERNI (500, o 200 degradato) usano captureApiError.
+    console.error('POST /api/voice/speak error:', error);
     return NextResponse.json({ error: 'Sintesi vocale non riuscita' }, { status: 502 });
   }
 }

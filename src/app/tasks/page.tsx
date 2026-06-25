@@ -171,6 +171,8 @@ function getEnergyLabel(level: number): string {
 
 async function fetchTasks(): Promise<ShadowTask[]> {
   const res = await apiFetch('/api/tasks', { skipErrorToast: true });
+  // Su 401 apiFetch ha già avviato il re-login: non parsare un body non-JSON.
+  if (!res.ok) return [];
   const data = await res.json();
   return data.tasks || [];
 }
@@ -214,6 +216,8 @@ async function decomposeTask(taskId: string, taskTitle: string, taskDescription:
     body: JSON.stringify({ taskId, taskTitle, taskDescription, energy, timeAvailable, currentContext }),
     skipErrorToast: true,
   });
+  // Coerente con createTask/updateTaskAPI: non parsare un body non-ok (incl. 401).
+  if (!res.ok) throw new Error(`decompose HTTP ${res.status}`);
   return res.json();
 }
 
@@ -225,6 +229,7 @@ async function classifyTaskAI(title: string, description: string, energy?: numbe
       body: JSON.stringify({ taskTitle: title, taskDescription: description, energy: energy ?? 3, timeAvailable: timeAvailable ?? 480, currentContext: currentContext ?? 'any' }),
       skipErrorToast: true,
     });
+    if (!res.ok) return null;
     const data = await res.json();
     return data.classification || null;
   } catch {
@@ -235,6 +240,7 @@ async function classifyTaskAI(title: string, description: string, energy?: numbe
 async function loadProfile(): Promise<UserProfileData | null> {
   try {
     const res = await apiFetch('/api/profile', { skipErrorToast: true });
+    if (!res.ok) return null;
     const data = await res.json();
     return data.profile || null;
   } catch {
