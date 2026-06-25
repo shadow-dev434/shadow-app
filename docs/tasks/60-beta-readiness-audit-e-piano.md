@@ -47,6 +47,21 @@ merge/push; ordine deploy native + validazione on-device (B8 app-picker per rend
 > `profile.blockedApps`. Senza, l'APK nativo non blocca nulla — il "valore vero del nativo" richiede
 > il picker prima del lancio native. Deciso con Antonio di shippare native a tutti: il picker va schedulato.
 
+**Hardening §4 fatto in questa sessione** (stessi gate verdi, commit successivi):
+- `GET /api/health` (SELECT 1 su Neon + versione) — puntarci un uptime monitor.
+- `captureApiError` (`src/lib/observability.ts`) → 500 server inviati a Sentry su chat/turn (+ rimosso
+  il leak di `err.message` al client) e su tasks, tasks/[id]. **Restano da adottare** sulle altre route
+  (daily-plan, review, strict-mode, beta/*, ecc.) — incrementale o via wrapper `withApiHandler`.
+- Alert email (Resend) quando il cron serale crasha o consegna 0 invii su N candidati.
+- Throttle brute-force sul login (`src/lib/login-throttle.ts`, 5 tentativi/15 min, fail-open).
+- Password policy register 6→8 caratteri.
+- **Security header** in `next.config.ts` (HSTS, X-Content-Type-Options, X-Frame-Options SAMEORIGIN,
+  Referrer-Policy, Permissions-Policy con `microphone=(self)` per la dettatura). **CSP non inclusa**:
+  richiede nonce + test in browser → follow-up.
+
+**Hardening non fatto (follow-up):** wrapper `apiFetch` client (401→re-login + toast centralizzati);
+adozione `captureApiError` sulle route restanti; CSP; app-picker nativo (B8).
+
 ---
 
 ## 1. Cosa è SOLIDO (verificato — la base di cui fidarsi)
