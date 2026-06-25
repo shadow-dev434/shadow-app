@@ -3,6 +3,44 @@ import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { getAuthSecret } from '@/lib/auth-secret';
 
+// ─── Content-Security-Policy (Task 60 D) ────────────────────────────────
+// Scelta dopo verifica prod (vedi docs/tasks/60): la CSP con nonce + 'strict-
+// dynamic' NON è applicabile qui perché tutte le pagine sono prerenderizzate
+// STATICHE (il nonce per-request non finisce mai negli script statici → app
+// bianca), e avrebbe richiesto force-dynamic app-wide + un rischio non testabile
+// headless sul bridge Capacitor della WebView. Adottiamo quindi una CSP
+// enforced "static-compatible": tutte le direttive forti, con script-src
+// 'self' 'unsafe-inline'. NON copre l'XSS via inline-script (serve il nonce, e
+// quindi il rendering dinamico — upgrade futuro da validare anche on-device),
+// ma applica subito e senza rischi: niente script da origini esterne,
+// anti-clickjacking (frame-ancestors), anti base-tag (base-uri), niente
+// plugin/object, allowlist di connect (anti-exfil), form-action 'self'.
+// style-src 'unsafe-inline' per Tailwind/next-font/framer. connect-src include
+// gli host ingest di Sentry (tutte le region). In dev si aggiunge 'unsafe-eval'
+// + ws per l'HMR di Next.
+function buildCsp(isDev: boolean): string {
+  const scriptSrc = isDev ? `'self' 'unsafe-inline' 'unsafe-eval'` : `'self' 'unsafe-inline'`;
+  const connectSrc =
+    `'self' https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://*.ingest.de.sentry.io` +
+    (isDev ? ' ws: wss:' : '');
+  const directives = [
+    `default-src 'self'`,
+    `script-src ${scriptSrc}`,
+    `style-src 'self' 'unsafe-inline'`,
+    `img-src 'self' data: blob:`,
+    `font-src 'self' data:`,
+    `connect-src ${connectSrc}`,
+    `worker-src 'self'`,
+    `manifest-src 'self'`,
+    `object-src 'none'`,
+    `base-uri 'self'`,
+    `form-action 'self'`,
+    `frame-ancestors 'self'`,
+    ...(isDev ? [] : ['upgrade-insecure-requests']),
+  ];
+  return directives.join('; ');
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -104,6 +142,18 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // ─── CSP per le PAGE route (documenti HTML) ──────────────────────────
+  // Applicata solo ai documenti che eseguono script: gli asset/_next sono in
+  // skip-list e le API ritornano JSON. I redirect 307 non eseguono script →
+  // niente CSP. (Le pubbliche fuori-matcher /privacy /terms /reset-password
+  // non passano di qui: restano coperte da X-Frame-Options di next.config.)
+  const csp = buildCsp(process.env.NODE_ENV !== 'production');
+  const pageResponse = (): NextResponse => {
+    const res = NextResponse.next();
+    res.headers.set('Content-Security-Policy', csp);
+    return res;
+  };
+
   // ─── Page routes ─────────────────────────────────────────────────────
   // '/' è semi-pubblica: senza JWT mostra la landing (login/register),
   // con JWT mostra la chat. Le altre page route sono tutte autenticate.
@@ -129,7 +179,7 @@ export async function middleware(req: NextRequest) {
       return response;
     }
     // No cookie: landing '/' è aperta, tutto il resto redirige al login.
-    if (isHome) return NextResponse.next();
+    if (isHome) return pageResponse();
     const url = req.nextUrl.clone();
     url.pathname = '/';
     url.search = '';
@@ -142,8 +192,8 @@ export async function middleware(req: NextRequest) {
   // sopra; /onboarding solo DOPO il consenso, perché la raccolta dei dati
   // di categoria particolare (art. 9) avviene dentro l'onboarding → il
   // gate consenso non dev'essere saltabile via deep-link a /onboarding.
-  if (isTourPage || isConsentPage) return NextResponse.next();
-  if (isOnboardingPage && consentGiven) return NextResponse.next();
+  if (isTourPage || isConsentPage) return pageResponse();
+  if (isOnboardingPage && consentGiven) return pageResponse();
 
   // Gate sequenziale: tour → consenso → onboarding. Ordine obbligato: il
   // register manda al tour; il consenso deve precedere ogni raccolta di
@@ -168,7 +218,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // Utente completamente configurato: passa.
-  return NextResponse.next();
+  return pageResponse();
 }
 
 export const config = {
