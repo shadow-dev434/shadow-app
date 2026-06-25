@@ -14,8 +14,8 @@ export async function POST(req: NextRequest) {
     if (!rawEmail || !password) {
       return NextResponse.json({ error: 'Email e password sono obbligatori' }, { status: 400 });
     }
-    if (password.length < 6) {
-      return NextResponse.json({ error: 'Password deve essere almeno 6 caratteri' }, { status: 400 });
+    if (typeof password !== 'string' || password.length < 8) {
+      return NextResponse.json({ error: 'La password deve essere di almeno 8 caratteri' }, { status: 400 });
     }
 
     // Normalizza l'email (lowercase + trim) PRIMA del controllo di unicità:

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { encode } from 'next-auth/jwt';
 import { db } from '@/lib/db';
 import { getAuthSecret } from '@/lib/auth-secret';
+import { isLoginLocked, recordLoginFailure, clearLoginFailures } from '@/lib/login-throttle';
 
 const SESSION_COOKIE_NAME = 'next-auth.session-token';
 const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 days
@@ -10,26 +11,41 @@ const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 days
 export async function POST(req: NextRequest) {
   const secret = getAuthSecret();
   try {
-    const { email, password } = await req.json();
-    if (!email || !password) {
+    const { email: rawEmail, password } = await req.json();
+    if (!rawEmail || !password) {
       return NextResponse.json({ error: 'Email e password sono obbligatori' }, { status: 400 });
     }
+    const email = String(rawEmail).trim().toLowerCase();
 
-    const user = await db.user.findUnique({
-      where: { email: email.trim().toLowerCase() },
-    });
-    if (!user) {
-      return NextResponse.json({ error: 'Credenziali non valide' }, { status: 401 });
+    // Throttle brute-force (audit pre-beta). Fail-open sulla lettura: un errore
+    // DB non deve impedire il login legittimo.
+    try {
+      if (await isLoginLocked(email)) {
+        return NextResponse.json(
+          { error: 'Troppi tentativi falliti. Riprova tra qualche minuto.' },
+          { status: 429 },
+        );
+      }
+    } catch (err) {
+      console.error('[login] isLoginLocked failed, fail-open:', err);
     }
 
-    if (!user.password) {
-      return NextResponse.json({ error: 'Account non configurato per il login con password. Registrati prima.' }, { status: 401 });
+    const user = await db.user.findUnique({ where: { email } });
+    if (!user || !user.password) {
+      // Stesso messaggio generico per utente inesistente e account senza password
+      // (anti-enumeration); entrambi contano come tentativo fallito.
+      await recordLoginFailure(email).catch(() => {});
+      return NextResponse.json({ error: 'Credenziali non valide' }, { status: 401 });
     }
 
     const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
+      await recordLoginFailure(email).catch(() => {});
       return NextResponse.json({ error: 'Credenziali non valide' }, { status: 401 });
     }
+
+    // Login riuscito: azzera i tentativi falliti.
+    await clearLoginFailures(email).catch(() => {});
 
     const profile = await db.userProfile.findUnique({
       where: { userId: user.id },
