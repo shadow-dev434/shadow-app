@@ -10,6 +10,7 @@ import {
   processSignal,
 } from '@/lib/engines/learning-engine';
 import type { LearningSignalData } from '@/lib/types/shadow';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/learning-signal?limit=50
 export async function GET(req: NextRequest) {
@@ -136,7 +137,7 @@ export async function POST(req: NextRequest) {
       updatesApplied: [],
     });
   } catch (error) {
-    console.error('Error processing learning signal:', error);
+    captureApiError(error, 'POST /api/learning-signal');
     return NextResponse.json({ error: 'Failed to process signal' }, { status: 500 });
   }
 }

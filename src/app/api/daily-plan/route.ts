@@ -9,6 +9,7 @@ import { buildDailyPlan, getCurrentTimeSlot } from '@/lib/engines/execution-engi
 import { terminalTaskStatuses, type ExecutionContext, type TaskRecord } from '@/lib/types/shadow';
 import { formatTodayInRome } from '@/lib/evening-review/dates';
 import { upsertTodayContext } from '@/lib/daily-plan/commit-today-plan';
+import { captureApiError } from '@/lib/observability';
 
 const SLOT_NAMES = ['morning', 'afternoon', 'evening'] as const;
 const SLOT_LOCATIONS = ['home', 'office', 'out'] as const;
@@ -217,7 +218,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('POST /api/daily-plan error:', error);
+    captureApiError(error, 'POST /api/daily-plan');
     return NextResponse.json({ error: 'Failed to generate daily plan' }, { status: 500 });
   }
 }
@@ -305,7 +306,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('GET /api/daily-plan error:', error);
+    captureApiError(error, 'GET /api/daily-plan');
     return NextResponse.json({ error: 'Failed to fetch daily plan' }, { status: 500 });
   }
 }
@@ -324,7 +325,7 @@ export async function PATCH(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, slotContexts });
   } catch (error) {
-    console.error('PATCH /api/daily-plan error:', error);
+    captureApiError(error, 'PATCH /api/daily-plan');
     return NextResponse.json({ error: 'Failed to update slot contexts' }, { status: 500 });
   }
 }

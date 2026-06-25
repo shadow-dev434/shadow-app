@@ -63,6 +63,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 import { isInsideEveningWindow } from '@/lib/evening-review/window';
 import { computeEveningReviewSignal } from '@/lib/evening-review/compute-signal';
 import { INACTIVITY_PAUSE_MINUTES } from '@/lib/evening-review/config';
@@ -342,7 +343,7 @@ export async function GET(req: NextRequest) {
     };
     return NextResponse.json(body);
   } catch (err) {
-    console.error('[/api/chat/active-thread] error:', err);
+    captureApiError(err, 'GET /api/chat/active-thread');
     return NextResponse.json(
       { error: 'Failed to load active thread' },
       { status: 500 },

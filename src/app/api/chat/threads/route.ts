@@ -31,6 +31,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 import { threadSidebarLabel } from '@/lib/chat/day-rollover';
 import { formatTodayInRome, formatDateInRome } from '@/lib/evening-review/dates';
 
@@ -81,7 +82,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ threads });
   } catch (err) {
-    console.error('[/api/chat/threads] error:', err);
+    captureApiError(err, 'GET /api/chat/threads');
     return NextResponse.json({ error: 'Failed to load threads' }, { status: 500 });
   }
 }

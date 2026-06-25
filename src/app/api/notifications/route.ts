@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/notifications — List notifications
 export async function GET(req: NextRequest) {
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ notifications, unreadCount });
   } catch (error) {
-    console.error('Fetch notifications error:', error);
+    captureApiError(error, 'GET /api/notifications');
     return NextResponse.json({ error: 'Errore nel caricamento notifiche' }, { status: 500 });
   }
 }
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ notification });
   } catch (error) {
-    console.error('Create notification error:', error);
+    captureApiError(error, 'POST /api/notifications');
     return NextResponse.json({ error: 'Errore nella creazione notifica' }, { status: 500 });
   }
 }
@@ -104,7 +105,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ error: 'Parametri mancanti' }, { status: 400 });
   } catch (error) {
-    console.error('Update notification error:', error);
+    captureApiError(error, 'PATCH /api/notifications');
     return NextResponse.json({ error: 'Errore aggiornamento notifica' }, { status: 500 });
   }
 }

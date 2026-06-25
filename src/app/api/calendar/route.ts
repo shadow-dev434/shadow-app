@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses } from '@/lib/types/shadow';
 
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ events });
   } catch (error) {
-    console.error('Calendar fetch error:', error);
+    captureApiError(error, 'GET /api/calendar');
     return NextResponse.json({ error: 'Errore nel caricamento calendario' }, { status: 500 });
   }
 }
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, message: 'Token Google Calendar salvato' });
   } catch (error) {
-    console.error('Calendar sync error:', error);
+    captureApiError(error, 'POST /api/calendar');
     return NextResponse.json({ error: 'Errore nella sincronizzazione calendario' }, { status: 500 });
   }
 }
@@ -126,7 +127,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ imported, total: events.length });
   } catch (error) {
-    console.error('Calendar import error:', error);
+    captureApiError(error, 'PUT /api/calendar');
     return NextResponse.json({ error: 'Errore nell\'importazione eventi' }, { status: 500 });
   }
 }

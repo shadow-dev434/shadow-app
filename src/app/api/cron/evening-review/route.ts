@@ -23,6 +23,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 import { computeEveningReviewSignal } from '@/lib/evening-review/compute-signal';
 import { sendEveningReviewEmail } from '@/lib/evening-review/evening-email';
 import { sendBetaAlert } from '@/lib/beta/alert';
@@ -109,7 +110,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ candidates: byUser.size, sent, skipped, failed });
   } catch (err) {
-    console.error('[/api/cron/evening-review] error:', err);
+    captureApiError(err, 'GET /api/cron/evening-review');
     await sendBetaAlert(
       'Shadow — cron review serale CRASHATO',
       `Il cron ha sollevato un'eccezione: ${err instanceof Error ? err.message : String(err)}`,

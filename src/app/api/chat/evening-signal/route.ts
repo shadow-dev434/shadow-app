@@ -27,6 +27,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
+import { captureApiError } from '@/lib/observability';
 import { computeEveningReviewSignal } from '@/lib/evening-review/compute-signal';
 
 export async function GET(req: NextRequest) {
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
     const signal = await computeEveningReviewSignal(userId, clientTime, clientDate);
     return NextResponse.json(signal);
   } catch (err) {
-    console.error('[/api/chat/evening-signal] error:', err);
+    captureApiError(err, 'GET /api/chat/evening-signal');
     return NextResponse.json({ shouldStart: false }, { status: 500 });
   }
 }

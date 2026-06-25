@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
+import { captureApiError } from '@/lib/observability';
 import { classifyTaskWithAI } from '@/lib/engines/profiling-engine';
 import { prioritizeTask } from '@/lib/engines/priority-engine';
 import { getCurrentTimeSlot } from '@/lib/engines/execution-engine';
@@ -119,7 +120,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ classification });
   } catch (error) {
-    console.error('POST /api/ai-classify error:', error);
+    captureApiError(error, 'POST /api/ai-classify');
     return NextResponse.json({ error: 'Classification failed' }, { status: 500 });
   }
 }

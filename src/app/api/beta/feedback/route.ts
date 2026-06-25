@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { hasGivenConsent } from '@/lib/beta/consent-guard';
+import { captureApiError } from '@/lib/observability';
 
 const KINDS = new Set(['daily_pulse', 'weekly', 'final', 'baseline']);
 // One-shot per utente (a differenza di daily_pulse, uno al giorno): la unique
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
       throw err;
     }
   } catch (err) {
-    console.error('POST /api/beta/feedback error:', err);
+    captureApiError(err, 'POST /api/beta/feedback');
     return NextResponse.json({ error: 'Failed to save feedback' }, { status: 500 });
   }
 }

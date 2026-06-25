@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { dbRecordToProfileData } from '@/lib/engines/learning-engine';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/adaptive-profile
 export async function GET(req: NextRequest) {
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ profile: parsed }, { status: 201 });
   } catch (error) {
-    console.error('Error creating adaptive profile:', error);
+    captureApiError(error, 'POST /api/adaptive-profile');
     return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 });
   }
 }
@@ -147,7 +148,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ profile: parsed });
   } catch (error) {
-    console.error('Error updating adaptive profile:', error);
+    captureApiError(error, 'PATCH /api/adaptive-profile');
     return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
   }
 }

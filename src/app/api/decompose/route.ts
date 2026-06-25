@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { decomposeWithAI } from '@/lib/engines/decomposition-engine';
 import type { ExecutionContext } from '@/lib/types/shadow';
+import { captureApiError } from '@/lib/observability';
 
 // POST /api/decompose — decompose a task into micro-steps
 export async function POST(req: NextRequest) {
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
       source: result.raw === '[fallback]' ? 'fallback' : 'ai',
     });
   } catch (error) {
-    console.error('POST /api/decompose error:', error);
+    captureApiError(error, 'POST /api/decompose');
     return NextResponse.json({ error: 'Decomposition failed' }, { status: 500 });
   }
 }

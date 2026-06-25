@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { encode } from 'next-auth/jwt';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 import { getAuthSecret } from '@/lib/auth-secret';
 
 const SESSION_COOKIE_NAME = 'next-auth.session-token';
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('Registration error:', error);
+    captureApiError(error, 'POST /api/auth/register');
     return NextResponse.json({ error: 'Errore durante la registrazione' }, { status: 500 });
   }
 }

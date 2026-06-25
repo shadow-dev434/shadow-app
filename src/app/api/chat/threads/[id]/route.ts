@@ -25,6 +25,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 import { threadSidebarLabel } from '@/lib/chat/day-rollover';
 
 const MESSAGE_LIMIT = 500;
@@ -74,7 +75,7 @@ export async function GET(
       messages,
     });
   } catch (err) {
-    console.error('[/api/chat/threads/[id]] error:', err);
+    captureApiError(err, 'GET /api/chat/threads/[id]');
     return NextResponse.json({ error: 'Failed to load thread' }, { status: 500 });
   }
 }

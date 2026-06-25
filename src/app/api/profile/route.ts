@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/profile
 export async function GET(req: NextRequest) {
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('GET /api/profile error:', error);
+    captureApiError(error, 'GET /api/profile');
     return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 });
   }
 }
@@ -59,7 +60,7 @@ export async function PATCH(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('PATCH /api/profile error:', error);
+    captureApiError(error, 'PATCH /api/profile');
     return NextResponse.json({ error: 'Failed to update profile' }, { status: 500 });
   }
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
+import { captureApiError } from '@/lib/observability';
 import { db } from '@/lib/db';
 import { callLLM } from '@/lib/llm/client';
 import { recordAiUsage, getDailyCalls } from '@/lib/llm/usage';
@@ -112,7 +113,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ text: llm.text.trim(), costUsd: llm.costUsd });
   } catch (error) {
-    console.error('POST /api/body-double/checkin error:', error);
+    captureApiError(error, 'POST /api/body-double/checkin');
     return NextResponse.json({ error: 'Check-in non riuscito' }, { status: 500 });
   }
 }

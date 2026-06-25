@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/calendar/oauth/callback — Exchange OAuth code for tokens
 export async function GET(req: NextRequest) {
@@ -80,7 +81,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.redirect(new URL('/?action=settings&calendar=connected', req.url));
   } catch (error) {
-    console.error('Calendar OAuth callback error:', error);
+    captureApiError(error, 'GET /api/calendar/oauth/callback');
     return NextResponse.redirect(new URL('/?action=settings&calendar=error&msg=unknown', req.url));
   }
 }

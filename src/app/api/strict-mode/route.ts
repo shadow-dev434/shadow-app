@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/strict-mode — Get active strict mode session
 export async function GET(req: NextRequest) {
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('GET /api/strict-mode error:', error);
+    captureApiError(error, 'GET /api/strict-mode');
     return NextResponse.json({ error: 'Failed to fetch strict mode session' }, { status: 500 });
   }
 }
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
       },
     }, { status: 201 });
   } catch (error) {
-    console.error('POST /api/strict-mode error:', error);
+    captureApiError(error, 'POST /api/strict-mode');
     return NextResponse.json({ error: 'Failed to activate strict mode' }, { status: 500 });
   }
 }
@@ -162,7 +163,7 @@ export async function PATCH(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('PATCH /api/strict-mode error:', error);
+    captureApiError(error, 'PATCH /api/strict-mode');
     return NextResponse.json({ error: 'Failed to update strict mode session' }, { status: 500 });
   }
 }

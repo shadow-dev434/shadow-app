@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // POST /api/onboarding/reset
 // Resetta lo stato onboarding dell'utente. Usato da
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('POST /api/onboarding/reset error:', err);
+    captureApiError(err, 'POST /api/onboarding/reset');
     return NextResponse.json({ error: 'Reset failed' }, { status: 500 });
   }
 }

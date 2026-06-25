@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/settings
 export async function GET(req: NextRequest) {
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json({ settings });
   } catch (error) {
-    console.error('GET /api/settings error:', error);
+    captureApiError(error, 'GET /api/settings');
     return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
   }
 }
@@ -65,7 +66,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ settings: updated });
   } catch (error) {
-    console.error('PATCH /api/settings error:', error);
+    captureApiError(error, 'PATCH /api/settings');
     return NextResponse.json({ error: 'Failed to update settings' }, { status: 500 });
   }
 }

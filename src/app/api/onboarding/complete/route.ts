@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // POST /api/onboarding/complete
 // Finalizza l'onboarding: legge le risposte grezze salvate via PATCH,
@@ -191,7 +192,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, onboardingComplete: true });
   } catch (err) {
-    console.error('POST /api/onboarding/complete error:', err);
+    captureApiError(err, 'POST /api/onboarding/complete');
     return NextResponse.json({ error: 'Onboarding completion failed' }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // POST /api/consent
 // Registra il consenso esplicito pre-onboarding (gate art. 9). Sink di
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('POST /api/consent error:', err);
+    captureApiError(err, 'POST /api/consent');
     return NextResponse.json({ error: 'Salvataggio consenso fallito' }, { status: 500 });
   }
 }
@@ -70,7 +71,7 @@ export async function DELETE(req: NextRequest) {
     });
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('DELETE /api/consent error:', err);
+    captureApiError(err, 'DELETE /api/consent');
     return NextResponse.json({ error: 'Revoca consenso fallita' }, { status: 500 });
   }
 }

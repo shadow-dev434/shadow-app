@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { buildMemoryEntry } from '@/lib/engines/memory-engine';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/memory?type=XXX&category=XXX&limit=50
 export async function GET(req: NextRequest) {
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ memory, created: true }, { status: 201 });
   } catch (error) {
-    console.error('Error storing memory:', error);
+    captureApiError(error, 'POST /api/memory');
     return NextResponse.json({ error: 'Failed to store memory' }, { status: 500 });
   }
 }

@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
+import { captureApiError } from '@/lib/observability';
 import { db } from '@/lib/db';
 import {
   generateProactiveResponse,
@@ -410,7 +411,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }
   } catch (error) {
-    console.error('AI Assistant API error:', error);
+    captureApiError(error, 'POST /api/ai-assistant');
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -464,7 +465,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ insights, triggers: filteredTriggers });
   } catch (error) {
-    console.error('AI Assistant GET error:', error);
+    captureApiError(error, 'GET /api/ai-assistant');
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

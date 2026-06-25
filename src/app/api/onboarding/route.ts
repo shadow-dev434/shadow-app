@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/onboarding
 // Ritorna stato corrente per permettere al frontend di riprendere da
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
       onboardingComplete: profile?.onboardingComplete ?? false,
     });
   } catch (err) {
-    console.error('GET /api/onboarding error:', err);
+    captureApiError(err, 'GET /api/onboarding');
     return NextResponse.json({ error: 'Failed to read onboarding state' }, { status: 500 });
   }
 }
@@ -104,7 +105,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('PATCH /api/onboarding error:', err);
+    captureApiError(err, 'PATCH /api/onboarding');
     return NextResponse.json({ error: 'Failed to save onboarding state' }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 import { addDaysIso, formatTodayInRome } from '@/lib/evening-review/dates';
 
 // POST /api/review — save a daily review
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ review });
   } catch (error) {
-    console.error('POST /api/review error:', error);
+    captureApiError(error, 'POST /api/review');
     return NextResponse.json({ error: 'Failed to save review' }, { status: 500 });
   }
 }
@@ -90,7 +91,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ reviews });
   } catch (error) {
-    console.error('GET /api/review error:', error);
+    captureApiError(error, 'GET /api/review');
     return NextResponse.json({ error: 'Failed to fetch reviews' }, { status: 500 });
   }
 }

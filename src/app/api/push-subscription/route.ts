@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // POST /api/push-subscription — Save push subscription
 export async function POST(req: NextRequest) {
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Push subscription error:', error);
+    captureApiError(error, 'POST /api/push-subscription');
     return NextResponse.json({ error: 'Errore nel salvataggio sottoscrizione' }, { status: 500 });
   }
 }
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
     const sub = await db.pushSubscription.findUnique({ where: { userId } });
     return NextResponse.json({ subscribed: !!sub });
   } catch (error) {
-    console.error('Push subscription check error:', error);
+    captureApiError(error, 'GET /api/push-subscription');
     return NextResponse.json({ error: 'Errore nella verifica sottoscrizione' }, { status: 500 });
   }
 }
@@ -62,7 +63,7 @@ export async function DELETE(req: NextRequest) {
     await db.pushSubscription.deleteMany({ where: { userId } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Push subscription delete error:', error);
+    captureApiError(error, 'DELETE /api/push-subscription');
     return NextResponse.json({ error: 'Errore nella rimozione sottoscrizione' }, { status: 500 });
   }
 }

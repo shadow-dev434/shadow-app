@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
+import { captureApiError } from '@/lib/observability';
 import { db } from '@/lib/db';
 import { orchestrate } from '@/lib/chat/orchestrator';
 import { isInsideEveningWindow } from '@/lib/evening-review/window';
@@ -84,7 +85,7 @@ export async function POST(req: NextRequest) {
       ...result,
     });
   } catch (err) {
-    console.error('[bootstrap] ERROR:', err);
+    captureApiError(err, 'POST /api/chat/bootstrap');
     return NextResponse.json({ triggered: false });
   }
 }

@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { hasGivenConsent } from '@/lib/beta/consent-guard';
+import { captureApiError } from '@/lib/observability';
 import {
   INSTRUMENTS,
   allAnswered,
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ responses });
   } catch (err) {
-    console.error('GET /api/beta/assessment error:', err);
+    captureApiError(err, 'GET /api/beta/assessment');
     return NextResponse.json({ error: 'Failed to fetch assessments' }, { status: 500 });
   }
 }
@@ -139,7 +140,7 @@ export async function PATCH(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error('PATCH /api/beta/assessment error:', err);
+    captureApiError(err, 'PATCH /api/beta/assessment');
     return NextResponse.json({ error: 'Failed to save assessment' }, { status: 500 });
   }
 }

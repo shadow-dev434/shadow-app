@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/micro-feedback?limit=50
 export async function GET(req: NextRequest) {
@@ -163,7 +164,7 @@ export async function POST(req: NextRequest) {
       updatesApplied: Object.keys(updateData),
     });
   } catch (error) {
-    console.error('Error processing micro-feedback:', error);
+    captureApiError(error, 'POST /api/micro-feedback');
     return NextResponse.json({ error: 'Failed to process feedback' }, { status: 500 });
   }
 }

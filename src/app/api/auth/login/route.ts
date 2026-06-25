@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { encode } from 'next-auth/jwt';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 import { getAuthSecret } from '@/lib/auth-secret';
 import { isLoginLocked, recordLoginFailure, clearLoginFailures } from '@/lib/login-throttle';
 
@@ -95,7 +96,7 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error('Login error:', error);
+    captureApiError(error, 'POST /api/auth/login');
     return NextResponse.json({ error: 'Errore durante il login' }, { status: 500 });
   }
 }

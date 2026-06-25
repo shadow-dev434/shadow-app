@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { getTtsProvider } from '@/lib/voice/provider';
 import { recordAiUsage, getDailyCalls } from '@/lib/llm/usage';
+import { captureApiError } from '@/lib/observability';
 
 export const maxDuration = 30;
 
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('POST /api/voice/speak error:', error);
+    captureApiError(error, 'POST /api/voice/speak');
     return NextResponse.json({ error: 'Sintesi vocale non riuscita' }, { status: 502 });
   }
 }

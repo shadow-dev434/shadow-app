@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminSession } from '@/lib/beta/admin-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 const PULSE_NUMERIC_KEYS = ['useful', 'focus', 'control', 'procrastination'] as const;
 type PulseKey = (typeof PULSE_NUMERIC_KEYS)[number];
@@ -139,7 +140,7 @@ export async function GET(req: NextRequest) {
       })),
     });
   } catch (err) {
-    console.error('GET /api/admin/beta/summary error:', err);
+    captureApiError(err, 'GET /api/admin/beta/summary');
     return NextResponse.json({ error: 'Failed to build summary' }, { status: 500 });
   }
 }

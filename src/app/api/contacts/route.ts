@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/contacts — List contacts
 export async function GET(req: NextRequest) {
@@ -14,7 +15,7 @@ export async function GET(req: NextRequest) {
     });
     return NextResponse.json({ contacts });
   } catch (error) {
-    console.error('Fetch contacts error:', error);
+    captureApiError(error, 'GET /api/contacts');
     return NextResponse.json({ error: 'Errore nel caricamento contatti' }, { status: 500 });
   }
 }
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ contact });
   } catch (error) {
-    console.error('Create contact error:', error);
+    captureApiError(error, 'POST /api/contacts');
     return NextResponse.json({ error: 'Errore nella creazione contatto' }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/patterns — get user patterns
 export async function GET(req: NextRequest) {
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('GET /api/patterns error:', error);
+    captureApiError(error, 'GET /api/patterns');
     return NextResponse.json({ error: 'Failed to fetch patterns' }, { status: 500 });
   }
 }

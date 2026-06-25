@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { addDaysIso, formatDateInRome, formatTodayInRome } from '@/lib/evening-review/dates';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/streaks — Get streak data for visualization
 export async function GET(req: NextRequest) {
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
       totalAvoided: patterns?.totalTasksAvoided || 0,
     });
   } catch (error) {
-    console.error('Streaks fetch error:', error);
+    captureApiError(error, 'GET /api/streaks');
     return NextResponse.json({ error: 'Errore nel caricamento streak' }, { status: 500 });
   }
 }
@@ -128,7 +129,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ streak });
   } catch (error) {
-    console.error('Streak save error:', error);
+    captureApiError(error, 'POST /api/streaks');
     return NextResponse.json({ error: 'Errore nel salvataggio streak' }, { status: 500 });
   }
 }

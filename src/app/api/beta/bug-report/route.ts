@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { sendBetaAlert } from '@/lib/beta/alert';
+import { captureApiError } from '@/lib/observability';
 
 const AREAS = new Set([
   'chat',
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ reports });
   } catch (err) {
-    console.error('GET /api/beta/bug-report error:', err);
+    captureApiError(err, 'GET /api/beta/bug-report');
     return NextResponse.json({ error: 'Failed to fetch bug reports' }, { status: 500 });
   }
 }
@@ -120,7 +121,7 @@ export async function POST(req: NextRequest) {
       report: { id: report.id, status: report.status, createdAt: report.createdAt },
     });
   } catch (err) {
-    console.error('POST /api/beta/bug-report error:', err);
+    captureApiError(err, 'POST /api/beta/bug-report');
     return NextResponse.json({ error: 'Failed to save bug report' }, { status: 500 });
   }
 }

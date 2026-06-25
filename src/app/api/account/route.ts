@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // DELETE /api/account — cancellazione irreversibile account + tutti i dati utente.
 // Si appoggia a onDelete: Cascade su tutte le relazioni di User (27 Cascade, 0 Restrict):
@@ -18,7 +19,7 @@ export async function DELETE(req: NextRequest) {
     ]);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('DELETE /api/account error:', err);
+    captureApiError(err, 'DELETE /api/account');
     return NextResponse.json({ error: 'Eliminazione account fallita' }, { status: 500 });
   }
 }

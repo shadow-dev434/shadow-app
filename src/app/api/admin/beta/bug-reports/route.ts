@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { requireAdminSession } from '@/lib/beta/admin-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 const STATUSES = new Set(['new', 'triaged', 'in_progress', 'fixed', 'wont_fix', 'duplicate']);
 const PRIORITIES = new Set(['P0', 'P1', 'P2', 'P3']);
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ reports });
   } catch (err) {
-    console.error('GET /api/admin/beta/bug-reports error:', err);
+    captureApiError(err, 'GET /api/admin/beta/bug-reports');
     return NextResponse.json({ error: 'Failed to fetch reports' }, { status: 500 });
   }
 }
@@ -99,7 +100,7 @@ export async function PATCH(req: NextRequest) {
       throw err;
     }
   } catch (err) {
-    console.error('PATCH /api/admin/beta/bug-reports error:', err);
+    captureApiError(err, 'PATCH /api/admin/beta/bug-reports');
     return NextResponse.json({ error: 'Failed to update report' }, { status: 500 });
   }
 }

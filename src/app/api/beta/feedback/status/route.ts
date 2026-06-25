@@ -9,6 +9,7 @@ import { db } from '@/lib/db';
 import { isInsideEveningWindow } from '@/lib/evening-review/window';
 import { formatDateInRome } from '@/lib/evening-review/dates';
 import { computeBetaStatus } from '@/lib/beta/feedback-status';
+import { captureApiError } from '@/lib/observability';
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -90,7 +91,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(status);
   } catch (err) {
-    console.error('GET /api/beta/feedback/status error:', err);
+    captureApiError(err, 'GET /api/beta/feedback/status');
     return NextResponse.json({ error: 'Failed to compute status' }, { status: 500 });
   }
 }

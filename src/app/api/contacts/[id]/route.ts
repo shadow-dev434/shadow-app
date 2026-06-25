@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // DELETE /api/contacts/[id] — Delete a contact
 export async function DELETE(
@@ -31,7 +32,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Delete contact error:', error);
+    captureApiError(error, 'DELETE /api/contacts/[id]');
     return NextResponse.json({ error: 'Errore nell\'eliminazione contatto' }, { status: 500 });
   }
 }
@@ -64,7 +65,7 @@ export async function PATCH(
 
     return NextResponse.json({ contact });
   } catch (error) {
-    console.error('Update contact error:', error);
+    captureApiError(error, 'PATCH /api/contacts/[id]');
     return NextResponse.json({ error: 'Errore nell\'aggiornamento contatto' }, { status: 500 });
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 export const maxDuration = 60;
 
@@ -108,7 +109,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Export error:', error);
+    captureApiError(error, 'GET /api/export');
     return NextResponse.json({ error: 'Errore nell\'esportazione dati' }, { status: 500 });
   }
 }
