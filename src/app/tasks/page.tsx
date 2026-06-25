@@ -179,6 +179,10 @@ async function createTask(title: string, extra?: Record<string, unknown>): Promi
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title, status: 'inbox', ...extra }),
   });
+  // B2 (audit pre-beta): senza questo check, un 500 (es. drift schema) o un blip
+  // di rete non solleva → i chiamanti applicavano l'update ottimistico su un
+  // salvataggio mai avvenuto (desync silenzioso, falso "fatto").
+  if (!res.ok) throw new Error(`createTask HTTP ${res.status}`);
   const data = await res.json();
   return data.task;
 }
@@ -189,12 +193,14 @@ async function updateTaskAPI(id: string, updates: Partial<ShadowTask>): Promise<
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   });
+  if (!res.ok) throw new Error(`updateTask HTTP ${res.status}`);
   const data = await res.json();
   return data.task;
 }
 
 async function deleteTaskAPI(id: string): Promise<void> {
-  await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+  const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`deleteTask HTTP ${res.status}`);
 }
 
 async function decomposeTask(taskId: string, taskTitle: string, taskDescription: string, energy: number, timeAvailable: number, currentContext: string) {
@@ -1116,8 +1122,8 @@ function StrictModeExitDialogConnected() {
 
     const selectedTask = store.tasks.find((t) => t.id === store.selectedTaskId);
     if (selectedTask) {
-      updateTaskAPI(selectedTask.id, { status: 'planned' });
       store.updateTask(selectedTask.id, { status: 'planned' });
+      void updateTaskAPI(selectedTask.id, { status: 'planned' }).catch(() => {});
     }
 
     store.setStrictModeState('exited');
@@ -1156,7 +1162,7 @@ function PriorityConfirmDialog() {
     if (!classification) return;
     const unclassifiedTask = store.tasks.find(t => t.status === 'inbox' && !t.aiClassified);
     if (unclassifiedTask) {
-      await updateTaskAPI(unclassifiedTask.id, {
+      void updateTaskAPI(unclassifiedTask.id, {
         importance: classification.importance,
         urgency: classification.urgency,
         resistance: classification.resistance,
@@ -1171,7 +1177,7 @@ function PriorityConfirmDialog() {
         aiClassified: true,
         aiClassificationData: JSON.stringify(classification),
         status: 'planned',
-      });
+      }).catch(() => toast({ title: 'Salvataggio non riuscito', description: 'Riprova', variant: 'destructive' }));
       store.updateTask(unclassifiedTask.id, {
         importance: classification.importance,
         urgency: classification.urgency,
@@ -2043,9 +2049,15 @@ function InboxView() {
   }, [newTask, isCreating, store, setTranscript]);
 
   const handleDelete = useCallback(async (id: string) => {
-    await deleteTaskAPI(id);
+    const prev = store.tasks;
     store.setTasks(store.tasks.filter((t) => t.id !== id));
-    toast({ title: 'Task eliminato' });
+    try {
+      await deleteTaskAPI(id);
+      toast({ title: 'Task eliminato' });
+    } catch {
+      store.setTasks(prev);
+      toast({ title: 'Non sono riuscito a eliminare', description: 'Riprova', variant: 'destructive' });
+    }
   }, [store]);
 
   return (
@@ -2479,16 +2491,37 @@ function FocusView() {
 
   const handleStepDone = useCallback(async (stepIdx: number) => {
     if (!selectedTask) return;
+    const prevSteps = selectedTask.microSteps;
+    const prevIdx = selectedTask.currentStepIdx;
     const steps = parseMicroSteps(selectedTask.microSteps);
     steps[stepIdx].done = true;
-    await updateTaskAPI(selectedTask.id, { microSteps: JSON.stringify(steps), currentStepIdx: stepIdx + 1 });
-    store.updateTask(selectedTask.id, { microSteps: JSON.stringify(steps), currentStepIdx: stepIdx + 1 });
+    const nextSteps = JSON.stringify(steps);
+    // Ottimistico, ma con rollback + toast se il server non salva (B2).
+    store.updateTask(selectedTask.id, { microSteps: nextSteps, currentStepIdx: stepIdx + 1 });
+    try {
+      await updateTaskAPI(selectedTask.id, { microSteps: nextSteps, currentStepIdx: stepIdx + 1 });
+    } catch {
+      store.updateTask(selectedTask.id, { microSteps: prevSteps, currentStepIdx: prevIdx });
+      toast({ title: 'Non sono riuscito a salvare', description: 'Riprova', variant: 'destructive' });
+    }
   }, [selectedTask, store]);
 
   const handleComplete = useCallback(async () => {
     if (!selectedTask) return;
-    await updateTaskAPI(selectedTask.id, { status: 'completed', completedAt: new Date().toISOString() });
-    store.updateTask(selectedTask.id, { status: 'completed', completedAt: new Date().toISOString() });
+    const prevStatus = selectedTask.status;
+    const prevCompletedAt = selectedTask.completedAt;
+    const completedAt = new Date().toISOString();
+    // Ottimistico + rollback (B2): se il salvataggio fallisce non smontiamo la
+    // UI di esecuzione (return) così l'utente può ritentare, invece di vedere
+    // un falso "completato" che riappare al refresh.
+    store.updateTask(selectedTask.id, { status: 'completed', completedAt });
+    try {
+      await updateTaskAPI(selectedTask.id, { status: 'completed', completedAt });
+    } catch {
+      store.updateTask(selectedTask.id, { status: prevStatus, completedAt: prevCompletedAt });
+      toast({ title: 'Non sono riuscito a completare', description: 'Riprova', variant: 'destructive' });
+      return;
+    }
     store.setIsExecuting(false);
     store.setExecutionMode('none');
     store.setFocusModeActive(false);
@@ -2588,8 +2621,8 @@ function FocusView() {
 
     // Soft mode or no strict — end immediately
     if (selectedTask) {
-      updateTaskAPI(selectedTask.id, { status: 'planned' });
       store.updateTask(selectedTask.id, { status: 'planned' });
+      void updateTaskAPI(selectedTask.id, { status: 'planned' }).catch(() => {});
     }
 
     if (store.strictModeState === 'active_soft' && store.strictSessionId) {
@@ -2860,9 +2893,15 @@ function TaskDetailView() {
 
   const handleSave = useCallback(async () => {
     if (!selectedTask) return;
-    await updateTaskAPI(selectedTask.id, { ...formState, status: 'planned' });
+    const prev = { ...selectedTask };
     store.updateTask(selectedTask.id, { ...formState, status: 'planned' });
-    toast({ title: 'Task aggiornato' });
+    try {
+      await updateTaskAPI(selectedTask.id, { ...formState, status: 'planned' });
+      toast({ title: 'Task aggiornato' });
+    } catch {
+      store.updateTask(selectedTask.id, prev);
+      toast({ title: 'Non sono riuscito a salvare', description: 'Riprova', variant: 'destructive' });
+    }
   }, [selectedTask, formState, store]);
 
   const handleDecompose = useCallback(async () => {
@@ -2885,10 +2924,16 @@ function TaskDetailView() {
 
   const handleDelete = useCallback(async () => {
     if (!selectedTask) return;
-    await deleteTaskAPI(selectedTask.id);
+    const prev = store.tasks;
     store.removeTask(selectedTask.id);
     store.setCurrentView('inbox');
-    toast({ title: 'Eliminato' });
+    try {
+      await deleteTaskAPI(selectedTask.id);
+      toast({ title: 'Eliminato' });
+    } catch {
+      store.setTasks(prev);
+      toast({ title: 'Non sono riuscito a eliminare', description: 'Riprova', variant: 'destructive' });
+    }
   }, [selectedTask, store]);
 
   if (!selectedTask) return <div className="max-w-2xl mx-auto px-4 py-12 text-center"><p className="text-zinc-400">Nessun task</p></div>;
