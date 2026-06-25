@@ -88,7 +88,11 @@ adozione `captureApiError` sulle route restanti; CSP; app-picker nativo (B8).
 
 **Review avversariale del diff A-D** (workflow multi-agente: review per dimensione → refutazione di ogni finding): 12 finding, 7 confermati. Fixati (commit `0776fae`): guardie `if(!res.ok)` su `fetchTasks`/`decomposeTask`/`classifyTaskAI`/`loadProfile` (su 401 apiFetch fa il re-login ma ritornava la Response → parse di body non-JSON); revert di `captureApiError` sul 502 di `voice/speak` (fallimento upstream atteso = rumore Sentry). Tenuti per scelta motivata: `recordSignal` resta raw fetch (telemetria best-effort fuori scope); `AppBlockerCard` mantiene la selezione su errore di salvataggio (retry-friendly) invece di scartarla. Dopo i fix: tsc + 802 test + build verdi.
 
-**Commit della sessione su `feature/60-beta-hardening`** (non pushati): `a3fb338` (A), `2e10413` (B), `22254f5` (C), `d95c224` (D), `0776fae` (fix review). Branch a +18 su `origin/main`.
+**Polish §5 fatti** (commit `5304041`): export GDPR include i `RecurringTask`; `getCurrentTimeSlot` (execution-engine + decompose) usa l'ora di Rome via nuovo `nowHourInRome()` invece dell'UTC del server; `chat/bootstrap` ha `maxDuration=60`; la review serale legacy controlla `res.ok` (niente "Review salvata" su POST fallito).
+
+**Correzione all'audit (§5 lint):** il finding "47 errori da artefatti/reel non ignorati" è **stale** — i ~48 errori `bun run lint` sono per lo più in `src/` reale (≈40) e sono **diagnostiche del React Compiler** (setState-in-effect, memoization non preservata), non bug; la config prova a spegnere `react-compiler/react-compiler` ma in Next 16 il nome regola è cambiato. Ripristinare il gate = tuning config con giudizio (NON un ignore di artefatti) → resta follow-up separato, non quick-win. Restano §5: SW offline.html/errorPath (tocca `public/sw.js` + bump cache), perf middleware (1 query Neon/nav), accessibilità, i18n IT-only dichiarato, retention/DPIA.
+
+**Commit della sessione su `feature/60-beta-hardening`** (non pushati): `a3fb338` (A), `2e10413` (B), `22254f5` (C), `d95c224` (D), `0776fae` (fix review), `5304041` (polish §5). Branch a +20 su `origin/main`.
 
 ---
 
