@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { hasGivenConsent } from '@/lib/beta/consent-guard';
 import {
   INSTRUMENTS,
   allAnswered,
@@ -61,6 +62,11 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const { error, userId } = await requireSession(req);
   if (error) return error;
+
+  // Sink art.9: niente persistenza di punteggi clinici senza consenso registrato.
+  if (!(await hasGivenConsent(userId))) {
+    return NextResponse.json({ error: 'consent required' }, { status: 403 });
+  }
 
   try {
     const body = await req.json();

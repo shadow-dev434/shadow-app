@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { ClipboardList, Loader2, Moon, X } from 'lucide-react';
 import { BugReportDialog } from '@/features/beta/BugReportDialog';
 
@@ -109,6 +110,9 @@ async function postFeedback(kind: string, day: string, answers: object): Promise
 
 export function BetaCheckin({ suppress }: { suppress?: boolean }) {
   const router = useRouter();
+  // Affordance beta-only: pulse e questionari clinici (art.9) solo agli invitati.
+  const { data: session } = useSession();
+  const isBetaTester = session?.user?.isBetaTester ?? false;
   const [status, setStatus] = useState<BetaStatusDto | null>(null);
   const [flow, setFlow] = useState<'none' | 'pulse' | 'weekly'>('none');
   const [dismissed, setDismissed] = useState<{ [k: string]: boolean }>({});
@@ -133,6 +137,7 @@ export function BetaCheckin({ suppress }: { suppress?: boolean }) {
   }, []);
 
   useEffect(() => {
+    if (!isBetaTester) return;
     void loadStatus();
     // Ricalcola quando l'app torna in foreground (TWA/PWA in resume non
     // rimontano la pagina) o quando la tab ridiventa visibile.
@@ -145,9 +150,9 @@ export function BetaCheckin({ suppress }: { suppress?: boolean }) {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
     };
-  }, [loadStatus]);
+  }, [loadStatus, isBetaTester]);
 
-  if (suppress || !status) return null;
+  if (!isBetaTester || suppress || !status) return null;
 
   if (flow === 'pulse') {
     return (

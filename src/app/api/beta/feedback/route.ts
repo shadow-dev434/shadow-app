@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { hasGivenConsent } from '@/lib/beta/consent-guard';
 
 const KINDS = new Set(['daily_pulse', 'weekly', 'final', 'baseline']);
 // One-shot per utente (a differenza di daily_pulse, uno al giorno): la unique
@@ -18,6 +19,12 @@ const MAX_ANSWERS_CHARS = 16_000;
 export async function POST(req: NextRequest) {
   const { error, userId } = await requireSession(req);
   if (error) return error;
+
+  // Sink dati beta (i kind baseline/final includono covariate diagnosi/farmaci,
+  // art.9): niente persistenza senza consenso registrato.
+  if (!(await hasGivenConsent(userId))) {
+    return NextResponse.json({ error: 'consent required' }, { status: 403 });
+  }
 
   try {
     const body = await req.json();
