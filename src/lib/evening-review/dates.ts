@@ -201,3 +201,18 @@ export function nowHHMMInRome(): string {
   );
   return `${parts.hour}:${parts.minute}`;
 }
+
+/**
+ * Ora corrente (0-23) wall-clock in Europe/Rome. Server-side i runtime girano in
+ * UTC: lo scoring per-fascia oraria (getCurrentTimeSlot) deve usare l'ora di Rome,
+ * non `new Date().getHours()` del server, altrimenti la fascia slitta di 1-2h.
+ */
+export function nowHourInRome(): number {
+  const fmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Rome',
+    hour: '2-digit',
+    hour12: false,
+  });
+  const hour = fmt.formatToParts(new Date()).find((p) => p.type === 'hour')?.value ?? '0';
+  return Number(hour) % 24;
+}

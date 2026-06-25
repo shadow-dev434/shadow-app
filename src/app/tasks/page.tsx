@@ -3053,7 +3053,7 @@ function ReviewView() {
     setIsSaving(true);
     try {
       // Save review
-      await fetch('/api/review', {
+      const res = await apiFetch('/api/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3067,7 +3067,11 @@ function ReviewView() {
             avoidedToday.map(t => ({ taskId: t.id, completed: false, avoided: true }))
           ),
         }),
+        skipErrorToast: true,
       });
+      // Task 60 §5: senza questo check, un POST fallito (500) mostrava comunque
+      // "Review salvata" → il catch sotto mostra invece "Errore".
+      if (!res.ok) throw new Error(`review HTTP ${res.status}`);
 
       // Record learning signals from the review
       if (completedToday.length > 0) {

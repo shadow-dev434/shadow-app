@@ -20,6 +20,9 @@ export async function GET(req: NextRequest) {
         profile: true,
         settings: true,
         tasks: true,
+        // GDPR completeness (Task 60 §5): i template ricorrenti (Task 46) sono
+        // dati dell'utente e vanno inclusi nell'export.
+        recurringTasks: true,
         contacts: true,
         streaks: true,
         notifications: true,

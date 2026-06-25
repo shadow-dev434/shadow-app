@@ -10,11 +10,13 @@ import type {
   RecoveryAction,
   AdaptiveProfileData,
 } from '@/lib/types/shadow';
+import { nowHourInRome } from '@/lib/evening-review/dates';
 
 // ── Time Slot Detection ─────────────────────────────────────────────────
 
 export function getCurrentTimeSlot(): 'morning' | 'afternoon' | 'evening' | 'night' {
-  const hour = new Date().getHours();
+  // Task 60 §5: ora di Rome, non UTC del server (slittava la fascia ai confini).
+  const hour = nowHourInRome();
   if (hour >= 6 && hour < 12) return 'morning';
   if (hour >= 12 && hour < 17) return 'afternoon';
   if (hour >= 17 && hour < 21) return 'evening';

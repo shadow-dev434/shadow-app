@@ -15,6 +15,11 @@ import { isInsideEveningWindow } from '@/lib/evening-review/window';
 import { eveningReviewHasPriority } from '@/lib/evening-review/priority';
 import { formatTodayInRome, formatDateInRome, nowHHMMInRome } from '@/lib/evening-review/dates';
 
+// Task 60 §5: la bootstrap puo' lanciare l'orchestrator LLM (morning check-in /
+// review serale) al primo mount → senza cap il default serverless rischia il
+// timeout proprio all'apertura dell'app.
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   const { error, userId } = await requireSession(req);
   if (error) return error;
