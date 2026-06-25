@@ -42,6 +42,9 @@ export async function sendEveningReviewEmail(email: string): Promise<boolean> {
   const base = (process.env.NEXTAUTH_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
   const url = `${base}/`;
   const subject = 'Shadow — è ora della review serale';
+  // Opt-out (B4): l'utente disattiva il promemoria dal toggle notifiche nelle
+  // impostazioni dell'app (PATCH /api/settings notificationsEnabled=false).
+  const unsubText = 'Per non ricevere più questi promemoria, disattiva le notifiche nelle impostazioni di Shadow.';
   const text = [
     'Ciao,',
     '',
@@ -52,6 +55,8 @@ export async function sendEveningReviewEmail(email: string): Promise<boolean> {
     '',
     'Se stasera non te la senti, va bene così — la ritrovi domani.',
     '',
+    unsubText,
+    '',
     'Shadow — il tuo executive function esterno',
   ].join('\n');
   const html = [
@@ -59,8 +64,12 @@ export async function sendEveningReviewEmail(email: string): Promise<boolean> {
     '<p>è la tua finestra serale: 10 minuti per chiudere la giornata e preparare domani con la <strong>review</strong>.</p>',
     `<p><a href="${url}">Apri Shadow</a></p>`,
     '<p>Se stasera non te la senti, va bene così — la ritrovi domani.</p>',
+    `<p style="color:#888;font-size:12px">${unsubText}</p>`,
     '<p style="color:#888;font-size:12px">Shadow — il tuo executive function esterno</p>',
   ].join('');
+  // List-Unsubscribe: in assenza di un endpoint one-click, puntiamo all'email
+  // del titolare beta (se configurata) come canale di disiscrizione richiesto.
+  const unsubTo = process.env.BETA_ALERT_EMAIL_TO?.split(',')[0]?.trim();
 
   try {
     const res = await fetch(RESEND_URL, {
@@ -69,7 +78,14 @@ export async function sendEveningReviewEmail(email: string): Promise<boolean> {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({ from, to: [email], subject, text, html }),
+      body: JSON.stringify({
+        from,
+        to: [email],
+        subject,
+        text,
+        html,
+        ...(unsubTo ? { headers: { 'List-Unsubscribe': `<mailto:${unsubTo}?subject=unsubscribe>` } } : {}),
+      }),
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) {

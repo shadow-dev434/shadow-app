@@ -45,6 +45,19 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
+    // Opt-out promemoria email + finestra serale (B4): scrivibili dall'utente.
+    // Senza questi, il toggle notifiche e la finestra restavano immutabili e
+    // l'utente non poteva fermare le email serali (problema di controllo art.9).
+    if (body.notificationsEnabled !== undefined) {
+      updateData.notificationsEnabled = Boolean(body.notificationsEnabled);
+    }
+    const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+    for (const field of ['eveningWindowStart', 'eveningWindowEnd'] as const) {
+      if (typeof body[field] === 'string' && HHMM.test(body[field])) {
+        updateData[field] = body[field];
+      }
+    }
+
     const updated = await db.settings.update({
       where: { id: settings.id },
       data: updateData,
