@@ -30,11 +30,21 @@ export interface StartShieldOptions {
 
 export interface StartShieldResult {
   started: boolean;
-  reason?: 'not-android' | 'permissions' | 'error';
+  reason?: 'not-android' | 'permissions' | 'error' | 'no-apps';
 }
 
 export async function startNativeShield(opts: StartShieldOptions): Promise<StartShieldResult> {
   if (!isAndroid()) return { started: false, reason: 'not-android' };
+
+  // B8 (audit pre-beta): senza app selezionate NON entrare in "blocca tutto".
+  // Il plugin nativo, con `packages` vuoto, andrebbe in blockAllMode e
+  // bloccherebbe OGNI app (WhatsApp, banca, mappe…) a sorpresa: esperienza
+  // punitiva e inattesa. Finché non c'è un app-picker (getInstalledApps() è già
+  // pronto lato plugin), lo scudo è un no-op quando la lista è vuota.
+  const packages = opts.blockedAppPackages ?? [];
+  if (packages.length === 0) {
+    return { started: false, reason: 'no-apps' };
+  }
 
   const perms = await getShieldPermissions();
   if (!shieldReady(perms)) {
@@ -49,7 +59,7 @@ export async function startNativeShield(opts: StartShieldOptions): Promise<Start
   try {
     await ShadowAppBlocker.startBlocking({
       sessionId: opts.sessionId,
-      packages: opts.blockedAppPackages,
+      packages,
       endsAtEpochMs: opts.endsAt,
       overlayTitle: 'Torna a Shadow',
       overlayBody: 'Sei in sessione focus. Quest\'app è in pausa.',
