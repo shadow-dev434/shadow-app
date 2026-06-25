@@ -37,6 +37,7 @@ import { signOut, useSession } from 'next-auth/react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { StrictModeExitDialog, type StrictModeExitResult } from '@/features/strict-mode/StrictModeExitDialog';
 import { SkyView } from '@/features/sky/SkyView';
+import { AppBlockerCard } from '@/components/native/app-blocker-card';
 import { APP_VERSION } from '@/lib/version';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -3353,6 +3354,10 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
           )}
         </CardContent>
       </Card>
+
+      {/* App-picker nativo (Task 60 / B8): solo Android, si auto-gata su isAndroid().
+          Sceglie le app messe in pausa dallo scudo durante lo strict mode. */}
+      <AppBlockerCard />
 
       {/* Export — affordance beta-only (dump JSON con cronologia chat) */}
       {isBetaTester && (
