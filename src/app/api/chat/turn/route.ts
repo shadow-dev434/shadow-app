@@ -13,6 +13,13 @@ import { db } from '@/lib/db';
 import { orchestrate, type ChatMode, type ChatAttachment } from '@/lib/chat/orchestrator';
 import { rollSummaryIfNeeded } from '@/lib/chat/summary';
 import { shouldRollOverThread } from '@/lib/chat/day-rollover';
+import { getDailyCalls, recordAiUsage } from '@/lib/llm/usage';
+
+// B3 (audit pre-beta): cap giornaliero per-utente sui turni chat. La route LLM
+// più trafficata (check-in, review serale su Sonnet, chat, vision) non aveva
+// alcun freno (fino a ~10 callLLM per turno, nessun limite sul numero di turni).
+// 0 = kill-switch (chat disabilitata), come il pattern di voice/body-double.
+const CHAT_DAILY_CAP = Number(process.env.CHAT_DAILY_CAP ?? '200');
 
 /**
  * Task 40: after() gira DENTRO il budget di durata residuo della stessa
@@ -96,6 +103,29 @@ export async function POST(req: NextRequest) {
   if (error) return error;
 
   try {
+    // Cap giornaliero / kill-switch (B3): respinge prima di qualunque chiamata LLM.
+    // Fail-open sulla LETTURA del consumo: un errore transitorio di AiUsage non
+    // deve rompere la chat (il cap è protezione costi, non percorso critico). Il
+    // kill-switch (cap<=0) invece blocca sempre, anche se la lettura fallisce.
+    if (CHAT_DAILY_CAP <= 0) {
+      return NextResponse.json(
+        { error: 'La chat è temporaneamente non disponibile.' },
+        { status: 429 },
+      );
+    }
+    let dailyChatCalls = 0;
+    try {
+      dailyChatCalls = await getDailyCalls(userId, 'chat');
+    } catch (err) {
+      console.error('[chat/turn] getDailyCalls failed, fail-open:', err);
+    }
+    if (dailyChatCalls >= CHAT_DAILY_CAP) {
+      return NextResponse.json(
+        { error: 'Hai raggiunto il limite di messaggi per oggi. Riprova domani.' },
+        { status: 429 },
+      );
+    }
+
     const body = await req.json();
     const { threadId, mode, userMessage, relatedTaskId, clientDate, attachments } = body as {
       threadId?: string;
@@ -190,6 +220,17 @@ export async function POST(req: NextRequest) {
       rollSummaryIfNeeded(result.threadId).catch(err =>
         console.error('[summary] after() trigger failed:', err),
       ),
+    );
+
+    // B3: registra il consumo del turno in AiUsage (alimenta il cap sopra e il
+    // budget per tier W3). result espone già i totali aggregati del turno.
+    after(() =>
+      recordAiUsage(userId, 'chat', {
+        model: 'chat-turn',
+        tokensIn: result.tokensIn,
+        tokensOut: result.tokensOut,
+        costUsd: result.costUsd,
+      }).catch(err => console.error('[ai-usage] chat turn failed:', err)),
     );
 
     // Task 41 (bug mode-sticky post-review): result.mode e' il mode
