@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/tasks — list all tasks, with optional filters
 export async function GET(req: NextRequest) {
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ tasks: serialized });
   } catch (error) {
-    console.error('GET /api/tasks error:', error);
+    captureApiError(error, 'GET /api/tasks');
     return NextResponse.json({ error: 'Failed to fetch tasks' }, { status: 500 });
   }
 }
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ task: serialized }, { status: 201 });
   } catch (error) {
-    console.error('POST /api/tasks error:', error);
+    captureApiError(error, 'POST /api/tasks');
     return NextResponse.json({ error: 'Failed to create task' }, { status: 500 });
   }
 }

@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { computeEveningReviewSignal } from '@/lib/evening-review/compute-signal';
 import { sendEveningReviewEmail } from '@/lib/evening-review/evening-email';
+import { sendBetaAlert } from '@/lib/beta/alert';
 import { nowHHMMInRome, formatTodayInRome, startOfDayInZone } from '@/lib/evening-review/dates';
 
 const PROMPT_TYPE = 'evening_review_prompt';
@@ -96,9 +97,23 @@ export async function GET(req: NextRequest) {
       sent++;
     }
 
+    // Observability (audit pre-beta): se c'erano candidati nella finestra ma
+    // NESSUN invio è riuscito, Resend è probabilmente rotto (dominio/API key) e
+    // i tester smettono di ricevere il promemoria del core loop in silenzio.
+    if (byUser.size > 0 && sent === 0 && failed > 0) {
+      await sendBetaAlert(
+        'Shadow — cron review serale: tutti gli invii falliti',
+        `candidates=${byUser.size} sent=0 failed=${failed}. Probabile problema Resend (RESEND_API_KEY / dominio verificato / EVENING_EMAIL_FROM).`,
+      );
+    }
+
     return NextResponse.json({ candidates: byUser.size, sent, skipped, failed });
   } catch (err) {
     console.error('[/api/cron/evening-review] error:', err);
+    await sendBetaAlert(
+      'Shadow — cron review serale CRASHATO',
+      `Il cron ha sollevato un'eccezione: ${err instanceof Error ? err.message : String(err)}`,
+    ).catch(() => {});
     return NextResponse.json({ error: 'cron failed' }, { status: 500 });
   }
 }

@@ -14,6 +14,7 @@ import { orchestrate, type ChatMode, type ChatAttachment } from '@/lib/chat/orch
 import { rollSummaryIfNeeded } from '@/lib/chat/summary';
 import { shouldRollOverThread } from '@/lib/chat/day-rollover';
 import { getDailyCalls, recordAiUsage } from '@/lib/llm/usage';
+import { captureApiError } from '@/lib/observability';
 
 // B3 (audit pre-beta): cap giornaliero per-utente sui turni chat. La route LLM
 // più trafficata (check-in, review serale su Sonnet, chat, vision) non aveva
@@ -240,8 +241,8 @@ export async function POST(req: NextRequest) {
     // a setThreadId a ogni risposta.
     return NextResponse.json(result);
   } catch (err) {
-    console.error('[/api/chat/turn] error:', err);
-    const message = err instanceof Error ? err.message : 'Internal error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    captureApiError(err, '/api/chat/turn');
+    // Messaggio generico: non esporre err.message (può rivelare dettagli interni).
+    return NextResponse.json({ error: 'Errore interno' }, { status: 500 });
   }
 }

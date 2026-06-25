@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { captureApiError } from '@/lib/observability';
 
 // GET /api/tasks/[id]
 export async function GET(
@@ -26,7 +27,7 @@ export async function GET(
 
     return NextResponse.json({ task: serialized });
   } catch (error) {
-    console.error('GET /api/tasks/[id] error:', error);
+    captureApiError(error, 'GET /api/tasks/[id]');
     return NextResponse.json({ error: 'Failed to fetch task' }, { status: 500 });
   }
 }
@@ -75,7 +76,7 @@ export async function PATCH(
 
     return NextResponse.json({ task: serialized });
   } catch (error) {
-    console.error('PATCH /api/tasks/[id] error:', error);
+    captureApiError(error, 'PATCH /api/tasks/[id]');
     return NextResponse.json({ error: 'Failed to update task' }, { status: 500 });
   }
 }
@@ -99,7 +100,7 @@ export async function DELETE(
     await db.task.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('DELETE /api/tasks/[id] error:', error);
+    captureApiError(error, 'DELETE /api/tasks/[id]');
     return NextResponse.json({ error: 'Failed to delete task' }, { status: 500 });
   }
 }
