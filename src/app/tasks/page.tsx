@@ -6,6 +6,7 @@ import { useShadowStore, type ViewMode, type ShadowTask, type MicroStep, type Us
 import { stepProgressFromJson, type StepProgress } from '@/lib/tasks/step-progress';
 import { type AdaptiveProfileData, type LearningSignalData, type AIInsight, type ProactiveTrigger, type NudgeMessage, type TaskRecommendation, type ProactiveChatbotResponse } from '@/lib/types/shadow';
 import { formatDateInRome } from '@/lib/evening-review/dates';
+import { apiFetch } from '@/lib/api/fetch';
 import { isNative } from '@/lib/native/platform';
 import { startNativeShield, stopNativeShield } from '@/lib/native/focus-shield';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -169,16 +170,17 @@ function getEnergyLabel(level: number): string {
 // ─── API Helpers ────────────────────────────────────────────────────────────
 
 async function fetchTasks(): Promise<ShadowTask[]> {
-  const res = await fetch('/api/tasks');
+  const res = await apiFetch('/api/tasks', { skipErrorToast: true });
   const data = await res.json();
   return data.tasks || [];
 }
 
 async function createTask(title: string, extra?: Record<string, unknown>): Promise<ShadowTask> {
-  const res = await fetch('/api/tasks', {
+  const res = await apiFetch('/api/tasks', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title, status: 'inbox', ...extra }),
+    skipErrorToast: true,
   });
   // B2 (audit pre-beta): senza questo check, un 500 (es. drift schema) o un blip
   // di rete non solleva → i chiamanti applicavano l'update ottimistico su un
@@ -189,10 +191,11 @@ async function createTask(title: string, extra?: Record<string, unknown>): Promi
 }
 
 async function updateTaskAPI(id: string, updates: Partial<ShadowTask>): Promise<ShadowTask> {
-  const res = await fetch(`/api/tasks/${id}`, {
+  const res = await apiFetch(`/api/tasks/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
+    skipErrorToast: true,
   });
   if (!res.ok) throw new Error(`updateTask HTTP ${res.status}`);
   const data = await res.json();
@@ -200,25 +203,27 @@ async function updateTaskAPI(id: string, updates: Partial<ShadowTask>): Promise<
 }
 
 async function deleteTaskAPI(id: string): Promise<void> {
-  const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+  const res = await apiFetch(`/api/tasks/${id}`, { method: 'DELETE', skipErrorToast: true });
   if (!res.ok) throw new Error(`deleteTask HTTP ${res.status}`);
 }
 
 async function decomposeTask(taskId: string, taskTitle: string, taskDescription: string, energy: number, timeAvailable: number, currentContext: string) {
-  const res = await fetch('/api/decompose', {
+  const res = await apiFetch('/api/decompose', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ taskId, taskTitle, taskDescription, energy, timeAvailable, currentContext }),
+    skipErrorToast: true,
   });
   return res.json();
 }
 
 async function classifyTaskAI(title: string, description: string, energy?: number, timeAvailable?: number, currentContext?: string): Promise<AIClassifyResult | null> {
   try {
-    const res = await fetch('/api/ai-classify', {
+    const res = await apiFetch('/api/ai-classify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ taskTitle: title, taskDescription: description, energy: energy ?? 3, timeAvailable: timeAvailable ?? 480, currentContext: currentContext ?? 'any' }),
+      skipErrorToast: true,
     });
     const data = await res.json();
     return data.classification || null;
@@ -229,7 +234,7 @@ async function classifyTaskAI(title: string, description: string, energy?: numbe
 
 async function loadProfile(): Promise<UserProfileData | null> {
   try {
-    const res = await fetch('/api/profile');
+    const res = await apiFetch('/api/profile', { skipErrorToast: true });
     const data = await res.json();
     return data.profile || null;
   } catch {
@@ -241,10 +246,11 @@ async function startStrictModeSession(mode: 'soft' | 'strict', taskId: string | 
   // fix(v3-w7): il body non mandava `mode` (la route rispondeva 400 e la sessione
   // non veniva mai creata server-side) e usava `plannedDurationMinutes` dove la
   // route legge `durationMinutes` (la durata pianificata finiva sempre a 25).
-  const res = await fetch('/api/strict-mode', {
+  const res = await apiFetch('/api/strict-mode', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mode, triggerType: 'manual', taskId, durationMinutes, blockedApps }),
+    skipErrorToast: true,
   });
   const data = await res.json();
   // Scudo nativo (Android): blocca le app per tutta la sessione. No-op su web.
@@ -261,7 +267,7 @@ async function startStrictModeSession(mode: 'soft' | 'strict', taskId: string | 
 async function endStrictModeSession(sessionId: string, exitReason: string, exitConfirmationText: string) {
   // Ferma lo scudo nativo e recupera i tentativi bloccati (null su web).
   const blockedAttempts = await stopNativeShield();
-  const res = await fetch('/api/strict-mode', {
+  const res = await apiFetch('/api/strict-mode', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -271,6 +277,7 @@ async function endStrictModeSession(sessionId: string, exitReason: string, exitC
       exitConfirmationText,
       ...(blockedAttempts != null ? { distractionsBlocked: blockedAttempts } : {}),
     }),
+    skipErrorToast: true,
   });
   return res.json();
 }
@@ -415,7 +422,7 @@ export default function ShadowApp() {
           // onboarding fossero incompleti, il middleware avrebbe già
           // redirectato prima di montare questo componente.
           try {
-            const profileRes = await fetch('/api/profile');
+            const profileRes = await apiFetch('/api/profile', { skipErrorToast: true });
             const profileData = await profileRes.json();
             if (profileData.profile) store.setUserProfile(profileData.profile);
           } catch {}
@@ -427,7 +434,7 @@ export default function ShadowApp() {
           store.setTasks(tasks);
 
           try {
-            const adaptiveRes = await fetch('/api/adaptive-profile');
+            const adaptiveRes = await apiFetch('/api/adaptive-profile', { skipErrorToast: true });
             const adaptiveData = await adaptiveRes.json();
             if (adaptiveData.profile) {
               store.setAdaptiveProfile(adaptiveData.profile);
@@ -581,7 +588,7 @@ export default function ShadowApp() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/strict-mode');
+        const res = await apiFetch('/api/strict-mode', { skipErrorToast: true });
         if (!res.ok) return;
         const data = (await res.json()) as {
           session?: { triggerType?: string; taskId?: string | null } | null;
@@ -2165,10 +2172,11 @@ function TodayView() {
     const next = { ...slotLocations, [slot]: loc };
     setSlotLocations(next);
     try {
-      await fetch('/api/daily-plan', {
+      await apiFetch('/api/daily-plan', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slotContexts: next }),
+        skipErrorToast: true,
       });
     } catch {
       // silenzioso: errore di rete → resta lo stato locale
@@ -2184,7 +2192,7 @@ function TodayView() {
     try {
       const currentContext =
         slotLocationToContext(slotLocations[currentSlotKey()]) ?? store.currentContext;
-      const res = await fetch('/api/daily-plan', {
+      const res = await apiFetch('/api/daily-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2192,6 +2200,7 @@ function TodayView() {
           timeAvailable: store.timeAvailable,
           currentContext,
         }),
+        skipErrorToast: true,
       });
       const data = await res.json();
       if (data?.breakdown) {
@@ -2239,7 +2248,7 @@ function TodayView() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/daily-plan');
+        const res = await apiFetch('/api/daily-plan', { skipErrorToast: true });
         const data = await res.json();
         if (cancelled || !data?.plan) return;
         // Task 49: sincronizza energia/tempo/contesto dichiarati in chat con la
