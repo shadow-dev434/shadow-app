@@ -64,6 +64,34 @@ adozione `captureApiError` sulle route restanti; CSP; app-picker nativo (B8).
 
 ---
 
+## 0ter. Follow-up A-D implementati (sessione 2026-06-25 sera, `feature/60-beta-hardening`)
+
+**Stato verificato a inizio sessione** (git/locale, ciò che resta ad Antonio):
+- **Merge/push/deploy NON fatto**: feature/60 era (ed è) avanti su `origin/main`, che resta a `95a8d1d`. Il web-side di Task 59 è dentro feature/60 → un merge porta tutto in un colpo.
+- **Env Vercel prod**: nessuna settata (e inerti finché non si deploya).
+- **Verifiche prod** (B6 cookie, A2 migrate status, invio Resend reale, UptimeRobot /health): nessuna fatta.
+- **APK nativo**: non distribuito (regola "web prima, binario poi" rispettata).
+- **Legale C1/C2**: dichiarato "già fatto" da Antonio, **ma su nessun branch locale risulta a codice** — `CONSENT_VERSION`/`CONSENT_COPY_VERSION` ancora `0.2-draft`, `COPY.art9` non cita ASRS/ADEXI né le covariate, l'intro cita solo Anthropic (mancano Resend/Vercel/Neon). **DA RICONCILIARE prima del go**: il bump dev'essere nel treno di merge di feature/60.
+
+**Follow-up implementati** (build + tsc + 802 test verdi a ogni step, commit atomici, **non pushati**):
+
+| FU | Commit | Cosa |
+|---|---|---|
+| **A** | `a3fb338` | App-picker nativo (`AppBlockerCard`, gated `isAndroid()`) → persiste `profile.blockedApps` via PATCH /api/profile; `handleStartSession` già lo passa allo scudo → rende utile lo scudo B8 (prima no-op) |
+| **B** | `2e10413` | Wrapper `apiFetch` (`src/lib/api/fetch.ts`): **401→re-login centralizzato** (guard anti-loop) + toast opt-out; adottato sui 14 call-site autenticati del monolite (skipErrorToast per preservare l'UX). +5 test |
+| **C** | `22254f5` | `captureApiError` sui 500 di **43 route** (oltre a chat/turn, tasks, tasks/[id] già fatte): i 500 ora vanno a Sentry |
+| **D** | `d95c224` | **CSP enforced** nel middleware (non `next.config`, file protetto non toccato) |
+
+**Nota D (CSP):** l'approccio nonce + `strict-dynamic` è stato **scartato dopo verifica prod** — tutte le pagine sono prerenderizzate statiche, il nonce per-request non finisce negli script (verificato: 0/27 script col nonce → app bianca); avrebbe richiesto force-dynamic app-wide + un rischio non testabile headless sul bridge Capacitor della WebView. Adottata una CSP **static-compatible**: direttive forti (default-src/object-src/base-uri/frame-ancestors/form-action/connect-src allowlist) con `script-src 'self' 'unsafe-inline'`. Verificata su server prod (20 script same-origin, 0 bloccati, HTTP 200). **NON copre l'XSS via inline-script**: l'upgrade a nonce richiede rendering dinamico + validazione on-device (follow-up). *(Antonio non ha risposto alla scelta d'approccio → default sicuro e reversibile.)*
+
+**Restano follow-up:** upgrade CSP a nonce (con force-dynamic) se si vuole la protezione inline-XSS; adozione `apiFetch` nelle feature non toccate (chat streaming, body-double) se si vuole il 401-handling anche lì.
+
+**Review avversariale del diff A-D** (workflow multi-agente: review per dimensione → refutazione di ogni finding): 12 finding, 7 confermati. Fixati (commit `0776fae`): guardie `if(!res.ok)` su `fetchTasks`/`decomposeTask`/`classifyTaskAI`/`loadProfile` (su 401 apiFetch fa il re-login ma ritornava la Response → parse di body non-JSON); revert di `captureApiError` sul 502 di `voice/speak` (fallimento upstream atteso = rumore Sentry). Tenuti per scelta motivata: `recordSignal` resta raw fetch (telemetria best-effort fuori scope); `AppBlockerCard` mantiene la selezione su errore di salvataggio (retry-friendly) invece di scartarla. Dopo i fix: tsc + 802 test + build verdi.
+
+**Commit della sessione su `feature/60-beta-hardening`** (non pushati): `a3fb338` (A), `2e10413` (B), `22254f5` (C), `d95c224` (D), `0776fae` (fix review). Branch a +18 su `origin/main`.
+
+---
+
 ## 1. Cosa è SOLIDO (verificato — la base di cui fidarsi)
 
 - **Auth & isolamento dati**: 51 route esaminate. `requireSession`/`requireAdminSession`
