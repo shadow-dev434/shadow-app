@@ -119,11 +119,11 @@ non solo un side-effect server. → vedi `enterStrictMode` condiviso (Fase 3).
 
 ## 3. Prerequisiti & convenzioni
 
-- **Branch**: parti dal tip di `feature/60-beta-hardening` (è +21 su `main`, NON
-  ancora mergiato/pushato al 2026-06-27) se Antonio non l'ha ancora mergiato;
-  altrimenti da `main`. Crea `feature/61-strict-onetap-proposta`.
-  - Verifica con `git log --oneline origin/main..HEAD` e chiedi ad Antonio se in
-    dubbio su quale base.
+- **Branch**: lavora **direttamente su `feature/61-strict-onetap-proposta`** —
+  GIÀ creato il 2026-06-27, basato su `main` (che ora contiene **tutto Task 60**:
+  A/B/C/D + §5, mergiato e pushato da Antonio). Questo doc è già committato qui.
+  `git checkout feature/61-strict-onetap-proposta` e prosegui. Se il branch non
+  esiste più, ricrealo da `main`.
 - Usa **`apiFetch`** (`src/lib/api/fetch.ts`, da Task 60 B) per le nuove fetch client
   (gestisce 401→re-login). Per i call-site con fallback silenzioso usa `{skipErrorToast:true}`.
 - **Gate verdi a OGNI fase**: `bun run build` + `bun x tsc --noEmit` + `bun run test`
