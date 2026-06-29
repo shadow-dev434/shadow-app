@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MicroStep } from '@/store/shadow-store';
 import { startShield, stopShield } from '@/lib/focus-shield';
+import { apiFetch } from '@/lib/api/fetch';
 import type { CheckinOutcome, CheckinTrigger } from '@/lib/body-double/checkin';
 import { CHAT_HISTORY_MAX_MESSAGES } from '@/lib/body-double/chat';
 import { TIME_UP_MESSAGE, type AvatarState, type BodyDoublePhase, type CompanionMessage } from './types';
@@ -71,6 +72,21 @@ async function fetchActiveSession(): Promise<ApiStrictSession | null> {
   if (!res.ok) return null;
   const data = (await res.json()) as { session?: ApiStrictSession | null };
   return data.session ?? null;
+}
+
+// Task 61 (D1): la lista app da bloccare viene dal profilo. Lo store Zustand è
+// senza persist e su /focus (deep-link) può essere vuoto, quindi si legge dal
+// server (apiFetch → 401 re-login). Fallback [] = scudo no-op (nessun blocco),
+// comportamento pre-Task 61.
+async function fetchBlockedApps(): Promise<string[]> {
+  try {
+    const res = await apiFetch('/api/profile', { skipErrorToast: true });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { profile?: { blockedApps?: string[] } | null };
+    return Array.isArray(data.profile?.blockedApps) ? data.profile.blockedApps : [];
+  } catch {
+    return [];
+  }
 }
 
 async function patchSession(body: Record<string, unknown>): Promise<ApiStrictSession | null> {
@@ -284,6 +300,9 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
       if (!t || phaseRef.current === 'starting') return;
       setPhase('starting');
       try {
+        // Task 61 (D1): blocca le app scelte dall'utente nel profilo anche nel
+        // body doubling (prima la lista era sempre vuota → scudo no-op).
+        const blockedApps = await fetchBlockedApps();
         const res = await fetch('/api/strict-mode', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -292,7 +311,7 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
             triggerType: 'body_double',
             taskId: t.id,
             durationMinutes,
-            blockedApps: [],
+            blockedApps,
           }),
         });
         if (!res.ok) throw new Error(`POST /api/strict-mode ${res.status}`);
@@ -307,7 +326,7 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
           plannedDurationMinutes: data.session.plannedDurationMinutes,
         });
         setRemainingSeconds(Math.max(0, Math.round((endsAtMs - Date.now()) / 1000)));
-        await startShield({ sessionId: data.session.id, blockedApps: [] });
+        await startShield({ sessionId: data.session.id, blockedApps, endsAt: endsAtMs });
         setPhase('running');
         void doCheckin('session_start');
       } catch {
