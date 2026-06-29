@@ -8,7 +8,8 @@ import { type AdaptiveProfileData, type LearningSignalData, type AIInsight, type
 import { formatDateInRome } from '@/lib/evening-review/dates';
 import { apiFetch } from '@/lib/api/fetch';
 import { isNative } from '@/lib/native/platform';
-import { startNativeShield, stopNativeShield } from '@/lib/native/focus-shield';
+import { stopNativeShield } from '@/lib/native/focus-shield';
+import { startStrictModeSession, enterStrictMode } from '@/lib/strict-mode/enter';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,7 +32,7 @@ import {
   Download, Share2, RefreshCw, Send, Pencil, ShieldAlert, Lock, Unlock,
   Loader2, ChevronLeft, CheckCircle2, AlertCircle, User, Baby,
   Home, Briefcase, GraduationCap, Heart, BookOpen, FileText,
-  Palette, Wrench, Eye, EyeOff, MessageCircle, Hand, Repeat
+  Palette, Wrench, Eye, EyeOff, MessageCircle, Hand, Repeat, MoreHorizontal
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { signOut, useSession } from 'next-auth/react';
@@ -246,28 +247,6 @@ async function loadProfile(): Promise<UserProfileData | null> {
   } catch {
     return null;
   }
-}
-
-async function startStrictModeSession(mode: 'soft' | 'strict', taskId: string | null, durationMinutes: number, blockedApps: string[]) {
-  // fix(v3-w7): il body non mandava `mode` (la route rispondeva 400 e la sessione
-  // non veniva mai creata server-side) e usava `plannedDurationMinutes` dove la
-  // route legge `durationMinutes` (la durata pianificata finiva sempre a 25).
-  const res = await apiFetch('/api/strict-mode', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode, triggerType: 'manual', taskId, durationMinutes, blockedApps }),
-    skipErrorToast: true,
-  });
-  const data = await res.json();
-  // Scudo nativo (Android): blocca le app per tutta la sessione. No-op su web.
-  if (data?.session?.id) {
-    void startNativeShield({
-      sessionId: data.session.id,
-      blockedAppPackages: blockedApps,
-      endsAt: data.session.endsAt ? new Date(data.session.endsAt).getTime() : null,
-    });
-  }
-  return data;
 }
 
 async function endStrictModeSession(sessionId: string, exitReason: string, exitConfirmationText: string) {
@@ -2229,13 +2208,27 @@ function TodayView() {
     }
   }, [store, slotLocations]);
 
+  // Task 61 (D4): UN tap = strict attivo (timer + blocco app + uscita difficile),
+  // zero menù. È l'azione primaria della Today: enterStrictMode crea la sessione,
+  // arma lo scudo nativo e porta alla vista focus (banner rosso).
+  const handleStrictOneTap = useCallback((taskId: string) => {
+    void enterStrictMode({ taskId });
+    recordSignal('task_started', taskId);
+    recordSignal('strict_activated', taskId);
+    setTimeout(() => {
+      store.setMicroFeedbackType('start_experience');
+      store.setMicroFeedbackTaskId(taskId);
+      store.setShowMicroFeedback(true);
+    }, 3000);
+  }, [store]);
+
+  // Task 61: percorso SECONDARIO "altre modalità" (Soft / Body doubling). Porta
+  // alla vista focus SENZA attivare nulla, così il ModeSelector di FocusView
+  // compare (prima l'auto-attivazione su focusModeDefault lo nascondeva). Lo
+  // strict resta one-tap via handleStrictOneTap.
   const handleStartFocus = useCallback((taskId: string, mode: 'launch' | 'hold' | 'recovery') => {
     store.setSelectedTaskId(taskId);
     store.setExecutionMode(mode);
-    if (store.userProfile?.focusModeDefault) {
-      store.setFocusModeType(store.userProfile.focusModeDefault);
-      store.setFocusModeActive(true);
-    }
     store.setCurrentView('focus');
     // Record learning signal for task start
     recordSignal('task_started', taskId);
@@ -2404,9 +2397,15 @@ function TodayView() {
                         </p>
                       )}
                     </div>
-                    <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700" onClick={(e) => { e.stopPropagation(); handleStartFocus(task.id, 'launch'); }}>
-                      <Play className="w-3 h-3 mr-1" /> Inizia
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      {/* Task 61 (D4): primaria = strict one-tap; "…" = altre modalità (soft / body doubling). */}
+                      <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700" onClick={(e) => { e.stopPropagation(); handleStrictOneTap(task.id); }}>
+                        <Play className="w-3 h-3 mr-1" /> Inizia
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-200" aria-label="Altre modalità" title="Altre modalità (soft, body doubling)" onClick={(e) => { e.stopPropagation(); handleStartFocus(task.id, 'launch'); }}>
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
