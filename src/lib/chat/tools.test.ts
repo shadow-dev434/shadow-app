@@ -2010,3 +2010,68 @@ describe('executeTool: offer_body_double (Task 51, D8 — garantisce un taskId)'
     expect(db.task.create).not.toHaveBeenCalled();
   });
 });
+
+describe('getToolsForMode: offer_strict_mode exposure (Task 61)', () => {
+  const names = (tools: ReturnType<typeof getToolsForMode>) => tools.map((t) => t.name);
+
+  it('esposto in morning_checkin e planning (dopo il commit del piano)', () => {
+    for (const mode of ['morning_checkin', 'planning']) {
+      expect(names(getToolsForMode(mode))).toContain('offer_strict_mode');
+    }
+  });
+
+  it('NON esposto in general / focus_companion / unblock (solo pianificazione del mattino)', () => {
+    for (const mode of ['general', 'focus_companion', 'unblock']) {
+      expect(names(getToolsForMode(mode))).not.toContain('offer_strict_mode');
+    }
+  });
+
+  it('NON esposto in evening_review, in nessuna fase (flusso chiuso)', () => {
+    const phases = ['per_entry', 'plan_preview', 'closing', undefined] as const;
+    for (const phase of phases) {
+      expect(names(getToolsForMode('evening_review', phase, makeState()))).not.toContain('offer_strict_mode');
+    }
+  });
+});
+
+describe('executeTool: offer_strict_mode (Task 61, D3 — garantisce un taskId)', () => {
+  it('taskId esistente non terminale: success con taskId/title/durata (default 50 senza sessionDuration)', async () => {
+    mockTaskWithStatus('t1', 'Relazione', 'inbox');
+    const result = await executeTool('offer_strict_mode', { taskId: 't1' }, 'user1');
+    expect(result.kind).toBe('sideEffect');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual({ taskId: 't1', title: 'Relazione', durationMinutes: 50 });
+  });
+
+  it('usa task.sessionDuration come durata default quando presente', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.task.findFirst).mockResolvedValue({ id: 't1', title: 'Relazione', status: 'inbox', sessionDuration: 25 } as any);
+    const result = await executeTool('offer_strict_mode', { taskId: 't1' }, 'user1');
+    if (result.kind !== 'sideEffect') return;
+    expect((result.data as { durationMinutes: number }).durationMinutes).toBe(25);
+  });
+
+  it('durationMinutes esplicita vince sul default', async () => {
+    mockTaskWithStatus('t1', 'Relazione', 'inbox');
+    const result = await executeTool('offer_strict_mode', { taskId: 't1', durationMinutes: 90 }, 'user1');
+    if (result.kind !== 'sideEffect') return;
+    expect((result.data as { durationMinutes: number }).durationMinutes).toBe(90);
+  });
+
+  it('task terminale (completed): sideEffect failure, nessuna sessione offerta', async () => {
+    mockTaskWithStatus('t1', 'Relazione', 'completed');
+    const result = await executeTool('offer_strict_mode', { taskId: 't1' }, 'user1');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/terminale/);
+  });
+
+  it('taskId non posseduto (findFirst null): sideEffect failure', async () => {
+    vi.mocked(db.task.findFirst).mockResolvedValue(null);
+    const result = await executeTool('offer_strict_mode', { taskId: 'nope' }, 'user1');
+    if (result.kind !== 'sideEffect') return;
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/not found|not owned/);
+  });
+});

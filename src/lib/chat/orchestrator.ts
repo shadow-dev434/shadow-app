@@ -109,7 +109,10 @@ export interface OrchestratorInput {
  */
 export type QuickReply =
   | { label: string; value: string }
-  | { label: string; action: 'body_double'; taskId: string };
+  | { label: string; action: 'body_double'; taskId: string }
+  // Task 61 (D3): proposta proattiva strict. Il client (ChatView) la riconosce
+  // dal campo action e chiama enterStrictMode(taskId, durationMinutes).
+  | { label: string; action: 'start_strict'; taskId: string; durationMinutes: number };
 
 export interface OrchestratorOutput {
   threadId: string;
@@ -720,6 +723,8 @@ export async function orchestrate(
   // Task 51 (D8): catturato dal risultato del tool offer_body_double nel loop;
   // l'orchestrator garantisce così il taskId prima di emettere la quick-action.
   let pendingBodyDouble: { taskId: string; label: string } | null = null;
+  // Task 61 (D3): risultato di offer_strict_mode → quick-action start_strict.
+  let pendingStrictMode: { taskId: string; durationMinutes: number; label: string } | null = null;
 
   // Anomalia B Blocco 3: traccia la phase all'inizio di ogni iter per rilevare
   // transizione per_entry -> !per_entry (rebuild systemPrompt con preview) o
@@ -817,6 +822,17 @@ export async function orchestrate(
           const d = result.data as { taskId?: string; label?: string };
           if (d.taskId) {
             pendingBodyDouble = { taskId: d.taskId, label: d.label ?? 'Fallo con Shadow' };
+          }
+        }
+        // Task 61 (D3): cattura il taskId+durata garantiti da offer_strict_mode.
+        if (toolCall.name === 'offer_strict_mode' && result.success && result.data) {
+          const d = result.data as { taskId?: string; durationMinutes?: number };
+          if (d.taskId) {
+            pendingStrictMode = {
+              taskId: d.taskId,
+              durationMinutes: typeof d.durationMinutes === 'number' ? d.durationMinutes : 50,
+              label: 'Attiva strict',
+            };
           }
         }
       }
@@ -978,6 +994,18 @@ export async function orchestrate(
       label: pendingBodyDouble.label,
       action: 'body_double',
       taskId: pendingBodyDouble.taskId,
+    });
+  }
+
+  // ── 8d. Task 61 (D3): quick-action strict proattivo ─────────────────
+  // taskId+durata garantiti da offer_strict_mode. Il client (ChatView) la
+  // riconosce dal campo action e chiama enterStrictMode → strict puro.
+  if (pendingStrictMode) {
+    quickReplies.push({
+      label: pendingStrictMode.label,
+      action: 'start_strict',
+      taskId: pendingStrictMode.taskId,
+      durationMinutes: pendingStrictMode.durationMinutes,
     });
   }
 

@@ -312,6 +312,46 @@ export const BODY_DOUBLE_TOOLS: LLMTool[] = [
 ];
 
 /**
+ * Task 61 (D3) — Proposta proattiva STRICT dalla chat. Gemello di
+ * offer_body_double ma per lo strict PURO (D2: timer + blocco app + uscita
+ * difficile, NIENTE avatar). Esposto SOLO in morning_checkin/planning (vedi
+ * getToolsForMode), da chiamare DOPO commit_today_plan. Garantisce un taskId
+ * (quello passato o il primo task del piano di oggi) e segnala all'orchestrator
+ * di mostrare una quick-action che, lato client, chiama enterStrictMode. Niente
+ * avvio sessione qui: lo scudo nativo parte solo lato client (vedi
+ * orchestrator.ts capture + prompts.ts MORNING_CHECKIN_PROMPT).
+ */
+export const OFFER_STRICT_MODE_TOOL: LLMTool = {
+  name: 'offer_strict_mode',
+  description:
+    "Offre all'utente di attivare la MODALITÀ STRICT per lavorare adesso: timer + " +
+    "blocco delle app distraenti + uscita difficile (NIENTE avatar/body doubling). " +
+    "Chiamalo nel check-in del mattino DOPO aver fissato il piano " +
+    "(commit_today_plan), quando inviti a partire dalla prima cosa, SE una spinta " +
+    "a concentrarsi aiuterebbe. taskId = id del primo task di oggi (da " +
+    "get_today_tasks / commit_today_plan); se lo ometti viene usato il primo task " +
+    "del piano di oggi. durationMinutes opzionale (default: durata del task o " +
+    "~50 min). Dopo la chiamata l'app mostra da sola il bottone che attiva lo " +
+    "strict: scrivi comunque UNA frase che lo propone (es. \"Vuoi attivare la " +
+    "modalità strict per un paio d'ore?\"). Non descrivere il bottone a parole, " +
+    "non usare un tag [[QR:...]] per questo, e non insistere se l'utente rifiuta.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      taskId: {
+        type: 'string',
+        description:
+          'ID del task di oggi su cui attivare lo strict (da get_today_tasks / commit_today_plan). Se assente, si usa il primo task del piano di oggi.',
+      },
+      durationMinutes: {
+        type: 'number',
+        description: 'Opzionale: durata in minuti della sessione strict (default: durata del task o ~50).',
+      },
+    },
+  },
+};
+
+/**
  * Task 44 — commit del piano di OGGI dalla chat (morning check-in / planning).
  * Esposto SOLO in quelle modalità (vedi getToolsForMode): fissa "Le 3 cose di
  * oggi" + il resto della giornata dopo che l'utente ha confermato, persistendo
@@ -537,6 +577,8 @@ export function getToolsForMode(
       tools.push(COMMIT_TODAY_PLAN_TOOL);
       // Task 48: ricalibrazione sul tempo disponibile, solo in pianificazione.
       tools.push(FIT_TODAY_PLAN_TOOL);
+      // Task 61 (D3): proposta proattiva strict, da chiamare dopo il commit.
+      tools.push(OFFER_STRICT_MODE_TOOL);
     }
     // Task 51 (D8): body doubling offerto dove l'utente "sta per mettersi al
     // lavoro" — chat libera, pianificazione, focus_companion. Fuori da
@@ -731,6 +773,8 @@ export async function executeTool(
         return await executeStopTaskRecurrence(input, userId);
       case 'offer_body_double':
         return await executeOfferBodyDouble(input, userId);
+      case 'offer_strict_mode':
+        return await executeOfferStrictMode(input, userId);
       case 'record_mood':
         return executeRecordMood(input, context);
       case 'record_energy':
@@ -983,6 +1027,78 @@ async function executeOfferBodyDouble(
     kind: 'sideEffect',
     success: true,
     data: { taskId: createdData.id, title: createdData.title ?? title, label },
+  };
+}
+
+// Parsing difensivo di una colonna DailyPlan JSON (top3Ids/doNowIds sono stringhe).
+function parseIdArray(json: string | null | undefined): string[] {
+  if (!json) return [];
+  try {
+    const parsed: unknown = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed.map((x) => String(x)).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Task 61 (D3) — proposta proattiva strict. Garantisce un taskId prima di offrire
+ * la quick-action: usa quello passato (ownership + stato non terminale) oppure,
+ * se manca, il PRIMO task del piano di OGGI (top3 → doNow). Ritorna
+ * { taskId, title, durationMinutes } in data; l'orchestrator legge il risultato
+ * per nome tool e costruisce la quick reply action='start_strict'. Non avvia la
+ * sessione: lo scudo nativo parte lato client (enterStrictMode), il server non
+ * può armarlo dal turno chat.
+ */
+async function executeOfferStrictMode(
+  input: Record<string, unknown>,
+  userId: string,
+): Promise<ToolExecutionResult> {
+  const durationInput =
+    typeof input.durationMinutes === 'number' && input.durationMinutes > 0
+      ? Math.round(input.durationMinutes)
+      : undefined;
+  let taskId = String(input.taskId ?? '').trim();
+
+  // Nessun taskId: prendi il primo task del piano di oggi (top of today).
+  if (!taskId) {
+    const date = formatTodayInRome();
+    const plan = await db.dailyPlan.findUnique({
+      where: { userId_date: { userId, date } },
+      select: { top3Ids: true, doNowIds: true },
+    });
+    taskId = [...parseIdArray(plan?.top3Ids), ...parseIdArray(plan?.doNowIds)][0] ?? '';
+    if (!taskId) {
+      return {
+        kind: 'sideEffect',
+        success: false,
+        error:
+          'Nessun task nel piano di oggi: fissa prima il piano (commit_today_plan) o passa un taskId.',
+      };
+    }
+  }
+
+  // Valida ownership + stato non terminale (come offer_body_double).
+  const task = await db.task.findFirst({
+    where: { id: taskId, userId },
+    select: { id: true, title: true, status: true, sessionDuration: true },
+  });
+  if (!task) {
+    return { kind: 'sideEffect', success: false, error: `Task ${taskId} not found or not owned by user` };
+  }
+  if ((terminalTaskStatuses() as string[]).includes(task.status)) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error: `Task "${task.title}" è '${task.status}' (terminale): scegli un task attivo per lo strict.`,
+    };
+  }
+
+  const durationMinutes = durationInput ?? task.sessionDuration ?? 50;
+  return {
+    kind: 'sideEffect',
+    success: true,
+    data: { taskId: task.id, title: task.title, durationMinutes },
   };
 }
 

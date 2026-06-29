@@ -88,24 +88,27 @@ export async function enterStrictMode({
   triggerType = 'manual',
 }: EnterStrictModeOptions): Promise<void> {
   const store = useShadowStore.getState();
-  const blockedApps = await resolveBlockedApps();
-
   const task = store.tasks.find((t) => t.id === taskId);
   const duration =
     durationMinutes ?? task?.sessionDuration ?? store.userProfile?.preferredSessionLength ?? 50;
 
-  // Ottimistico: vista focus + strict attivo subito (UX ADHD: feedback immediato).
+  // Ottimistico SUBITO, prima di qualunque await: vista focus + strict attivo, così
+  // chi naviga (chat → router.push('/tasks')) atterra già sulla vista focus e il
+  // banner rosso compare senza attendere la rete.
   store.setSelectedTaskId(taskId);
   store.setExecutionMode('launch');
   store.setIsExecuting(true);
   store.setFocusModeType('strict');
   store.setFocusModeActive(true);
   store.setStrictModeState('active_strict');
-  store.setStrictBlockedApps(blockedApps);
   store.setStrictExitAttempts(0);
   store.setStrictSessionStartedAt(Date.now());
   store.setStrictSessionEndsAt(Date.now() + duration * 60 * 1000);
   store.setCurrentView('focus');
+
+  // Poi risolvi le app da bloccare (può servire un fetch) e crea la sessione.
+  const blockedApps = await resolveBlockedApps();
+  store.setStrictBlockedApps(blockedApps);
 
   try {
     const result = await startStrictModeSession('strict', taskId, duration, blockedApps, triggerType);

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Archive, Info, List, Pencil, Send, Loader2, CheckCircle2, History, ArrowLeft, Lock, MessageSquare, Paperclip, X, FileText } from 'lucide-react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { BetaCheckin } from '@/features/beta/BetaCheckinCard';
+import { enterStrictMode } from '@/lib/strict-mode/enter';
 import {
   SidebarProvider,
   Sidebar,
@@ -18,9 +19,12 @@ import {
 
 // Task 51: unione discriminata. Il ramo body_double apre /focus?taskId=…
 // (deep-link body doubling) invece di re-inviare il valore come messaggio.
+// Task 61 (D3): il ramo start_strict attiva lo strict puro (enterStrictMode)
+// e porta alla vista focus su /tasks.
 type QuickReply =
   | { label: string; value: string }
-  | { label: string; action: 'body_double'; taskId: string };
+  | { label: string; action: 'body_double'; taskId: string }
+  | { label: string; action: 'start_strict'; taskId: string; durationMinutes: number };
 
 interface ToolExecution {
   name: string;
@@ -670,10 +674,21 @@ export function ChatView() {
                 <QuickReplyButtons
                   replies={msg.quickReplies}
                   onSelect={(reply) => {
-                    // Task 51: il ramo body_double (unico con `action`) naviga
-                    // al deep-link Focus, senza re-inviare un turno (niente user
-                    // bubble spuria). Gli altri re-inviano il valore come messaggio.
+                    // Task 51/61: i rami con `action` non re-inviano un turno
+                    // (niente user bubble spuria) ma scatenano un'azione client.
                     if ('action' in reply) {
+                      if (reply.action === 'start_strict') {
+                        // Task 61 (D3): strict puro sul top task; lo scudo parte
+                        // lato client (enterStrictMode) e si va alla vista focus.
+                        void enterStrictMode({
+                          taskId: reply.taskId,
+                          durationMinutes: reply.durationMinutes,
+                          triggerType: 'chat_proactive',
+                        });
+                        router.push('/tasks');
+                        return;
+                      }
+                      // body_double: deep-link alla sessione Focus con avatar.
                       router.push(`/focus?taskId=${encodeURIComponent(reply.taskId)}`);
                       return;
                     }
