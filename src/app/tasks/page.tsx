@@ -402,7 +402,12 @@ export default function ShadowApp() {
           } catch {}
         }
 
-        if (store.isAuthenticated && store.authUser) {
+        // Task 61: stato LIVE, non la closure del primo render — al primo mount
+        // di /tasks in una sessione SPA partita dalla chat (route /), l'auth
+        // appena ripristinata dal localStorage qui sopra non è visibile nello
+        // snapshot stale e l'utente autenticato finiva sulla landing.
+        const auth = useShadowStore.getState();
+        if (auth.isAuthenticated && auth.authUser) {
           // Carica profile e imposta vista di default per /tasks. Se i flag
           // onboarding fossero incompleti, il middleware avrebbe già
           // redirectato prima di montare questo componente.
@@ -412,7 +417,15 @@ export default function ShadowApp() {
             if (profileData.profile) store.setUserProfile(profileData.profile);
           } catch {}
 
-          store.setCurrentView('inbox');
+          // Task 61 (D3): se si arriva qui con un focus già attivo nello store
+          // (enterStrictMode dalla chat + router.push('/tasks'), store singleton),
+          // non buttare l'utente sull'inbox: deve atterrare sulla vista focus.
+          // getState() e non la closure: questo init è async e lo snapshot del
+          // primo render non vede ciò che la chat ha appena impostato.
+          const live = useShadowStore.getState();
+          if (!(live.focusModeActive && live.selectedTaskId)) {
+            store.setCurrentView('inbox');
+          }
 
           store.setIsLoading(true);
           const tasks = await fetchTasks();

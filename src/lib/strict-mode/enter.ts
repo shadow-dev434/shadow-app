@@ -97,7 +97,9 @@ export async function enterStrictMode({
   // banner rosso compare senza attendere la rete.
   store.setSelectedTaskId(taskId);
   store.setExecutionMode('launch');
-  store.setIsExecuting(true);
+  // isExecuting NON si setta qui: lo fa la FocusView al mount, che nello stesso
+  // effect inizializza il timer del task alla sua durata — settandolo prima, il
+  // timer resterebbe a 0:00 "Terminato".
   store.setFocusModeType('strict');
   store.setFocusModeActive(true);
   store.setStrictModeState('active_strict');
