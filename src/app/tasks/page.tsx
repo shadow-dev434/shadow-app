@@ -9,7 +9,7 @@ import { formatDateInRome } from '@/lib/evening-review/dates';
 import { apiFetch } from '@/lib/api/fetch';
 import { isNative } from '@/lib/native/platform';
 import { stopNativeShield } from '@/lib/native/focus-shield';
-import { startStrictModeSession, enterStrictMode } from '@/lib/strict-mode/enter';
+import { startStrictModeSession, enterStrictMode, rehydrateStrictSession, type ActiveStrictSession } from '@/lib/strict-mode/enter';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +24,11 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  Inbox, Sun, Target, ClipboardCheck, Settings, Plus, Trash2,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Inbox, Sun, Target, Settings, Plus, Trash2,
   ChevronRight, Zap, Shield, ArrowLeft, Play, Check,
   AlertTriangle, Clock, TrendingUp, Brain, Sparkles,
   Flame, Activity, X, RotateCcw, Coffee, Mic, MicOff,
@@ -589,12 +593,31 @@ export default function ShadowApp() {
         const res = await apiFetch('/api/strict-mode', { skipErrorToast: true });
         if (!res.ok) return;
         const data = (await res.json()) as {
-          session?: { triggerType?: string; taskId?: string | null } | null;
+          session?: (ActiveStrictSession & { triggerType?: string }) | null;
         };
         const s = data.session;
-        if (!cancelled) {
-          setActiveBdTaskId(s && s.triggerType === 'body_double' ? s.taskId ?? '' : null);
+        if (cancelled) return;
+        if (s && s.triggerType === 'body_double') {
+          setActiveBdTaskId(s.taskId ?? '');
+          return;
         }
+        setActiveBdTaskId(null);
+        if (!s) return;
+        // Task 63 (D8): sessione strict/soft attiva trovata al mount — lo store
+        // non è persistito, quindi F5/cold start la perdevano (fuga totale +
+        // sessione orfana in DB). Scaduta → chiusura d'ufficio con durata
+        // clampata; ancora in corso → ripristino friction/vista/scudo.
+        const endsAtMs = s.endsAt ? new Date(s.endsAt).getTime() : null;
+        if (endsAtMs != null && endsAtMs <= Date.now()) {
+          void apiFetch('/api/strict-mode', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId: s.id, status: 'exited', exitReason: 'expired_on_rehydrate' }),
+            skipErrorToast: true,
+          });
+          return;
+        }
+        rehydrateStrictSession(s);
       } catch {}
     })();
     return () => {
@@ -682,7 +705,6 @@ export default function ShadowApp() {
         {store.currentView === 'today' && <TodayView />}
         {store.currentView === 'focus' && <FocusView />}
         {store.currentView === 'task' && <TaskDetailView />}
-        {store.currentView === 'review' && <ReviewView />}
         {store.currentView === 'sky' && <SkyView />}
         {store.currentView === 'settings' && <SettingsView onLogout={handleLogout} />}
       </main>
@@ -1940,7 +1962,6 @@ function BottomNav() {
     { view: 'inbox', icon: <Inbox className="w-5 h-5" />, label: 'Inbox' },
     { view: 'today', icon: <Sun className="w-5 h-5" />, label: 'Today' },
     { view: 'focus', icon: <Target className="w-5 h-5" />, label: 'Focus' },
-    { view: 'review', icon: <ClipboardCheck className="w-5 h-5" />, label: 'Review' },
     { view: 'sky', icon: <Sparkles className="w-5 h-5" />, label: 'Cielo' },
     { view: 'settings', icon: <Settings className="w-5 h-5" />, label: 'Impost.' },
   ];
@@ -2054,6 +2075,10 @@ function InboxView() {
     }
   }, [newTask, isCreating, store, setTranscript]);
 
+  // Task 63: il cestino eliminava al primo tap, senza conferma né undo — un
+  // tocco accidentale perdeva il task (finding S1-candidato del collaudo 62).
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   const handleDelete = useCallback(async (id: string) => {
     const prev = store.tasks;
     store.setTasks(store.tasks.filter((t) => t.id !== id));
@@ -2068,6 +2093,27 @@ function InboxView() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
+      {/* Conferma eliminazione (Task 63): mai più delete a un tap */}
+      <AlertDialog open={confirmDeleteId !== null} onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminare questo task?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`"${store.tasks.find((t) => t.id === confirmDeleteId)?.title ?? ''}" verrà eliminato. L'azione non si può annullare.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => { if (confirmDeleteId) void handleDelete(confirmDeleteId); setConfirmDeleteId(null); }}
+            >
+              Elimina
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Quick capture */}
       <div className="flex gap-2">
         <div className="flex-1 relative">
@@ -2141,7 +2187,7 @@ function InboxView() {
                   {task.status === 'inbox' ? 'Classifica' : 'Riprendi'} <ChevronRight className="w-3 h-3 ml-1" />
                 </Button>
                 {task.status === 'inbox' && (
-                  <Button variant="ghost" size="sm" className="text-zinc-400 h-8 shrink-0" onClick={() => handleDelete(task.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                  <Button variant="ghost" size="sm" className="text-zinc-400 h-8 shrink-0" aria-label="Elimina task" onClick={() => setConfirmDeleteId(task.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                 )}
               </CardContent>
             </Card>
@@ -2500,7 +2546,14 @@ function FocusView() {
   useEffect(() => {
     if (selectedTask && !store.isExecuting) {
       store.setIsExecuting(true);
-      setTimerSeconds((selectedTask.sessionDuration || store.userProfile?.preferredSessionLength || 25) * 60);
+      // Task 63 (D8+D32): con una sessione strict/soft in corso il timer parte
+      // dal tempo RESIDUO della sessione (rehydrate post-F5), altrimenti dalla
+      // durata piena; e parte DA SOLO — il one-tap della Today è un tap vero.
+      const remainingSecs = store.strictSessionEndsAt
+        ? Math.max(0, Math.ceil((store.strictSessionEndsAt - Date.now()) / 1000))
+        : (selectedTask.sessionDuration || store.userProfile?.preferredSessionLength || 25) * 60;
+      setTimerSeconds(remainingSecs);
+      setIsTimerRunning(remainingSecs > 0);
     }
   }, [selectedTask, store.isExecuting, store]);
 
@@ -2950,6 +3003,9 @@ function TaskDetailView() {
     store.setCurrentView('focus');
   }, [selectedTask, store]);
 
+  // Task 63: anche qui la conferma esplicita prima dell'eliminazione.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   const handleDelete = useCallback(async () => {
     if (!selectedTask) return;
     const prev = store.tasks;
@@ -3039,201 +3095,28 @@ function TaskDetailView() {
         >
           <Users className="w-4 h-4 mr-2" /> Fallo con Shadow
         </Button>
-        <Button variant="ghost" size="sm" className="text-zinc-400" onClick={handleDelete}><Trash2 className="w-3 h-3 mr-1" /> Elimina</Button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Review View ────────────────────────────────────────────────────────────
-
-function ReviewView() {
-  const store = useShadowStore();
-  const [whatDone, setWhatDone] = useState('');
-  const [whatAvoided, setWhatAvoided] = useState('');
-  const [whatBlocked, setWhatBlocked] = useState('');
-  const [mood, setMood] = useState(3);
-  const [isSaving, setIsSaving] = useState(false);
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
-
-  // Compute task summary for the day
-  const completedToday = store.tasks.filter(t => t.status === 'completed');
-  const avoidedToday = store.tasks.filter(t => t.avoidanceCount > 0 && t.status !== 'completed');
-  const inProgress = store.tasks.filter(t => t.status === 'in_progress');
-
-  const handleSave = useCallback(async () => {
-    setIsSaving(true);
-    try {
-      // Save review
-      const res = await apiFetch('/api/review', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          whatDone,
-          whatAvoided,
-          whatBlocked,
-          restartFrom: '',
-          mood,
-          energyEnd: store.energy,
-          taskReviews: completedToday.map(t => ({ taskId: t.id, completed: true })).concat(
-            avoidedToday.map(t => ({ taskId: t.id, completed: false, avoided: true }))
-          ),
-        }),
-        skipErrorToast: true,
-      });
-      // Task 60 §5: senza questo check, un POST fallito (500) mostrava comunque
-      // "Review salvata" → il catch sotto mostra invece "Errore".
-      if (!res.ok) throw new Error(`review HTTP ${res.status}`);
-
-      // Record learning signals from the review
-      if (completedToday.length > 0) {
-        for (const task of completedToday) {
-          recordSignal('task_completed', task.id);
-        }
-      }
-      if (avoidedToday.length > 0) {
-        for (const task of avoidedToday) {
-          recordSignal('task_avoided', task.id, { reviewContext: true });
-        }
-      }
-
-      // Generate AI summary based on the review
-      if (store.adaptiveProfile) {
-        const profile = store.adaptiveProfile;
-        const summaryParts: string[] = [];
-
-        if (completedToday.length > 0) {
-          const completedCategories = completedToday.map(t => t.category);
-          const uniqueCategories = [...new Set(completedCategories)];
-          summaryParts.push(`Hai completato ${completedToday.length} task (${uniqueCategories.join(', ')}).`);
-
-          // Check if completed tasks match best time windows
-          if (profile.bestTimeWindows.length > 0) {
-            summaryParts.push(`I task completati confermano che funzioni bene ${profile.bestTimeWindows.join(' e ')}.`);
-          }
-        }
-
-        if (avoidedToday.length > 0) {
-          const avoidedCategories = avoidedToday.map(t => t.category);
-          const uniqueAvoided = [...new Set(avoidedCategories)];
-          summaryParts.push(`Hai evitato ${avoidedToday.length} task, soprattutto ${uniqueAvoided.join(' e ')}.`);
-
-          // Suggest strategies based on profile
-          if (profile.avoidanceProfile > 3) {
-            summaryParts.push('Domani proverò a proporti questi task in forma più piccola o in momenti migliori.');
-          }
-        }
-
-        if (whatBlocked.trim()) {
-          summaryParts.push(`Nota di blocco: "${whatBlocked}". Userò questa informazione per adattarmi.`);
-        }
-
-        // Compare with profile predictions
-        if (profile.predictedBlockLikelihood > 0.5 && avoidedToday.length > completedToday.length) {
-          summaryParts.push('Il modello aveva previsto una giornata difficile e i dati lo confermano. Domani ti proporò task più adatti.');
-        }
-
-        if (summaryParts.length > 0) {
-          setAiSummary(summaryParts.join(' '));
-        }
-      }
-
-      toast({ title: 'Review salvata', description: 'Shadow ha imparato dalla tua giornata.' });
-    } catch {
-      toast({ title: 'Errore', variant: 'destructive' });
-    } finally {
-      setIsSaving(false);
-    }
-  }, [whatDone, whatAvoided, whatBlocked, mood, store, completedToday, avoidedToday]);
-
-  return (
-    <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <ClipboardCheck className="w-5 h-5 text-amber-500" />
-        <h2 className="text-lg font-bold">Review di oggi</h2>
-      </div>
-      <p className="text-sm text-zinc-500">Senza giudizio. Solo dati per aiutarti meglio domani.</p>
-
-      {/* Quick stats */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-800/40 text-center">
-          <p className="text-2xl font-bold text-emerald-400">{completedToday.length}</p>
-          <p className="text-[10px] text-emerald-600">Completati</p>
-        </div>
-        <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-800/40 text-center">
-          <p className="text-2xl font-bold text-amber-400">{avoidedToday.length}</p>
-          <p className="text-[10px] text-amber-600">Evitati</p>
-        </div>
-        <div className="p-3 rounded-xl bg-blue-950/30 border border-blue-800/40 text-center">
-          <p className="text-2xl font-bold text-blue-400">{inProgress.length}</p>
-          <p className="text-[10px] text-blue-600">In corso</p>
-        </div>
+        <Button variant="ghost" size="sm" className="text-zinc-400" onClick={() => setConfirmDelete(true)}><Trash2 className="w-3 h-3 mr-1" /> Elimina</Button>
       </div>
 
-      <Card className="border-zinc-200 dark:border-zinc-800">
-        <CardContent className="p-4 space-y-4">
-          <div>
-            <Label className="text-xs text-zinc-500">Cosa hai fatto?</Label>
-            <Textarea value={whatDone} onChange={(e) => setWhatDone(e.target.value)} rows={3} className="mt-1" placeholder="Descrivi brevemente cosa sei riuscito a fare oggi..." />
-          </div>
-          <div>
-            <Label className="text-xs text-zinc-500">Cosa hai evitato?</Label>
-            <Textarea value={whatAvoided} onChange={(e) => setWhatAvoided(e.target.value)} rows={2} className="mt-1" placeholder="Quali task hai rimandato o ignorato?" />
-          </div>
-          <div>
-            <Label className="text-xs text-zinc-500">Cosa ti ha bloccato?</Label>
-            <Textarea value={whatBlocked} onChange={(e) => setWhatBlocked(e.target.value)} rows={2} className="mt-1" placeholder="Se c'è stato un blocco, cosa lo ha causato?" />
-          </div>
-          <div>
-            <Label className="text-xs text-zinc-500">Umore: {mood}/5 {mood <= 2 ? '😔' : mood <= 3 ? '😐' : mood <= 4 ? '🙂' : '😊'}</Label>
-            <Slider value={[mood]} onValueChange={([v]) => setMood(v)} min={1} max={5} step={1} className="mt-1" />
-          </div>
-          <Button onClick={handleSave} disabled={isSaving} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
-            {isSaving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvataggio...</> : <><Brain className="w-4 h-4 mr-2" /> Salva e aggiorna il modello</>}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* AI Summary from Review */}
-      {aiSummary && (
-        <Card className="border-amber-500/30 bg-amber-950/20">
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <Brain className="w-4 h-4 text-amber-500" />
-              <span className="text-xs font-semibold text-amber-500 uppercase tracking-wider">Cosa ha imparato Shadow</span>
-            </div>
-            <p className="text-sm text-zinc-300 leading-relaxed">{aiSummary}</p>
-            {store.adaptiveProfile && (
-              <div className="flex items-center gap-2 pt-2">
-                <div className="flex-1 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-amber-600 rounded-full" style={{ width: `${Math.round(store.adaptiveProfile.confidenceLevel * 100)}%` }} />
-                </div>
-                <span className="text-[10px] text-zinc-500">Confidenza: {Math.round(store.adaptiveProfile.confidenceLevel * 100)}%</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Adaptive Profile Summary */}
-      {store.adaptiveProfile && (
-        <Card className="border-zinc-700 bg-zinc-900">
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-zinc-400" />
-              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Profilo adattivo attuale</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div><span className="text-zinc-500">Evitamento:</span> <span className="text-zinc-300">{store.adaptiveProfile.avoidanceProfile.toFixed(1)}/5</span></div>
-              <div><span className="text-zinc-500">Attivazione:</span> <span className="text-zinc-300">{store.adaptiveProfile.activationDifficulty.toFixed(1)}/5</span></div>
-              <div><span className="text-zinc-500">Completamento:</span> <span className="text-zinc-300">{Math.round(store.adaptiveProfile.averageCompletionRate * 100)}%</span></div>
-              <div><span className="text-zinc-500">Evitamento rate:</span> <span className="text-zinc-300">{Math.round(store.adaptiveProfile.averageAvoidanceRate * 100)}%</span></div>
-              <div><span className="text-zinc-500">Segnali elaborati:</span> <span className="text-zinc-300">{store.adaptiveProfile.totalSignals}</span></div>
-              <div><span className="text-zinc-500">Livello apprendimento:</span> <span className="text-zinc-300">{store.adaptiveProfile.lastUpdatedFrom}</span></div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminare questo task?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {`"${selectedTask.title}" verrà eliminato. L'azione non si può annullare.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => { setConfirmDelete(false); void handleDelete(); }}
+            >
+              Elimina
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -3282,7 +3165,13 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
     if (deleteConfirmText !== 'ELIMINA') return;
     setBusy(true);
     try {
-      const res = await fetch('/api/account', { method: 'DELETE' });
+      // Task 63 (S2-PRIV2a): la conferma viaggia nel body — il server la
+      // esige (400 senza), il client non è più l'unico attrito.
+      const res = await fetch('/api/account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: deleteConfirmText }),
+      });
       if (!res.ok) throw new Error('delete failed');
       await signOut({ callbackUrl: '/' });
     } catch {

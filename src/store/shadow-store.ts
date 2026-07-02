@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import type { AdaptiveProfileData, LearningSignalData, AIInsight, ProactiveTrigger, NudgeMessage, TaskRecommendation, ConversationalOnboardingResponse } from '@/lib/types/shadow';
 
-export type ViewMode = 'onboarding' | 'inbox' | 'today' | 'focus' | 'task' | 'review' | 'settings' | 'auth' | 'tour' | 'sky';
+// 'review' rimosso (Task 63, S1-B): la review manuale a tab è stata ritirata —
+// la review è solo conversazionale (chat serale).
+export type ViewMode = 'onboarding' | 'inbox' | 'today' | 'focus' | 'task' | 'settings' | 'auth' | 'tour' | 'sky';
 
 export interface ShadowTask {
   id: string;

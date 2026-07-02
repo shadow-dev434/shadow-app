@@ -127,8 +127,6 @@ function guessArea(): BugArea {
         return 'today_plan';
       case 'focus':
         return 'focus_strict';
-      case 'review':
-        return 'evening_review';
       case 'settings':
         return 'settings';
       case 'onboarding':

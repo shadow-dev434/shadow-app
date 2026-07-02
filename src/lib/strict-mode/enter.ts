@@ -74,6 +74,62 @@ export interface EnterStrictModeOptions {
   triggerType?: string;
 }
 
+/** Shape della sessione attiva come la ritorna GET /api/strict-mode (blockedApps già parsato). */
+export interface ActiveStrictSession {
+  id: string;
+  status: string;
+  taskId: string | null;
+  startedAt: string;
+  endsAt: string | null;
+  exitAttempts: number;
+  blockedApps: string[];
+}
+
+/**
+ * Ripristina nello store una sessione strict/soft ATTIVA trovata in DB al
+ * mount di /tasks (Task 63, D8): lo store non è persistito, quindi un F5 o il
+ * cold-restart della WebView perdevano ogni friction lasciando la sessione
+ * orfana. Non crea nulla: riflette la sessione server e riarma lo scudo
+ * nativo. NON setta isExecuting (stesso vincolo di enterStrictMode: è
+ * l'arming effect della FocusView a inizializzare timer ed esecuzione).
+ */
+export function rehydrateStrictSession(session: ActiveStrictSession): void {
+  const store = useShadowStore.getState();
+  // Idempotenza: i re-mount in-SPA (navigazione /↔/tasks) ripassano di qui
+  // con lo store già coerente — non risbattere l'utente sulla vista focus.
+  if (store.strictSessionId === session.id) return;
+
+  const state =
+    session.status === 'active_strict' || session.status === 'pending_exit' || session.status === 'active_soft'
+      ? (session.status as 'active_strict' | 'pending_exit' | 'active_soft')
+      : 'active_soft';
+  const isStrict = state === 'active_strict' || state === 'pending_exit';
+
+  store.setFocusModeType(isStrict ? 'strict' : 'soft');
+  store.setFocusModeActive(true);
+  store.setStrictModeState(state);
+  store.setStrictExitAttempts(session.exitAttempts ?? 0);
+  store.setStrictSessionId(session.id);
+  store.setStrictSessionStartedAt(new Date(session.startedAt).getTime());
+  store.setStrictSessionEndsAt(session.endsAt ? new Date(session.endsAt).getTime() : null);
+  store.setStrictBlockedApps(Array.isArray(session.blockedApps) ? session.blockedApps : []);
+
+  // Senza taskId (sessione creata dal tool server-side) non c'è una FocusView
+  // sensata da forzare: si ripristinano friction e stato, non la vista.
+  if (session.taskId) {
+    store.setSelectedTaskId(session.taskId);
+    store.setExecutionMode('launch');
+    store.setCurrentView('focus');
+  }
+
+  // Lo scudo nativo muore col processo: al rehydrate va riarmato (no-op su web).
+  void startNativeShield({
+    sessionId: session.id,
+    blockedAppPackages: Array.isArray(session.blockedApps) ? session.blockedApps : [],
+    endsAt: session.endsAt ? new Date(session.endsAt).getTime() : null,
+  });
+}
+
 /**
  * Entra in strict mode (D2: strict PURO — timer + blocco app + uscita difficile,
  * NIENTE avatar/body doubling) su un task, in un solo gesto. Imposta lo store
