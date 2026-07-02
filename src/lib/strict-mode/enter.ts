@@ -9,7 +9,7 @@
 // la durata: default = task.sessionDuration ?? profilo ?? 50 ("un paio d'ore").
 
 import { apiFetch } from '@/lib/api/fetch';
-import { startNativeShield } from '@/lib/native/focus-shield';
+import { startNativeShield, stopNativeShield } from '@/lib/native/focus-shield';
 import { useShadowStore } from '@/store/shadow-store';
 
 interface StrictSessionResponse {
@@ -128,6 +128,75 @@ export function rehydrateStrictSession(session: ActiveStrictSession): void {
     blockedAppPackages: Array.isArray(session.blockedApps) ? session.blockedApps : [],
     endsAt: session.endsAt ? new Date(session.endsAt).getTime() : null,
   });
+}
+
+/**
+ * Entra in modalità SOFT su un task con sessione server reale (Task 64, A9/D6).
+ * Prima l'avvio da TaskDetail con focusModeDefault='soft' impostava solo lo
+ * store: la sessione non esisteva in DB, non sopravviveva al refresh (D8) e
+ * non contava nelle statistiche. Soft = niente scudo nativo, niente friction
+ * d'uscita: solo timer + stato.
+ */
+export async function enterSoftMode(taskId: string, durationMinutes?: number): Promise<void> {
+  const store = useShadowStore.getState();
+  const task = store.tasks.find((t) => t.id === taskId);
+  const duration =
+    durationMinutes ?? task?.sessionDuration ?? store.userProfile?.preferredSessionLength ?? 50;
+
+  // Ottimistico come enterStrictMode: lo stato soft compare subito.
+  store.setFocusModeType('soft');
+  store.setFocusModeActive(true);
+  store.setStrictModeState('active_soft');
+  store.setStrictSessionStartedAt(Date.now());
+  store.setStrictSessionEndsAt(Date.now() + duration * 60 * 1000);
+
+  try {
+    const result = await startStrictModeSession('soft', taskId, duration, []);
+    if (result.session) {
+      store.setStrictSessionId(result.session.id);
+      store.setStrictSessionEndsAt(
+        Date.now() + (result.session.plannedDurationMinutes || duration) * 60 * 1000,
+      );
+    }
+  } catch {
+    // Rete giù: resta il soft locale (nessuna friction da proteggere).
+  }
+}
+
+/**
+ * Chiude la sessione strict/soft ATTIVA lato server e pulisce lo store
+ * (Task 64, A9/D7). Prima il "Disattiva" del soft toccava solo lo store: la
+ * sessione restava aperta in DB e il rehydrate (Task 63, D8) la resuscitava
+ * al refresh successivo. Fire-and-forget sul PATCH: la UI si sblocca subito.
+ */
+export async function exitStrictSession(exitReason: string): Promise<void> {
+  const store = useShadowStore.getState();
+  const sessionId = store.strictSessionId;
+
+  store.setFocusModeActive(false);
+  store.setFocusModeType('soft');
+  store.setStrictModeState('inactive');
+  store.setStrictSessionId(null);
+  store.setStrictSessionStartedAt(null);
+  store.setStrictSessionEndsAt(null);
+  store.setStrictExitAttempts(0);
+
+  // Scudo nativo: no-op su web, su Android va disarmato insieme alla sessione.
+  void stopNativeShield().catch(() => null);
+
+  if (!sessionId) return; // sessione solo-locale (fallback rete): niente da chiudere
+
+  try {
+    await apiFetch('/api/strict-mode', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, status: 'exited', exitReason }),
+      skipErrorToast: true,
+    });
+  } catch {
+    // Rete giù: la sessione resta aperta in DB e il rehydrate la riproporrà —
+    // meglio di un fallimento silenzioso che perde il taskId.
+  }
 }
 
 /**

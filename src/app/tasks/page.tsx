@@ -9,7 +9,7 @@ import { formatDateInRome } from '@/lib/evening-review/dates';
 import { apiFetch } from '@/lib/api/fetch';
 import { isNative } from '@/lib/native/platform';
 import { stopNativeShield } from '@/lib/native/focus-shield';
-import { startStrictModeSession, enterStrictMode, rehydrateStrictSession, type ActiveStrictSession } from '@/lib/strict-mode/enter';
+import { startStrictModeSession, enterStrictMode, enterSoftMode, exitStrictSession, rehydrateStrictSession, type ActiveStrictSession } from '@/lib/strict-mode/enter';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -2813,7 +2813,9 @@ function FocusView() {
             <Shield className="w-4 h-4 text-amber-400" />
             <span className="text-sm font-medium text-amber-400">FOCUS SOFT</span>
           </div>
-          <Button variant="ghost" size="sm" className="text-xs text-amber-400 hover:text-amber-300" onClick={() => { store.setFocusModeActive(false); store.setFocusModeType('soft'); store.setStrictModeState('inactive'); }}>
+          {/* Task 64 (A9, D7): chiude anche la sessione server, non solo lo
+              store — prima restava aperta in DB e il rehydrate la resuscitava. */}
+          <Button variant="ghost" size="sm" className="text-xs text-amber-400 hover:text-amber-300" onClick={() => { void exitStrictSession('user_disabled'); }}>
             <Unlock className="w-3 h-3 mr-1" /> Disattiva
           </Button>
         </div>
@@ -3023,7 +3025,17 @@ function TaskDetailView() {
     if (!selectedTask) return;
     const mode = selectedTask.avoidanceCount >= 3 ? 'recovery' : selectedTask.status === 'in_progress' ? 'hold' : 'launch';
     store.setExecutionMode(mode);
-    if (store.userProfile?.focusModeDefault) { store.setFocusModeType(store.userProfile.focusModeDefault); store.setFocusModeActive(true); }
+    // Task 64 (A9, D6): col default profilo la modalità parte DAVVERO —
+    // sessione server + scudo (strict) o sessione soft — non più il solo
+    // flag di store che simulava lo stato senza friction né persistenza.
+    const focusDefault = store.userProfile?.focusModeDefault;
+    if (focusDefault === 'strict') {
+      void enterStrictMode({ taskId: selectedTask.id });
+      return; // enterStrictMode imposta già executionMode/vista focus
+    }
+    if (focusDefault === 'soft') {
+      void enterSoftMode(selectedTask.id);
+    }
     store.setCurrentView('focus');
   }, [selectedTask, store]);
 
