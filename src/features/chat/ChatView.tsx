@@ -243,6 +243,15 @@ export function ChatView() {
     mountInitCalled.current = true;
 
     (async () => {
+      // Task 64 (A3): CTA del Cielo — ?draft= precompila l'input SENZA
+      // inviare (decide l'utente); il bootstrap prosegue normale.
+      const draftParam = new URLSearchParams(window.location.search).get('draft');
+      if (draftParam) {
+        window.history.replaceState({}, '', '/'); // niente ri-trigger al refresh
+        setInput(draftParam.slice(0, 500));
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
+
       // Task 44: CTA "Costruiamo il piano di oggi" da /tasks (?plan=today).
       // Avvio manuale del morning check-in: bypassa le guardie del bootstrap
       // (thread attivo / once-a-day) perché l'utente l'ha chiesto esplicitamente.

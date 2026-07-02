@@ -170,6 +170,27 @@ function Sky({ state }: { state: SkyState }) {
             <p className="text-base font-medium text-amber-200">Hai completato {hero.name} ✦</p>
             <p className="mt-1 text-xs text-zinc-400">Una nuova costellazione ti aspetta.</p>
           </>
+        ) : state.litStars === 0 ? (
+          // Task 64 (A3, D48): a cielo spento la vista si spiega — da dove
+          // arrivano le stelle e come accenderne una, con ingresso diretto in
+          // chat (input precompilato, non inviato: decide l'utente).
+          <>
+            <p className="text-base font-medium text-amber-100">{hero.name}</p>
+            <p className="mx-auto mt-2 max-w-[300px] text-xs leading-relaxed text-zinc-400">
+              Le stelle si accendono completando i task ricorrenti — creane uno in
+              chat («ogni lunedì palestra»).
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href =
+                  '/?draft=' + encodeURIComponent('Voglio un task ricorrente: ogni ');
+              }}
+              className="mt-4 rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/20"
+            >
+              ✦ Creane uno in chat
+            </button>
+          </>
         ) : (
           <>
             <p className="text-base font-medium text-amber-100">{hero.name}</p>

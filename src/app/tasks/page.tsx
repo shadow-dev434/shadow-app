@@ -2666,7 +2666,13 @@ function FocusView() {
     }, 500);
 
     store.setCurrentView('today');
-    toast({ title: 'Completato!', description: selectedTask.title });
+    // Task 64 (A3, D48): ponte visibile completamento -> stella. Solo per i
+    // task ricorrenti (sono loro ad accendere le stelle del Cielo).
+    if (selectedTask.recurringTemplateId) {
+      toast({ title: '⭐ Una stella si è accesa nel Cielo', description: selectedTask.title });
+    } else {
+      toast({ title: 'Completato!', description: selectedTask.title });
+    }
   }, [selectedTask, store]);
 
   const handleStartSession = useCallback(async () => {
