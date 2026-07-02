@@ -3,6 +3,8 @@ import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
 import { taskStatuses } from '@/lib/types/shadow';
+import { materializeRecurringWithRollover } from '@/lib/recurring/materialize';
+import { formatTodayInRome } from '@/lib/evening-review/dates';
 
 // GET /api/tasks — list all tasks, with optional filters
 export async function GET(req: NextRequest) {
@@ -10,6 +12,16 @@ export async function GET(req: NextRequest) {
   if (error) return error;
 
   try {
+    // Task 65 (B1/B2): il ricorrente di oggi (o l'occorrenza saltata piu'
+    // recente) nasce anche senza passare dalla chat — questa GET e' il punto
+    // d'ingresso comune di inbox e Today. Fail-open: un errore di
+    // materializzazione non deve mai rompere la lista.
+    try {
+      await materializeRecurringWithRollover(userId, formatTodayInRome());
+    } catch (err) {
+      captureApiError(err, 'GET /api/tasks (materialize rollover)');
+    }
+
     const url = req.nextUrl;
     const status = url.searchParams.get('status');
     const category = url.searchParams.get('category');

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   occursOn,
+  mostRecentOccurrenceInWindow,
   weekdayOf,
   daysInMonth,
   normalizeWeekdays,
@@ -130,5 +131,42 @@ describe('describeRuleIt', () => {
       'ogni lunedì, mercoledì e venerdì',
     );
     expect(describeRuleIt(rule({ frequency: 'monthly', monthDay: 15 }))).toBe('ogni mese il giorno 15');
+  });
+});
+
+describe('mostRecentOccurrenceInWindow — rollover Task 65 (B2/J7)', () => {
+  it('daily: oggi è sempre la più recente', () => {
+    expect(mostRecentOccurrenceInWindow(rule({ frequency: 'daily' }), '2026-06-17')).toBe('2026-06-17');
+  });
+  it('weekly lunedì, oggi mercoledì: recupera il lunedì saltato', () => {
+    const r = rule({ frequency: 'weekly', weekdays: [1] });
+    expect(mostRecentOccurrenceInWindow(r, '2026-06-17')).toBe('2026-06-15');
+  });
+  it('weekly, occorrenza fuori finestra: null', () => {
+    // lunedì 06-15; oggi sabato 06-20 con finestra 3 (18-19-20) → mai dentro
+    const r = rule({ frequency: 'weekly', weekdays: [1] });
+    expect(mostRecentOccurrenceInWindow(r, '2026-06-20', 3)).toBeNull();
+  });
+  it('rispetta startDate: occorrenze prima dell\'inizio non contano', () => {
+    // regola nata giovedì 06-18, weekly lunedì: il lunedì 06-15 è pre-start → null
+    const r = rule({ frequency: 'weekly', weekdays: [1], startDate: '2026-06-18' });
+    expect(mostRecentOccurrenceInWindow(r, '2026-06-19')).toBeNull();
+  });
+  it('rispetta endDate: dopo la fine niente occorrenze nuove, ma recupera quelle in coda', () => {
+    // daily terminata il 06-16, oggi 06-18: la più recente valida è il 06-16
+    const r = rule({ frequency: 'daily', endDate: '2026-06-16' });
+    expect(mostRecentOccurrenceInWindow(r, '2026-06-18')).toBe('2026-06-16');
+  });
+  it('weekdays: sabato recupera il venerdì', () => {
+    expect(mostRecentOccurrenceInWindow(rule({ frequency: 'weekdays' }), '2026-06-20')).toBe('2026-06-19');
+  });
+  it('monthly il 15, oggi il 17: recupera il 15', () => {
+    const r = rule({ frequency: 'monthly', monthDay: 15 });
+    expect(mostRecentOccurrenceInWindow(r, '2026-06-17')).toBe('2026-06-15');
+  });
+  it('finestra minima 1: guarda solo oggi', () => {
+    const r = rule({ frequency: 'weekly', weekdays: [1] });
+    expect(mostRecentOccurrenceInWindow(r, '2026-06-17', 1)).toBeNull();
+    expect(mostRecentOccurrenceInWindow(r, '2026-06-15', 1)).toBe('2026-06-15');
   });
 });

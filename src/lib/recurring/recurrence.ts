@@ -14,6 +14,8 @@
  * gia' la regola normalizzata.
  */
 
+import { addDaysIso } from '@/lib/evening-review/dates';
+
 export type Frequency = 'daily' | 'weekdays' | 'weekly' | 'monthly';
 
 export const FREQUENCIES: readonly Frequency[] = ['daily', 'weekdays', 'weekly', 'monthly'];
@@ -88,6 +90,29 @@ export function occursOn(rule: RecurrenceRule, ymd: string): boolean {
     default:
       return false;
   }
+}
+
+/**
+ * Task 65 (B2/J7): l'occorrenza PIÙ RECENTE della regola nella finestra
+ * [today-windowDays+1, today], oppure null se non scatta mai lì dentro.
+ *
+ * È il cuore del rollover retroattivo: se l'app non è stata aperta il giorno
+ * dell'occorrenza (es. ricorrenza del lunedì, prima apertura mercoledì), si
+ * recupera SOLO l'occorrenza più recente persa — mai l'intera pila (decisione
+ * di prodotto anti shame-pile: 7 istanze arretrate di "Meditazione" sono un
+ * muro, una sola è un invito).
+ */
+export function mostRecentOccurrenceInWindow(
+  rule: RecurrenceRule,
+  todayYMD: string,
+  windowDays: number = 7,
+): string | null {
+  const window = Math.max(1, Math.floor(windowDays));
+  for (let back = 0; back < window; back++) {
+    const day = back === 0 ? todayYMD : addDaysIso(todayYMD, -back);
+    if (occursOn(rule, day)) return day;
+  }
+  return null;
 }
 
 /** Normalizza un input grezzo (numero/array) in un set di weekday validi 0-6, ordinati e dedup. */

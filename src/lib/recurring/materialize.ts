@@ -13,6 +13,7 @@ import { db } from '@/lib/db';
 import { formatTodayInRome } from '@/lib/evening-review/dates';
 import {
   occursOn,
+  mostRecentOccurrenceInWindow,
   normalizeWeekdays,
   isFrequency,
   describeRuleIt,
@@ -76,37 +77,98 @@ export async function materializeRecurringForDate(
   const created: string[] = [];
   for (const t of due) {
     if (existingIds.has(t.id)) continue;
-    try {
-      const task = await db.task.create({
-        data: {
-          userId,
-          title: t.title,
-          description: t.description,
-          category: t.category,
-          urgency: t.urgency,
-          importance: t.importance,
-          size: t.size,
-          status: 'inbox',
-          source: 'recurring',
-          aiClassified: true,
-          aiClassificationData: JSON.stringify({
-            via: 'recurring',
-            templateId: t.id,
-            urgency: t.urgency,
-            importance: t.importance,
-            category: t.category,
-          }),
-          recurringTemplateId: t.id,
-          occurrenceDate: dateYMD,
-        },
-      });
-      created.push(task.id);
-    } catch {
-      // P2002 sulla guardia unique (template, data): un'altra chiamata concorrente
-      // ha gia' materializzato l'istanza. Idempotente -> si ignora.
-    }
+    const id = await createInstanceFromTemplate(userId, t, dateYMD);
+    if (id !== null) created.push(id);
   }
   return created;
+}
+
+/**
+ * Task 65 (B1/B2, ADV-ricorrenti + J7): materializzazione con rollover.
+ *
+ * Chiamata da GET /api/tasks (il punto d'ingresso comune di inbox e Today):
+ * per ogni template attivo cerca l'occorrenza piu' recente <= oggi nella
+ * finestra (default 7 giorni) e crea SOLO quella, se manca. Copre due casi:
+ * - il ricorrente di oggi c'e' anche senza passare dalla chat (B1);
+ * - l'occorrenza saltata (app chiusa il giorno giusto, tipico dei weekly)
+ *   nasce comunque alla prima apertura, con la sua occurrenceDate reale (B2).
+ * Una sola istanza per template, mai la pila arretrata (anti shame-pile).
+ * Idempotente come materializeRecurringForDate (guardia unique + P2002).
+ */
+export async function materializeRecurringWithRollover(
+  userId: string,
+  todayYMD: string,
+  windowDays: number = 7,
+): Promise<string[]> {
+  const templates = await db.recurringTask.findMany({ where: { userId, active: true } });
+  if (templates.length === 0) return [];
+
+  const due: { template: RecurringTask; dateYMD: string }[] = [];
+  for (const t of templates) {
+    const day = mostRecentOccurrenceInWindow(ruleFromTemplate(t), todayYMD, windowDays);
+    if (day !== null) due.push({ template: t, dateYMD: day });
+  }
+  if (due.length === 0) return [];
+
+  // Check esistenza per coppia ESATTA (template, data-target): un'istanza di
+  // domani creata dalla review serale non deve mascherare quella di oggi.
+  const existing = await db.task.findMany({
+    where: {
+      userId,
+      OR: due.map((d) => ({
+        recurringTemplateId: d.template.id,
+        occurrenceDate: d.dateYMD,
+      })),
+    },
+    select: { recurringTemplateId: true, occurrenceDate: true },
+  });
+  const existingKeys = new Set(existing.map((e) => `${e.recurringTemplateId}|${e.occurrenceDate}`));
+
+  const created: string[] = [];
+  for (const d of due) {
+    if (existingKeys.has(`${d.template.id}|${d.dateYMD}`)) continue;
+    const id = await createInstanceFromTemplate(userId, d.template, d.dateYMD);
+    if (id !== null) created.push(id);
+  }
+  return created;
+}
+
+/** Crea l'istanza Task di un template per una data; null se la guardia unique scatta. */
+async function createInstanceFromTemplate(
+  userId: string,
+  t: RecurringTask,
+  dateYMD: string,
+): Promise<string | null> {
+  try {
+    const task = await db.task.create({
+      data: {
+        userId,
+        title: t.title,
+        description: t.description,
+        category: t.category,
+        urgency: t.urgency,
+        importance: t.importance,
+        size: t.size,
+        status: 'inbox',
+        source: 'recurring',
+        aiClassified: true,
+        aiClassificationData: JSON.stringify({
+          via: 'recurring',
+          templateId: t.id,
+          urgency: t.urgency,
+          importance: t.importance,
+          category: t.category,
+        }),
+        recurringTemplateId: t.id,
+        occurrenceDate: dateYMD,
+      },
+    });
+    return task.id;
+  } catch {
+    // P2002 sulla guardia unique (template, data): un'altra chiamata concorrente
+    // ha gia' materializzato l'istanza. Idempotente -> si ignora.
+    return null;
+  }
 }
 
 export interface SetRecurrenceInput {
