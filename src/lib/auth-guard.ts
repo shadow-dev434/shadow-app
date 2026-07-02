@@ -19,8 +19,11 @@
  * prendeva un 403 consenso fuorviante). Utente assente ⇒ 401 `session_invalid`
  * — apiFetch lato client re-logga su qualunque 401. Stessa query del consenso
  * (User + profile innestato): costo netto zero per le route consent-gated,
- * +1 query leggera per le poche `allowWithoutConsent`. L'invalidazione post
- * reset-password resta fuori (richiederebbe un claim `passwordChangedAt`).
+ * +1 query leggera per le poche `allowWithoutConsent`.
+ *
+ * Task 66 (D): stessa query, un campo in più — un token con iat precedente a
+ * User.passwordChangedAt è revocato (401 `session_invalid`): il reset password
+ * chiude le sessioni aperte su altri device invece di lasciarle vive 30gg.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -66,10 +69,31 @@ export async function requireSession(
 
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { id: true, profile: { select: { consentGivenAt: true } } },
+    select: {
+      id: true,
+      passwordChangedAt: true,
+      profile: { select: { consentGivenAt: true } },
+    },
   });
 
   if (!user) {
+    return {
+      error: NextResponse.json({ error: 'session_invalid' }, { status: 401 }),
+      userId: null,
+    };
+  }
+
+  // Task 66 (D): token emesso prima dell'ultimo cambio password ⇒ revocato.
+  // iat è in secondi (floor): il confronto in secondi fa sopravvivere un token
+  // emesso nello stesso secondo del cambio — il flusso legittimo (reset da non
+  // autenticato → login subito dopo) non può produrne uno più vecchio. iat
+  // assente su un token firmato da noi non accade: in quel caso non si revoca.
+  const iat = token && typeof token.iat === 'number' ? token.iat : null;
+  if (
+    user.passwordChangedAt != null &&
+    iat != null &&
+    iat < Math.floor(user.passwordChangedAt.getTime() / 1000)
+  ) {
     return {
       error: NextResponse.json({ error: 'session_invalid' }, { status: 401 }),
       userId: null,

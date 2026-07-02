@@ -37,14 +37,18 @@ export async function POST(req: NextRequest) {
       db.user.update({
         where: { id: user.id },
         // Il reset prova il possesso dell'email: vale come verifica.
-        data: { password: hashed, emailVerified: user.emailVerified ?? new Date() },
+        // passwordChangedAt (Task 66 D): revoca le sessioni JWT emesse prima
+        // del reset — requireSession risponde 401 session_invalid ai token
+        // con iat precedente (prima restavano valide fino a 30gg).
+        data: {
+          password: hashed,
+          emailVerified: user.emailVerified ?? new Date(),
+          passwordChangedAt: new Date(),
+        },
       }),
       deleteResetTokensFor(email), // monouso: brucia tutti i token dell'email
     ]);
 
-    // Limite accettato per la beta: le sessioni JWT già emesse restano valide
-    // fino a scadenza naturale (30gg) — niente revoca server-side con
-    // strategy 'jwt' senza un campo passwordChangedAt.
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[password-reset] reset-password error:', err);
