@@ -710,6 +710,31 @@ describe('executeTool: mark_entry_discussed', () => {
     expect(db.learningSignal.create).not.toHaveBeenCalled();
   });
 
+  it("'completed' outcome (Task 65 E3/J2): sets status='completed' with completedAt, no signal", async () => {
+    mockTaskOwned('a', 'Task A');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.task.update).mockResolvedValue({ id: 'a' } as any);
+    const state = makeState();
+    const result = await executeTool(
+      'mark_entry_discussed',
+      { entryId: 'a', outcome: 'completed' },
+      'user1',
+      { triageState: state },
+    );
+    expect(result.kind).toBe('mutatorWithSideEffects');
+    if (result.kind !== 'mutatorWithSideEffects') return;
+    expect(result.success).toBe(true);
+    expect(db.task.update).toHaveBeenCalledTimes(1);
+    const updateArg = vi.mocked(db.task.update).mock.calls[0][0];
+    expect(updateArg.where).toEqual({ id: 'a' });
+    expect(updateArg.data).toMatchObject({ status: 'completed' });
+    expect((updateArg.data as { completedAt?: unknown }).completedAt).toBeInstanceOf(Date);
+    // Parita' con complete_task (executeCompleteTask): nessun LearningSignal.
+    expect(db.learningSignal.create).not.toHaveBeenCalled();
+    // Terminale: registrato nello state come gli altri outcome.
+    expect(result.newTriageState.outcomes).toEqual({ a: 'completed' });
+  });
+
   it("'emotional_skip' outcome: writes LearningSignal with task_emotional_skip, metadata empty", async () => {
     mockTaskOwned('a', 'Task A');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

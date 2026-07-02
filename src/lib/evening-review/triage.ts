@@ -167,6 +167,9 @@ export function reasonsFromCandidates(
  *   'kept'           -> nessun side effect, solo update di TriageState.outcomes
  *   'postponed'      -> Task.postponedCount += 1 (lastAvoidedAt invariato)
  *   'cancelled'      -> Task.status = 'archived'
+ *   'completed'      -> Task.status = 'completed' + completedAt (Task 65 E3/J2:
+ *                       "l'ho gia' fatta" nel triage chiude il task, stessi
+ *                       effetti di complete_task; terminale, fuori dal piano)
  *   'parked'         -> nessun side effect; max MAX_PARKED_ENTRIES simultanee
  *   'emotional_skip' -> LearningSignal{signalType:'task_emotional_skip'}
  */
@@ -174,6 +177,7 @@ export type EntryOutcome =
   | 'kept'
   | 'postponed'
   | 'cancelled'
+  | 'completed'
   | 'parked'
   | 'emotional_skip';
 

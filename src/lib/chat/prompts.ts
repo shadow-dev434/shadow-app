@@ -559,7 +559,7 @@ La review attraversa le entry una alla volta. Il blocco TRIAGE CORRENTE espone C
 - CURRENT_ENTRY=none: nessun cursor attivo. Scegli la prossima entry dalla lista candidate (in ordine), chiama set_current_entry con l'entryId, poi apri con una variante di apertura (vedi sezione VARIANTI DI APERTURA).
 - CURRENT_ENTRY=<id>: la entry è attiva. Procedi con la conversazione su quella entry, usa CURRENT_ENTRY_DETAIL per scegliere mossa di apertura e tono.
 
-Quando hai raggiunto una decisione sull'entry, chiama mark_entry_discussed con outcome (kept | postponed | cancelled | parked | emotional_skip). Il cursor torna a none, passi alla prossima.
+Quando hai raggiunto una decisione sull'entry, chiama mark_entry_discussed con outcome (kept | postponed | cancelled | completed | parked | emotional_skip). Il cursor torna a none, passi alla prossima. Se l'utente dice di averla GIA' fatta ("l'ho fatta", "gia' fatto ieri"), outcome=completed: il task si chiude come completato — riconoscilo con una riga ("Ottimo, la segno fatta") e NON metterlo nel piano di domani.
 
 set_current_entry e' idempotente, ma il segnale data.action='cursor_already_set' ha due interpretazioni opposte. Verifica SEMPRE l'entryId rispetto a OUTCOMES_ASSIGNED prima di proseguire:
 
@@ -1503,13 +1503,13 @@ Casi speciali: se ricevi un tool_result con error che inizia con "Entry already 
 
 CASO alreadyClosed (mark_entry_discussed su entry gia' chiusa): hai replicato meccanicamente il tool call del turno precedente. Leggi data.suggestedNextEntryId. Se non null, chiama set_current_entry con quel valore esatto, poi conversa sulla nuova entry. Se null, tutti i candidate sono stati processati: signala 'all entries discussed', non chiamare set_current_entry, transita a plan_preview.
 
-CASO alreadyOpen (set_current_entry su entry gia' aperta nel turno precedente): hai saltato la chiusura del task corrente. Chiama mark_entry_discussed({entryId: <data.entryId>, outcome: ...}) basandoti sul user message (kept/postponed/cancelled/parked/emotional_skip), poi (se data.suggestedNextEntryId non null) chiama set_current_entry con quel valore. Se data.suggestedNextEntryId e' null, dopo il mark transita a plan_preview senza set_current_entry.
+CASO alreadyOpen (set_current_entry su entry gia' aperta nel turno precedente): hai saltato la chiusura del task corrente. Chiama mark_entry_discussed({entryId: <data.entryId>, outcome: ...}) basandoti sul user message (kept/postponed/cancelled/completed/parked/emotional_skip), poi (se data.suggestedNextEntryId non null) chiama set_current_entry con quel valore. Se data.suggestedNextEntryId e' null, dopo il mark transita a plan_preview senza set_current_entry.
 
 CASO previousEntryOpen (set_current_entry su nuova entry senza aver marcato la corrente): hai saltato la chiusura del task corrente prima di passare al prossimo. Due step obbligati: (1) chiama mark_entry_discussed({entryId: <data.previousEntryId>, outcome: ...}) basandoti su cosa ha detto l'utente sul task <data.previousEntryId>; (2) chiama set_current_entry({entryId: <data.entryId>}).
 
 Classificazione dell'outcome -- esempi appaiati:
 
-postponed / parked / cancelled / emotional_skip richiedono un verbo ESPLICITO di rimando / sospensione / abbandono / cedimento riferito all'entry che stai chiudendo (la corrente lasciata aperta o la precedente non marcata). In tutti gli altri casi (silenzio sulla entry, utterance che non nomina un'azione sull'entry, esitazione, menzione vaga, espressione emotiva sola): outcome=kept. kept e' l'unico outcome a zero side-effect DB. Nel dubbio: kept.
+postponed / parked / cancelled / completed / emotional_skip richiedono un verbo ESPLICITO di rimando / sospensione / abbandono / completamento / cedimento riferito all'entry che stai chiudendo (la corrente lasciata aperta o la precedente non marcata). In tutti gli altri casi (silenzio sulla entry, utterance che non nomina un'azione sull'entry, esitazione, menzione vaga, espressione emotiva sola): outcome=kept. kept e' l'unico outcome a zero side-effect DB. Nel dubbio: kept.
 
 KEPT vs POSTPONED:
   UTENTE (su bolletta): "ok pianificala" -> kept
@@ -1533,6 +1533,13 @@ KEPT vs CANCELLED:
   UTENTE (su bolletta): "non la faccio piu'" -> cancelled
   UTENTE (su bolletta): "togliamola del tutto" -> cancelled
 
+KEPT vs COMPLETED (Task 65 E3/J2):
+  UTENTE (su bolletta): "quella e' quasi fatta" -> kept (non e' finita, niente completamento)
+  UTENTE (su bolletta): "la faccio domani sicuro" -> postponed (intenzione futura, non completamento)
+  UTENTE (su bolletta): "l'ho gia' pagata" -> completed
+  UTENTE (su bolletta): "fatta stamattina" -> completed
+  UTENTE (su bolletta): "gia' fatto" -> completed
+
 KEPT vs EMOTIONAL_SKIP:
   UTENTE (su bolletta): "uffa che palle" -> kept (espressione emotiva sola, niente cedimento)
   UTENTE (su bolletta): "boh non so" -> kept (esitazione, niente cedimento)
@@ -1540,7 +1547,7 @@ KEPT vs EMOTIONAL_SKIP:
   UTENTE (su bolletta): "non ce la faccio davvero" -> emotional_skip
   UTENTE (su bolletta): "lascia perdere stasera" -> emotional_skip (verbo "lascia perdere" + cornice "stasera" = cedimento esplicito)
 
-Non inferire mai postponed / parked / cancelled / emotional_skip da silenzio o esitazione: scrivono stato reale (postponedCount alimenta soglia 2.2/3.2, parked occupa slot 2/2, cancelled rimuove dalla inbox). kept e' inerte.
+Non inferire mai postponed / parked / cancelled / completed / emotional_skip da silenzio o esitazione: scrivono stato reale (postponedCount alimenta soglia 2.2/3.2, parked occupa slot 2/2, cancelled rimuove dalla inbox, completed chiude il task con completedAt). kept e' inerte.
 
 In tutti e tre i casi: il messaggio finale all'utente e' la conversazione sulla nuova entry (o l'apertura del piano se suggestedNextEntryId === null) - l'utente non vede traccia dell'errore.
 

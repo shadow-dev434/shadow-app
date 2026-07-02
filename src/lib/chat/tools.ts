@@ -463,14 +463,14 @@ export const EVENING_REVIEW_TOOLS: LLMTool[] = [
   {
     name: 'mark_entry_discussed',
     description:
-      'Chiude la discussione sull\'entry corrente registrandone l\'outcome. Chiamala quando hai raggiunto una decisione: kept (la teniamo cosi\'), postponed (rimandata a domani sera), cancelled (cancellata, archiviata), parked (messa da parte temporaneamente, max 2 simultanee, riprenderemo dopo), emotional_skip (saltata stasera per peso emotivo). Dopo questa chiamata il cursore torna libero per la prossima entry.',
+      'Chiude la discussione sull\'entry corrente registrandone l\'outcome. Chiamala quando hai raggiunto una decisione: kept (la teniamo cosi\'), postponed (rimandata a domani sera), cancelled (cancellata, archiviata), completed (l\'utente dice di averla GIA\' fatta: il task si chiude come completato e non entra nel piano), parked (messa da parte temporaneamente, max 2 simultanee, riprenderemo dopo), emotional_skip (saltata stasera per peso emotivo). Dopo questa chiamata il cursore torna libero per la prossima entry.',
     input_schema: {
       type: 'object',
       properties: {
         entryId: { type: 'string', description: 'ID del task da chiudere' },
         outcome: {
           type: 'string',
-          enum: ['kept', 'postponed', 'cancelled', 'parked', 'emotional_skip'],
+          enum: ['kept', 'postponed', 'cancelled', 'completed', 'parked', 'emotional_skip'],
           description: 'Outcome della discussione',
         },
       },
@@ -1759,7 +1759,7 @@ async function executeSetCurrentEntry(
 }
 
 const VALID_OUTCOMES: ReadonlySet<EntryOutcome> = new Set([
-  'kept', 'postponed', 'cancelled', 'parked', 'emotional_skip',
+  'kept', 'postponed', 'cancelled', 'completed', 'parked', 'emotional_skip',
 ]);
 
 function isValidOutcome(v: unknown): v is EntryOutcome {
@@ -1788,7 +1788,7 @@ async function executeMarkEntryDiscussed(
     return {
       kind: 'sideEffect',
       success: false,
-      error: `Invalid outcome '${String(input.outcome)}'. Valid: kept | postponed | cancelled | parked | emotional_skip`,
+      error: `Invalid outcome '${String(input.outcome)}'. Valid: kept | postponed | cancelled | completed | parked | emotional_skip`,
     };
   }
   const outcome: EntryOutcome = input.outcome;
@@ -1857,7 +1857,7 @@ async function executeMarkEntryDiscussed(
         kind: 'sideEffect',
         success: false,
         data: { currentParkedCount: current, max: MAX_PARKED_ENTRIES },
-        error: `Cannot park: ${MAX_PARKED_ENTRIES} entries already parked. Close one (kept | postponed | cancelled | emotional_skip) before parking another.`,
+        error: `Cannot park: ${MAX_PARKED_ENTRIES} entries already parked. Close one (kept | postponed | cancelled | completed | emotional_skip) before parking another.`,
       };
     }
   }
@@ -1887,6 +1887,16 @@ async function executeMarkEntryDiscussed(
       await db.task.update({
         where: { id: entryId },
         data: { status: 'archived' },
+      });
+      break;
+    case 'completed':
+      // Task 65 (E3/J2): "l'ho gia' fatta" detto nel triage chiude il task
+      // davvero — stessi effetti di complete_task (executeCompleteTask), che
+      // resta il percorso fuori-review. Terminale: l'entry non rientra nel
+      // piano di domani (il prompt la classifica come cancelled a quel fine).
+      await db.task.update({
+        where: { id: entryId },
+        data: { status: 'completed', completedAt: new Date() },
       });
       break;
     case 'emotional_skip':

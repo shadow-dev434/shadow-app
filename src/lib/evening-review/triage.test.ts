@@ -457,8 +457,8 @@ describe('clearCurrentEntry', () => {
 
 describe('applyOutcome', () => {
   it('records each outcome value in the outcomes map', () => {
-    const outcomes: Array<['kept' | 'postponed' | 'cancelled' | 'parked' | 'emotional_skip']> = [
-      ['kept'], ['postponed'], ['cancelled'], ['parked'], ['emotional_skip'],
+    const outcomes: Array<['kept' | 'postponed' | 'cancelled' | 'completed' | 'parked' | 'emotional_skip']> = [
+      ['kept'], ['postponed'], ['cancelled'], ['completed'], ['parked'], ['emotional_skip'],
     ];
     for (const [o] of outcomes) {
       const s = makeState({ candidateTaskIds: ['a'] });
