@@ -634,7 +634,7 @@ export default function ShadowApp() {
     setShowInstallBanner(false);
   }, [installPrompt]);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
     store.setAuthUser(null);
     store.setIsAuthenticated(false);
     store.setUserId(null);
@@ -643,8 +643,12 @@ export default function ShadowApp() {
     localStorage.removeItem('shadow-user');
     localStorage.removeItem('shadow-tour-completed');
     localStorage.removeItem('shadow-profile-complete');
-    store.setCurrentView('auth');
-    toast({ title: 'Disconnesso' });
+    // Task 64 (A8, D5): il logout deve invalidare il COOKIE, non solo lo
+    // store — prima il JWT restava valido 30 giorni e chiunque riaprisse
+    // l'app era ancora dentro. Stesso pattern del re-login di lib/api/fetch.
+    // signOut fa redirect completo: niente toast/setCurrentView, non si
+    // vedrebbero.
+    await signOut({ callbackUrl: '/?auth=login' });
   }, [store]);
 
   if (initializing) {
