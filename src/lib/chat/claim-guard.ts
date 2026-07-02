@@ -17,6 +17,12 @@ const CLAIM_PATTERNS: RegExp[] = [
   // Prima persona, perfetto: "ho creato/aggiunto/salvato…"
   /\bho (creato|aggiunto|salvato|segnato|registrato|archiviato|aggiornato|completato|eliminato)\b/i,
   /\b(l'ho|te l'ho) (creato|aggiunt[oa]|salvat[oa]|segnat[oa]|mess[oa]|archiviat[oa])\b/i,
+  // Participio secco di conferma a inizio frase: "Aggiunto.", "Fatto, per
+  // oggi.", "Creato: scade venerdì". È LA forma standard delle conferme del
+  // modello (osservata nel probe e2e: la cattura persa rispondeva proprio
+  // "Aggiunto." con zero tool). Anchor a inizio riga: in mezzo al discorso
+  // ("quando l'hai fatto, dimmelo") non deve scattare.
+  /^(fatt|creat|aggiunt|salvat|segnat|registrat|archiviat|aggiornat|eliminat|completat)[oaie]\b\s*[.!,:…]/im,
   // Participio + spunta: "Creato ✓", "Aggiunto! ✅"
   /\b(creat[oa]|aggiunt[oa]|salvat[oa]|segnat[oa]|archiviat[oa]|aggiornat[oa]|fatt[oa])\s*[!.]?\s*[✓✔✅]/iu,
   // Dichiarazioni di esito: "creato con scadenza…", "è (già) creato/salvato/in lista/in inbox"

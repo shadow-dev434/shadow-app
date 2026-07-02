@@ -12,6 +12,11 @@ describe('textClaimsWrite', () => {
     'Fatto ✅',
     'Segnato ✓ energia bassa.',
     'Ho archiviato la bozza vecchia.',
+    // Participio secco di conferma (forma osservata nel probe e2e).
+    'Aggiunto. Ha una scadenza o è una cosa da fare quando capita?',
+    'Fatto, per oggi (giovedì).',
+    'Creato: scade venerdì.',
+    'Segnato! Passiamo al resto.',
   ])('claim di scrittura → true: "%s"', (text) => {
     expect(textClaimsWrite(text)).toBe(true);
   });
@@ -26,6 +31,9 @@ describe('textClaimsWrite', () => {
     'Domani riparti dalla lista di oggi.',
     'La scadenza di venerdì è vicina.',
     'Quando hai fatto, dimmelo.',
+    // Participio in mezzo al discorso: l'anchor di inizio riga non scatta.
+    'Perfetto — quando l\'hai fatto, avvisami.',
+    'Il task va creato prima di venerdì, ti va?',
   ])('nessun claim → false: "%s"', (text) => {
     expect(textClaimsWrite(text)).toBe(false);
   });
