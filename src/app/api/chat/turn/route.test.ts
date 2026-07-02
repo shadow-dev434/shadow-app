@@ -46,10 +46,18 @@ vi.mock('@/lib/chat/summary', () => ({
   rollSummaryIfNeeded: vi.fn(async () => null),
 }));
 
+// Task 64 (A5): il cap giornaliero si testa mockando il conteggio consumi.
+// Default 0 = sotto cap, i test esistenti restano invariati.
+vi.mock('@/lib/llm/usage', () => ({
+  getDailyCalls: vi.fn(async () => 0),
+  recordAiUsage: vi.fn(async () => undefined),
+}));
+
 import type { NextRequest } from 'next/server';
 import { POST } from './route';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
+import { getDailyCalls } from '@/lib/llm/usage';
 import { orchestrate, type OrchestratorOutput } from '@/lib/chat/orchestrator';
 
 const BASE_RESULT: OrchestratorOutput = {
@@ -119,6 +127,31 @@ describe('POST /api/chat/turn — passthrough di OrchestratorOutput (Task 41 fol
       await POST(makeReq({ mode: legacy, userMessage: 'ciao' }));
       expect(vi.mocked(orchestrate).mock.calls[0][0].mode).toBe('general');
     }
+  });
+
+  it('Task 64 (A5): cap giornaliero raggiunto -> 429 con code daily_cap e messaggio IT', async () => {
+    vi.mocked(getDailyCalls).mockResolvedValueOnce(999999);
+
+    const res = await POST(makeReq({ mode: 'general', userMessage: 'ciao' }));
+    const json = await res.json();
+
+    expect(res.status).toBe(429);
+    expect(json.code).toBe('daily_cap');
+    expect(json.error).toContain('limite di messaggi');
+    expect(orchestrate).not.toHaveBeenCalled();
+  });
+
+  it('Task 64 (A4): validazione allegati -> 400 con messaggio italiano', async () => {
+    const res = await POST(makeReq({
+      mode: 'general',
+      userMessage: 'ciao',
+      attachments: [{ kind: 'image', mediaType: 'image/tiff', data: 'AAAA' }],
+    }));
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error).toBe('Formato non supportato: immagini (JPEG, PNG, GIF, WebP) o PDF.');
+    expect(orchestrate).not.toHaveBeenCalled();
   });
 
   it('userMessage mancante -> 400, orchestrate non chiamato', async () => {

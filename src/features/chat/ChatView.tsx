@@ -207,7 +207,7 @@ export function ChatView() {
   const [mode, setMode] = useState<string>('general');
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState<{ message: string; status?: number } | null>(null);
+  const [error, setError] = useState<{ message: string; status?: number; code?: string } | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
   const [eveningReviewShouldStart, setEveningReviewShouldStart] = useState(false);
 
@@ -451,7 +451,7 @@ export function ChatView() {
       });
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({ error: 'Errore sconosciuto' }));
+        const errData = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
         // Lo status serve all'error box: 404 (probabile deployment skew) ha
         // un'azione diversa (Ricarica) dal resto (Riprova). Task 42.
         // 403 consenso revocato (Task 63): messaggio chiaro al posto dell'enum;
@@ -459,11 +459,20 @@ export function ChatView() {
         const consentRevoked =
           res.status === 403 &&
           (res.headers.get('x-consent-required') === '1' || errData.error === 'consent_required');
+        // Task 64 (A4): gli errori di piattaforma (proxy Vercel: 413 body
+        // troppo grande, 415 media type) non passano dal nostro handler e
+        // arrivano senza JSON — messaggio italiano per status, mai il raw.
+        const statusFallback =
+          res.status === 413 ? 'Allegato troppo grande per il server: riduci le dimensioni.'
+          : res.status === 415 ? 'Formato di file non supportato.'
+          : res.status >= 500 ? 'Il server ha avuto un problema. Riprova tra poco.'
+          : 'Qualcosa è andato storto. Riprova.';
         const message = consentRevoked
           ? 'Hai revocato il consenso, quindi Shadow è in pausa: per riprendere riattivalo dalla pagina del consenso.'
-          : errData.error || 'HTTP ' + res.status;
-        const err = new Error(message) as Error & { status?: number };
+          : errData.error || statusFallback;
+        const err = new Error(message) as Error & { status?: number; code?: string };
         err.status = res.status;
+        err.code = typeof errData.code === 'string' ? errData.code : undefined;
         throw err;
       }
 
@@ -490,8 +499,9 @@ export function ChatView() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Errore';
       const status = err instanceof Error ? (err as Error & { status?: number }).status : undefined;
+      const code = err instanceof Error ? (err as Error & { code?: string }).code : undefined;
       lastFailedRef.current = { text: trimmed, attachments: atts };
-      setError({ message: msg, status });
+      setError({ message: msg, status, code });
     } finally {
       setSending(false);
       setTimeout(() => inputRef.current?.focus(), 50);
@@ -754,9 +764,15 @@ export function ChatView() {
             <div>
               {error.status === 404
                 ? 'Non ho raggiunto il server — probabile aggiornamento dell\'app in corso.'
+                : error.status === 429
+                ? (error.code === 'chat_disabled'
+                    ? 'La chat è momentaneamente in pausa. Riprova più tardi — intanto task e piano restano qui.'
+                    : 'Per oggi ho finito i messaggi: ci risentiamo domani. I tuoi task e il piano restano qui.')
                 : `Errore: ${error.message}`}
             </div>
-            {error.status === 404 ? (
+            {/* Task 64 (A5, D33): sul 429 niente Riprova — ritenterebbe contro
+                lo stesso cap fino a domani. Le altre viste restano usabili. */}
+            {error.status === 429 ? null : error.status === 404 ? (
               <button
                 type="button"
                 onClick={() => window.location.reload()}

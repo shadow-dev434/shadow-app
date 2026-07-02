@@ -62,28 +62,30 @@ type AttachmentValidation =
   | { attachments: ChatAttachment[]; error?: undefined }
   | { attachments?: undefined; error: string };
 
+// Task 64 (A4, D34): i messaggi di errore arrivano in UI così come sono
+// (ChatView li mostra all'utente) — devono essere italiani e parlanti.
 function validateAttachments(raw: unknown): AttachmentValidation {
   if (raw === undefined || raw === null) return { attachments: [] };
-  if (!Array.isArray(raw)) return { error: 'attachments must be an array' };
+  if (!Array.isArray(raw)) return { error: 'Allegati non validi.' };
   if (raw.length === 0) return { attachments: [] };
   if (raw.length > MAX_ATTACHMENTS) {
-    return { error: `too many attachments (max ${MAX_ATTACHMENTS})` };
+    return { error: `Troppi allegati: al massimo ${MAX_ATTACHMENTS} per messaggio.` };
   }
 
   const out: ChatAttachment[] = [];
   let total = 0;
   for (const item of raw) {
-    if (typeof item !== 'object' || item === null) return { error: 'invalid attachment' };
+    if (typeof item !== 'object' || item === null) return { error: 'Allegato non valido.' };
     const { kind, mediaType, data } = item as {
       kind?: unknown;
       mediaType?: unknown;
       data?: unknown;
     };
-    if (typeof data !== 'string' || data.length === 0) return { error: 'attachment data missing' };
+    if (typeof data !== 'string' || data.length === 0) return { error: 'Allegato vuoto o non leggibile.' };
     const bytes = approxBase64Bytes(data);
-    if (bytes > MAX_ITEM_BYTES) return { error: 'attachment too large (max 4MB)' };
+    if (bytes > MAX_ITEM_BYTES) return { error: 'Allegato troppo grande: il massimo è 4MB.' };
     total += bytes;
-    if (total > MAX_TOTAL_BYTES) return { error: 'attachments total too large' };
+    if (total > MAX_TOTAL_BYTES) return { error: 'Allegati troppo grandi nel complesso: riduci o togline qualcuno.' };
 
     if (
       kind === 'image' &&
@@ -94,7 +96,7 @@ function validateAttachments(raw: unknown): AttachmentValidation {
     } else if (kind === 'document' && mediaType === 'application/pdf') {
       out.push({ kind: 'document', mediaType: 'application/pdf', data });
     } else {
-      return { error: 'unsupported attachment type' };
+      return { error: 'Formato non supportato: immagini (JPEG, PNG, GIF, WebP) o PDF.' };
     }
   }
   return { attachments: out };
@@ -109,9 +111,11 @@ export async function POST(req: NextRequest) {
     // Fail-open sulla LETTURA del consumo: un errore transitorio di AiUsage non
     // deve rompere la chat (il cap è protezione costi, non percorso critico). Il
     // kill-switch (cap<=0) invece blocca sempre, anche se la lettura fallisce.
+    // Task 64 (A5, D33): `code` distingue lato client il kill-switch dal cap
+    // giornaliero — messaggi e affordance diversi (niente Riprova inutile).
     if (CHAT_DAILY_CAP <= 0) {
       return NextResponse.json(
-        { error: 'La chat è temporaneamente non disponibile.' },
+        { error: 'La chat è temporaneamente non disponibile.', code: 'chat_disabled' },
         { status: 429 },
       );
     }
@@ -123,7 +127,7 @@ export async function POST(req: NextRequest) {
     }
     if (dailyChatCalls >= CHAT_DAILY_CAP) {
       return NextResponse.json(
-        { error: 'Hai raggiunto il limite di messaggi per oggi. Riprova domani.' },
+        { error: 'Hai raggiunto il limite di messaggi per oggi. Riprova domani.', code: 'daily_cap' },
         { status: 429 },
       );
     }
@@ -150,10 +154,10 @@ export async function POST(req: NextRequest) {
     // l'invio con solo allegato).
     const trimmedMessage = typeof userMessage === 'string' ? userMessage.trim() : '';
     if (!trimmedMessage && !hasAttachments) {
-      return NextResponse.json({ error: 'userMessage or attachment is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Scrivi un messaggio o allega un file.' }, { status: 400 });
     }
     if (typeof userMessage === 'string' && userMessage.length > 4000) {
-      return NextResponse.json({ error: 'userMessage too long' }, { status: 400 });
+      return NextResponse.json({ error: 'Messaggio troppo lungo: il massimo è 4000 caratteri.' }, { status: 400 });
     }
 
     const chatMode: ChatMode = VALID_MODES.includes(mode as ChatMode)
