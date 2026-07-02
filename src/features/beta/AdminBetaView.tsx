@@ -55,6 +55,11 @@ interface PulseDay {
 interface Summary {
   reports: Record<string, number>;
   engagement: { totalUsers: number; active1d: number; active7d: number };
+  // Opzionale per tollerare una summary di un server pre-Task 66.
+  eveningEmail?: {
+    failed7d: number;
+    failedUsers: { email: string; failCount: number; lastFailedAt: string; lastDetail: string }[];
+  };
   pulse: { days: PulseDay[]; texts: { day: string; friction?: string; suggestion?: string }[] };
   assessments: {
     id: string;
@@ -140,7 +145,7 @@ export function AdminBetaView() {
         {loadError && <p className="text-sm text-red-400">{loadError}</p>}
 
         {!loading && summary && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
             <Stat label="Tester totali" value={summary.engagement.totalUsers} />
             <Stat label="Attivi oggi" value={summary.engagement.active1d} />
             <Stat label="Attivi 7gg" value={summary.engagement.active7d} />
@@ -148,6 +153,22 @@ export function AdminBetaView() {
               label="Segnalazioni aperte"
               value={(summary.reports.new ?? 0) + (summary.reports.in_progress ?? 0) + (summary.reports.triaged ?? 0)}
             />
+            <Stat label="Email serali KO 7gg" value={summary.eveningEmail?.failed7d ?? 0} />
+          </div>
+        )}
+
+        {/* Task 66 (C1): chi non sta ricevendo l'email della review serale. */}
+        {!loading && summary?.eveningEmail && summary.eveningEmail.failed7d > 0 && (
+          <div className="rounded-lg border border-red-900/50 bg-red-950/20 p-3 text-sm space-y-1.5">
+            <p className="font-medium text-red-400">Email serali non consegnate (ultimi 7 giorni)</p>
+            {summary.eveningEmail.failedUsers.map((u) => (
+              <p key={u.email} className="text-xs text-zinc-400">
+                <span className="text-zinc-200">{u.email}</span> — {u.failCount}{' '}
+                {u.failCount === 1 ? 'giorno' : 'giorni'}, ultimo:{' '}
+                {new Date(u.lastFailedAt).toLocaleString('it-IT')}
+                <span className="text-zinc-500"> · {u.lastDetail}</span>
+              </p>
+            ))}
           </div>
         )}
 

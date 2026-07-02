@@ -5,10 +5,10 @@
  * aperta. Riusa il pattern di src/lib/beta/alert.ts e src/lib/password-reset.ts:
  * Resend via REST puro (nessun SDK, regola CLAUDE.md #3), timeout 5s, MAI throw.
  *
- * A differenza di quei due, ritorna un boolean (inviata sì/no): il cron lo usa
- * per contare i fallimenti e per scrivere il marcatore anti-duplicato SOLO sugli
+ * A differenza di quei due, ritorna l'esito ({ ok, detail }): il cron lo usa
+ * per contare i fallimenti, scrivere il marcatore anti-duplicato SOLO sugli
  * invii andati a buon fine (un invio fallito non segna "inviato oggi" → niente
- * falso skip).
+ * falso skip) e tracciare il motivo del fallimento per l'admin (Task 66 C1).
  *
  * ⚠️ Resend sandbox: senza dominio verificato consegna solo all'email del
  * titolare dell'account e solo da onboarding@resend.dev (cfr. nota in
@@ -23,11 +23,18 @@ function maskEmail(email: string): string {
   return `${(local ?? '').slice(0, 2)}***@${domain ?? '?'}`;
 }
 
+export interface EveningEmailResult {
+  ok: boolean;
+  /** Motivo sintetico del fallimento: config mancante, status HTTP + estratto risposta, o errore di rete. */
+  detail?: string;
+}
+
 /**
- * Invia il promemoria della review serale. Ritorna true se Resend ha accettato
- * l'invio, false altrimenti (config mancante, errore HTTP, timeout). Mai throw.
+ * Invia il promemoria della review serale. Ritorna { ok: true } se Resend ha
+ * accettato l'invio, { ok: false, detail } altrimenti (config mancante, errore
+ * HTTP, timeout). Mai throw.
  */
-export async function sendEveningReviewEmail(email: string): Promise<boolean> {
+export async function sendEveningReviewEmail(email: string): Promise<EveningEmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const from =
     process.env.EVENING_EMAIL_FROM ??
@@ -36,7 +43,7 @@ export async function sendEveningReviewEmail(email: string): Promise<boolean> {
 
   if (!apiKey) {
     console.warn('[evening-email] RESEND_API_KEY assente: email non inviata');
-    return false;
+    return { ok: false, detail: 'RESEND_API_KEY assente' };
   }
 
   const base = (process.env.NEXTAUTH_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
@@ -95,12 +102,12 @@ export async function sendEveningReviewEmail(email: string): Promise<boolean> {
         res.status,
         detail.slice(0, 300),
       );
-      return false;
+      return { ok: false, detail: `HTTP ${res.status}: ${detail.slice(0, 200)}` };
     }
     console.log(`[evening-email] promemoria inviato a ${maskEmail(email)}`);
-    return true;
+    return { ok: true };
   } catch (err) {
     console.error(`[evening-email] invio a ${maskEmail(email)} fallito:`, err);
-    return false;
+    return { ok: false, detail: err instanceof Error ? err.message : String(err) };
   }
 }

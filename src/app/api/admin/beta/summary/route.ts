@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdminSession } from '@/lib/beta/admin-guard';
 import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
+import { EVENING_EMAIL_FAILED_TYPE } from '@/lib/notifications/internal-types';
 
 const PULSE_NUMERIC_KEYS = ['useful', 'focus', 'control', 'procrastination'] as const;
 type PulseKey = (typeof PULSE_NUMERIC_KEYS)[number];
@@ -34,6 +35,7 @@ export async function GET(req: NextRequest) {
       threads7d,
       pulses,
       assessments,
+      emailFailures,
     ] = await Promise.all([
       db.user.count(),
       db.bugReport.groupBy({ by: ['status'], _count: { _all: true } }),
@@ -65,6 +67,18 @@ export async function GET(req: NextRequest) {
         orderBy: { administeredAt: 'desc' },
         take: 200,
         include: { user: { select: { email: true } } },
+      }),
+      // Task 66 (C1): tracce dei fallimenti email serale (una/utente/giorno,
+      // scritte dal cron) — rispondono a "chi non sta ricevendo le email?".
+      db.notification.findMany({
+        where: { type: EVENING_EMAIL_FAILED_TYPE, createdAt: { gte: d7 } },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          userId: true,
+          body: true,
+          createdAt: true,
+          user: { select: { email: true } },
+        },
       }),
     ]);
 
@@ -125,9 +139,35 @@ export async function GET(req: NextRequest) {
       }))
       .sort((a, b) => a.day.localeCompare(b.day));
 
+    // Aggregazione fallimenti email per utente (findMany è createdAt desc:
+    // la prima riga vista per utente è la più recente → lastFailedAt/lastDetail).
+    const failuresByUser = new Map<
+      string,
+      { email: string; failCount: number; lastFailedAt: Date; lastDetail: string }
+    >();
+    for (const f of emailFailures) {
+      const cur = failuresByUser.get(f.userId);
+      if (cur) {
+        cur.failCount++;
+      } else {
+        failuresByUser.set(f.userId, {
+          email: f.user.email,
+          failCount: 1,
+          lastFailedAt: f.createdAt,
+          lastDetail: f.body,
+        });
+      }
+    }
+
     return NextResponse.json({
       reports,
       engagement: { totalUsers, active1d, active7d },
+      eveningEmail: {
+        failed7d: emailFailures.length,
+        failedUsers: [...failuresByUser.values()].sort(
+          (a, b) => b.lastFailedAt.getTime() - a.lastFailedAt.getTime(),
+        ),
+      },
       pulse: { days: pulseDays, texts: texts.slice(-50) },
       assessments: assessments.map((a) => ({
         id: a.id,

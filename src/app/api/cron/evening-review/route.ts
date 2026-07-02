@@ -28,6 +28,7 @@ import { computeEveningReviewSignal } from '@/lib/evening-review/compute-signal'
 import { sendEveningReviewEmail } from '@/lib/evening-review/evening-email';
 import { sendBetaAlert } from '@/lib/beta/alert';
 import { nowHHMMInRome, formatTodayInRome, startOfDayInZone } from '@/lib/evening-review/dates';
+import { EVENING_EMAIL_FAILED_TYPE } from '@/lib/notifications/internal-types';
 
 const PROMPT_TYPE = 'evening_review_prompt';
 
@@ -80,9 +81,33 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      const ok = await sendEveningReviewEmail(email);
-      if (!ok) {
+      const sendResult = await sendEveningReviewEmail(email);
+      if (!sendResult.ok) {
         failed++;
+        // Task 66 (C1): traccia persistente del fallimento — riga Notification
+        // interna (read:true, esclusa dalla GET utente) che alimenta il blocco
+        // eveningEmail della summary admin. Dedup per giorno-Rome come il
+        // marcatore di successo; un errore qui non ferma il giro degli altri
+        // utenti. Il retry resta invariato: nessun marcatore PROMPT_TYPE.
+        try {
+          const alreadyTracked = await db.notification.findFirst({
+            where: { userId, type: EVENING_EMAIL_FAILED_TYPE, createdAt: { gte: dayStartRome } },
+            select: { id: true },
+          });
+          if (!alreadyTracked) {
+            await db.notification.create({
+              data: {
+                userId,
+                type: EVENING_EMAIL_FAILED_TYPE,
+                title: 'Invio email serale fallito',
+                body: sendResult.detail ?? 'Errore sconosciuto',
+                read: true,
+              },
+            });
+          }
+        } catch (trackErr) {
+          captureApiError(trackErr, 'GET /api/cron/evening-review — traccia fallimento email');
+        }
         continue; // niente marcatore: ritenta al prossimo giro utile
       }
 

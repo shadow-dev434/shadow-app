@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
+import { INTERNAL_NOTIFICATION_TYPES } from '@/lib/notifications/internal-types';
 
 // GET /api/notifications — List notifications
 export async function GET(req: NextRequest) {
@@ -12,9 +13,12 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const unreadOnly = url.searchParams.get('unread') === 'true';
 
+    // Task 66 (C1): i type interni (osservabilità admin) non sono notifiche
+    // per l'utente — fuori da lista e conteggio.
     const notifications = await db.notification.findMany({
       where: {
         userId,
+        type: { notIn: [...INTERNAL_NOTIFICATION_TYPES] },
         ...(unreadOnly ? { read: false } : {}),
       },
       orderBy: { createdAt: 'desc' },
@@ -22,7 +26,7 @@ export async function GET(req: NextRequest) {
     });
 
     const unreadCount = await db.notification.count({
-      where: { userId, read: false },
+      where: { userId, read: false, type: { notIn: [...INTERNAL_NOTIFICATION_TYPES] } },
     });
 
     return NextResponse.json({ notifications, unreadCount });

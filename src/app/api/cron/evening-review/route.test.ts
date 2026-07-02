@@ -4,7 +4,7 @@
  * Isola lo strato route: db, computeEveningReviewSignal e sendEveningReviewEmail
  * sono mockati. Gli helper data/ora (dates.ts) restano reali (puri). Copre:
  * auth bearer, selezione candidati, dedup giornaliero, fuori finestra, fallimento
- * invio (niente marcatore).
+ * invio (niente marcatore + traccia admin evening_email_failed, Task 66 C1).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -51,7 +51,7 @@ beforeEach(() => {
   vi.mocked(db.notification.findFirst).mockResolvedValue(null as never);
   vi.mocked(db.notification.create).mockResolvedValue({} as never);
   vi.mocked(computeEveningReviewSignal).mockResolvedValue({ shouldStart: true });
-  vi.mocked(sendEveningReviewEmail).mockResolvedValue(true);
+  vi.mocked(sendEveningReviewEmail).mockResolvedValue({ ok: true });
 });
 
 describe('GET /api/cron/evening-review', () => {
@@ -98,12 +98,54 @@ describe('GET /api/cron/evening-review', () => {
     expect(body).toEqual({ candidates: 1, sent: 0, skipped: 1, failed: 0 });
   });
 
-  it('invio fallito: failed++ e NESSUN marcatore (ritenta domani)', async () => {
-    vi.mocked(sendEveningReviewEmail).mockResolvedValue(false);
+  it('invio fallito: failed++, NESSUN marcatore, traccia evening_email_failed col motivo', async () => {
+    vi.mocked(sendEveningReviewEmail).mockResolvedValue({
+      ok: false,
+      detail: 'HTTP 422: invalid to',
+    });
+    const res = await GET(cronReq(SECRET));
+    const body = await res.json();
+    // Una sola create: la traccia admin, mai il marcatore PROMPT_TYPE.
+    expect(db.notification.create).toHaveBeenCalledTimes(1);
+    expect(db.notification.create).toHaveBeenCalledWith({
+      data: {
+        userId: 'u1',
+        type: 'evening_email_failed',
+        title: 'Invio email serale fallito',
+        body: 'HTTP 422: invalid to',
+        read: true,
+      },
+    });
+    expect(body).toEqual({ candidates: 1, sent: 0, skipped: 0, failed: 1 });
+  });
+
+  it('invio fallito già tracciato oggi: nessuna seconda traccia (dedup giorno)', async () => {
+    vi.mocked(sendEveningReviewEmail).mockResolvedValue({ ok: false, detail: 'HTTP 500' });
+    // findFirst risponde per type: PROMPT_TYPE mai sollecitato, FAILED già tracciato.
+    vi.mocked(db.notification.findFirst).mockImplementation((async (args: {
+      where: { type: string };
+    }) => (args.where.type === 'evening_email_failed' ? { id: 'nf1' } : null)) as never);
     const res = await GET(cronReq(SECRET));
     const body = await res.json();
     expect(db.notification.create).not.toHaveBeenCalled();
     expect(body).toEqual({ candidates: 1, sent: 0, skipped: 0, failed: 1 });
+  });
+
+  it('errore nella scrittura della traccia: il giro continua e risponde 200', async () => {
+    vi.mocked(db.settings.findMany).mockResolvedValue([
+      { userId: 'u1', user: { email: 'a@b.com' } },
+      { userId: 'u2', user: { email: 'c@d.com' } },
+    ] as never);
+    vi.mocked(sendEveningReviewEmail)
+      .mockResolvedValueOnce({ ok: false, detail: 'HTTP 500' })
+      .mockResolvedValueOnce({ ok: true });
+    vi.mocked(db.notification.create)
+      .mockRejectedValueOnce(new Error('db down')) // traccia u1 fallisce
+      .mockResolvedValueOnce({} as never); // marcatore u2 ok
+    const res = await GET(cronReq(SECRET));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body).toEqual({ candidates: 2, sent: 1, skipped: 0, failed: 1 });
   });
 
   it('dedup per userId quando Settings ha più righe stesso utente', async () => {
