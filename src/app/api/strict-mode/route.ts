@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
+import { computeActualDurationMinutes } from '@/lib/strict-mode/duration';
 
 // GET /api/strict-mode — Get active strict mode session
 export async function GET(req: NextRequest) {
@@ -49,11 +50,34 @@ export async function POST(req: NextRequest) {
       if (!task) return NextResponse.json({ error: 'Task non trovato' }, { status: 404 });
     }
 
-    // End any existing active sessions first
-    await db.strictModeSession.updateMany({
+    // End any existing active sessions first — per-riga (D10): la vecchia
+    // updateMany lasciava actualDurationMinutes=0 e exitReason vuoto, sporcando
+    // le statistiche di ogni sessione chiusa per sostituzione.
+    const activeSessions = await db.strictModeSession.findMany({
       where: { userId, status: { in: ['active_soft', 'active_strict', 'pending_exit'] } },
-      data: { status: 'exited', exitedAt: new Date() },
+      select: { id: true, startedAt: true, endsAt: true },
     });
+    if (activeSessions.length > 0) {
+      const nowMs = Date.now();
+      await db.$transaction(
+        activeSessions.map((s) =>
+          db.strictModeSession.update({
+            where: { id: s.id },
+            data: {
+              status: 'exited',
+              exitedAt: new Date(nowMs),
+              exitReason: 'superseded',
+              actualDurationMinutes: computeActualDurationMinutes({
+                startedAtMs: new Date(s.startedAt).getTime(),
+                endsAtMs: s.endsAt ? new Date(s.endsAt).getTime() : null,
+                nowMs,
+                exitReason: 'superseded',
+              }),
+            },
+          }),
+        ),
+      );
+    }
 
     const now = new Date();
     const endsAt = new Date(now.getTime() + (durationMinutes || 25) * 60000);
@@ -142,12 +166,16 @@ export async function PATCH(req: NextRequest) {
       updateData.exitAttempts = existing.exitAttempts + 1;
     }
 
-    // If exiting, record the time and calculate duration
+    // If exiting, record the time and calculate duration. Per le chiusure
+    // d'ufficio di sessioni scadute (rehydrate) la durata è clampata a endsAt.
     if (status === 'exited') {
       updateData.exitedAt = new Date();
-      const startedAt = new Date(existing.startedAt);
-      const durationMs = Date.now() - startedAt.getTime();
-      updateData.actualDurationMinutes = Math.round(durationMs / 60000);
+      updateData.actualDurationMinutes = computeActualDurationMinutes({
+        startedAtMs: new Date(existing.startedAt).getTime(),
+        endsAtMs: existing.endsAt ? new Date(existing.endsAt).getTime() : null,
+        nowMs: Date.now(),
+        exitReason: typeof exitReason === 'string' ? exitReason : null,
+      });
     }
 
     const session = await db.strictModeSession.update({
