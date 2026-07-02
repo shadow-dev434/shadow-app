@@ -12,6 +12,7 @@ import {
   clearDecomposition,
   countParked,
   allOutcomesAssigned,
+  isPreviewPhaseActive,
   isRecentlyAvoided,
   sortForCursorSelection,
   loadTriageStateFromContext,
@@ -876,5 +877,64 @@ describe('hasMicroSteps', () => {
       { id: 's1', text: 'apri', done: false, estimatedSeconds: 30 },
     ]);
     expect(hasMicroSteps({ microSteps: json })).toBe(true);
+  });
+});
+
+describe('isPreviewPhaseActive — 0 candidate (Task 67 B, ADV-0cand)', () => {
+  it('lista vuota + intake incompleto -> false (Q1/Q2 restano in per_entry)', () => {
+    expect(isPreviewPhaseActive(makeState({}))).toBe(false);
+    expect(
+      isPreviewPhaseActive(makeState({ moodIntake: { mood: 3 } })),
+    ).toBe(false);
+    expect(
+      isPreviewPhaseActive(makeState({ moodIntake: { energyEnd: 2 } })),
+    ).toBe(false);
+  });
+
+  it('lista vuota + intake completo -> true (piano vuoto confermabile)', () => {
+    expect(
+      isPreviewPhaseActive(makeState({ moodIntake: { mood: 3, energyEnd: 2 } })),
+    ).toBe(true);
+  });
+
+  it('con candidate il gate intake NON si applica: servono gli outcomes', () => {
+    // 1 candidate senza outcome: false anche a intake completo.
+    expect(
+      isPreviewPhaseActive(
+        makeState({
+          candidateTaskIds: ['t1'],
+          moodIntake: { mood: 3, energyEnd: 2 },
+        }),
+      ),
+    ).toBe(false);
+    // outcome assegnato: true anche a intake incompleto (comportamento pre-67).
+    expect(
+      isPreviewPhaseActive(
+        makeState({
+          candidateTaskIds: ['t1'],
+          outcomes: { t1: 'kept' },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('candidate tutte escluse (effective vuota) -> vale il ramo 0-candidate', () => {
+    expect(
+      isPreviewPhaseActive(
+        makeState({
+          candidateTaskIds: ['t1'],
+          excludedTaskIds: ['t1'],
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isPreviewPhaseActive(
+        makeState({
+          candidateTaskIds: ['t1'],
+          excludedTaskIds: ['t1'],
+          moodIntake: { mood: 4, energyEnd: 4 },
+        }),
+      ),
+    ).toBe(true);
   });
 });

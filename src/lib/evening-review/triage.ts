@@ -391,6 +391,22 @@ export type TriageState = {
    * force finche' modello chiama tool. Comportamento corretto.
    */
   lastTurnWasTextOnly?: boolean;
+
+  /**
+   * Task 67 B (§6.11): contatore dei turni text-only CONSECUTIVI nelle fasi di
+   * commit (plan_preview e closing) — il parente "contato" di
+   * lastTurnWasTextOnly, che copre per_entry come boolean one-shot. Le fasi di
+   * commit tollerano UN turno in prosa (presentazione piano, chiarimenti), ma
+   * a CONFIRM_STREAK_THRESHOLD turni senza alcun tool call il turno successivo
+   * forza la scelta di un tool di fase (chiusura d'ufficio, ADV-0cand/J5).
+   *
+   * Lifecycle (tutto orchestrator-side via applyConfirmStreak, pure function
+   * in at-risk-detection.ts): ++ a fine turno text-only in plan_preview/
+   * closing; azzerato a fine turno se >=1 tool eseguito o fase fuori commit.
+   * Additivo/opzionale: contextJson persistiti pre-Task-67 caricano intatti
+   * (undefined ≡ 0).
+   */
+  confirmTextOnlyStreak?: number;
 };
 
 /**
@@ -629,10 +645,24 @@ export type EveningReviewPhase = 'per_entry' | 'plan_preview' | 'closing';
  * (incluso 'parked', a differenza di allOutcomesAssigned).
  * Usato come guard per update_plan_preview (6b) e confirm_plan_preview (6c),
  * e come fallback della phase machine readPhase() in orchestrator (G.D7).
+ *
+ * Task 67 B (ADV-0cand): review con 0 candidate — prima ritornava sempre
+ * false, quindi la fase non lasciava MAI per_entry: i tool di chiusura
+ * (confirm_plan_preview/confirm_close_review) non venivano esposti, la review
+ * "chiusa a parole" non scriveva Review/DailyPlan e si riproponeva l'indomani.
+ * Ora la preview (piano vuoto, che closeReview gia' gestisce — D3) diventa
+ * attiva quando l'intake mood+energy e' completo: Q1/Q2 del primo turno
+ * restano in per_entry, dove l'utente puo' ancora aggiungere task al triage;
+ * task aggiunti a preview attiva passano da update_plan_preview.adds.
  */
 export function isPreviewPhaseActive(state: TriageState): boolean {
   const effective = computeEffectiveList(state);
-  if (effective.length === 0) return false;
+  if (effective.length === 0) {
+    return (
+      state.moodIntake?.mood !== undefined &&
+      state.moodIntake?.energyEnd !== undefined
+    );
+  }
   const outcomes = state.outcomes ?? {};
   return effective.every((id) => outcomes[id] !== undefined);
 }

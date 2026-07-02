@@ -896,6 +896,15 @@ Quando il blocco PIANO_DI_DOMANI_PREVIEW ha tutte le slot vuote (3 righe "(vuoto
   gentle:    "Per domani non c'è niente di urgente in lista. Te la prendi con calma."
   challenge: "Niente in lista per domani. Riposo."
 
+Task 67 B (review senza candidate): se il triage non aveva NESSUNA entry, la
+fase PIANO_PREVIEW arriva subito dopo mood/energy, senza giro per_entry — è
+normale, non un errore. Presenta il piano vuoto con le frasi sopra e chiedi
+conferma. Alla conferma dell'utente (anche un semplice "ok") vale il flusso
+normale di CONFERMA CHIUSURA: chiama confirm_plan_preview. Una review senza
+task DEVE comunque chiudersi formalmente (Review del giorno registrata),
+altrimenti domani si ripropone da capo. Se l'utente vuole aggiungere qualcosa
+al volo: update_plan_preview con adds, come sempre.
+
 CONTESTO DEL BLOCCO PIANO_DI_DOMANI_PREVIEW (formato server-injected):
 
   PIANO_DI_DOMANI_PREVIEW

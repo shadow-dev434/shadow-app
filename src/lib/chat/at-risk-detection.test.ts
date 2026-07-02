@@ -4,6 +4,9 @@ import {
   clearConsumedAtRiskFlags,
   shouldSetTextOnlyFlag,
   extractSelfCorrectionTrigger,
+  applyConfirmStreak,
+  shouldForcePhaseCommit,
+  CONFIRM_STREAK_THRESHOLD,
 } from './at-risk-detection';
 import type { TriageState } from '@/lib/evening-review/triage';
 import type { ChatMode } from './orchestrator';
@@ -285,5 +288,170 @@ describe('extractSelfCorrectionTrigger', () => {
         entryId: 'q',
       }),
     ).toEqual({ trigger: 'alreadyOpen', entryId: 'q' });
+  });
+});
+
+describe('applyConfirmStreak (Task 67 B)', () => {
+  it('pendingTriageState null -> null', () => {
+    expect(
+      applyConfirmStreak({
+        mode: 'evening_review',
+        pendingTriageState: null,
+        effectivePhase: 'plan_preview',
+        toolsExecutedCount: 0,
+      }),
+    ).toBeNull();
+  });
+
+  it('plan_preview text-only -> incrementa (undefined trattato come 0)', () => {
+    const state = makeTriageState();
+    const next = applyConfirmStreak({
+      mode: 'evening_review',
+      pendingTriageState: state,
+      effectivePhase: 'plan_preview',
+      toolsExecutedCount: 0,
+    });
+    expect(next?.confirmTextOnlyStreak).toBe(1);
+  });
+
+  it('closing text-only -> incrementa da valore esistente', () => {
+    const state = makeTriageState({ confirmTextOnlyStreak: 1 });
+    const next = applyConfirmStreak({
+      mode: 'evening_review',
+      pendingTriageState: state,
+      effectivePhase: 'closing',
+      toolsExecutedCount: 0,
+    });
+    expect(next?.confirmTextOnlyStreak).toBe(2);
+  });
+
+  it('tool eseguito in fase commit -> azzera', () => {
+    const state = makeTriageState({ confirmTextOnlyStreak: 2 });
+    const next = applyConfirmStreak({
+      mode: 'evening_review',
+      pendingTriageState: state,
+      effectivePhase: 'plan_preview',
+      toolsExecutedCount: 1,
+    });
+    expect(next?.confirmTextOnlyStreak).toBe(0);
+  });
+
+  it('fase per_entry -> azzera (cambio contesto)', () => {
+    const state = makeTriageState({ confirmTextOnlyStreak: 1 });
+    const next = applyConfirmStreak({
+      mode: 'evening_review',
+      pendingTriageState: state,
+      effectivePhase: 'per_entry',
+      toolsExecutedCount: 0,
+    });
+    expect(next?.confirmTextOnlyStreak).toBe(0);
+  });
+
+  it('mode != evening_review -> azzera', () => {
+    const state = makeTriageState({ confirmTextOnlyStreak: 2 });
+    const next = applyConfirmStreak({
+      mode: 'general',
+      pendingTriageState: state,
+      effectivePhase: 'plan_preview',
+      toolsExecutedCount: 0,
+    });
+    expect(next?.confirmTextOnlyStreak).toBe(0);
+  });
+
+  it('idempotenza spread: streak gia 0 fuori fase -> ritorna la STESSA reference', () => {
+    const state = makeTriageState();
+    const next = applyConfirmStreak({
+      mode: 'evening_review',
+      pendingTriageState: state,
+      effectivePhase: 'per_entry',
+      toolsExecutedCount: 0,
+    });
+    expect(next).toBe(state);
+  });
+
+  it('funzione pura: input non mutato sull incremento', () => {
+    const state = makeTriageState({ confirmTextOnlyStreak: 1 });
+    applyConfirmStreak({
+      mode: 'evening_review',
+      pendingTriageState: state,
+      effectivePhase: 'plan_preview',
+      toolsExecutedCount: 0,
+    });
+    expect(state.confirmTextOnlyStreak).toBe(1);
+  });
+});
+
+describe('shouldForcePhaseCommit (Task 67 B)', () => {
+  it('sotto soglia -> false', () => {
+    const state = makeTriageState({ confirmTextOnlyStreak: CONFIRM_STREAK_THRESHOLD - 1 });
+    expect(
+      shouldForcePhaseCommit({
+        mode: 'evening_review',
+        currentPhase: 'plan_preview',
+        triageState: state,
+      }),
+    ).toBe(false);
+  });
+
+  it('a soglia in plan_preview -> true', () => {
+    const state = makeTriageState({ confirmTextOnlyStreak: CONFIRM_STREAK_THRESHOLD });
+    expect(
+      shouldForcePhaseCommit({
+        mode: 'evening_review',
+        currentPhase: 'plan_preview',
+        triageState: state,
+      }),
+    ).toBe(true);
+  });
+
+  it('sopra soglia in closing -> true', () => {
+    const state = makeTriageState({ confirmTextOnlyStreak: CONFIRM_STREAK_THRESHOLD + 1 });
+    expect(
+      shouldForcePhaseCommit({
+        mode: 'evening_review',
+        currentPhase: 'closing',
+        triageState: state,
+      }),
+    ).toBe(true);
+  });
+
+  it('fase per_entry -> false anche a soglia', () => {
+    const state = makeTriageState({ confirmTextOnlyStreak: CONFIRM_STREAK_THRESHOLD });
+    expect(
+      shouldForcePhaseCommit({
+        mode: 'evening_review',
+        currentPhase: 'per_entry',
+        triageState: state,
+      }),
+    ).toBe(false);
+  });
+
+  it('phase undefined (thread pre-6c) -> false', () => {
+    const state = makeTriageState({ confirmTextOnlyStreak: CONFIRM_STREAK_THRESHOLD });
+    expect(
+      shouldForcePhaseCommit({
+        mode: 'evening_review',
+        currentPhase: undefined,
+        triageState: state,
+      }),
+    ).toBe(false);
+  });
+
+  it('mode != evening_review / triageState null -> false', () => {
+    const state = makeTriageState({ confirmTextOnlyStreak: CONFIRM_STREAK_THRESHOLD });
+    expect(
+      shouldForcePhaseCommit({
+        mode: 'general',
+        currentPhase: 'plan_preview',
+        triageState: state,
+      }),
+    ).toBe(false);
+    expect(
+      shouldForcePhaseCommit({
+        mode: 'evening_review',
+        currentPhase: 'plan_preview',
+        triageState: null,
+      }),
+    ).toBe(false);
   });
 });

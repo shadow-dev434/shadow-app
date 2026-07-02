@@ -569,7 +569,20 @@ export function getToolsForMode(
   mode: string,
   phase?: EveningReviewPhase,
   triageState?: TriageState,
+  // Task 67 B (§6.11): turno forzato di chiusura d'ufficio — il set si
+  // restringe ai SOLI tool di commit della fase (niente CHAT_TOOLS: il
+  // forcing tool_choice='any' non deve essere eludibile via create_task &co).
+  restrictToPhaseCommitTools?: boolean,
 ): LLMTool[] {
+  if (restrictToPhaseCommitTools === true && mode === 'evening_review') {
+    if (phase === 'plan_preview') {
+      return [UPDATE_PLAN_PREVIEW_TOOL, CONFIRM_PLAN_PREVIEW_TOOL];
+    }
+    if (phase === 'closing') {
+      return [CONFIRM_CLOSE_REVIEW_TOOL];
+    }
+    // Fase inattesa col flag: degrada al gating normale (fall-through).
+  }
   if (mode !== 'evening_review') {
     const tools: LLMTool[] = [...CHAT_TOOLS, ...TASK_MANAGEMENT_TOOLS, ...RECURRENCE_TOOLS];
     // Task 44: il commit del piano di oggi vive nelle modalità di pianificazione,

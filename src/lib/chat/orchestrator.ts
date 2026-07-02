@@ -47,6 +47,8 @@ import {
   clearConsumedAtRiskFlags,
   shouldSetTextOnlyFlag,
   extractSelfCorrectionTrigger,
+  applyConfirmStreak,
+  shouldForcePhaseCommit,
 } from './at-risk-detection';
 // Task 63 (S1-A): parti pure del claim-guard (pattern + criterio di scrittura),
 // nel modulo dedicato per i test; qui solo il wiring del blocco 7c.
@@ -637,11 +639,34 @@ export async function orchestrate(
     );
   }
 
+  // ── 5.7. Task 67 B (§6.11): chiusura d'ufficio plan_preview/closing ──
+  // CONFIRM_STREAK_THRESHOLD turni text-only consecutivi in fase di commit
+  // (streak scritto dal blocco applyConfirmStreak post-loop, persistito in
+  // contextJson) => questo turno DEVE eseguire un tool di fase: toolset
+  // ristretto (restrictToPhaseCommitTools) + tool_choice={type:'any'}.
+  // Il turno forzato esegue per costruzione un tool -> lo streak si azzera
+  // da solo nel blocco post-loop, nessun clear dedicato.
+  const forcePhaseCommit = shouldForcePhaseCommit({
+    mode,
+    currentPhase,
+    triageState,
+  });
+  if (forcePhaseCommit) {
+    console.warn(
+      `[Task67 B forced phase commit] streak=${triageState?.confirmTextOnlyStreak} ` +
+      `phase=${currentPhase} -> toolset ristretto + tool_choice={type:'any'}`,
+    );
+  }
+
   // toolChoice effettivo per la prima callLLM: l'harness VINCE su un
   // eventuale {type:'any'} at-risk dello stesso turno (precedenza esplicita).
+  // Il phase-commit vive in plan_preview/closing (harness/at-risk in
+  // per_entry): fasi disgiunte, ma la precedenza resta dichiarata.
   const effectiveToolChoice: ToolChoiceParam | undefined = harnessActive
     ? { type: 'tool', name: 'set_current_entry' }
-    : forcedToolChoice;
+    : forcePhaseCommit
+      ? { type: 'any' }
+      : forcedToolChoice;
 
   // ── 6. First LLM call ────────────────────────────────────────────────
   // Slice 7 BUG #A: tools filtrati per fase corrente in evening_review.
@@ -657,7 +682,7 @@ export async function orchestrate(
       dynamic: dynamicSuffix,
     },
     messages: llmMessages,
-    tools: getToolsForMode(mode, currentPhase, triageState ?? undefined),
+    tools: getToolsForMode(mode, currentPhase, triageState ?? undefined, forcePhaseCommit),
     maxTokens: 500,
     temperature: 0.5,
     toolChoice: effectiveToolChoice,
@@ -1171,6 +1196,32 @@ export async function orchestrate(
     );
     // Non-null assertion sicura: il predicate include pendingTriageState !== null.
     pendingTriageState = { ...pendingTriageState!, lastTurnWasTextOnly: true };
+  }
+
+  // Task 67 B (§6.11): streak conferme text-only nelle fasi di commit
+  // (plan_preview/closing) — parente contato del SET V1.3.2 qui sopra, stesso
+  // vincolo di posizione (dopo effectivePhase, prima della serializzazione).
+  // A CONFIRM_STREAK_THRESHOLD il turno successivo forza il tool di fase (5.7).
+  {
+    const streakBefore = pendingTriageState?.confirmTextOnlyStreak ?? 0;
+    pendingTriageState = applyConfirmStreak({
+      mode,
+      pendingTriageState,
+      effectivePhase,
+      toolsExecutedCount: toolsExecuted.length,
+    });
+    const streakAfter = pendingTriageState?.confirmTextOnlyStreak ?? 0;
+    if (streakAfter !== streakBefore) {
+      console.warn(
+        `[Task67 B streak] confirmTextOnlyStreak ${streakBefore} -> ${streakAfter} ` +
+        `(phase=${effectivePhase}, toolsExecuted=${toolsExecuted.length})`,
+      );
+    }
+    // Primo giro a vuoto in plan_preview: QuickReply deterministica come via
+    // esplicita di conferma, prima che il giro dopo scatti il forcing.
+    if (streakAfter === 1 && effectivePhase === 'plan_preview') {
+      quickReplies.push({ label: '✅ Conferma il piano', value: 'Conferma il piano' });
+    }
   }
 
   // chatMessage.create factor-out: PrismaPromise lazy (non esegue finche'

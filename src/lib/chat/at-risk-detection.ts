@@ -150,6 +150,65 @@ export function shouldSetTextOnlyFlag(args: {
 }
 
 /**
+ * Task 67 B (§6.11): soglia di turni text-only consecutivi in fase di commit
+ * (plan_preview/closing) oltre la quale il turno successivo forza la scelta
+ * di un tool di fase. N=2 (decisione di prodotto): un turno in prosa e'
+ * legittimo (presentazione/chiarimento), due consecutivi sono il pattern
+ * "loop di conferme" del collaudo (ADV-0cand/J5).
+ */
+export const CONFIRM_STREAK_THRESHOLD = 2;
+
+/**
+ * Task 67 B: aggiorna il contatore confirmTextOnlyStreak a fine turno
+ * (post tool-loop). Semantica:
+ *   - fase plan_preview/closing e 0 tool eseguiti -> streak + 1;
+ *   - fase plan_preview/closing e >=1 tool -> azzerato (il modello ha agito);
+ *   - fuori fase commit o mode diverso -> azzerato (cambio contesto).
+ * Pure function, idempotente sugli spread: ritorna l'input invariato quando
+ * il valore effettivo non cambia (streak 0 -> 0), pattern shouldSetTextOnlyFlag.
+ */
+export function applyConfirmStreak(args: {
+  mode: ChatMode;
+  pendingTriageState: TriageState | null;
+  effectivePhase: EveningReviewPhase | undefined;
+  toolsExecutedCount: number;
+}): TriageState | null {
+  const state = args.pendingTriageState;
+  if (state === null) return null;
+  const current = state.confirmTextOnlyStreak ?? 0;
+  const inCommitPhase =
+    args.mode === 'evening_review' &&
+    (args.effectivePhase === 'plan_preview' || args.effectivePhase === 'closing');
+  if (!inCommitPhase || args.toolsExecutedCount > 0) {
+    return current === 0 ? state : { ...state, confirmTextOnlyStreak: 0 };
+  }
+  return { ...state, confirmTextOnlyStreak: current + 1 };
+}
+
+/**
+ * Task 67 B: decide se il turno corrente va forzato a un tool di fase
+ * (chiusura d'ufficio). Letto pre-callLLM su currentPhase (fase di inizio
+ * turno, da contextJson): a soglia raggiunta il caller restringe il toolset
+ * ai soli tool di commit della fase (getToolsForMode restrictToPhaseCommitTools)
+ * e passa tool_choice={type:'any'} — il modello DEVE scegliere tra confermare
+ * (confirm_*) o applicare la modifica richiesta (update_plan_preview); il
+ * turno forzato esegue per costruzione un tool, quindi applyConfirmStreak
+ * azzera lo streak senza bisogno di un clear dedicato.
+ */
+export function shouldForcePhaseCommit(args: {
+  mode: ChatMode;
+  currentPhase: EveningReviewPhase | undefined;
+  triageState: TriageState | null;
+}): boolean {
+  return (
+    args.mode === 'evening_review' &&
+    args.triageState !== null &&
+    (args.currentPhase === 'plan_preview' || args.currentPhase === 'closing') &&
+    (args.triageState.confirmTextOnlyStreak ?? 0) >= CONFIRM_STREAK_THRESHOLD
+  );
+}
+
+/**
  * Slice 5 V1.3 (continuazione Tech debt #18): identifica il discriminator
  * V1.2/V1.2.2/V1.2.3 nel `data` di un tool_result fallito.
  *
