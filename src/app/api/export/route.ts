@@ -7,7 +7,9 @@ export const maxDuration = 60;
 
 // GET /api/export?format=csv|json
 export async function GET(req: NextRequest) {
-  const { error, userId } = await requireSession(req);
+  // allowWithoutConsent: diritto di portabilita' (art. 20), esercitabile
+  // anche dopo la revoca del consenso.
+  const { error, userId } = await requireSession(req, { allowWithoutConsent: true });
   if (error) return error;
 
   try {

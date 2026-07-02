@@ -75,7 +75,7 @@ function makeReq(body: Record<string, unknown>): NextRequest {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(requireSession).mockResolvedValue({ error: null, userId: 'user-1' });
+  vi.mocked(requireSession).mockResolvedValue({ error: null, userId: 'user-1', consentGiven: true });
   vi.mocked(orchestrate).mockResolvedValue({ ...BASE_RESULT });
   // Default: nessun thread risolto -> il rollover (Task 53) non scatta.
   vi.mocked(db.chatThread.findFirst).mockResolvedValue(null as never);

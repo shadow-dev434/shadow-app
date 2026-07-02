@@ -454,7 +454,15 @@ export function ChatView() {
         const errData = await res.json().catch(() => ({ error: 'Errore sconosciuto' }));
         // Lo status serve all'error box: 404 (probabile deployment skew) ha
         // un'azione diversa (Ricarica) dal resto (Riprova). Task 42.
-        const err = new Error(errData.error || 'HTTP ' + res.status) as Error & { status?: number };
+        // 403 consenso revocato (Task 63): messaggio chiaro al posto dell'enum;
+        // alla prossima navigazione il middleware porta comunque a /consent.
+        const consentRevoked =
+          res.status === 403 &&
+          (res.headers.get('x-consent-required') === '1' || errData.error === 'consent_required');
+        const message = consentRevoked
+          ? 'Hai revocato il consenso, quindi Shadow è in pausa: per riprendere riattivalo dalla pagina del consenso.'
+          : errData.error || 'HTTP ' + res.status;
+        const err = new Error(message) as Error & { status?: number };
         err.status = res.status;
         throw err;
       }

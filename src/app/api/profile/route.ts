@@ -31,7 +31,10 @@ export async function GET(req: NextRequest) {
 
 // PATCH /api/profile — partial update
 export async function PATCH(req: NextRequest) {
-  const { error, userId } = await requireSession(req);
+  // allowWithoutConsent: il tour salva tourCompleted/tourStep PRIMA del
+  // consenso (gate sequenziale: tour → consent → onboarding). Senza questa
+  // esenzione ogni nuovo utente resterebbe in loop sul tour (Task 63 §1.4).
+  const { error, userId, consentGiven } = await requireSession(req, { allowWithoutConsent: true });
   if (error) return error;
 
   try {
@@ -39,10 +42,13 @@ export async function PATCH(req: NextRequest) {
 
     const updateData: Record<string, unknown> = {};
 
-    if (body.onboardingComplete !== undefined) updateData.onboardingComplete = body.onboardingComplete;
-    if (body.onboardingStep !== undefined) updateData.onboardingStep = body.onboardingStep;
-    if (body.focusModeDefault !== undefined) updateData.focusModeDefault = body.focusModeDefault;
-    if (body.blockedApps !== undefined) updateData.blockedApps = JSON.stringify(body.blockedApps);
+    // Senza consenso sono scrivibili SOLO i flag di navigazione del tour.
+    if (consentGiven) {
+      if (body.onboardingComplete !== undefined) updateData.onboardingComplete = body.onboardingComplete;
+      if (body.onboardingStep !== undefined) updateData.onboardingStep = body.onboardingStep;
+      if (body.focusModeDefault !== undefined) updateData.focusModeDefault = body.focusModeDefault;
+      if (body.blockedApps !== undefined) updateData.blockedApps = JSON.stringify(body.blockedApps);
+    }
     if (body.tourCompleted !== undefined) updateData.tourCompleted = body.tourCompleted;
     if (body.tourStep !== undefined) updateData.tourStep = body.tourStep;
 

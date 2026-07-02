@@ -19,7 +19,9 @@ import { captureApiError } from '@/lib/observability';
 const CONSENT_VERSION = '0.2-draft';
 
 export async function POST(req: NextRequest) {
-  const { error, userId } = await requireSession(req);
+  // allowWithoutConsent: e' la route con cui il consenso si DA (e si ri-da'
+  // dopo una revoca) — gated sul consenso si bloccherebbe da sola.
+  const { error, userId } = await requireSession(req, { allowWithoutConsent: true });
   if (error) return error;
 
   let body: { acceptTerms?: unknown; acceptArt9?: unknown };
@@ -61,7 +63,9 @@ export async function POST(req: NextRequest) {
 // (consentVersion resta come record storico). Il gate del middleware (DB re-read) rimbalza
 // l'utente su /consent al primo hop di pagina, quindi la revoca ha effetto immediato.
 export async function DELETE(req: NextRequest) {
-  const { error, userId } = await requireSession(req);
+  // allowWithoutConsent: la revoca deve restare idempotente anche a consenso
+  // gia' assente (diritto art. 7(3), mai bloccato dal suo stesso esito).
+  const { error, userId } = await requireSession(req, { allowWithoutConsent: true });
   if (error) return error;
 
   try {

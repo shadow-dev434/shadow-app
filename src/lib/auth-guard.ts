@@ -3,17 +3,38 @@
  *
  * Reads the NextAuth JWT directly from cookies — more reliable than
  * getServerSession() in App Router routes.
+ *
+ * Task 63 (S2-PRIV1): oltre alla sessione, il guard applica il consenso.
+ * La revoca (art. 7(3) GDPR) scrive solo il DB mentre il cookie JWT resta
+ * valido 30 giorni: la fonte di verità è quindi il DB a ogni request.
+ * Default: consenso obbligatorio → 403 `consent_required` (+ header
+ * `x-consent-required: 1` così il client discrimina senza leggere il body).
+ * `allowWithoutConsent` è riservato a: diritti GDPR (consent, delete account,
+ * export) e flusso pre-consenso (PATCH profile dal tour). Fail-closed:
+ * profilo assente ⇒ consenso assente.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { getAuthSecret } from '@/lib/auth-secret';
+import { hasGivenConsent } from '@/lib/beta/consent-guard';
 
 export type AuthGuardResult =
-  | { error: NextResponse; userId: null }
-  | { error: null; userId: string };
+  | { error: NextResponse; userId: null; consentGiven?: undefined }
+  | { error: null; userId: string; consentGiven: boolean };
 
-export async function requireSession(req?: NextRequest): Promise<AuthGuardResult> {
+export interface RequireSessionOptions {
+  /**
+   * Salta il 403 per consenso mancante. Il chiamante riceve comunque
+   * `consentGiven` per decisioni fini (es. campo-limit del PATCH profile).
+   */
+  allowWithoutConsent?: boolean;
+}
+
+export async function requireSession(
+  req?: NextRequest,
+  options: RequireSessionOptions = {},
+): Promise<AuthGuardResult> {
   // getToken() reads the JWT from the session cookie directly.
   // It needs the request object, so we pass it when available.
   const token = req
@@ -34,5 +55,12 @@ export async function requireSession(req?: NextRequest): Promise<AuthGuardResult
     };
   }
 
-  return { error: null, userId };
+  const consentGiven = await hasGivenConsent(userId);
+  if (!consentGiven && !options.allowWithoutConsent) {
+    const res = NextResponse.json({ error: 'consent_required' }, { status: 403 });
+    res.headers.set('x-consent-required', '1');
+    return { error: res, userId: null };
+  }
+
+  return { error: null, userId, consentGiven };
 }

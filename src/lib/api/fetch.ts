@@ -28,12 +28,28 @@ function triggerRelogin(): void {
   void signOut({ callbackUrl: '/?auth=login' });
 }
 
+// Task 63 (S2-PRIV1): consenso revocato → il server risponde 403 con header
+// x-consent-required. Stessa disciplina del re-login: una sola redirect anche
+// con piu' fetch in volo, nessun toast (la pagina /consent spiega tutto).
+let consentRedirectInFlight = false;
+
+function triggerConsentRedirect(): void {
+  if (consentRedirectInFlight) return;
+  consentRedirectInFlight = true;
+  window.location.assign('/consent');
+}
+
 export async function apiFetch(input: string, options: ApiFetchOptions = {}): Promise<Response> {
   const { skipErrorToast, ...init } = options;
   const res = await fetch(input, init);
 
   if (res.status === 401) {
     triggerRelogin();
+    return res;
+  }
+
+  if (res.status === 403 && res.headers.get('x-consent-required') === '1') {
+    triggerConsentRedirect();
     return res;
   }
 
