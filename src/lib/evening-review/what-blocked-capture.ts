@@ -49,6 +49,13 @@ export function captureWhatBlocked(
     return {
       ...triageState,
       whatBlocked: `${prev ?? ''}${separator}— ${taskMatch.title}: ${reason}`,
+      // Task 65 (E2/J5): stessa cattura, forma strutturata — alimenta il
+      // LearningSignal task_blocked alla chiusura review (vedi
+      // confirm-close-review-handler) per il micro-step di rientro in Today.
+      whatBlockedEntries: [
+        ...(triageState.whatBlockedEntries ?? []),
+        { taskId: targetTaskId, reason },
+      ],
       pendingWhatBlockedForTaskId: undefined,
     };
   }

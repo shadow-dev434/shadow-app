@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import {
   prioritizeTask,
 } from '@/lib/engines/priority-engine';
-import { buildDailyPlan, getCurrentTimeSlot } from '@/lib/engines/execution-engine';
+import { buildDailyPlan, getCurrentTimeSlot, generateRecoveryAction } from '@/lib/engines/execution-engine';
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses, type ExecutionContext, type TaskRecord } from '@/lib/types/shadow';
 import { formatTodayInRome } from '@/lib/evening-review/dates';
@@ -309,6 +309,46 @@ export async function GET(req: NextRequest) {
         ? 'chat'
         : 'engine';
 
+    // Task 65 (E2/J5): se ieri sera la review ha catturato un whatBlocked su un
+    // task del piano (LearningSignal task_blocked <=36h), la Today lo mostra col
+    // micro-step di rientro gia' armato. Il micro-step viene dall'engine
+    // esistente generateRecoveryAction('avoided'): primo step da 30 secondi.
+    // Fail-open: senza segnali (o su errore) recovery e' {} e la Today e' quella
+    // di sempre.
+    let recovery: Record<string, { reason: string; microStep: string }> = {};
+    try {
+      const since = new Date(Date.now() - 36 * 60 * 60 * 1000);
+      const blockedSignals = await db.learningSignal.findMany({
+        where: {
+          userId,
+          signalType: 'task_blocked',
+          taskId: { in: allIds },
+          createdAt: { gte: since },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+      for (const sig of blockedSignals) {
+        const t = sig.taskId ? taskMap.get(sig.taskId) : undefined;
+        if (!t || t.status === 'completed' || t.status === 'archived') continue;
+        let reason = '';
+        try {
+          const meta = JSON.parse(sig.metadata) as { reason?: string };
+          reason = typeof meta.reason === 'string' ? meta.reason : '';
+        } catch { /* metadata malformato: reason vuota */ }
+        const action = generateRecoveryAction(
+          toTaskRecord(t),
+          'avoided',
+          { energy: 3, timeAvailable: 60, currentContext: 'any', currentTimeSlot: 'morning' },
+          [],
+        );
+        const microStep = action.newSteps?.[0]?.text ?? '';
+        if (microStep) recovery[sig.taskId as string] = { reason, microStep };
+      }
+    } catch (err) {
+      captureApiError(err, 'GET /api/daily-plan (recovery enrichment)');
+      recovery = {};
+    }
+
     return NextResponse.json({
       plan: {
         ...plan,
@@ -327,6 +367,7 @@ export async function GET(req: NextRequest) {
       },
       slots,
       source,
+      recovery,
     });
   } catch (error) {
     captureApiError(error, 'GET /api/daily-plan');

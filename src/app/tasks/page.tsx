@@ -2270,6 +2270,10 @@ function TodayView() {
   // Task 50: location per fascia (mattina/pomeriggio/sera -> casa/ufficio/fuori).
   const [slotLocations, setSlotLocations] = useState<Record<string, string>>({});
 
+  // Task 65 (E2/J5): micro-step di rientro per i task su cui ieri sera la
+  // review ha catturato un whatBlocked (taskId -> {reason, microStep}).
+  const [recoveryMap, setRecoveryMap] = useState<Record<string, { reason: string; microStep: string }>>({});
+
   const handleTaskClick = useCallback((taskId: string) => {
     store.setSelectedTaskId(taskId);
     store.setCurrentView('task');
@@ -2390,7 +2394,13 @@ function TodayView() {
       try {
         const res = await apiFetch('/api/daily-plan', { skipErrorToast: true });
         const data = await res.json();
-        if (cancelled || !data?.plan) return;
+        if (cancelled) return;
+        // Task 65 (E2): micro-step di rientro dai whatBlocked di ieri sera —
+        // si idrata anche se il piano in store c'e' gia'.
+        if (data?.recovery && typeof data.recovery === 'object') {
+          setRecoveryMap(data.recovery as Record<string, { reason: string; microStep: string }>);
+        }
+        if (!data?.plan) return;
         // Task 49: sincronizza energia/tempo/contesto dichiarati in chat con la
         // schermata Today (lo store non ha persist → senza questo non li vedresti).
         if (typeof data.plan.energyLevel === 'number') store.setEnergy(data.plan.energyLevel);
@@ -2575,6 +2585,7 @@ function TodayView() {
                         key={task.id}
                         task={task}
                         index={idx >= 0 ? idx : null}
+                        recovery={recoveryMap[task.id]}
                         onTaskClick={handleTaskClick}
                         onStrictOneTap={handleStrictOneTap}
                         onStartFocus={handleStartFocus}
@@ -2599,6 +2610,7 @@ function TodayView() {
                   key={task.id}
                   task={task}
                   index={idx}
+                  recovery={recoveryMap[task.id]}
                   onTaskClick={handleTaskClick}
                   onStrictOneTap={handleStrictOneTap}
                   onStartFocus={handleStartFocus}
@@ -2624,9 +2636,10 @@ function TodayView() {
 // Card di un task del piano: con `index` (0-2) è una delle "3 cose di oggi"
 // (numerata, azione primaria strict one-tap); senza è una riga di fascia.
 
-function PlanTaskCard({ task, index, onTaskClick, onStrictOneTap, onStartFocus }: {
+function PlanTaskCard({ task, index, recovery, onTaskClick, onStrictOneTap, onStartFocus }: {
   task: ShadowTask;
   index: number | null;
+  recovery?: { reason: string; microStep: string };
   onTaskClick: (id: string) => void;
   onStrictOneTap: (id: string) => void;
   onStartFocus: (id: string, mode: 'launch' | 'hold' | 'recovery') => void;
@@ -2637,16 +2650,24 @@ function PlanTaskCard({ task, index, onTaskClick, onStrictOneTap, onStartFocus }
   if (!isTop3) {
     return (
       <Card className="border-zinc-200 dark:border-zinc-800 cursor-pointer hover:border-zinc-300 dark:hover:border-zinc-700" onClick={() => onTaskClick(task.id)}>
-        <CardContent className="p-2.5 flex items-center gap-2">
-          <div className="flex-1 min-w-0 flex items-center gap-1.5">
-            <p className="text-sm truncate">{task.title}</p>
-            {isAutoClassified(task)
-              ? <span className="text-[10px] text-amber-500/90 shrink-0 flex items-center gap-0.5"><Sparkles className="w-2.5 h-2.5" /> Shadow</span>
-              : task.aiClassified && <Sparkles className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
-            {task.recurringTemplateId && <Repeat className="w-2.5 h-2.5 text-zinc-400 shrink-0" />}
-            <StepProgressBadge task={task} />
+        <CardContent className="p-2.5 space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0 flex items-center gap-1.5">
+              <p className="text-sm truncate">{task.title}</p>
+              {isAutoClassified(task)
+                ? <span className="text-[10px] text-amber-500/90 shrink-0 flex items-center gap-0.5"><Sparkles className="w-2.5 h-2.5" /> Shadow</span>
+                : task.aiClassified && <Sparkles className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
+              {task.recurringTemplateId && <Repeat className="w-2.5 h-2.5 text-zinc-400 shrink-0" />}
+              <StepProgressBadge task={task} />
+            </div>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onStartFocus(task.id, 'launch'); }}><Play className="w-3 h-3" /></Button>
           </div>
-          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onStartFocus(task.id, 'launch'); }}><Play className="w-3 h-3" /></Button>
+          {/* Task 65 (E2/J5): micro-step di rientro dal whatBlocked di ieri sera. */}
+          {recovery && (
+            <p className="text-[10px] text-teal-600 dark:text-teal-400 flex items-center gap-0.5">
+              <Zap className="w-2.5 h-2.5 shrink-0" /> Riparti da 30 secondi: {recovery.microStep}
+            </p>
+          )}
         </CardContent>
       </Card>
     );
@@ -2666,8 +2687,13 @@ function PlanTaskCard({ task, index, onTaskClick, onStrictOneTap, onStartFocus }
             {task.recurringTemplateId && <span className="text-[10px] text-zinc-500 dark:text-zinc-400 flex items-center gap-0.5"><Repeat className="w-2.5 h-2.5" /> ricorrente</span>}
             <StepProgressBadge task={task} />
           </div>
-          {/* Motivational personalization */}
-          {store.adaptiveProfile && (
+          {/* Task 65 (E2/J5): micro-step di rientro dal whatBlocked di ieri sera —
+              prevale sul framing motivazionale (piu' specifico e azionabile). */}
+          {recovery ? (
+            <p className="text-[10px] text-teal-600 dark:text-teal-400 mt-0.5 flex items-center gap-0.5">
+              <Zap className="w-2.5 h-2.5 shrink-0" /> Riparti da 30 secondi: {recovery.microStep}
+            </p>
+          ) : store.adaptiveProfile && (
             <p className="text-[10px] text-amber-600/70 mt-0.5 flex items-center gap-0.5">
               <Flame className="w-2.5 h-2.5" /> {getMotivationalFraming(task, store.adaptiveProfile)}
             </p>

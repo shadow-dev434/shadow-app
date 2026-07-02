@@ -195,3 +195,34 @@ describe('captureWhatBlocked — scenario 4 brief (whatBlocked multipli)', () =>
     );
   });
 });
+
+describe('captureWhatBlocked — whatBlockedEntries strutturate (Task 65 E2/J5)', () => {
+  it('append riuscito -> entry {taskId, reason} accumulata accanto al blob', () => {
+    const state = makeTriageState({ pendingWhatBlockedForTaskId: 't1' });
+    const result = captureWhatBlocked(state, TASKS, 'troppo aperto');
+    expect(result.whatBlockedEntries).toEqual([{ taskId: 't1', reason: 'troppo aperto' }]);
+  });
+
+  it('append multipli -> entry in ordine di cattura', () => {
+    let state = makeTriageState({ pendingWhatBlockedForTaskId: 't1' });
+    state = captureWhatBlocked(state, TASKS, 'non so da dove partire');
+    state = { ...state, pendingWhatBlockedForTaskId: 't2' };
+    state = captureWhatBlocked(state, TASKS, 'troppa ansia');
+    expect(state.whatBlockedEntries).toEqual([
+      { taskId: 't1', reason: 'non so da dove partire' },
+      { taskId: 't2', reason: 'troppa ansia' },
+    ]);
+  });
+
+  it('capture fallita (reason corta) -> nessuna entry, campo assente', () => {
+    const state = makeTriageState({ pendingWhatBlockedForTaskId: 't1' });
+    const result = captureWhatBlocked(state, TASKS, 'x');
+    expect(result.whatBlockedEntries).toBeUndefined();
+  });
+
+  it('capture fallita (task orfano) -> nessuna entry', () => {
+    const state = makeTriageState({ pendingWhatBlockedForTaskId: 'ghost' });
+    const result = captureWhatBlocked(state, TASKS, 'motivo valido');
+    expect(result.whatBlockedEntries).toBeUndefined();
+  });
+});

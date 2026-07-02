@@ -249,6 +249,17 @@ export type TriageState = {
   whatBlocked?: string;
 
   /**
+   * Task 65 (E2/J5): controparte STRUTTURATA di whatBlocked — coppie
+   * {taskId, reason} accumulate dalla stessa cattura (captureWhatBlocked).
+   * Il blob whatBlocked resta la stringa display per Review (verbatim,
+   * contratto D2 invariato); queste entry servono alla chiusura review per
+   * emettere LearningSignal 'task_blocked' per-task, che la Today del giorno
+   * dopo usa per armare il micro-step di rientro (generateRecoveryAction).
+   * Opzionale e additivo: contextJson persistiti pre-Task-65 caricano intatti.
+   */
+  whatBlockedEntries?: { taskId: string; reason: string }[];
+
+  /**
    * Slice 7: flag pausa-conferma whatBlocked detection. Settato dal tool
    * mark_what_blocked_asked NELLO STESSO TURNO in cui il modello pone la
    * domanda whatBlocked all'utente. L'orchestrator legge questo campo al

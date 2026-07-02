@@ -49,6 +49,7 @@ import {
 } from '@/lib/evening-review/plan-preview';
 import { addDaysIso } from '@/lib/evening-review/dates';
 import { MOOD_INTAKE_FALLBACK_VALUE } from '@/lib/evening-review/config';
+import { db } from '@/lib/db';
 import type {
   EveningReviewPhase,
   TriageState,
@@ -130,6 +131,32 @@ export async function handleConfirmCloseReview(
       '[slice9-calibration] ricalcolo post-chiusura fallito (ignorato):',
       err,
     );
+  }
+
+  // Task 65 (E2/J5): un LearningSignal task_blocked per ogni whatBlocked
+  // catturato — la Today di domani ci arma il micro-step di rientro
+  // (generateRecoveryAction) sul task evitato. SOLO alla prima chiusura
+  // (alreadyClosed=false): il replay non deve duplicare i segnali.
+  // Fail-open come la calibrazione: la chiusura e' gia' persistita.
+  if (!result.alreadyClosed) {
+    const entries = input.triageState.whatBlockedEntries ?? [];
+    for (const entry of entries) {
+      try {
+        await db.learningSignal.create({
+          data: {
+            userId: input.userId,
+            taskId: entry.taskId,
+            signalType: 'task_blocked',
+            metadata: JSON.stringify({ reason: entry.reason, reviewDate }),
+          },
+        });
+      } catch (err) {
+        console.warn(
+          '[task65-e2] LearningSignal task_blocked fallito (ignorato):',
+          err,
+        );
+      }
+    }
   }
 
   return {
