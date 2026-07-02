@@ -485,6 +485,65 @@ function replaceView(view: ViewMode, taskId?: string): void {
   syncViewToUrl(view, { replace: true, taskId: taskId ?? st.selectedTaskId });
 }
 
+// ─── Economia delle interruzioni (Task 66 B/D57) ────────────────────────────
+// UNA sola interruzione proattiva alla volta (collaudo 62, L10 grade C):
+// micro-feedback, nudge e popup proattivo non si impilano più nella stessa
+// zona. Chi trova occupato viene SOPPRESSO, non accodato: se il momento è
+// passato, il popup non serve più — ricomparirà al prossimo check naturale.
+
+/**
+ * Mostra un micro-feedback a un confine naturale (completamento, fine
+ * sessione, risposta a un'azione esplicita). Ha priorità sul nudge (passivo:
+ * viene sfrattato) ma non strappa il popup proattivo, che è interattivo e
+ * l'utente potrebbe starci rispondendo.
+ */
+function showMicroFeedbackNow(type: string, taskId: string | null): void {
+  const st = useShadowStore.getState();
+  if (st.showProactiveChatbot) return;
+  if (st.activeNudge) st.setActiveNudge(null);
+  st.setMicroFeedbackType(type);
+  st.setMicroFeedbackTaskId(taskId);
+  st.setShowMicroFeedback(true);
+}
+
+// Cooldown client tra check proattivi: i trigger sono deterministici (query
+// DB, zero LLM) ma ogni check è un'occasione di popup — meno occasioni, meno
+// interruzioni. Il cooldown ack server (30 min/tipo, Task 43) resta invariato.
+const PROACTIVE_CHECK_COOLDOWN_MS = 15 * 60 * 1000;
+
+// Budget nudge persistito per-giorno in localStorage: prima viveva solo nello
+// store (senza persist) e si azzerava a ogni refresh — su mobile, dove l'app
+// si riapre spesso, il limite giornaliero non limitava niente.
+const NUDGE_BUDGET_KEY = 'shadow-nudge-budget';
+
+function localDayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function loadNudgeBudget(): { shown: number; lastAt: number | null } {
+  try {
+    const raw = localStorage.getItem(NUDGE_BUDGET_KEY);
+    if (!raw) return { shown: 0, lastAt: null };
+    const parsed = JSON.parse(raw) as { day?: string; shown?: number; lastAt?: number | null };
+    if (parsed.day !== localDayKey()) return { shown: 0, lastAt: null };
+    return { shown: parsed.shown ?? 0, lastAt: parsed.lastAt ?? null };
+  } catch {
+    return { shown: 0, lastAt: null };
+  }
+}
+
+function recordNudgeShown(): void {
+  const st = useShadowStore.getState();
+  const shown = st.nudgesShownToday + 1;
+  const now = Date.now();
+  st.setNudgesShownToday(shown);
+  st.setLastNudgeTime(now);
+  try {
+    localStorage.setItem(NUDGE_BUDGET_KEY, JSON.stringify({ day: localDayKey(), shown, lastAt: now }));
+  } catch {}
+}
+
 export default function ShadowApp() {
   const store = useShadowStore();
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -493,6 +552,11 @@ export default function ShadowApp() {
   // Task 52 (D1): id del task di una sessione body doubling attiva (o '' se la
   // sessione non ha taskId) → banner "riprendi"; null = nessuna sessione attiva.
   const [activeBdTaskId, setActiveBdTaskId] = useState<string | null>(null);
+  // Task 66 (B/D57): cooldown tra check proattivi e budget "1 popup per
+  // apertura app" — ref di sessione pagina: sopravvivono alle navigazioni
+  // interne, si azzerano alla riapertura.
+  const lastProactiveCheckRef = useRef(0);
+  const proactiveShownThisSessionRef = useRef(false);
   const router = useRouter();
 
   // On mount: inizializza auth state e carica dati. Il gating
@@ -555,6 +619,13 @@ export default function ShadowApp() {
             store.setCurrentView(initialView);
             syncViewToUrl(initialView, { replace: true, taskId: urlTaskId });
           }
+
+          // Task 66 (B/D57): idrata il budget nudge del giorno dal
+          // localStorage — lo store non ha persist e ripartiva da zero a ogni
+          // refresh, vanificando il limite giornaliero.
+          const nudgeBudget = loadNudgeBudget();
+          store.setNudgesShownToday(nudgeBudget.shown);
+          store.setLastNudgeTime(nudgeBudget.lastAt);
 
           store.setIsLoading(true);
           const tasks = await fetchTasks();
@@ -638,39 +709,55 @@ export default function ShadowApp() {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  // AI Assistant: Detect proactive triggers periodically
+  // AI Assistant: trigger proattivi a EVENTI, non più a polling (Task 66 B/D57).
+  // Il vecchio setInterval da 5 min girava su qualunque vista (popup possibile
+  // anche sopra una sessione focus) e ad libitum. Ora il check parte solo su
+  // navigazione verso today/inbox e al ritorno in foreground, con cooldown di
+  // 15 min, mai durante il focus, una sola interruzione visibile alla volta e
+  // al massimo UN popup proattivo mostrato per apertura dell'app.
   useEffect(() => {
     if (!store.isAuthenticated || !store.adaptiveProfile) return;
-    
+
     const checkTriggers = async () => {
-      // Task 43 (loop check-in): se un popup proattivo e' gia' aperto, non rifare
-      // il fetch ne' ri-mostrarlo. Evita il flicker quando l'effetto rigira su
-      // cambio di adaptiveProfile (dep dell'effetto). Lettura fresca via getState.
-      if (useShadowStore.getState().showProactiveChatbot) return;
+      const st = useShadowStore.getState();
+      // (a) una sola interruzione alla volta (Task 43 copriva solo il popup stesso)
+      if (st.showProactiveChatbot || st.showMicroFeedback || st.activeNudge) return;
+      // (c) mai durante una sessione focus: è il momento da proteggere
+      if (st.currentView === 'focus' || st.focusModeActive) return;
+      // (d) budget: massimo un popup proattivo per apertura dell'app
+      if (proactiveShownThisSessionRef.current) return;
+      if (Date.now() - lastProactiveCheckRef.current < PROACTIVE_CHECK_COOLDOWN_MS) return;
+      lastProactiveCheckRef.current = Date.now();
       try {
         const res = await fetch('/api/ai-assistant');
         const data = await res.json();
         if (data.triggers && data.triggers.length > 0) {
           store.setProactiveTriggers(data.triggers);
-          
+
           // Show the highest priority trigger as a proactive chatbot popup
           const topTrigger = data.triggers[0];
-          const topTask = topTrigger.taskId 
-            ? store.tasks.find(t => t.id === topTrigger.taskId) 
+          const topTask = topTrigger.taskId
+            ? store.tasks.find(t => t.id === topTrigger.taskId)
             : null;
-          
+
           try {
             const chatRes = await fetch('/api/ai-assistant', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 action: 'proactive',
-                      trigger: topTrigger,
+                trigger: topTrigger,
                 taskContext: topTask ? { title: topTask.title, category: topTask.category, resistance: topTask.resistance } : null,
               }),
             });
             const chatData = await chatRes.json();
-            if (chatData.response) {
+            // Ricontrolla lo stato: mentre i fetch giravano l'utente può aver
+            // avviato un focus o aperto un'altra interruzione.
+            const now = useShadowStore.getState();
+            const stillQuiet =
+              !now.showProactiveChatbot && !now.showMicroFeedback && !now.activeNudge &&
+              now.currentView !== 'focus' && !now.focusModeActive;
+            if (chatData.response && stillQuiet) {
               // Task 43: memorizza il tipo del trigger mostrato per registrare
               // l'ack 'proactive_ack:<type>' alla risposta/chiusura (cooldown).
               store.setProactiveChatbotTriggerType(topTrigger.type ?? null);
@@ -678,35 +765,44 @@ export default function ShadowApp() {
               store.setProactiveChatbotOptions(chatData.response.followUpOptions || []);
               store.setProactiveChatbotAllowFreeText(chatData.response.allowFreeText !== false);
               store.setShowProactiveChatbot(true);
+              proactiveShownThisSessionRef.current = true;
             }
           } catch {}
         }
-        
+
         if (data.insights) {
           store.setAIInsights(data.insights);
         }
       } catch {}
     };
 
-    // Check every 5 minutes
-    const interval = setInterval(checkTriggers, 5 * 60 * 1000);
-    // Also check on first load
+    // Check a eventi: ingresso/navigazione su today/inbox…
     if (store.currentView === 'today' || store.currentView === 'inbox') {
-      checkTriggers();
+      void checkTriggers();
     }
-    return () => clearInterval(interval);
+    // …e ritorno della tab/app in foreground.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void checkTriggers();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [store.isAuthenticated, store.adaptiveProfile, store.currentView, store.userId, store.authUser?.id]);
 
   // AI Assistant: Check for nudges when on today view
   useEffect(() => {
     if (store.currentView !== 'today' || !store.adaptiveProfile || !store.isAuthenticated) return;
     if (store.activeNudge) return; // Already have a nudge
-    
+
     const top3Task = store.dailyPlan?.top3?.[0];
     if (!top3Task) return;
-    
+
     // Check if we should show a nudge
     const checkNudge = async () => {
+      // Task 66 (B/D57): una sola interruzione alla volta — se micro-feedback
+      // o popup proattivo sono visibili, questo giro salta (lettura fresca:
+      // il timer parte 10s prima).
+      const st = useShadowStore.getState();
+      if (st.showMicroFeedback || st.showProactiveChatbot || st.activeNudge) return;
       try {
         const res = await fetch('/api/ai-assistant', {
           method: 'POST',
@@ -1507,8 +1603,8 @@ function NudgeDisplay() {
       });
     } catch {}
     store.setActiveNudge(null);
-    store.setNudgesShownToday(store.nudgesShownToday + 1);
-    store.setLastNudgeTime(Date.now());
+    // Task 66 (B/D57): budget persistito per-giorno (localStorage).
+    recordNudgeShown();
     setDelayedNudgeTitle(null);
   }, [store, nudge]);
 
@@ -1527,8 +1623,8 @@ function NudgeDisplay() {
     } catch {}
     recordSignal('nudge_ignored', null, { nudgeStrategy: nudge.strategy });
     store.setActiveNudge(null);
-    store.setNudgesShownToday(store.nudgesShownToday + 1);
-    store.setLastNudgeTime(Date.now());
+    // Task 66 (B/D57): budget persistito per-giorno (localStorage).
+    recordNudgeShown();
     setDelayedNudgeTitle(null);
   }, [store, nudge]);
 
@@ -2463,12 +2559,9 @@ function TodayView() {
     syncViewToUrl('focus', {});
     recordSignal('task_started', taskId);
     recordSignal('strict_activated', taskId);
-    setTimeout(() => {
-      store.setMicroFeedbackType('start_experience');
-      store.setMicroFeedbackTaskId(taskId);
-      store.setShowMicroFeedback(true);
-    }, 3000);
-  }, [store]);
+    // Task 66 (B/D57): niente micro-feedback 3s dopo l'avvio — l'avvio è il
+    // momento più fragile. start_experience viene chiesto a fine sessione.
+  }, []);
 
   // Task 61: percorso SECONDARIO "altre modalità" (Soft / Body doubling). Porta
   // alla vista focus SENZA attivare nulla, così il ModeSelector di FocusView
@@ -2479,12 +2572,8 @@ function TodayView() {
     pushView('focus', taskId);
     // Record learning signal for task start
     recordSignal('task_started', taskId);
-    // Show micro-feedback after a short delay
-    setTimeout(() => {
-      store.setMicroFeedbackType('start_experience');
-      store.setMicroFeedbackTaskId(taskId);
-      store.setShowMicroFeedback(true);
-    }, 3000);
+    // Task 66 (B/D57): niente micro-feedback 3s dopo l'avvio — l'avvio è il
+    // momento più fragile. start_experience viene chiesto a fine sessione.
   }, [store]);
 
   // Idrata il piano committato di oggi all'apertura: lo store non ha persist,
@@ -2953,12 +3042,9 @@ function FocusView() {
 
     // Record learning signal
     recordSignal('task_completed', selectedTask.id);
-    // Show micro-feedback after completion
-    setTimeout(() => {
-      store.setMicroFeedbackType('drain_activate');
-      store.setMicroFeedbackTaskId(selectedTask.id);
-      store.setShowMicroFeedback(true);
-    }, 500);
+    // Micro-feedback al completamento: confine naturale (Task 66 B/D57) —
+    // passa dal coordinatore (sfratta un eventuale nudge, cede al popup).
+    setTimeout(() => showMicroFeedbackNow('drain_activate', selectedTask.id), 500);
 
     replaceView('today');
     // Task 64 (A3, D48): ponte visibile completamento -> stella. Solo per i
@@ -3064,6 +3150,11 @@ function FocusView() {
     store.setFocusModeType('soft');
     store.setFocusExitConfirmStep(0);
     replaceView('today');
+    // Task 66 (B/D57): start_experience si chiede QUI, a fine sessione senza
+    // completamento (confine naturale) — non più 3s dopo l'avvio.
+    if (selectedTask) {
+      setTimeout(() => showMicroFeedbackNow('start_experience', selectedTask.id), 500);
+    }
   }, [selectedTask, store]);
 
   const handleRecovery = useCallback(async (type: string) => {
@@ -3079,6 +3170,8 @@ function FocusView() {
       store.setExecutionMode('none');
       store.setFocusModeActive(false);
       replaceView('today');
+      // Task 66 (B/D57): fine sessione via recovery-exit — confine naturale.
+      setTimeout(() => showMicroFeedbackNow('start_experience', selectedTask.id), 500);
     }
   }, [selectedTask, store]);
 
@@ -3258,7 +3351,7 @@ function FocusView() {
       )}
 
       <div className="flex gap-2">
-        <Button variant="destructive" size="sm" className="flex-1" onClick={() => { setShowRecovery(true); if (selectedTask) { recordSignal('task_too_hard', selectedTask.id); recordSignal('task_avoided', selectedTask.id); setTimeout(() => { store.setMicroFeedbackType('block_reason'); store.setMicroFeedbackTaskId(selectedTask.id); store.setShowMicroFeedback(true); }, 500); } }}><AlertTriangle className="w-4 h-4 mr-1" /> Troppo difficile</Button>
+        <Button variant="destructive" size="sm" className="flex-1" onClick={() => { setShowRecovery(true); if (selectedTask) { recordSignal('task_too_hard', selectedTask.id); recordSignal('task_avoided', selectedTask.id); setTimeout(() => showMicroFeedbackNow('block_reason', selectedTask.id), 500); } }}><AlertTriangle className="w-4 h-4 mr-1" /> Troppo difficile</Button>
         <Button
           variant={isStrict ? 'destructive' : 'outline'}
           size="sm"

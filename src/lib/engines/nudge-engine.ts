@@ -358,7 +358,9 @@ export interface NudgeTimingConfig {
 
 export const DEFAULT_NUDGE_CONFIG: NudgeTimingConfig = {
   minIntervalMinutes: 15,
-  maxDailyNudges: 8,
+  // Task 66 (B/D57): 8 → 3. Otto nudge al giorno erano rumore, non aiuto —
+  // e col budget client ora persistito (localStorage) il limite è reale.
+  maxDailyNudges: 3,
   avoidanceThreshold: 1,
   escalationDelayMinutes: 30,
 };
