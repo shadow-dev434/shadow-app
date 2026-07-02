@@ -2263,11 +2263,16 @@ function TodayView() {
     }
   }, [slotLocations]);
 
+  // Task 64 (A2, D44): "Rigenera piano ora" sovrascriveva in silenzio anche
+  // il piano costruito con la review serale o in chat. Se il piano corrente
+  // è conversazionale, prima si chiede conferma.
+  const [confirmRegenerate, setConfirmRegenerate] = useState(false);
+
   // Task 49: rigenera il piano al volo dalle condizioni correnti (energia /
   // tempo / contesto) impostate qui. Riusa il generatore euristico esistente,
   // che preserva i task fissati (pin). Task 50: il contesto deriva da dove sarai
   // nella fascia corrente, se l'hai indicato.
-  const handleRegenerate = useCallback(async () => {
+  const doRegenerate = useCallback(async () => {
     setRegenerating(true);
     try {
       const currentContext =
@@ -2294,6 +2299,9 @@ function TodayView() {
           schedule: pick(data.breakdown.schedule),
           delegate: pick(data.breakdown.delegate),
           postpone: pick(data.breakdown.postpone),
+          // Il POST engine riscrive gli slot: il piano torna "engine", niente fasce.
+          slots: null,
+          source: 'engine',
         });
       }
     } catch {
@@ -2302,6 +2310,16 @@ function TodayView() {
       setRegenerating(false);
     }
   }, [store, slotLocations]);
+
+  // Entry point del bottone: piano conversazionale -> conferma; engine -> via.
+  const handleRegenerate = useCallback(() => {
+    const src = store.dailyPlan?.source;
+    if (store.dailyPlan && (src === 'review' || src === 'chat')) {
+      setConfirmRegenerate(true);
+      return;
+    }
+    void doRegenerate();
+  }, [store, doRegenerate]);
 
   // Task 61 (D4): UN tap = strict attivo (timer + blocco app + uscita difficile),
   // zero menù. È l'azione primaria della Today: enterStrictMode crea la sessione,
@@ -2369,12 +2387,16 @@ function TodayView() {
           store.setTasks(all);
           const pick = (arr: { id: string }[]): ShadowTask[] =>
             arr.map((t) => all.find((x) => x.id === t.id)).filter(Boolean) as ShadowTask[];
+          // Task 64 (A2): fasce della review serale + sorgente del piano.
+          const s = data.slots as { morning: { id: string }[]; afternoon: { id: string }[]; evening: { id: string }[] } | null;
           store.setDailyPlan({
             top3: pick(b.top3),
             doNow: pick(b.doNow),
             schedule: pick(b.schedule),
             delegate: pick(b.delegate),
             postpone: pick(b.postpone),
+            slots: s ? { morning: pick(s.morning), afternoon: pick(s.afternoon), evening: pick(s.evening) } : null,
+            source: data.source === 'review' || data.source === 'chat' ? data.source : 'engine',
           });
         }
       } catch {
@@ -2387,14 +2409,19 @@ function TodayView() {
 
   // Tutto ciò che non è tra "Le 3 cose di oggi" confluisce in un'unica lista
   // "Altro" collassata: niente più quadranti/sezioni multiple per l'utente.
+  // Task 64 (A2): col layout a fasce i task delle fasce sono già a schermo —
+  // "Altro" li esclude (per il piano review doNow == fasce concatenate).
   const altroTasks: ShadowTask[] = (() => {
     const dp = store.dailyPlan;
     if (!dp) return [];
-    const top3Ids = new Set(dp.top3.map((t) => t.id));
+    const shown = new Set(dp.top3.map((t) => t.id));
+    if (dp.slots) {
+      for (const t of [...dp.slots.morning, ...dp.slots.afternoon, ...dp.slots.evening]) shown.add(t.id);
+    }
     const seen = new Set<string>();
     const out: ShadowTask[] = [];
     for (const t of [...dp.doNow, ...dp.schedule, ...dp.delegate, ...dp.postpone]) {
-      if (top3Ids.has(t.id) || seen.has(t.id)) continue;
+      if (shown.has(t.id) || seen.has(t.id)) continue;
       seen.add(t.id);
       out.push(t);
     }
@@ -2458,8 +2485,33 @@ function TodayView() {
               ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Rigenero…</>
               : <><RefreshCw className="w-4 h-4 mr-2" /> Rigenera piano ora</>}
           </Button>
+          {/* Task 64 (A2): i due ingressi restano, ma dichiarati. */}
+          <p className="text-[10px] text-zinc-500 text-center">
+            «Pianifica con Shadow» = lo costruiamo insieme in chat · «Rigenera» = piano automatico veloce
+          </p>
         </CardContent>
       </Card>
+
+      {/* Task 64 (A2, D44): conferma prima di sovrascrivere un piano
+          conversazionale (review serale o chat) con quello automatico. */}
+      <AlertDialog open={confirmRegenerate} onOpenChange={setConfirmRegenerate}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sostituire il piano?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {store.dailyPlan?.source === 'chat'
+                ? 'Stai per sostituire il piano concordato in chat con uno generato al volo. Procedo?'
+                : 'Stai per sostituire il piano fatto con la review serale con uno generato al volo. Procedo?'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setConfirmRegenerate(false); void doRegenerate(); }}>
+              Sostituisci
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* AI Insights */}
       <AIInsightsPanel />
@@ -2467,42 +2519,62 @@ function TodayView() {
       {/* Active Nudge */}
       <NudgeDisplay />
 
-      {/* Daily Plan */}
-      {store.dailyPlan ? (
+      {/* Daily Plan — Task 64 (A2, D43): se il piano ha le fasce della review
+          serale le mostra (un solo piano visibile, con dentro la Top3
+          evidenziata); altrimenti il layout Top3 classico. */}
+      {store.dailyPlan?.slots ? (
+        <div className="space-y-4">
+          <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wider flex items-center gap-1">
+            <Flame className="w-3 h-3" /> Il piano di oggi
+            <span className="normal-case font-normal tracking-normal text-zinc-500">· dalla review serale</span>
+          </h3>
+          {([
+            { key: 'morning' as const, label: '🌅 Mattina' },
+            { key: 'afternoon' as const, label: '☀️ Pomeriggio' },
+            { key: 'evening' as const, label: '🌙 Sera' },
+          ]).map(({ key, label }) => {
+            const fascia = store.dailyPlan!.slots![key];
+            if (fascia.length === 0) return null;
+            const top3Ids = store.dailyPlan!.top3.map((t) => t.id);
+            return (
+              <div key={key}>
+                <h4 className="text-[11px] font-medium text-zinc-500 mb-1.5">{label}</h4>
+                <div className="space-y-2">
+                  {fascia.map((task) => {
+                    const idx = top3Ids.indexOf(task.id);
+                    return (
+                      <PlanTaskCard
+                        key={task.id}
+                        task={task}
+                        index={idx >= 0 ? idx : null}
+                        onTaskClick={handleTaskClick}
+                        onStrictOneTap={handleStrictOneTap}
+                        onStartFocus={handleStartFocus}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+          {altroTasks.length > 0 && (
+            <TaskSection title="Altro" icon={null} tasks={altroTasks} onTaskClick={handleTaskClick} onStartFocus={handleStartFocus} colorClass="text-zinc-500" defaultExpanded={false} />
+          )}
+        </div>
+      ) : store.dailyPlan ? (
         <div className="space-y-4">
           <div>
             <h3 className="text-xs font-semibold text-amber-600 uppercase tracking-wider mb-2 flex items-center gap-1"><Flame className="w-3 h-3" /> Le 3 cose di oggi</h3>
             <div className="space-y-2">
               {store.dailyPlan.top3.map((task, idx) => (
-                <Card key={task.id} className="border-amber-200 dark:border-amber-900/50 cursor-pointer hover:shadow-md transition-shadow" onClick={() => handleTaskClick(task.id)}>
-                  <CardContent className="p-3 flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-700 dark:text-amber-400 font-bold text-xs">{idx + 1}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{task.title}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <Badge className={`text-[10px] h-4 ${DECISION_CONFIG[task.decision]?.bg || ''} ${DECISION_CONFIG[task.decision]?.color || ''}`}>{DECISION_CONFIG[task.decision]?.label || task.decision}</Badge>
-                        {task.aiClassified && <Sparkles className="w-3 h-3 text-amber-500" />}
-                        {task.recurringTemplateId && <span className="text-[10px] text-zinc-500 dark:text-zinc-400 flex items-center gap-0.5"><Repeat className="w-2.5 h-2.5" /> ricorrente</span>}
-                        <StepProgressBadge task={task} />
-                      </div>
-                      {/* Motivational personalization */}
-                      {store.adaptiveProfile && (
-                        <p className="text-[10px] text-amber-600/70 mt-0.5 flex items-center gap-0.5">
-                          <Flame className="w-2.5 h-2.5" /> {getMotivationalFraming(task, store.adaptiveProfile)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {/* Task 61 (D4): primaria = strict one-tap; "…" = altre modalità (soft / body doubling). */}
-                      <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700" onClick={(e) => { e.stopPropagation(); handleStrictOneTap(task.id); }}>
-                        <Play className="w-3 h-3 mr-1" /> Inizia
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-200" aria-label="Altre modalità" title="Altre modalità (Soft, body doubling)" onClick={(e) => { e.stopPropagation(); handleStartFocus(task.id, 'launch'); }}>
-                        <MoreHorizontal className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                <PlanTaskCard
+                  key={task.id}
+                  task={task}
+                  index={idx}
+                  onTaskClick={handleTaskClick}
+                  onStrictOneTap={handleStrictOneTap}
+                  onStartFocus={handleStartFocus}
+                />
               ))}
             </div>
           </div>
@@ -2517,6 +2589,69 @@ function TodayView() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Plan Task Card (Task 64, A2) ───────────────────────────────────────────
+// Card di un task del piano: con `index` (0-2) è una delle "3 cose di oggi"
+// (numerata, azione primaria strict one-tap); senza è una riga di fascia.
+
+function PlanTaskCard({ task, index, onTaskClick, onStrictOneTap, onStartFocus }: {
+  task: ShadowTask;
+  index: number | null;
+  onTaskClick: (id: string) => void;
+  onStrictOneTap: (id: string) => void;
+  onStartFocus: (id: string, mode: 'launch' | 'hold' | 'recovery') => void;
+}) {
+  const store = useShadowStore();
+  const isTop3 = index !== null;
+
+  if (!isTop3) {
+    return (
+      <Card className="border-zinc-200 dark:border-zinc-800 cursor-pointer hover:border-zinc-300 dark:hover:border-zinc-700" onClick={() => onTaskClick(task.id)}>
+        <CardContent className="p-2.5 flex items-center gap-2">
+          <div className="flex-1 min-w-0 flex items-center gap-1.5">
+            <p className="text-sm truncate">{task.title}</p>
+            {task.aiClassified && <Sparkles className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
+            {task.recurringTemplateId && <Repeat className="w-2.5 h-2.5 text-zinc-400 shrink-0" />}
+            <StepProgressBadge task={task} />
+          </div>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); onStartFocus(task.id, 'launch'); }}><Play className="w-3 h-3" /></Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-amber-200 dark:border-amber-900/50 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onTaskClick(task.id)}>
+      <CardContent className="p-3 flex items-center gap-3">
+        <div className="w-7 h-7 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-700 dark:text-amber-400 font-bold text-xs">{index + 1}</div>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-sm truncate">{task.title}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <Badge className={`text-[10px] h-4 ${DECISION_CONFIG[task.decision]?.bg || ''} ${DECISION_CONFIG[task.decision]?.color || ''}`}>{DECISION_CONFIG[task.decision]?.label || task.decision}</Badge>
+            {task.aiClassified && <Sparkles className="w-3 h-3 text-amber-500" />}
+            {task.recurringTemplateId && <span className="text-[10px] text-zinc-500 dark:text-zinc-400 flex items-center gap-0.5"><Repeat className="w-2.5 h-2.5" /> ricorrente</span>}
+            <StepProgressBadge task={task} />
+          </div>
+          {/* Motivational personalization */}
+          {store.adaptiveProfile && (
+            <p className="text-[10px] text-amber-600/70 mt-0.5 flex items-center gap-0.5">
+              <Flame className="w-2.5 h-2.5" /> {getMotivationalFraming(task, store.adaptiveProfile)}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {/* Task 61 (D4): primaria = strict one-tap; "…" = altre modalità (soft / body doubling). */}
+          <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700" onClick={(e) => { e.stopPropagation(); onStrictOneTap(task.id); }}>
+            <Play className="w-3 h-3 mr-1" /> Inizia
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-200" aria-label="Altre modalità" title="Altre modalità (Soft, body doubling)" onClick={(e) => { e.stopPropagation(); onStartFocus(task.id, 'launch'); }}>
+            <MoreHorizontal className="w-4 h-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

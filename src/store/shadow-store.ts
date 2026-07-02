@@ -65,6 +65,12 @@ export interface DailyPlanData {
   schedule: ShadowTask[];
   delegate: ShadowTask[];
   postpone: ShadowTask[];
+  // Task 64 (A2): fasce del piano della review serale (null/assenti per i
+  // piani engine o chat) + sorgente del piano — la Today mostra le fasce
+  // quando esistono e chiede conferma prima di sovrascrivere un piano
+  // conversazionale (review/chat) con "Rigenera piano ora".
+  slots?: { morning: ShadowTask[]; afternoon: ShadowTask[]; evening: ShadowTask[] } | null;
+  source?: 'review' | 'chat' | 'engine';
 }
 
 export interface UserProfileData {

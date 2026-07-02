@@ -288,6 +288,27 @@ export async function GET(req: NextRequest) {
 
     const getTasks = (ids: string[]) => ids.map(id => taskMap.get(id)).filter((t): t is NonNullable<typeof t> => Boolean(t)).map(serializeTask);
 
+    // Task 64 (A2, D43): le fasce scritte dalla review serale (close-review
+    // scrive slot morning/afternoon/evening in DailyPlanTask) diventano
+    // visibili al client. `source` discrimina chi ha scritto il piano:
+    // review (fasce) > chat (slot 'today', commit_today_plan) > engine
+    // (top3/doNow/... dal POST) — il client chiede conferma prima di
+    // sovrascrivere un piano conversazionale (D44).
+    const FASCE = ['morning', 'afternoon', 'evening'] as const;
+    const slotTask = (slot: (typeof FASCE)[number]) =>
+      plan.tasks
+        .filter(pt => pt.slot === slot && pt.task && pt.task.userId === userId)
+        .map(pt => serializeTask(pt.task));
+    const hasFasce = plan.tasks.some(pt => (FASCE as readonly string[]).includes(pt.slot));
+    const slots = hasFasce
+      ? { morning: slotTask('morning'), afternoon: slotTask('afternoon'), evening: slotTask('evening') }
+      : null;
+    const source: 'review' | 'chat' | 'engine' = hasFasce
+      ? 'review'
+      : plan.tasks.some(pt => pt.slot === 'today')
+        ? 'chat'
+        : 'engine';
+
     return NextResponse.json({
       plan: {
         ...plan,
@@ -304,6 +325,8 @@ export async function GET(req: NextRequest) {
         delegate: getTasks(delegateIds),
         postpone: getTasks(postponeIds),
       },
+      slots,
+      source,
     });
   } catch (error) {
     captureApiError(error, 'GET /api/daily-plan');
