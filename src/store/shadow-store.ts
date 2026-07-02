@@ -164,6 +164,11 @@ interface ShadowState {
   setShowPriorityConfirm: (v: boolean) => void;
   pendingClassification: AIClassifyResult | null;
   setPendingClassification: (r: AIClassifyResult | null) => void;
+  // Task 64 (A6, D3): il task a cui si riferisce pendingClassification.
+  // Senza binding, con 2 catture rapide il dialog confermava sul task
+  // sbagliato (pescava il primo inbox non classificato).
+  pendingClassificationTaskId: string | null;
+  setPendingClassificationTaskId: (id: string | null) => void;
 
   // Focus Mode
   focusModeActive: boolean;
@@ -315,6 +320,8 @@ export const useShadowStore = create<ShadowState>((set) => ({
   setShowPriorityConfirm: (showPriorityConfirm) => set({ showPriorityConfirm }),
   pendingClassification: null,
   setPendingClassification: (pendingClassification) => set({ pendingClassification }),
+  pendingClassificationTaskId: null,
+  setPendingClassificationTaskId: (pendingClassificationTaskId) => set({ pendingClassificationTaskId }),
 
   // Focus Mode
   focusModeActive: false,

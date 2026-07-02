@@ -554,6 +554,7 @@ export default function ShadowApp() {
           body: JSON.stringify({
             action: 'nudge',
               nudgeContext: {
+              taskId: top3Task.id,
               taskTitle: top3Task.title,
               taskCategory: top3Task.category,
               taskResistance: top3Task.resistance,
@@ -1190,9 +1191,20 @@ function PriorityConfirmDialog() {
   const store = useShadowStore();
   const classification = store.pendingClassification;
 
+  // Task 64 (A6, D3): il dialog agisce sul task BINDATO alla classificazione
+  // (pendingClassificationTaskId); il vecchio find per "primo inbox non
+  // classificato" resta solo come fallback per stati legacy.
+  const resolveBoundTask = useCallback(() => {
+    const boundId = store.pendingClassificationTaskId;
+    return (
+      (boundId ? store.tasks.find(t => t.id === boundId) : undefined) ??
+      store.tasks.find(t => t.status === 'inbox' && !t.aiClassified)
+    );
+  }, [store]);
+
   const handleConfirm = useCallback(async () => {
     if (!classification) return;
-    const unclassifiedTask = store.tasks.find(t => t.status === 'inbox' && !t.aiClassified);
+    const unclassifiedTask = resolveBoundTask();
     if (unclassifiedTask) {
       void updateTaskAPI(unclassifiedTask.id, {
         importance: classification.importance,
@@ -1229,18 +1241,20 @@ function PriorityConfirmDialog() {
       toast({ title: 'Priorità confermata', description: classification.reason });
     }
     store.setPendingClassification(null);
+    store.setPendingClassificationTaskId(null);
     store.setShowPriorityConfirm(false);
-  }, [classification, store]);
+  }, [classification, store, resolveBoundTask]);
 
   const handleEdit = useCallback(() => {
-    const unclassifiedTask = store.tasks.find(t => t.status === 'inbox' && !t.aiClassified);
+    const unclassifiedTask = resolveBoundTask();
     if (unclassifiedTask) {
       store.setSelectedTaskId(unclassifiedTask.id);
       store.setCurrentView('task');
     }
     store.setPendingClassification(null);
+    store.setPendingClassificationTaskId(null);
     store.setShowPriorityConfirm(false);
-  }, [store]);
+  }, [store, resolveBoundTask]);
 
   if (!classification) return null;
 
@@ -1248,7 +1262,7 @@ function PriorityConfirmDialog() {
   const decConfig = DECISION_CONFIG[classification.decision];
 
   return (
-    <Dialog open={store.showPriorityConfirm} onOpenChange={(open) => { if (!open) { store.setShowPriorityConfirm(false); store.setPendingClassification(null); } }}>
+    <Dialog open={store.showPriorityConfirm} onOpenChange={(open) => { if (!open) { store.setShowPriorityConfirm(false); store.setPendingClassification(null); store.setPendingClassificationTaskId(null); } }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="text-base flex items-center gap-2">
@@ -1334,8 +1348,13 @@ function NudgeDisplay() {
 
   const handleAccept = useCallback(async () => {
     if (!nudge) return;
-    // Find the task this nudge relates to
-    const nudgeTask = store.tasks.find(t => t.status !== 'completed' && t.status !== 'abandoned');
+    // Task 64 (A6, D2): apri il task che HA GENERATO il nudge (round-trip
+    // taskId). Fallback al primo non-completato solo se quel task nel
+    // frattempo è stato chiuso o eliminato.
+    const isOpen = (t: { status: string }) => t.status !== 'completed' && t.status !== 'abandoned';
+    const nudgeTask =
+      (nudge.taskId ? store.tasks.find(t => t.id === nudge.taskId && isOpen(t)) : undefined) ??
+      store.tasks.find(isOpen);
     if (nudgeTask) {
       // Start focus on the task
       store.setSelectedTaskId(nudgeTask.id);
@@ -2068,6 +2087,7 @@ function InboxView() {
 
       if (classification) {
         store.setPendingClassification(classification);
+        store.setPendingClassificationTaskId(task.id);
         store.setShowPriorityConfirm(true);
       } else {
         toast({ title: 'Task aggiunto', description: `"${taskTitle}" nell'inbox` });

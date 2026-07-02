@@ -29,9 +29,15 @@ export interface NudgeMessage {
   contextReason: string; // Why this nudge was triggered
   adaptiveReason: string; // Why this strategy was chosen for this user
   delaySeconds: number; // When to show (0 = immediately)
+  // Task 64 (A6, D2): il task che ha originato il nudge. Senza, il tap
+  // "accetta" apriva il primo task non completato dello store.
+  taskId?: string;
 }
 
 export interface NudgeContext {
+  // Task 64 (A6, D2): id del task a cui il nudge si riferisce (round-trip
+  // client -> engine -> client, così l'accettazione apre QUEL task).
+  taskId?: string;
   taskTitle: string;
   taskCategory: string;
   taskResistance: number;
@@ -317,6 +323,7 @@ export function generateNudgeMessage(
     contextReason,
     adaptiveReason,
     delaySeconds,
+    taskId: context.taskId,
   };
 }
 

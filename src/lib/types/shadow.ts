@@ -536,6 +536,9 @@ export interface NudgeMessage {
   contextReason: string;
   adaptiveReason: string;
   delaySeconds: number;
+  // Task 64 (A6, D2): task che ha originato il nudge — il tap "accetta"
+  // apre questo, non il primo non-completato dello store.
+  taskId?: string;
 }
 
 export interface ConversationalOnboardingResponse {
