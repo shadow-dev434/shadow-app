@@ -61,7 +61,7 @@ import {
   SUMMARY_HARD_CAP,
   SUMMARY_WINDOW,
 } from './summary';
-import { formatDeadlineLabel, formatTodayInRome, formatDateInRome, addDaysIso } from '@/lib/evening-review/dates';
+import { formatDeadlineLabel, formatTodayInRome, formatDateInRome, addDaysIso, startOfDayInZone } from '@/lib/evening-review/dates';
 import { materializeRecurringForDate } from '@/lib/recurring/materialize';
 import { computeInactivityGapDays, type InactivityGap } from '@/lib/evening-review/inactivity-gap';
 
@@ -278,7 +278,7 @@ export async function orchestrate(
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: SUMMARY_HARD_CAP,
     }),
-    buildContextAndVoice(input.userId, input.partOfDay),
+    buildContextAndVoice(input.userId, input.partOfDay, thread),
     summaryEligible ? loadLatestSummary(thread.id) : Promise.resolve(null),
   ]);
   const previousMessages = windowDesc.reverse();
@@ -1288,8 +1288,9 @@ function resolveFirstName(name?: string | null): string | null {
 async function buildContextAndVoice(
   userId: string,
   partOfDay?: 'morning' | 'afternoon',
+  thread?: { id: string; mode: string },
 ): Promise<{ userContext: string; voiceProfile: string }> {
-  const [profile, memories, user] = await Promise.all([
+  const [profile, memories, user, rientroLine] = await Promise.all([
     db.adaptiveProfile.findUnique({ where: { userId } }).catch(() => null),
     db.userMemory
       .findMany({
@@ -1301,6 +1302,11 @@ async function buildContextAndVoice(
     db.user
       .findUnique({ where: { id: userId }, select: { name: true } })
       .catch(() => null),
+    // Task 65 (E1/J4): riga RIENTRO — solo nei thread morning_checkin (2-3
+    // query leggere per turno di un thread breve). Fail-open: null su errore.
+    thread?.mode === 'morning_checkin'
+      ? computeRientroLine(userId, thread.id).catch(() => null)
+      : Promise.resolve(null),
   ]);
 
   const parts: string[] = [];
@@ -1320,6 +1326,12 @@ async function buildContextAndVoice(
     );
   } else if (partOfDay === 'morning') {
     parts.push('Momento della giornata: MATTINA. Saluta con "Buongiorno".');
+  }
+
+  // Task 65 (E1/J4): rientro dopo assenza con task scaduti — attiva la
+  // sezione PIANO DI RIENTRO del MORNING_CHECKIN_PROMPT.
+  if (rientroLine) {
+    parts.push(rientroLine);
   }
 
   if (profile) {
@@ -1353,6 +1365,63 @@ async function buildContextAndVoice(
     userContext: parts.join('\n'),
     voiceProfile,
   };
+}
+
+// Task 65 (E1/J4): sotto questa soglia di task scaduti il rientro non scatta —
+// per 1 solo arretrato il rito normale basta, il "piano di rientro" serve
+// quando il muro e' una pila.
+const RIENTRO_MIN_OVERDUE = 2;
+
+/**
+ * Task 65 (E1/J4): riga RIENTRO del CONTESTO UTENTE per il morning check-in.
+ *
+ * Al ritorno dopo un'assenza (gap calcolato con la SEMANTICA 8c riusata:
+ * computeInactivityGapDays su max(lastTurnAt) escluso il thread corrente,
+ * soglia RE_ENTRY_RECOGNITION_THRESHOLD_DAYS) con >= RIENTRO_MIN_OVERDUE task
+ * scaduti (deadline a ieri o prima, stati non terminali), il
+ * MORNING_CHECKIN_PROMPT (sezione PIANO DI RIENTRO) accorcia il rito e propone
+ * subito i critici con una sola conferma. Null in tutti gli altri casi: il
+ * flusso normale resta identico.
+ *
+ * L'esclusione del thread corrente e' OBBLIGATORIA come nel gate 8c
+ * (orchestrator ~:364): il thread morning fresco e' gia' stato creato con
+ * lastTurnAt~=now. Calcolata a ogni turno del thread morning (non solo al
+ * primo): la conferma del piano arriva ai turni 2-3 e la riga deve restare
+ * nel contesto. Stabile nella giornata -> non rompe il prompt caching per-walk.
+ */
+async function computeRientroLine(
+  userId: string,
+  excludeThreadId: string,
+): Promise<string | null> {
+  const gapAgg = await db.chatThread.aggregate({
+    _max: { lastTurnAt: true },
+    where: { userId, NOT: { id: excludeThreadId } },
+  });
+  const gap = computeInactivityGapDays(gapAgg._max.lastTurnAt, new Date());
+  if (gap === null) return null;
+
+  const overdueWhere = {
+    userId,
+    deadline: { lt: startOfDayInZone(formatTodayInRome()) },
+    status: { notIn: terminalTaskStatuses() },
+  };
+  const [critical, overdueCount] = await Promise.all([
+    db.task.findMany({
+      where: overdueWhere,
+      orderBy: { priorityScore: 'desc' },
+      take: 3,
+      select: { id: true, title: true },
+    }),
+    db.task.count({ where: overdueWhere }),
+  ]);
+  if (overdueCount < RIENTRO_MIN_OVERDUE) return null;
+
+  const criticalList = critical.map((t) => `"${t.title}" (id=${t.id})`).join(', ');
+  return (
+    `RIENTRO: l'utente torna dopo un'assenza di ${gap.gapDays} giorni (dato interno: ` +
+    `MAI dire il numero all'utente) con ${overdueCount} task scaduti. I piu' critici: ` +
+    `${criticalList}. Applica la sezione PIANO DI RIENTRO.`
+  );
 }
 
 function safeParseJSON<T>(json: string, fallback: T): T {
