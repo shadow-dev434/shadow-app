@@ -3446,6 +3446,124 @@ function DayScheduleCard() {
   );
 }
 
+// ─── Ricorrenti (Task 65 B3/D49) ────────────────────────────────────────────
+// Lista dei template ricorrenti con pausa/riattiva ed elimina (con conferma).
+// La creazione/modifica resta in chat — la CTA del Cielo (Task 64 A3) ce la
+// porta gia'; qui vive solo la gestione, il Cielo resta sola ricompensa.
+
+interface RecurringRow {
+  id: string;
+  title: string;
+  description: string;
+  active: boolean;
+}
+
+function RecurringCard() {
+  const [rows, setRows] = useState<RecurringRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<RecurringRow | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiFetch('/api/recurring', { skipErrorToast: true });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data.recurring)) setRows(data.recurring);
+      } catch {
+        // Non-critical: la card mostra l'empty state
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, []);
+
+  const handleToggle = useCallback(async (row: RecurringRow, active: boolean) => {
+    setBusyId(row.id);
+    const prev = rows;
+    setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, active } : r)));
+    try {
+      const res = await apiFetch(`/api/recurring/${row.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active }),
+        skipErrorToast: true,
+      });
+      if (!res.ok) throw new Error(`PATCH ${res.status}`);
+      toast({ title: active ? 'Ricorrenza riattivata' : 'Ricorrenza in pausa' });
+    } catch {
+      setRows(prev);
+      toast({ title: 'Non sono riuscito a salvare', description: 'Riprova', variant: 'destructive' });
+    } finally {
+      setBusyId(null);
+    }
+  }, [rows]);
+
+  const handleDelete = useCallback(async () => {
+    if (!pendingDelete) return;
+    const row = pendingDelete;
+    setBusyId(row.id);
+    try {
+      const res = await apiFetch(`/api/recurring/${row.id}`, { method: 'DELETE', skipErrorToast: true });
+      if (!res.ok) throw new Error(`DELETE ${res.status}`);
+      setRows((rs) => rs.filter((r) => r.id !== row.id));
+      toast({ title: 'Ricorrenza eliminata', description: 'I task già creati restano.' });
+    } catch {
+      toast({ title: 'Eliminazione fallita', description: 'Riprova', variant: 'destructive' });
+    } finally {
+      setBusyId(null);
+      setPendingDelete(null);
+    }
+  }, [pendingDelete]);
+
+  return (
+    <Card className="border-zinc-200 dark:border-zinc-800">
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="text-base flex items-center gap-2"><Repeat className="w-4 h-4 text-teal-500" /> Ricorrenti</CardTitle>
+        <CardDescription className="text-xs">Le abitudini che accendono le stelle del Cielo. Si creano e si modificano in chat.</CardDescription>
+      </CardHeader>
+      <CardContent className="p-4 pt-0 space-y-1">
+        {!loaded ? (
+          <Skeleton className="h-12 w-full" />
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-zinc-400">Nessuna ricorrenza attiva. Chiedi in chat, ad esempio: &quot;Meditazione ogni giorno&quot;.</p>
+        ) : (
+          rows.map((row) => (
+            <div key={row.id} className="flex items-center justify-between gap-2 py-2 border-b border-zinc-100 dark:border-zinc-800/60 last:border-0">
+              <div className="min-w-0">
+                <p className={`text-sm truncate ${row.active ? '' : 'text-zinc-400'}`}>{row.title}</p>
+                <p className="text-xs text-zinc-400">{row.description}{row.active ? '' : ' · in pausa'}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Switch checked={row.active} disabled={busyId === row.id} onCheckedChange={(v) => handleToggle(row, v)} />
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-zinc-400 hover:text-red-500" disabled={busyId === row.id} onClick={() => setPendingDelete(row)}>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          ))
+        )}
+      </CardContent>
+
+      <AlertDialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminare questa ricorrenza?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete ? `"${pendingDelete.title}" non si ripresenterà più. I task già creati (e le stelle già accese) restano.` : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annulla</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={handleDelete}>Elimina</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </Card>
+  );
+}
+
 // ─── Settings View (with Profile) ───────────────────────────────────────────
 
 function SettingsView({ onLogout }: { onLogout: () => void }) {
@@ -3603,6 +3721,9 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
       {/* Giornata e promemoria (Task 65 A3): orari letti dalle fasce del piano
           e dalla finestra review, opt-out email serale. */}
       <DayScheduleCard />
+
+      {/* Ricorrenti (Task 65 B3): gestione template — pausa/riattiva/elimina. */}
+      <RecurringCard />
 
       {/* App-picker nativo (Task 60 / B8): solo Android, si auto-gata su isAndroid().
           Sceglie le app messe in pausa dallo scudo durante lo strict mode. */}
