@@ -12,9 +12,12 @@
 // v9 (2026-07-02, Task 65): rimossi i percorsi morti — push handler senza sender,
 // pushsubscriptionchange, syncReminders (API inesistente), quick-capture offline
 // (sync mai registrato dal client). Restano caching e share target.
+// v10 (2026-07-02, Task 67 A/D21): share target onesto — l'esito del POST
+// /api/tasks decide il redirect (saved=1 solo a 2xx; altrimenti il testo
+// viaggia in ?text= e il client lo recupera, mai perso in silenzio).
 const CACHE_NAME = 'shadow-v2';
-const STATIC_CACHE = 'shadow-static-v9';
-const DYNAMIC_CACHE = 'shadow-dynamic-v9';
+const STATIC_CACHE = 'shadow-static-v10';
+const DYNAMIC_CACHE = 'shadow-dynamic-v10';
 
 const STATIC_ASSETS = [
   '/',
@@ -107,32 +110,46 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Handle share target POST — forward to quick capture
+  // Handle share target POST (Task 67 A/D21: esito onesto).
+  // Contratto: "saved" SOLO se /api/tasks ha risposto 2xx; su qualunque
+  // fallimento (401 sessione scaduta, 5xx, rete) il testo condiviso viaggia
+  // nel redirect (?text=) e il client lo recupera (precompila la chat,
+  // sopravvive al login via sessionStorage) — mai perso in silenzio.
   if (url.pathname === '/' && request.method === 'POST') {
     event.respondWith(
       (async () => {
+        let sharedText = '';
         try {
           const formData = await request.formData();
           const title = formData.get('title') || '';
           const text = formData.get('text') || '';
           const sharedUrl = formData.get('url') || '';
-          const sharedText = [title, text, sharedUrl].filter(Boolean).join(' — ');
+          sharedText = [title, text, sharedUrl].filter(Boolean).join(' — ');
 
-          if (sharedText) {
-            // Create task directly from shared text
-            await fetch('/api/tasks', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ title: sharedText, status: 'inbox' }),
-            });
+          if (!sharedText) {
+            return Response.redirect('/?action=inbox', 303);
           }
 
-          // Redirect back to app
-          return Response.redirect(`/?action=share&text=${encodeURIComponent(sharedText)}`, 303);
+          const res = await fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: sharedText, status: 'inbox' }),
+          });
+
+          if (res.ok) {
+            return Response.redirect('/?action=share&saved=1', 303);
+          }
+          console.error('[SW] Share target: /api/tasks rispose', res.status);
         } catch (err) {
           console.error('[SW] Share target error:', err);
-          return Response.redirect('/?action=inbox', 303);
         }
+        // Fallimento (status non-2xx o exception): il testo non è stato
+        // salvato — lo consegniamo al client. Cap difensivo: allineato al
+        // limite del reader ?draft= di ChatView (500 char).
+        return Response.redirect(
+          `/?action=share&text=${encodeURIComponent(sharedText.slice(0, 500))}`,
+          303,
+        );
       })()
     );
     return;

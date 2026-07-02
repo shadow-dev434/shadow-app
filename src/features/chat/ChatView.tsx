@@ -206,6 +206,9 @@ export function ChatView() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [mode, setMode] = useState<string>('general');
   const [input, setInput] = useState('');
+  // Task 67 (A/D21): conferma visiva dello share-target riuscito
+  // (?action=share&saved=1 dal SW). Auto-dismiss dopo qualche secondo.
+  const [shareSavedBanner, setShareSavedBanner] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<{ message: string; status?: number; code?: string } | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
@@ -233,6 +236,15 @@ export function ChatView() {
   // serve solo al click handler. Task 54: porta anche gli allegati.
   const lastFailedRef = useRef<{ text: string; attachments: PendingAttachment[] } | null>(null);
 
+  // Task 67 (A/D21): auto-dismiss del banner "salvato in inbox". Il countdown
+  // parte quando il composer è visibile (bootstrap finito), non al mount: al
+  // primo carico il bootstrap può superare i 6s e il banner sparirebbe mai visto.
+  useEffect(() => {
+    if (!shareSavedBanner || bootstrapping) return;
+    const t = setTimeout(() => setShareSavedBanner(false), 10_000);
+    return () => clearTimeout(t);
+  }, [shareSavedBanner, bootstrapping]);
+
   // Mount init: prima prova a rehydratare un thread attivo esistente
   // via GET /api/chat/active-thread. Se non ce n'e' nessuno (o il
   // fetch fallisce), fallback al bootstrap che puo' triggerare un
@@ -254,14 +266,36 @@ export function ChatView() {
 
       // Task 65 (A2/D68): reader degli shortcut PWA del manifest (?action=).
       // 'inbox' → focus dell'input (la cattura È la chat); 'today' → alias del
-      // percorso ?plan=today qui sotto. Azioni ignote (es. 'share', redirect
-      // del share-target quando il task è già creato dal SW): no-op deliberato.
-      const actionParam = new URLSearchParams(window.location.search).get('action');
+      // percorso ?plan=today qui sotto.
+      // Task 67 (A/D21): 'share' non è più noop — il SW redirige con l'esito:
+      // saved=1 → banner di conferma; text= → salvataggio FALLITO (sessione
+      // scaduta/errore), il testo va recuperato precompilando l'input.
+      const actionSearch = new URLSearchParams(window.location.search);
+      const actionParam = actionSearch.get('action');
       if (actionParam) {
         window.history.replaceState({}, '', '/'); // niente ri-trigger al refresh
         if (actionParam === 'inbox') {
           setTimeout(() => inputRef.current?.focus(), 100);
         }
+        if (actionParam === 'share') {
+          const sharedText = actionSearch.get('text');
+          if (actionSearch.get('saved') === '1') {
+            setShareSavedBanner(true);
+          } else if (sharedText) {
+            setInput(sharedText.slice(0, 500));
+            setTimeout(() => inputRef.current?.focus(), 100);
+          }
+        }
+      }
+
+      // Task 67 (A/D21): stash post-login. page.tsx salva il testo condiviso
+      // in sessionStorage quando lo share atterra sulla landing di login (il
+      // login fa router.replace('/') e butta la query). Consumo one-shot.
+      const pendingShare = sessionStorage.getItem('shadow-share-pending');
+      if (pendingShare) {
+        sessionStorage.removeItem('shadow-share-pending');
+        setInput(pendingShare.slice(0, 500));
+        setTimeout(() => inputRef.current?.focus(), 100);
       }
 
       // Task 44: CTA "Costruiamo il piano di oggi" da /tasks (?plan=today).
@@ -843,6 +877,24 @@ export function ChatView() {
         className="flex flex-col gap-2 px-3 py-3 border-t border-zinc-800 bg-zinc-900/50 flex-shrink-0"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
+        {/* Task 67 (A/D21): conferma visiva share-target riuscito */}
+        {shareSavedBanner && (
+          <div
+            data-testid="share-saved-banner"
+            className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 rounded-xl px-3 py-2"
+          >
+            <CheckCircle2 size={16} className="flex-shrink-0" />
+            <span>Salvato in inbox — lo trovi tra i task.</span>
+            <button
+              type="button"
+              onClick={() => setShareSavedBanner(false)}
+              className="ml-auto text-emerald-500 hover:text-emerald-300"
+              aria-label="Chiudi conferma"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
         {/* Task 54: chip degli allegati in coda */}
         {pendingAttachments.length > 0 && (
           <div className="flex flex-wrap gap-2">

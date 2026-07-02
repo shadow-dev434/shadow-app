@@ -27,6 +27,19 @@ export default function HomePage() {
     }
   }, [status, session, userId, setUserId]);
 
+  // Task 67 (A/D21): share-target fallito a sessione scaduta/assente — il testo
+  // condiviso arriva in ?action=share&text= sulla landing di login. Il login fa
+  // router.replace('/') e butta la query: lo stash in sessionStorage fa
+  // sopravvivere il testo al round-trip; ChatView lo consuma al mount post-login.
+  useEffect(() => {
+    if (status !== 'unauthenticated') return;
+    const params = new URLSearchParams(window.location.search);
+    const text = params.get('text');
+    if (params.get('action') === 'share' && text) {
+      sessionStorage.setItem('shadow-share-pending', text.slice(0, 500));
+    }
+  }, [status]);
+
   // Evita hydration mismatch + attende la risoluzione della sessione.
   if (!mounted || status === 'loading') {
     return (

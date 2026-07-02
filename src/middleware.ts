@@ -169,10 +169,20 @@ export async function middleware(req: NextRequest) {
     // se la request era su '/', per evitare che il client continui a
     // presentare un token morto ad ogni navigazione.
     if (hasStaleSession) {
+      // Task 67 (A/D21): il redirect del share-target fallito porta il testo
+      // condiviso in ?text= — va preservato attraverso il login o il
+      // contenuto è perso. Whitelist dei soli due param dello share
+      // (pathname resta '/', nessun open redirect).
+      const isShareRedirect = req.nextUrl.searchParams.get('action') === 'share';
+      const sharedText = req.nextUrl.searchParams.get('text');
       const url = req.nextUrl.clone();
       url.pathname = '/';
       url.search = '';
       url.searchParams.set('auth', 'login');
+      if (isShareRedirect && sharedText) {
+        url.searchParams.set('action', 'share');
+        url.searchParams.set('text', sharedText.slice(0, 500));
+      }
       const response = NextResponse.redirect(url);
       response.cookies.delete('next-auth.session-token');
       response.cookies.delete('__Secure-next-auth.session-token');
