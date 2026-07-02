@@ -138,6 +138,21 @@ const STRICT_STATE_LABELS: Record<string, string> = {
   exited: 'Chiusa',
 };
 
+// Task 64 (A7): sopra questa confidenza il quick-capture si auto-conferma
+// (stessa soglia dell'avviso "bassa confidenza" nel dialog — un solo numero).
+const AUTO_CONFIRM_CONFIDENCE = 0.6;
+
+// Task 64 (A7): true se la classificazione è stata auto-confermata da Shadow
+// (flag autoConfirmed dentro aiClassificationData — nessun campo DB nuovo).
+function isAutoClassified(task: Pick<ShadowTask, 'aiClassified' | 'aiClassificationData'>): boolean {
+  if (!task.aiClassified || !task.aiClassificationData) return false;
+  try {
+    return JSON.parse(task.aiClassificationData).autoConfirmed === true;
+  } catch {
+    return false;
+  }
+}
+
 // Task 64 (A1, D50): label italiane — LAUNCH/HOLD/RECOVERY restano i nomi
 // interni (ExecutionMode), qui solo il testo visibile.
 const MODE_CONFIG = {
@@ -236,6 +251,34 @@ async function decomposeTask(taskId: string, taskTitle: string, taskDescription:
   // Coerente con createTask/updateTaskAPI: non parsare un body non-ok (incl. 401).
   if (!res.ok) throw new Error(`decompose HTTP ${res.status}`);
   return res.json();
+}
+
+// Task 64 (A7): applica una classificazione al task — stesso payload della
+// conferma manuale del dialog. API-first: lo store si aggiorna solo a
+// salvataggio riuscito (su errore il task resta inbox, niente falso stato).
+async function applyClassification(
+  taskId: string,
+  classification: AIClassifyResult,
+  opts: { autoConfirmed: boolean },
+): Promise<void> {
+  const fields = {
+    importance: classification.importance,
+    urgency: classification.urgency,
+    resistance: classification.resistance,
+    size: classification.size,
+    delegable: classification.delegable,
+    context: classification.context,
+    category: classification.category,
+    quadrant: classification.quadrant,
+    priorityScore: classification.priorityScore,
+    decision: classification.decision,
+    decisionReason: classification.reason,
+    aiClassified: true,
+    aiClassificationData: JSON.stringify({ ...classification, autoConfirmed: opts.autoConfirmed }),
+    status: 'planned' as const,
+  };
+  await updateTaskAPI(taskId, fields);
+  useShadowStore.getState().updateTask(taskId, fields);
 }
 
 async function classifyTaskAI(title: string, description: string, energy?: number, timeAvailable?: number, currentContext?: string): Promise<AIClassifyResult | null> {
@@ -1218,39 +1261,10 @@ function PriorityConfirmDialog() {
     if (!classification) return;
     const unclassifiedTask = resolveBoundTask();
     if (unclassifiedTask) {
-      void updateTaskAPI(unclassifiedTask.id, {
-        importance: classification.importance,
-        urgency: classification.urgency,
-        resistance: classification.resistance,
-        size: classification.size,
-        delegable: classification.delegable,
-        context: classification.context,
-        category: classification.category,
-        quadrant: classification.quadrant,
-        priorityScore: classification.priorityScore,
-        decision: classification.decision,
-        decisionReason: classification.reason,
-        aiClassified: true,
-        aiClassificationData: JSON.stringify(classification),
-        status: 'planned',
-      }).catch(() => toast({ title: 'Salvataggio non riuscito', description: 'Riprova', variant: 'destructive' }));
-      store.updateTask(unclassifiedTask.id, {
-        importance: classification.importance,
-        urgency: classification.urgency,
-        resistance: classification.resistance,
-        size: classification.size,
-        delegable: classification.delegable,
-        context: classification.context,
-        category: classification.category,
-        quadrant: classification.quadrant,
-        priorityScore: classification.priorityScore,
-        decision: classification.decision,
-        decisionReason: classification.reason,
-        aiClassified: true,
-        aiClassificationData: JSON.stringify(classification),
-        status: 'planned',
-      });
-      toast({ title: 'Priorità confermata', description: classification.reason });
+      // Task 64 (A7): stesso helper dell'auto-conferma, qui con conferma umana.
+      void applyClassification(unclassifiedTask.id, classification, { autoConfirmed: false })
+        .then(() => toast({ title: 'Priorità confermata', description: classification.reason }))
+        .catch(() => toast({ title: 'Salvataggio non riuscito', description: 'Riprova', variant: 'destructive' }));
     }
     store.setPendingClassification(null);
     store.setPendingClassificationTaskId(null);
@@ -1314,7 +1328,7 @@ function PriorityConfirmDialog() {
           {classification.reason && (
             <p className="text-xs text-zinc-500 italic">&quot;{classification.reason}&quot;</p>
           )}
-          {classification.confidence < 0.6 && (
+          {classification.confidence < AUTO_CONFIRM_CONFIDENCE && (
             <div className="flex items-center gap-1 text-amber-600">
               <AlertCircle className="w-3 h-3" />
               <span className="text-[10px]">Bassa confidenza — ti consigliamo di verificare</span>
@@ -2098,9 +2112,18 @@ function InboxView() {
       store.setIsClassifying(false);
 
       if (classification) {
-        store.setPendingClassification(classification);
-        store.setPendingClassificationTaskId(task.id);
-        store.setShowPriorityConfirm(true);
+        // Task 64 (A7): sopra soglia l'auto-conferma è silenziosa (toast +
+        // badge, niente dialog); sotto soglia resta il dialog di conferma,
+        // che ora è bindato al task giusto (A6/D3).
+        if (classification.confidence >= AUTO_CONFIRM_CONFIDENCE) {
+          void applyClassification(task.id, classification, { autoConfirmed: true })
+            .then(() => toast({ title: '✨ Classificato da Shadow', description: classification.reason }))
+            .catch(() => toast({ title: 'Classificazione non salvata', description: 'Il task resta nell\'inbox: riprova da lì', variant: 'destructive' }));
+        } else {
+          store.setPendingClassification(classification);
+          store.setPendingClassificationTaskId(task.id);
+          store.setShowPriorityConfirm(true);
+        }
       } else {
         toast({ title: 'Task aggiunto', description: `"${taskTitle}" nell'inbox` });
       }
@@ -2612,7 +2635,9 @@ function PlanTaskCard({ task, index, onTaskClick, onStrictOneTap, onStartFocus }
         <CardContent className="p-2.5 flex items-center gap-2">
           <div className="flex-1 min-w-0 flex items-center gap-1.5">
             <p className="text-sm truncate">{task.title}</p>
-            {task.aiClassified && <Sparkles className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
+            {isAutoClassified(task)
+              ? <span className="text-[10px] text-amber-500/90 shrink-0 flex items-center gap-0.5"><Sparkles className="w-2.5 h-2.5" /> Shadow</span>
+              : task.aiClassified && <Sparkles className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
             {task.recurringTemplateId && <Repeat className="w-2.5 h-2.5 text-zinc-400 shrink-0" />}
             <StepProgressBadge task={task} />
           </div>
@@ -2630,7 +2655,9 @@ function PlanTaskCard({ task, index, onTaskClick, onStrictOneTap, onStartFocus }
           <p className="font-medium text-sm truncate">{task.title}</p>
           <div className="flex items-center gap-2 mt-0.5">
             <Badge className={`text-[10px] h-4 ${DECISION_CONFIG[task.decision]?.bg || ''} ${DECISION_CONFIG[task.decision]?.color || ''}`}>{DECISION_CONFIG[task.decision]?.label || task.decision}</Badge>
-            {task.aiClassified && <Sparkles className="w-3 h-3 text-amber-500" />}
+            {isAutoClassified(task)
+              ? <span className="text-[10px] text-amber-500/90 flex items-center gap-0.5"><Sparkles className="w-3 h-3" /> Shadow</span>
+              : task.aiClassified && <Sparkles className="w-3 h-3 text-amber-500" />}
             {task.recurringTemplateId && <span className="text-[10px] text-zinc-500 dark:text-zinc-400 flex items-center gap-0.5"><Repeat className="w-2.5 h-2.5" /> ricorrente</span>}
             <StepProgressBadge task={task} />
           </div>
@@ -3222,7 +3249,7 @@ function TaskDetailView() {
       {selectedTask.aiClassified && (
         <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
           <Sparkles className="w-4 h-4 text-amber-500" />
-          <span className="text-xs text-amber-700 dark:text-amber-400">Classificato da AI</span>
+          <span className="text-xs text-amber-700 dark:text-amber-400">{aiData?.autoConfirmed ? 'Classificato da Shadow' : 'Classificato da AI'}</span>
           {aiData?.confidence != null && <Badge variant="secondary" className="text-[10px]">Confidenza: {Math.round(aiData.confidence * 100)}%</Badge>}
           {aiData?.profileFactors?.length > 0 && <span className="text-[10px] text-zinc-400 ml-auto">Fattori: {aiData.profileFactors.join(', ')}</span>}
         </div>

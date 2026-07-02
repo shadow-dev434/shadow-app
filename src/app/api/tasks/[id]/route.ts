@@ -62,6 +62,11 @@ export async function PATCH(
       'decision', 'decisionReason', 'status', 'microSteps', 'microStepsRaw',
       'currentStepIdx', 'executionMode', 'sessionFormat', 'sessionDuration',
       'completedAt',
+      // Task 64 (A7): la conferma della classificazione (dialog e
+      // auto-conferma) scrive questi due — mancavano dalla whitelist, quindi
+      // aiClassified non si persisteva mai e i task tornavano "da
+      // classificare" al refresh (radice del registro §6.3 del collaudo).
+      'aiClassified', 'aiClassificationData',
     ];
 
     for (const field of allowedFields) {
