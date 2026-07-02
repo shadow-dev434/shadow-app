@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { requireAdminSession } from '@/lib/beta/admin-guard';
 import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
+import { sendBugFixedEmail } from '@/lib/beta/bug-fixed-email';
 
 const STATUSES = new Set(['new', 'triaged', 'in_progress', 'fixed', 'wont_fix', 'duplicate']);
 const PRIORITIES = new Set(['P0', 'P1', 'P2', 'P3']);
@@ -51,14 +52,24 @@ export async function PATCH(req: NextRequest) {
     // proprio "ultimo visto" per il toast "risolto". Lo impostiamo solo se
     // non già valorizzato (no re-stamp su fixed→in_progress→fixed), così il
     // toast non si ri-triggera per la stessa segnalazione.
-    let existing: { resolvedAt: Date | null } | null = null;
+    let existing: {
+      resolvedAt: Date | null;
+      userId: string;
+      description: string;
+      user: { email: string };
+    } | null = null;
     if (status !== undefined) {
       if (typeof status !== 'string' || !STATUSES.has(status)) {
         return NextResponse.json({ error: 'invalid status' }, { status: 400 });
       }
       existing = await db.bugReport.findUnique({
         where: { id },
-        select: { resolvedAt: true },
+        select: {
+          resolvedAt: true,
+          userId: true,
+          description: true,
+          user: { select: { email: true } },
+        },
       });
       if (!existing) {
         return NextResponse.json({ error: 'Report not found' }, { status: 404 });
@@ -91,6 +102,35 @@ export async function PATCH(req: NextRequest) {
 
     try {
       const report = await db.bugReport.update({ where: { id }, data });
+
+      // Task 66 (C2): alla transizione REALE a fixed (resolvedAt non era
+      // valorizzato) il tester riceve feedback: riga Notification (traccia
+      // in-app, il toast client resta) + email best-effort. Fixed→fixed
+      // ripetuto non rinotifica; un bug riaperto e ri-risolto sì (transizione
+      // reale). Un errore qui non deve rompere il PATCH: lo status è già
+      // aggiornato.
+      if (status === 'fixed' && existing && !existing.resolvedAt) {
+        const excerpt =
+          existing.description.length > 70
+            ? `${existing.description.slice(0, 70)}…`
+            : existing.description;
+        try {
+          await db.notification.create({
+            data: {
+              userId: existing.userId,
+              type: 'bug_fixed',
+              title: 'Segnalazione risolta 🎉',
+              body: `«${excerpt}» è stata sistemata. Grazie!`,
+            },
+          });
+          await sendBugFixedEmail(existing.user.email, {
+            description: existing.description,
+          });
+        } catch (notifyErr) {
+          captureApiError(notifyErr, 'PATCH /api/admin/beta/bug-reports — notifica fixed');
+        }
+      }
+
       return NextResponse.json({ report });
     } catch (err) {
       // P2025 = record inesistente (es. utente cancellato in cascade): 404, non 500.
