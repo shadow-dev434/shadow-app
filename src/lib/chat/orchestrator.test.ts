@@ -25,7 +25,8 @@ vi.mock('@/lib/db', () => ({
     // Task 47: buildContextAndVoice carica User.name per il saluto col nome.
     user: { findUnique: vi.fn() },
     settings: { findFirst: vi.fn() },
-    task: { findMany: vi.fn(), create: vi.fn() },
+    // Task 63: findFirst per la dedup di create_task (claim-guard test).
+    task: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
     // Task 46: materializeRecurringForDate (chiamato da initEveningReview) legge i
     // template ricorrenti. Default [] in beforeEach -> no-op nei test esistenti.
     recurringTask: { findMany: vi.fn() },
@@ -1133,5 +1134,132 @@ describe('orchestrate: allegati vision (Task 54)', () => {
     expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(2); // una sola escalation
     expect(result.assistantMessage).not.toContain('[[VISION_ESCALATE]]');
     expect(result.assistantMessage).toContain('Non riesco a leggere');
+  });
+});
+
+// ── Task 63 (S1-A): claim-guard — "Creato" senza tool = task perso ──────────
+// HARD deterministico qui (mock callLLM); l'e2e probe è invariante+WARN
+// perché Haiku non allucina on-demand. Collaudo 62, evidenza J3.
+describe('Task 63 (S1-A): claim-guard su scritture dichiarate senza tool', () => {
+  function resp(text: string, toolCalls: Array<{ id: string; name: string; input: Record<string, unknown> }> = []): LLMResponse {
+    return {
+      text,
+      toolCalls,
+      stopReason: toolCalls.length > 0 ? 'tool_use' : 'end_turn',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      model: 'mock-model' as any,
+      tokensIn: 10,
+      tokensOut: 5,
+      costUsd: 0.001,
+      latencyMs: 10,
+    };
+  }
+
+  function generalThread() {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 't-claim', state: 'active', mode: 'general' }),
+    );
+  }
+
+  it('claim "Creato ✓" senza tool → 1 retry con guidance; vince la risposta del retry; né guidance né testo allucinato persistiti', async () => {
+    generalThread();
+    vi.mocked(callLLM)
+      .mockResolvedValueOnce(resp('Creato ✓ "Pagare bolletta", scadenza venerdì.'))
+      .mockResolvedValueOnce(resp('Non lo avevo ancora salvato: vuoi che lo crei adesso?'));
+
+    const result = await orchestrate({
+      userId: 'u1',
+      threadId: 't-claim',
+      mode: 'general',
+      userMessage: 'segna pagare la bolletta',
+    });
+
+    expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(2);
+    // La 2ª call porta il guidance come ULTIMO messaggio user (solo RAM).
+    const retryMessages = vi.mocked(callLLM).mock.calls[1][0].messages;
+    const last = retryMessages[retryMessages.length - 1];
+    expect(last.role).toBe('user');
+    expect(JSON.stringify(last.content)).toContain('guardia di sistema');
+    // La risposta finale è quella del retry, non il claim allucinato.
+    expect(result.assistantMessage).toContain('vuoi che lo crei adesso');
+    // Persistenza: né il guidance né il testo del primo giro toccano il DB.
+    const persisted = vi.mocked(db.chatMessage.create).mock.calls.map((c) => JSON.stringify(c[0]));
+    expect(persisted.some((p) => p.includes('guardia di sistema'))).toBe(false);
+    expect(persisted.some((p) => p.includes('Creato ✓'))).toBe(false);
+  });
+
+  it('retry che chiama create_task → tool eseguito e conferma finale (il caso sperato)', async () => {
+    generalThread();
+    vi.mocked(db.task.findFirst).mockResolvedValue(null); // dedup: nessun omonimo
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.task.create).mockResolvedValue({ id: 'task-new', title: 'Pagare bolletta', status: 'inbox' } as any);
+    vi.mocked(callLLM)
+      .mockResolvedValueOnce(resp('È già creato. Non c\'è altro da fare su questo.'))
+      .mockResolvedValueOnce(resp('', [{ id: 'tc1', name: 'create_task', input: { title: 'Pagare bolletta' } }]))
+      .mockResolvedValueOnce(resp('Fatto, ora è in lista davvero: "Pagare bolletta".'));
+
+    const result = await orchestrate({
+      userId: 'u1',
+      threadId: 't-claim',
+      mode: 'general',
+      userMessage: 'non lo vedo in lista, crealo',
+    });
+
+    expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(db.task.create)).toHaveBeenCalledTimes(1);
+    expect(result.assistantMessage).toContain('in lista davvero');
+    expect(result.toolsExecuted.map((t) => t.name)).toContain('create_task');
+  });
+
+  it('claim CON create_task riuscito nello stesso turno → nessun retry', async () => {
+    generalThread();
+    vi.mocked(db.task.findFirst).mockResolvedValue(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.task.create).mockResolvedValue({ id: 'task-new', title: 'Bolletta', status: 'inbox' } as any);
+    vi.mocked(callLLM)
+      .mockResolvedValueOnce(resp('', [{ id: 'tc1', name: 'create_task', input: { title: 'Bolletta' } }]))
+      .mockResolvedValueOnce(resp('Creato ✓ "Bolletta".'));
+
+    const result = await orchestrate({
+      userId: 'u1',
+      threadId: 't-claim',
+      mode: 'general',
+      userMessage: 'segna bolletta',
+    });
+
+    expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(2); // loop tool + testo, niente 3ª call
+    expect(result.assistantMessage).toBe('Creato ✓ "Bolletta".');
+  });
+
+  it('risposta senza claim → nessun retry (1 sola call)', async () => {
+    generalThread();
+    vi.mocked(callLLM).mockResolvedValueOnce(resp('Vuoi che lo crei io?'));
+
+    const result = await orchestrate({
+      userId: 'u1',
+      threadId: 't-claim',
+      mode: 'general',
+      userMessage: 'dovrei pagare la bolletta',
+    });
+
+    expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(1);
+    expect(result.assistantMessage).toBe('Vuoi che lo crei io?');
+  });
+
+  it('evening_review fuori scope: il claim-guard non scatta', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 't-eve', state: 'active', mode: 'evening_review' }),
+    );
+    vi.mocked(callLLM).mockResolvedValueOnce(resp('Segnato ✓ passiamo alla prossima.'));
+
+    const result = await orchestrate({
+      userId: 'u1',
+      threadId: 't-eve',
+      mode: 'evening_review',
+      userMessage: 'fatta',
+    });
+
+    expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(1);
+    expect(result.assistantMessage).toBe('Segnato ✓ passiamo alla prossima.');
   });
 });

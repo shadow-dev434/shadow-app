@@ -562,6 +562,44 @@ export function ChatView() {
     // a chat vuota (path card) e' un no-op. Il thread general resta 'active' in
     // DB e si riprende dopo la review (decisione di prodotto: lo riprendi dopo).
     setMessages([]);
+    // Task 63 (D31): la review parte DAVVERO — Shadow parla per prima. Turno
+    // __auto_start__ (stesso pattern del morning ?plan=today): nessuna bolla
+    // utente; la risposta è l'apertura della review. Fetch dedicata e non
+    // sendMessage: il `mode` nello scope è ancora quello pre-setMode (stale).
+    setSending(true);
+    (async () => {
+      try {
+        const res = await fetch('/api/chat/turn', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            threadId: null,
+            mode: 'evening_review',
+            userMessage: '__auto_start__',
+            clientDate: new Intl.DateTimeFormat('en-CA').format(new Date()),
+          }),
+        });
+        if (res.ok) {
+          const data = (await res.json()) as TurnResponse;
+          setThreadId(data.threadId);
+          if (data.mode) setMode(data.mode);
+          setMessages([{
+            id: 'assist-evening-' + Date.now(),
+            role: 'assistant',
+            content: data.assistantMessage || '(nessuna risposta)',
+            toolsExecuted: data.toolsExecuted,
+            quickReplies: data.quickReplies,
+            createdAt: new Date().toISOString(),
+          }]);
+        } else {
+          console.warn('[ChatView] evening review auto-start failed:', res.status);
+        }
+      } catch (err) {
+        console.error('[ChatView] evening review start error:', err);
+      } finally {
+        setSending(false);
+      }
+    })();
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 

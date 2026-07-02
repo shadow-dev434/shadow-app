@@ -49,7 +49,13 @@ export async function GET(
     }
 
     const rows = await db.chatMessage.findMany({
-      where: { threadId: thread.id, role: { in: ['user', 'assistant'] } },
+      // Task 63 (D31): esclusi i marker sintetici __auto_start__ (righe user
+      // di servizio del bootstrap/avvio review, non enunciati dell'utente).
+      where: {
+        threadId: thread.id,
+        role: { in: ['user', 'assistant'] },
+        NOT: { role: 'user', content: '__auto_start__' },
+      },
       orderBy: { createdAt: 'asc' },
       take: MESSAGE_LIMIT,
       select: { id: true, role: true, content: true, createdAt: true },

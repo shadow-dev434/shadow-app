@@ -282,6 +282,14 @@ La lista corrente di candidate viene fornita in coda a questo prompt nel blocco 
 APERTURA E STATO DEL TURNO:
 Leggi le righe IS_FIRST_TURN, MOOD_INTAKE, ENERGY_INTAKE nel blocco TRIAGE CORRENTE qui sotto.
 
+APERTURA AUTOMATICA (__auto_start__):
+Se il messaggio utente è esattamente "__auto_start__", l'utente NON ha scritto nulla:
+ha toccato "Inizia la review" e stiamo aprendo noi la conversazione per conto suo.
+- Ignora "__auto_start__", non riferirti mai ad esso.
+- Apri tu la review secondo i casi qui sotto (A1/A2/B/C, incluso il re-entry).
+- Il CASO BURNOUT non può mai scattare su "__auto_start__": richiede una frase
+  reale dell'utente.
+
 CASO BURNOUT-SESSIONE (Slice 8a) — PRECEDE A1/A2/B/C E "GESTIONE RISPOSTA MOOD/ENERGY":
 Vale SOLO in apertura, quando CURRENT_ENTRY=none (nessuna entry aperta). Se l'ultimo messaggio
 dell'utente e' una resa riferita alla SERATA / REVIEW INTERA — riconoscimento semantico, non lista
@@ -1717,10 +1725,19 @@ export function buildSystemPrompt(
   return staticPrefix + dynamicSuffix;
 }
 
+// Task 63 (S1-A): direttiva anti-allucinazione sulle scritture task. Difesa in
+// profondità: il claim-guard dell'orchestrator (blocco 7c) intercetta a runtime,
+// questa direttiva riduce i casi alla fonte. Osservato (collaudo 62, J3): in
+// chat lunghe il modello fast risponde "Creato ✓" senza chiamare il tool.
+export const TASK_WRITE_HONESTY_PROMPT = `ONESTÀ SULLE AZIONI (regola dura):
+- MAI dire "creato/aggiunto/salvato/segnato/aggiornato/completato/archiviato" se in QUESTO turno non hai chiamato il tool corrispondente (create_task, update_task, complete_task, archive_task, set_task_recurrence, …). Vale anche a conversazione lunga: la storia della chat NON è memoria dell'app — solo i tool scrivono davvero.
+- Se hai un dubbio ("l'avrò già creato?"), chiama comunque create_task: ha la dedup — se il task esiste già risponde alreadyExists e nessun doppione viene creato. Poi rispondi in base all'esito REALE del tool.
+- Se un tool fallisce, dillo chiaramente e proponi di riprovare: mai fingere che l'azione sia riuscita.`;
+
 function getModePrompt(mode: string): string {
   switch (mode) {
     case 'morning_checkin':
-      return `\n${MORNING_CHECKIN_PROMPT}`;
+      return `\n${MORNING_CHECKIN_PROMPT}\n\n${TASK_WRITE_HONESTY_PROMPT}`;
     case 'evening_review':
       return `\n${EVENING_REVIEW_PROMPT}`;
     case 'planning':
@@ -1731,7 +1748,7 @@ function getModePrompt(mode: string): string {
       return '';
     case 'general':
       // Task 51 (D8): chat libera — offerta body doubling quando l'utente parte.
-      return `\n${BODY_DOUBLE_OFFER_PROMPT}`;
+      return `\n${BODY_DOUBLE_OFFER_PROMPT}\n\n${TASK_WRITE_HONESTY_PROMPT}`;
     default:
       return '';
   }

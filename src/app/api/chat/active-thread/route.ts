@@ -299,6 +299,10 @@ export async function GET(req: NextRequest) {
       where: {
         threadId: thread.id,
         role: { in: ['user', 'assistant'] },
+        // Task 63 (D31): i marker sintetici di apertura (bootstrap morning,
+        // "Inizia la review") sono persistiti come righe user ma non sono
+        // enunciati dell'utente: mai mostrarli come bolle al rehydrate.
+        NOT: { role: 'user', content: '__auto_start__' },
       },
       orderBy: { createdAt: 'desc' },
       take: MESSAGE_LIMIT + 1,

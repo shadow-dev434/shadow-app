@@ -48,6 +48,9 @@ import {
   shouldSetTextOnlyFlag,
   extractSelfCorrectionTrigger,
 } from './at-risk-detection';
+// Task 63 (S1-A): parti pure del claim-guard (pattern + criterio di scrittura),
+// nel modulo dedicato per i test; qui solo il wiring del blocco 7c.
+import { textClaimsWrite, isWriteToolName, CLAIM_GUARD_GUIDANCE } from './claim-guard';
 import { captureWhatBlocked } from '@/lib/evening-review/what-blocked-capture';
 // Task 40: rolling summary — finestra ancorata al watermark + blocco system
 // cachato. Soglie e helper vivono nel modulo (auto-approvabile), qui solo wiring.
@@ -143,6 +146,12 @@ export interface OrchestratorOutput {
    * probe e2e — il prompt non viene persistito, questa e' la spia esterna.
    */
   debugSummaryChars?: number;
+  /**
+   * Task 63 (S1-A), solo con SHADOW_CLAIM_GUARD_DEBUG=1: esito del blocco 7c
+   * per il probe e2e. triggered = claim senza scrittura rilevato;
+   * writeExecuted = il retry ha poi eseguito una scrittura riuscita.
+   */
+  debugClaimGuard?: { triggered: boolean; writeExecuted: boolean };
 }
 
 // Task 40 (opzione 1): MAX_HISTORY_MESSAGES=20 rimosso. La finestra history e'
@@ -725,6 +734,10 @@ export async function orchestrate(
   let pendingBodyDouble: { taskId: string; label: string } | null = null;
   // Task 61 (D3): risultato di offer_strict_mode → quick-action start_strict.
   let pendingStrictMode: { taskId: string; durationMinutes: number; label: string } | null = null;
+  // Task 63 (S1-A): true se nel turno un tool di SCRITTURA è riuscito (nomi in
+  // claim-guard.ts — 'sideEffect' da solo non basta: include letture e offer_*).
+  // Letto dal blocco 7c: un claim di scrittura senza scrittura → retry guidato.
+  let hadSuccessfulWrite = false;
 
   // Anomalia B Blocco 3: traccia la phase all'inizio di ogni iter per rilevare
   // transizione per_entry -> !per_entry (rebuild systemPrompt con preview) o
@@ -815,6 +828,10 @@ export async function orchestrate(
         }),
       );
       toolResults.push(...parallelResults);
+      // Task 63 (S1-A): traccia le scritture riuscite del turno per il claim-guard.
+      for (const { toolCall, result } of parallelResults) {
+        if (result.success && isWriteToolName(toolCall.name)) hadSuccessfulWrite = true;
+      }
       // Task 51 (D8): cattura il taskId garantito dal tool offer_body_double
       // (kind sideEffect → identifico per nome). Last-write-wins se chiamato due volte.
       for (const { toolCall, result } of parallelResults) {
@@ -949,6 +966,119 @@ export async function orchestrate(
       `threadId=${thread.id}, mode=${mode}, lastToolCalls=${currentResponse.toolCalls.map(tc => tc.name).join(',')}`,
     );
     finalAssistantMessage = 'Mi sono inceppato un attimo, riprova';
+  }
+
+  // ── 7c. Claim-guard (Task 63, S1-A) ─────────────────────────────────
+  // Collaudo 62 (J3): in chat lunga il modello fast dichiara "Creato" SENZA
+  // chiamare create_task — task persi in silenzio sulla promessa più
+  // importante. Se il testo finale claima una scrittura ma nel turno nessun
+  // tool di scrittura è riuscito → UN retry con messaggio-guida. Il guidance
+  // vive solo in llmMessages (RAM): la persistenza §9 scrive esclusivamente
+  // input.userMessage e il finalAssistantMessage finale, quindi il testo
+  // allucinato del primo giro non tocca mai il DB. Scope: mode di cattura
+  // (general/morning_checkin), mai sul cap fallback di §7b (testo sintetico).
+  let claimGuardTriggered = false;
+  let claimGuardSatisfied = false;
+  if (
+    (mode === 'general' || mode === 'morning_checkin') &&
+    !(iteration >= MAX_TOOL_ITERATIONS && currentResponse.stopReason === 'tool_use') &&
+    !hadSuccessfulWrite &&
+    // Match sul testo con le QR strippate: le label ("Sì, aggiungilo") non
+    // sono claim. Lo strip vero per il client resta in §8.
+    textClaimsWrite(finalAssistantMessage.replace(QR_REGEX, ' '))
+  ) {
+    claimGuardTriggered = true;
+    console.warn(
+      `[claim-guard] write claim without successful write tool: ` +
+      `threadId=${thread.id}, mode=${mode}, iterations=${iteration}`,
+    );
+    llmMessages.push({
+      role: 'assistant',
+      content: [{ type: 'text' as const, text: currentResponse.text }],
+    });
+    llmMessages.push({
+      role: 'user',
+      content: [{ type: 'text' as const, text: CLAIM_GUARD_GUIDANCE }],
+    });
+    let retryResponse = await callLLM({
+      tier: modelTier,
+      systemPrompt: {
+        static: staticPrefix,
+        ...(summaryBlock !== undefined && { summary: summaryBlock }),
+        dynamic: dynamicSuffix,
+      },
+      messages: llmMessages,
+      tools: getToolsForMode(mode, pendingPhase ?? currentPhase, pendingTriageState ?? undefined),
+      maxTokens: 500,
+      temperature: 0.5,
+    });
+    totalCost += retryResponse.costUsd;
+    totalTokensIn += retryResponse.tokensIn;
+    totalTokensOut += retryResponse.tokensOut;
+    totalLatencyMs += retryResponse.latencyMs;
+    lastModel = retryResponse.model;
+
+    // Il retry sperato chiama il tool: UNA passata di esecuzione (parallela,
+    // come il ramo non-evening) e una call finale per il testo di conferma.
+    // Niente secondo retry qualunque cosa risponda (cap costi).
+    if (retryResponse.stopReason === 'tool_use' && retryResponse.toolCalls.length > 0) {
+      const retryResults = await Promise.all(
+        retryResponse.toolCalls.map(async (tc) => {
+          const result = await executeTool(tc.name, tc.input, input.userId);
+          toolsExecuted.push({ name: tc.name, input: tc.input, result: result.data });
+          if (result.success && isWriteToolName(tc.name)) hadSuccessfulWrite = true;
+          return { toolCall: tc, result };
+        }),
+      );
+      llmMessages.push({
+        role: 'assistant',
+        content: [
+          ...(retryResponse.text ? [{ type: 'text' as const, text: retryResponse.text }] : []),
+          ...retryResponse.toolCalls.map(tc => ({
+            type: 'tool_use' as const,
+            id: tc.id,
+            name: tc.name,
+            input: tc.input,
+          })),
+        ],
+      });
+      llmMessages.push({
+        role: 'user',
+        content: retryResults.map(({ toolCall, result }) => ({
+          type: 'tool_result' as const,
+          tool_use_id: toolCall.id,
+          content: JSON.stringify(result),
+        })),
+      });
+      const confirmResponse = await callLLM({
+        tier: modelTier,
+        systemPrompt: {
+          static: staticPrefix,
+          ...(summaryBlock !== undefined && { summary: summaryBlock }),
+          dynamic: dynamicSuffix,
+        },
+        messages: llmMessages,
+        tools: getToolsForMode(mode, pendingPhase ?? currentPhase, pendingTriageState ?? undefined),
+        maxTokens: 500,
+        temperature: 0.5,
+      });
+      totalCost += confirmResponse.costUsd;
+      totalTokensIn += confirmResponse.tokensIn;
+      totalTokensOut += confirmResponse.tokensOut;
+      totalLatencyMs += confirmResponse.latencyMs;
+      lastModel = confirmResponse.model;
+      retryResponse = confirmResponse;
+    }
+    // Testo vuoto del retry → resta il fallback di §8b più sotto.
+    if (retryResponse.text.trim() !== '') {
+      finalAssistantMessage = retryResponse.text;
+      currentResponse = retryResponse;
+    }
+    claimGuardSatisfied = hadSuccessfulWrite;
+    console.warn(
+      `[claim-guard] retry outcome: threadId=${thread.id}, ` +
+      `writeExecuted=${claimGuardSatisfied}`,
+    );
   }
 
   // ── 8. Parse [[QR:...]] tag from text ───────────────────────────────
@@ -1128,6 +1258,10 @@ export async function orchestrate(
     // Task 40: observable di debug per il probe e2e, mai attivo di default.
     ...(process.env.SHADOW_SUMMARY_DEBUG === '1' && {
       debugSummaryChars: summaryBlock?.length ?? 0,
+    }),
+    // Task 63 (S1-A): observable del claim-guard, mai attivo di default.
+    ...(process.env.SHADOW_CLAIM_GUARD_DEBUG === '1' && {
+      debugClaimGuard: { triggered: claimGuardTriggered, writeExecuted: claimGuardSatisfied },
     }),
   };
 }
