@@ -128,10 +128,22 @@ const DECISION_CONFIG: Record<string, { label: string; color: string; bg: string
   unclassified: { label: 'Non classificato', color: 'text-zinc-400', bg: 'bg-zinc-100 dark:bg-zinc-800/40' },
 };
 
+// Task 64 (A1, D50): gli stati della sessione strict/soft mostrati in
+// Settings — gli enum interni non devono arrivare all'utente.
+const STRICT_STATE_LABELS: Record<string, string> = {
+  inactive: 'Non attiva',
+  active_soft: 'Attiva (Soft)',
+  active_strict: 'Attiva (Strict)',
+  pending_exit: 'In uscita',
+  exited: 'Chiusa',
+};
+
+// Task 64 (A1, D50): label italiane — LAUNCH/HOLD/RECOVERY restano i nomi
+// interni (ExecutionMode), qui solo il testo visibile.
 const MODE_CONFIG = {
-  launch: { label: 'LAUNCH', color: 'text-amber-600', bg: 'bg-amber-500', desc: 'Sblocca e inizia' },
-  hold: { label: 'HOLD', color: 'text-emerald-600', bg: 'bg-emerald-500', desc: 'Mantieni il ritmo' },
-  recovery: { label: 'RECOVERY', color: 'text-teal-600', bg: 'bg-teal-500', desc: 'Rientro graduale' },
+  launch: { label: 'Partenza', color: 'text-amber-600', bg: 'bg-amber-500', desc: 'Sblocca e inizia' },
+  hold: { label: 'Tieni il ritmo', color: 'text-emerald-600', bg: 'bg-emerald-500', desc: 'Sei già in moto: continua così' },
+  recovery: { label: 'Recupero', color: 'text-teal-600', bg: 'bg-teal-500', desc: 'Rientro graduale' },
   none: { label: '', color: '', bg: '', desc: '' },
 };
 
@@ -1983,7 +1995,7 @@ function BottomNav() {
 
   const tabs: { view: ViewMode; icon: React.ReactNode; label: string }[] = [
     { view: 'inbox', icon: <Inbox className="w-5 h-5" />, label: 'Inbox' },
-    { view: 'today', icon: <Sun className="w-5 h-5" />, label: 'Today' },
+    { view: 'today', icon: <Sun className="w-5 h-5" />, label: 'Oggi' },
     { view: 'focus', icon: <Target className="w-5 h-5" />, label: 'Focus' },
     { view: 'sky', icon: <Sparkles className="w-5 h-5" />, label: 'Cielo' },
     { view: 'settings', icon: <Settings className="w-5 h-5" />, label: 'Impost.' },
@@ -2485,7 +2497,7 @@ function TodayView() {
                       <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700" onClick={(e) => { e.stopPropagation(); handleStrictOneTap(task.id); }}>
                         <Play className="w-3 h-3 mr-1" /> Inizia
                       </Button>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-200" aria-label="Altre modalità" title="Altre modalità (soft, body doubling)" onClick={(e) => { e.stopPropagation(); handleStartFocus(task.id, 'launch'); }}>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-zinc-400 hover:text-zinc-200" aria-label="Altre modalità" title="Altre modalità (Soft, body doubling)" onClick={(e) => { e.stopPropagation(); handleStartFocus(task.id, 'launch'); }}>
                         <MoreHorizontal className="w-4 h-4" />
                       </Button>
                     </div>
@@ -2709,7 +2721,7 @@ function FocusView() {
     }
 
     setShowModeSelector(false);
-    toast({ title: mode === 'strict' ? 'Strict Mode attiva' : 'Sessione focus avviata', description: mode === 'strict' ? 'Per uscire dovrai confermare più volte' : 'Buon lavoro!' });
+    toast({ title: mode === 'strict' ? 'Modalità Strict attiva' : 'Sessione focus avviata', description: mode === 'strict' ? 'Per uscire dovrai confermare più volte' : 'Buon lavoro!' });
     // Record learning signal for strict mode activation
     if (mode === 'strict') {
       recordSignal('strict_activated', selectedTask?.id);
@@ -2792,7 +2804,7 @@ function FocusView() {
               <Lock className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="text-sm font-bold text-red-400 uppercase tracking-wider">Strict Mode Attiva</p>
+              <p className="text-sm font-bold text-red-400 uppercase tracking-wider">Modalità Strict attiva</p>
               <p className="text-xs text-red-400/70">
                 {store.strictBlockedApps.length > 0 ? `${store.strictBlockedApps.length} app bloccate` : 'Distrazioni bloccate'}
                 {store.strictSessionEndsAt && ` · Finisce alle ${new Date(store.strictSessionEndsAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`}
@@ -2811,7 +2823,7 @@ function FocusView() {
         <div className="rounded-lg p-3 flex items-center justify-between bg-amber-950/50 border border-amber-800">
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-amber-400" />
-            <span className="text-sm font-medium text-amber-400">FOCUS SOFT</span>
+            <span className="text-sm font-medium text-amber-400">Focus Soft</span>
           </div>
           {/* Task 64 (A9, D7): chiude anche la sessione server, non solo lo
               store — prima restava aperta in DB e il rehydrate la resuscitava. */}
@@ -3284,7 +3296,7 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
             <div className="flex justify-between text-sm"><span className="text-zinc-500">Carico cognitivo</span><span>{profile.cognitiveLoad}/5</span></div>
             <div className="flex justify-between text-sm"><span className="text-zinc-500">Carico responsabilità</span><span>{profile.responsibilityLoad}/5</span></div>
             <div className="flex justify-between text-sm"><span className="text-zinc-500">Sessione consigliata</span><span>{profile.preferredSessionLength} min</span></div>
-            <div className="flex justify-between text-sm"><span className="text-zinc-500">Focus mode</span><span>{profile.focusModeDefault}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Modalità focus</span><span>{profile.focusModeDefault === 'strict' ? 'Strict' : 'Soft'}</span></div>
             {profile.executionStyle && <p className="text-xs text-zinc-400 italic mt-1">{profile.executionStyle}</p>}
             {isBetaTester && (
               <>
@@ -3300,7 +3312,7 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
       <Card className="border-zinc-200 dark:border-zinc-800">
         <CardHeader className="p-4 pb-2"><CardTitle className="text-base flex items-center gap-2"><Shield className="w-4 h-4 text-red-500" /> Strict Mode</CardTitle></CardHeader>
         <CardContent className="p-4 pt-0 space-y-2">
-          <div className="flex justify-between text-sm"><span className="text-zinc-500">Stato</span><span className="capitalize">{store.strictModeState.replace('_', ' ')}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-zinc-500">Stato</span><span>{STRICT_STATE_LABELS[store.strictModeState] ?? store.strictModeState}</span></div>
           <div className="flex justify-between text-sm"><span className="text-zinc-500">Tentativi di uscita</span><span>{store.strictExitAttempts}</span></div>
           {store.strictSessionStartedAt && (
             <div className="flex justify-between text-sm">
