@@ -252,10 +252,22 @@ export function ChatView() {
         setTimeout(() => inputRef.current?.focus(), 100);
       }
 
+      // Task 65 (A2/D68): reader degli shortcut PWA del manifest (?action=).
+      // 'inbox' → focus dell'input (la cattura È la chat); 'today' → alias del
+      // percorso ?plan=today qui sotto. Azioni ignote (es. 'share', redirect
+      // del share-target quando il task è già creato dal SW): no-op deliberato.
+      const actionParam = new URLSearchParams(window.location.search).get('action');
+      if (actionParam) {
+        window.history.replaceState({}, '', '/'); // niente ri-trigger al refresh
+        if (actionParam === 'inbox') {
+          setTimeout(() => inputRef.current?.focus(), 100);
+        }
+      }
+
       // Task 44: CTA "Costruiamo il piano di oggi" da /tasks (?plan=today).
       // Avvio manuale del morning check-in: bypassa le guardie del bootstrap
       // (thread attivo / once-a-day) perché l'utente l'ha chiesto esplicitamente.
-      if (new URLSearchParams(window.location.search).get('plan') === 'today') {
+      if (new URLSearchParams(window.location.search).get('plan') === 'today' || actionParam === 'today') {
         window.history.replaceState({}, '', '/'); // niente ri-trigger al refresh
         setMode('morning_checkin');
         try {

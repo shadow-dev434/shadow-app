@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
-// Shadow PWA — Enhanced Service Worker
-// Features: caching strategies, push notifications, background sync, quick capture
+// Shadow PWA — Service Worker
+// Features: caching strategies, share target.
 
 // v4 (2026-06-12, W7 body doubling): bump obbligatorio a ogni release con CSS/JS
 // nuovi — staleWhileRevalidate servirebbe ai client i bundle vecchi (classi
@@ -9,9 +9,12 @@
 // v5 (2026-06-12, Task 42): card tool gestione task + error UX in ChatView.
 // v6 (2026-06-14, Task 43): banner review serale in ChatView + fix loop check-in.
 // v7→v8 (2026-06-16, Task 55): gamification "Il tuo cielo" (SkyView + tab nav).
+// v9 (2026-07-02, Task 65): rimossi i percorsi morti — push handler senza sender,
+// pushsubscriptionchange, syncReminders (API inesistente), quick-capture offline
+// (sync mai registrato dal client). Restano caching e share target.
 const CACHE_NAME = 'shadow-v2';
-const STATIC_CACHE = 'shadow-static-v8';
-const DYNAMIC_CACHE = 'shadow-dynamic-v8';
+const STATIC_CACHE = 'shadow-static-v9';
+const DYNAMIC_CACHE = 'shadow-dynamic-v9';
 
 const STATIC_ASSETS = [
   '/',
@@ -98,103 +101,6 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(networkFirstWithCache(request, DYNAMIC_CACHE));
 });
 
-// ─── Push Notifications ──────────────────────────────────────────────────────
-
-self.addEventListener('push', (event) => {
-  let data = { title: 'Shadow', body: 'Hai un promemoria!', icon: '/icon-192.png', url: '/' };
-
-  if (event.data) {
-    try {
-      data = { ...data, ...event.data.json() };
-    } catch {
-      data.body = event.data.text();
-    }
-  }
-
-  const options = {
-    body: data.body,
-    icon: data.icon || '/icon-192.png',
-    badge: '/icon-maskable-192.png',
-    vibrate: [100, 50, 100],
-    data: { url: data.url || '/' },
-    actions: [
-      { action: 'open', title: 'Apri' },
-      { action: 'dismiss', title: 'Ignora' },
-    ],
-    tag: 'shadow-reminder',
-    renotify: true,
-  };
-
-  event.waitUntil(self.registration.showNotification(data.title, options));
-});
-
-// Notification click handler
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-
-  if (event.action === 'dismiss') return;
-
-  const urlToOpen = event.notification.data?.url || '/';
-
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // If already open, focus and navigate
-      for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.navigate(urlToOpen);
-          return client.focus();
-        }
-      }
-      // Otherwise open new window
-      return self.clients.openWindow(urlToOpen);
-    })
-  );
-});
-
-// ─── Background Sync ─────────────────────────────────────────────────────────
-
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'shadow-quick-capture') {
-    event.waitUntil(processQuickCapture());
-  }
-  if (event.tag === 'shadow-sync-reminders') {
-    event.waitUntil(syncReminders());
-  }
-});
-
-// ─── Push Subscription Change ────────────────────────────────────────────────
-
-self.addEventListener('pushsubscriptionchange', (event) => {
-  event.waitUntil(
-    (async () => {
-      try {
-        const subscription = await self.registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          // applicationServerKey would come from server config in production
-        });
-
-        // Resubscribe on server
-        await fetch('/api/push-subscription', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: 'default', // Will be enriched by middleware if auth token present
-            endpoint: subscription.endpoint,
-            keys: {
-              p256dh: subscription.toJSON().keys?.p256dh || '',
-              auth: subscription.toJSON().keys?.auth || '',
-            },
-          }),
-        });
-
-        console.log('[SW] Push subscription renewed');
-      } catch (err) {
-        console.error('[SW] Push subscription renewal failed:', err);
-      }
-    })()
-  );
-});
-
 // ─── Share Target Handler ────────────────────────────────────────────────────
 
 self.addEventListener('fetch', (event) => {
@@ -232,70 +138,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 });
-
-async function processQuickCapture() {
-  // Read pending captures from IndexedDB and post them
-  try {
-    const db = await openIndexedDB();
-    const tx = db.transaction('pending-captures', 'readwrite');
-    const store = tx.objectStore('pending-captures');
-    const captures = await store.getAll();
-
-    for (const capture of captures) {
-      await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: capture.title, status: 'inbox' }),
-      });
-      await store.delete(capture.id);
-    }
-  } catch (err) {
-    console.error('[SW] Quick capture sync error:', err);
-  }
-}
-
-async function syncReminders() {
-  try {
-    const now = new Date().toISOString();
-    const res = await fetch(`/api/tasks?reminder=true&before=${now}`);
-    const data = await res.json();
-
-    for (const task of (data.tasks || [])) {
-      if (task.reminderAt && !task.reminderSent) {
-        self.registration.showNotification('Shadow — Promemoria', {
-          body: `È ora di: ${task.title}`,
-          icon: '/icon-192.png',
-          badge: '/icon-maskable-192.png',
-          vibrate: [100, 50, 100],
-          data: { url: `/?action=focus&taskId=${task.id}` },
-          tag: `reminder-${task.id}`,
-        });
-        // Mark as sent
-        await fetch(`/api/tasks/${task.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reminderSent: true }),
-        });
-      }
-    }
-  } catch (err) {
-    console.error('[SW] Reminder sync error:', err);
-  }
-}
-
-function openIndexedDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('shadow-offline', 1);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains('pending-captures')) {
-        db.createObjectStore('pending-captures', { keyPath: 'id', autoIncrement: true });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
 
 // ─── Caching Strategies ──────────────────────────────────────────────────────
 

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useShadowStore, type ViewMode, type ShadowTask, type MicroStep, type UserProfileData, type AIClassifyResult } from '@/store/shadow-store';
 import { stepProgressFromJson, type StepProgress } from '@/lib/tasks/step-progress';
 import { type AdaptiveProfileData, type LearningSignalData, type AIInsight, type ProactiveTrigger, type NudgeMessage, type TaskRecommendation, type ProactiveChatbotResponse } from '@/lib/types/shadow';
-import { formatDateInRome } from '@/lib/evening-review/dates';
 import { apiFetch } from '@/lib/api/fetch';
 import { isNative } from '@/lib/native/platform';
 import { stopNativeShield } from '@/lib/native/focus-shield';
@@ -3158,8 +3157,6 @@ function TaskDetailView() {
   const selectedTask = store.tasks.find((t) => t.id === store.selectedTaskId);
   const [isDecomposing, setIsDecomposing] = useState(false);
   const [formState, setFormState] = useState<Partial<ShadowTask>>({});
-  const [reminderDate, setReminderDate] = useState('');
-  const [reminderTime, setReminderTime] = useState('');
 
   useEffect(() => {
     if (selectedTask) {
@@ -3170,11 +3167,6 @@ function TaskDetailView() {
         size: selectedTask.size, delegable: selectedTask.delegable,
         category: selectedTask.category, context: selectedTask.context,
       });
-      if (selectedTask.reminderAt) {
-        const d = new Date(selectedTask.reminderAt);
-        setReminderDate(formatDateInRome(d));
-        setReminderTime(d.toTimeString().substring(0, 5));
-      }
     }
   }, [selectedTask]);
 

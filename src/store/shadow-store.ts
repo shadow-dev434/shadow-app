@@ -42,9 +42,6 @@ export interface ShadowTask {
   delegatedToId: string | null;
   delegationNote: string;
   delegationStatus: string;
-  // Notifications
-  reminderAt: string | null;
-  reminderSent: boolean;
   // Calendar
   calendarEventId: string;
   // Ricorrenza (Task 46): valorizzato se il task è un'istanza di un template ricorrente.

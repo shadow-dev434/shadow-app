@@ -53,20 +53,6 @@
       "url": "/?action=today",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }],
       "description": "Visualizza il piano giornaliero"
-    },
-    {
-      "name": "Input vocale",
-      "short_name": "Voice",
-      "url": "/?action=voice",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }],
-      "description": "Cattura task con la voce"
-    },
-    {
-      "name": "Focus mode",
-      "short_name": "Focus",
-      "url": "/?action=focus",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }],
-      "description": "Inizia una sessione di focus"
     }
   ],
   "share_target": {
