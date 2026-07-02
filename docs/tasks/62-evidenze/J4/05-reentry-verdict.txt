@@ -1,0 +1,1 @@
+attempt1: re-entry presente, nessun conteggio giorni, asksMood=true

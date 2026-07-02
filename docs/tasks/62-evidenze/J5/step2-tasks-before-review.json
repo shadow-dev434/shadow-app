@@ -1,0 +1,42 @@
+[
+  {
+    "id": "cmr2nfmk7001lib00gk9m4rf3",
+    "title": "Scrivere la mail difficile al capo",
+    "status": "planned",
+    "postponedCount": 5,
+    "avoidanceCount": 4,
+    "lastAvoidedAt": "2026-07-01T22:30:25.782Z",
+    "microSteps": "[]",
+    "decision": "decompose_then_do"
+  },
+  {
+    "id": "cmr2nfm7z001hib009dw0vuhs",
+    "title": "Compilare la dichiarazione dei redditi",
+    "status": "planned",
+    "postponedCount": 4,
+    "avoidanceCount": 3,
+    "lastAvoidedAt": "2026-07-01T22:30:25.342Z",
+    "microSteps": "[]",
+    "decision": "decompose_then_do"
+  },
+  {
+    "id": "cmr2nfmg2001jib002zwtwfol",
+    "title": "Prenotare la visita medica di controllo",
+    "status": "planned",
+    "postponedCount": 3,
+    "avoidanceCount": 2,
+    "lastAvoidedAt": "2026-07-01T22:30:25.633Z",
+    "microSteps": "[]",
+    "decision": "do_now"
+  },
+  {
+    "id": "cmr2nfmp2001nib00r2kuglgn",
+    "title": "Portare il pacco alle poste",
+    "status": "inbox",
+    "postponedCount": 0,
+    "avoidanceCount": 0,
+    "lastAvoidedAt": null,
+    "microSteps": "[]",
+    "decision": "unclassified"
+  }
+]

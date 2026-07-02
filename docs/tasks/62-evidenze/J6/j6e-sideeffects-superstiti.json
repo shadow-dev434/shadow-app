@@ -1,0 +1,30 @@
+{
+  "note": "cosa SOPRAVVIVE all abbandono: side effect per-task del triage; cosa si perde: moodIntake + Review + DailyPlan",
+  "signals": [
+    {
+      "signalType": "task_postponed",
+      "taskId": "cmr2o28oo0007ibzkfskf4qcr",
+      "createdAt": "2026-07-01T22:50:05.160Z"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "cmr2o28xc0009ibzk376ugk5k",
+      "title": "Aggiornare il curriculum",
+      "postponedCount": 1,
+      "status": "planned"
+    },
+    {
+      "id": "cmr2o295k000bibzkblu63d51",
+      "title": "Chiamare il commercialista",
+      "postponedCount": 0,
+      "status": "planned"
+    },
+    {
+      "id": "cmr2o28oo0007ibzkfskf4qcr",
+      "title": "Consegnare il progetto al cliente",
+      "postponedCount": 1,
+      "status": "planned"
+    }
+  ]
+}

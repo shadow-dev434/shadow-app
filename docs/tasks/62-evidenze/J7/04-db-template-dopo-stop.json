@@ -1,0 +1,18 @@
+{
+  "id": "cmr2vtkkx000jib741kjj9897",
+  "userId": "cmr2nfop90026ib00hs8vya58",
+  "title": "Stretching 10 minuti",
+  "description": "",
+  "category": "health",
+  "urgency": 3,
+  "importance": 3,
+  "size": 3,
+  "frequency": "daily",
+  "weekdays": "[]",
+  "monthDay": null,
+  "active": false,
+  "startDate": "2026-07-01",
+  "endDate": null,
+  "createdAt": "2026-07-02T02:25:13.329Z",
+  "updatedAt": "2026-07-02T02:28:17.761Z"
+}

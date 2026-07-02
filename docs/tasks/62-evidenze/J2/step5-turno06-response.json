@@ -1,0 +1,47 @@
+{
+  "userMessage": "Il regalo per Marta lo tengo per domani, ho tempo fino all'8.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr2w73mz00i4ib74mnfn4s6m",
+    "mode": "evening_review",
+    "assistantMessage": "Rispondere alle mail arretrate — dimmi.",
+    "toolsExecuted": [
+      {
+        "name": "record_energy",
+        "input": {
+          "value": 3
+        }
+      },
+      {
+        "name": "mark_entry_discussed",
+        "input": {
+          "entryId": "cmr2nfh7y000hib00oa2e2qjl",
+          "outcome": "postponed"
+        },
+        "result": {
+          "entryId": "cmr2nfh7y000hib00oa2e2qjl",
+          "taskTitle": "Comprare regalo per Marta",
+          "outcome": "postponed",
+          "action": "marked_discussed"
+        }
+      },
+      {
+        "name": "set_current_entry",
+        "input": {
+          "entryId": "cmr2nfh43000fib00mdr7rwgw"
+        },
+        "result": {
+          "entryId": "cmr2nfh43000fib00mdr7rwgw",
+          "taskTitle": "Rispondere alle mail arretrate",
+          "action": "cursor_set"
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.061213500000000004,
+    "tokensIn": 2186,
+    "tokensOut": 235,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 9511
+  }
+}

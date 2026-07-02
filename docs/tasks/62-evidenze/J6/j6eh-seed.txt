@@ -1,0 +1,4 @@
+j6e collaudo-j6e@probe.local userId=cmr2o27ef0000ibzkwztbx0f3 PATCH settings=200 window=00:00-23:59
+j6f collaudo-j6f@probe.local userId=cmr2o2ab3000cibzkgxxmz54y PATCH settings=200 window=00:00-23:59
+j6g collaudo-j6g@probe.local userId=cmr2o2bfo000iibzkzm8e4385 PATCH settings=200 window=00:00-23:59
+j6h collaudo-j6h@probe.local userId=cmr2o2dtm000sibzkm3of5okm PATCH settings=200 window=00:00-23:59

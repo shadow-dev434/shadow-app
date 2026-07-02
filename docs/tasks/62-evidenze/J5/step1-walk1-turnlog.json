@@ -1,0 +1,281 @@
+[
+  {
+    "turn": 1,
+    "msg": "ok dai, facciamo questa review",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.14021475,
+    "assistantExcerpt": "Come stai stasera? 1-5."
+  },
+  {
+    "turn": 2,
+    "msg": "2",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "record_mood"
+    ],
+    "costUsd": 0.27545699999999995,
+    "assistantExcerpt": "E di energia? 1-5."
+  },
+  {
+    "turn": 3,
+    "msg": "2",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "record_energy"
+    ],
+    "costUsd": 0.1516407,
+    "assistantExcerpt": "Stasera ho 4 candidate da attraversare con te, le altre 0 restano nell'inbox per ora — ti va?"
+  },
+  {
+    "turn": 4,
+    "msg": "non l'ho fatto neanche oggi, non ci riesco proprio",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "set_current_entry",
+      "mark_what_blocked_asked"
+    ],
+    "costUsd": 0.16475459999999997,
+    "assistantExcerpt": "La mail al capo è ancora qui. Cosa ti ha fermato l'ultima volta?"
+  },
+  {
+    "turn": 5,
+    "msg": "Boh... appena lo apro mi sale l'ansia e non so da dove partire",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "mark_what_blocked_asked",
+      "propose_decomposition"
+    ],
+    "costUsd": 0.0458448,
+    "assistantExcerpt": "Fatto. Dimmi tu come proseguiamo."
+  },
+  {
+    "turn": 6,
+    "msg": "Boh... appena lo apro mi sale l'ansia e non so da dove partire",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "mark_what_blocked_asked",
+      "propose_decomposition"
+    ],
+    "costUsd": 0.03444270000000001,
+    "assistantExcerpt": "Ti suona praticabile?"
+  },
+  {
+    "turn": 7,
+    "msg": "Boh... appena lo apro mi sale l'ansia e non so da dove partire",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "propose_decomposition"
+    ],
+    "costUsd": 0.028247550000000003,
+    "assistantExcerpt": "Ti torna come inizio?"
+  },
+  {
+    "turn": 8,
+    "msg": "sì dai, proviamo a spezzarlo così",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "approve_decomposition"
+    ],
+    "costUsd": 0.027071550000000003,
+    "assistantExcerpt": "Salvati. La teniamo in lista per domani?"
+  },
+  {
+    "turn": 9,
+    "msg": "non lo so... ok, rimandiamolo a domani",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "mark_what_blocked_asked",
+      "propose_decomposition"
+    ],
+    "costUsd": 0.04799985,
+    "assistantExcerpt": "Ho proposto cinque passi: apri una bozza vuota senza pensare al contenuto, scrivi solo l'oggetto, annota in tre parole cosa vuoi dire al capo, espandi in due fr"
+  },
+  {
+    "turn": 10,
+    "msg": "Boh... appena lo apro mi sale l'ansia e non so da dove partire",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "propose_decomposition"
+    ],
+    "costUsd": 0.033027299999999996,
+    "assistantExcerpt": "Ti torna come inizio?"
+  },
+  {
+    "turn": 11,
+    "msg": "sì dai, proviamo a spezzarlo così",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.012434249999999999,
+    "assistantExcerpt": "Capisco che siamo in un loop — mi sembra che ci sia qualcosa di inceppato nella conversazione. Ricominciamo da qui. Hai detto che vuoi spezzarla in passi. Ho gi"
+  },
+  {
+    "turn": 12,
+    "msg": "non l'ho fatto neanche oggi, non ci riesco proprio",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "mark_what_blocked_asked"
+    ],
+    "costUsd": 0.030532050000000005,
+    "assistantExcerpt": "Cosa ti ha fermato oggi — è ancora l'ansia di aprirla, o c'è qualcos'altro?"
+  },
+  {
+    "turn": 13,
+    "msg": "Boh... appena lo apro mi sale l'ansia e non so da dove partire",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.0117117,
+    "assistantExcerpt": "Capito. Hai già dei micro-step salvati per questa mail — vuoi che partiamo da quelli, o li riscriviamo da zero?"
+  },
+  {
+    "turn": 14,
+    "msg": "non lo so... ok, rimandiamolo a domani",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "mark_entry_discussed"
+    ],
+    "costUsd": 0.030961050000000004,
+    "assistantExcerpt": "Ok, rimandata a domani. Passiamo alla dichiarazione dei redditi?"
+  },
+  {
+    "turn": 15,
+    "msg": "non l'ho fatto neanche oggi, non ci riesco proprio",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.01648455,
+    "assistantExcerpt": "Capisco. Cosa ti blocca — è simile alla mail, non sai da dove partire, o è qualcos'altro?"
+  },
+  {
+    "turn": 16,
+    "msg": "non lo so... ok, rimandiamolo a domani",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "set_current_entry",
+      "mark_entry_discussed"
+    ],
+    "costUsd": 0.0508146,
+    "assistantExcerpt": "Ok, rimandata. Passiamo alla dichiarazione dei redditi — è qui da un po'. Vediamola."
+  },
+  {
+    "turn": 17,
+    "msg": "non l'ho fatto neanche oggi, non ci riesco proprio",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "mark_what_blocked_asked"
+    ],
+    "costUsd": 0.0367296,
+    "assistantExcerpt": "Cosa ti ha bloccato con la dichiarazione dei redditi — sai da dove partire o è nebbia totale?"
+  },
+  {
+    "turn": 18,
+    "msg": "Boh... appena lo apro mi sale l'ansia e non so da dove partire",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.0116667,
+    "assistantExcerpt": "Capito. Vuoi che la spezziamo in passi piccoli, come abbiamo fatto con la mail?"
+  },
+  {
+    "turn": 19,
+    "msg": "non lo so... ok, rimandiamolo a domani",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "mark_entry_discussed"
+    ],
+    "costUsd": 0.032355300000000004,
+    "assistantExcerpt": "Ok, rimandata. Passiamo alla visita medica — vuoi prenotarla o la saltiamo stasera?"
+  },
+  {
+    "turn": 20,
+    "msg": "non l'ho fatto neanche oggi, non ci riesco proprio",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.017388300000000002,
+    "assistantExcerpt": "Capito. La rimandi anche questa o la togliamo dalla lista?"
+  },
+  {
+    "turn": 21,
+    "msg": "non lo so... ok, rimandiamolo a domani",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [
+      "set_current_entry",
+      "mark_entry_discussed"
+    ],
+    "costUsd": 0.05510265,
+    "assistantExcerpt": "Ok, rimandata. Ultima: il pacco alle poste — lo facciamo o lo saltiamo?"
+  },
+  {
+    "turn": 22,
+    "msg": "non l'ho fatto neanche oggi, non ci riesco proprio",
+    "status": 200,
+    "phase": "per_entry",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.017797050000000002,
+    "assistantExcerpt": "Ok. Lo rimandi a domani o lo togliamo?"
+  },
+  {
+    "turn": 23,
+    "msg": "non lo so... ok, rimandiamolo a domani",
+    "status": 200,
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [
+      "set_current_entry",
+      "mark_entry_discussed"
+    ],
+    "costUsd": 0.06399465000000001,
+    "assistantExcerpt": "Ok, tutte e quattro rimandate a domani. Il piano di domani è leggero: visita medica di mattina, pacco alle poste di pomeriggio, mail al capo e dichiarazione dei"
+  },
+  {
+    "turn": 24,
+    "msg": "ok, va bene il piano così",
+    "status": 200,
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.13684575,
+    "assistantExcerpt": "Piano per domani pronto: 4 task selezionati, mood 2, energy 2. Blocco la review e chiudo?"
+  }
+]

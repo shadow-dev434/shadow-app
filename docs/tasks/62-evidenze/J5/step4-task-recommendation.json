@@ -1,0 +1,9 @@
+{
+  "recommendation": {
+    "taskId": "cmr2nfm7z001hib009dw0vuhs",
+    "reason": "Task eseguibile ora",
+    "adaptiveExplanation": "Task compatibile con il tuo profilo attuale.",
+    "confidence": 0.42500000000000004,
+    "suggestedAction": "do_now"
+  }
+}

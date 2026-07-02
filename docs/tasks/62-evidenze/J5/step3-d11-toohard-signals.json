@@ -1,0 +1,208 @@
+{
+  "statuses": {
+    "tooHard": 200,
+    "avoided": 200,
+    "microFeedback": 200,
+    "learningSignal": 200,
+    "aiAssistant": 200
+  },
+  "responses": {
+    "microFeedback": {
+      "feedback": {
+        "id": "cmr2om7ox00n6ib6srnsyslj0",
+        "userId": "cmr2nflf2001aib00bjpe6yev",
+        "taskId": "cmr2nfm7z001hib009dw0vuhs",
+        "feedbackType": "block_reason",
+        "response": "[\"anxiety\",\"too_big\"]",
+        "category": "general",
+        "createdAt": "2026-07-01T23:03:32.721Z"
+      },
+      "signal": {
+        "id": "cmr2om7tg00n8ib6shqvw1scp",
+        "userId": "cmr2nflf2001aib00bjpe6yev",
+        "signalType": "micro_feedback",
+        "taskId": "cmr2nfm7z001hib009dw0vuhs",
+        "category": "general",
+        "context": null,
+        "timeSlot": "night",
+        "value": 1,
+        "metadata": "{\"feedbackType\":\"block_reason\",\"response\":[\"anxiety\",\"too_big\"],\"microFeedbackId\":\"cmr2om7ox00n6ib6srnsyslj0\"}",
+        "processed": false,
+        "processedAt": null,
+        "createdAt": "2026-07-01T23:03:32.884Z"
+      },
+      "profile": {
+        "id": "cmr2o9mys0001ib0c2hk5arig",
+        "userId": "cmr2nflf2001aib00bjpe6yev",
+        "executiveLoad": 3,
+        "familyResponsibilityLoad": 3,
+        "domesticBurden": 3,
+        "workStudyCentrality": 3,
+        "rewardSensitivity": 3,
+        "noveltySeeking": 3,
+        "avoidanceProfile": 3,
+        "activationDifficulty": 3,
+        "frictionSensitivity": 3,
+        "shameFrustrationSensitivity": 3,
+        "preferredTaskStyle": "guided",
+        "preferredPromptStyle": "direct",
+        "optimalSessionLength": 25,
+        "bestTimeWindows": [],
+        "worstTimeWindows": [],
+        "interruptionVulnerability": 3,
+        "motivationProfile": {},
+        "taskPreferenceMap": {},
+        "energyRhythm": {},
+        "averageStartRate": 0.475,
+        "averageCompletionRate": 0.5,
+        "averageAvoidanceRate": 0.51,
+        "strictModeEffectiveness": 0.5,
+        "recoverySuccessRate": 0.5,
+        "preferredDecompositionGranularity": 3,
+        "predictedBlockLikelihood": 0.5835,
+        "predictedSuccessProbability": 0.5,
+        "commonFailureReasons": [],
+        "commonSuccessConditions": [],
+        "categorySuccessRates": {
+          "general": 0.425
+        },
+        "categoryBlockRates": {
+          "general": 0.5625
+        },
+        "categoryAvgResistance": {
+          "general": 3.385
+        },
+        "contextPerformanceRates": {},
+        "timeSlotPerformance": {
+          "afternoon_general": 0.425
+        },
+        "nudgeTypeEffectiveness": {},
+        "decompositionStyleEffectiveness": {},
+        "totalSignals": 5,
+        "lastUpdatedFrom": "behavioral",
+        "confidenceLevel": 0.32
+      },
+      "updatesApplied": [
+        "totalSignals",
+        "confidenceLevel",
+        "lastUpdatedFrom"
+      ]
+    },
+    "learningSignal": {
+      "signal": {
+        "id": "cmr2om8fs00naib6so31a278s",
+        "userId": "cmr2nflf2001aib00bjpe6yev",
+        "signalType": "micro_feedback",
+        "taskId": "cmr2nfm7z001hib009dw0vuhs",
+        "category": "general",
+        "context": null,
+        "timeSlot": "afternoon",
+        "value": 1,
+        "metadata": "{\"feedbackType\":\"block_reason\",\"response\":[\"anxiety\",\"too_big\"]}",
+        "processed": false,
+        "processedAt": null,
+        "createdAt": "2026-07-01T23:03:33.688Z"
+      },
+      "profile": {
+        "id": "cmr2o9mys0001ib0c2hk5arig",
+        "userId": "cmr2nflf2001aib00bjpe6yev",
+        "executiveLoad": 3,
+        "familyResponsibilityLoad": 3,
+        "domesticBurden": 3,
+        "workStudyCentrality": 3,
+        "rewardSensitivity": 3,
+        "noveltySeeking": 3,
+        "avoidanceProfile": 3,
+        "activationDifficulty": 3,
+        "frictionSensitivity": 3,
+        "shameFrustrationSensitivity": 3,
+        "preferredTaskStyle": "guided",
+        "preferredPromptStyle": "direct",
+        "optimalSessionLength": 25,
+        "bestTimeWindows": [],
+        "worstTimeWindows": [],
+        "interruptionVulnerability": 3,
+        "motivationProfile": {},
+        "taskPreferenceMap": {},
+        "energyRhythm": {},
+        "averageStartRate": 0.475,
+        "averageCompletionRate": 0.5,
+        "averageAvoidanceRate": 0.51,
+        "strictModeEffectiveness": 0.5,
+        "recoverySuccessRate": 0.5,
+        "preferredDecompositionGranularity": 3,
+        "predictedBlockLikelihood": 0.5835,
+        "predictedSuccessProbability": 0.5,
+        "commonFailureReasons": [],
+        "commonSuccessConditions": [],
+        "categorySuccessRates": {
+          "general": 0.425
+        },
+        "categoryBlockRates": {
+          "general": 0.5625
+        },
+        "categoryAvgResistance": {
+          "general": 3.385
+        },
+        "contextPerformanceRates": {},
+        "timeSlotPerformance": {
+          "afternoon_general": 0.425
+        },
+        "nudgeTypeEffectiveness": {},
+        "decompositionStyleEffectiveness": {},
+        "totalSignals": 6,
+        "lastUpdatedFrom": "behavioral",
+        "confidenceLevel": 0.325
+      },
+      "updatesApplied": [
+        "totalSignals",
+        "confidenceLevel",
+        "lastUpdatedFrom"
+      ]
+    },
+    "aiAssistant": {
+      "insightMessage": "Grazie. Userò questa informazione per aiutarti meglio.",
+      "profileUpdates": {}
+    }
+  },
+  "newSignals": [
+    {
+      "signalType": "task_too_hard",
+      "taskId": "cmr2nfm7z001hib009dw0vuhs",
+      "metadata": "{}",
+      "processed": true
+    },
+    {
+      "signalType": "task_avoided",
+      "taskId": "cmr2nfm7z001hib009dw0vuhs",
+      "metadata": "{}",
+      "processed": true
+    },
+    {
+      "signalType": "micro_feedback",
+      "taskId": "cmr2nfm7z001hib009dw0vuhs",
+      "metadata": "{\"feedbackType\":\"block_reason\",\"response\":[\"anxiety\",\"too_big\"],\"microFeedbackId\":\"cmr2om7ox00n6ib6srnsyslj0\"}",
+      "processed": true
+    },
+    {
+      "signalType": "micro_feedback",
+      "taskId": "cmr2nfm7z001hib009dw0vuhs",
+      "metadata": "{\"feedbackType\":\"block_reason\",\"response\":[\"anxiety\",\"too_big\"]}",
+      "processed": true
+    }
+  ],
+  "profileAfter": {
+    "totalSignals": 6,
+    "confidenceLevel": 0.325,
+    "categorySuccessRates": "{\"general\":0.425}",
+    "predictedBlockLikelihood": 0.5835,
+    "decompositionStyleEffectiveness": "{}",
+    "shameFrustrationSensitivity": 3,
+    "preferredDecompositionGranularity": 3,
+    "recoverySuccessRate": 0.5,
+    "avoidanceProfile": 3,
+    "lastUpdatedFrom": "behavioral"
+  },
+  "avoidBefore": 5,
+  "avoidAfter": 5
+}

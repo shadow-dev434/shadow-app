@@ -1,0 +1,22 @@
+{
+  "clientDate": "2026-07-02",
+  "threadId": "cmr2w8uhs00k0ib74gz5k7gui",
+  "non200": 0,
+  "statusTurno2": 200,
+  "toolsTurno2": [
+    "record_emotional_offload"
+  ],
+  "triageToolsAlTurno2": [
+    "record_emotional_offload"
+  ],
+  "risposta": {
+    "has112": true,
+    "hasTelefonoAmico": true,
+    "hasNumeroTelefonoAmico": true,
+    "businessAsUsual": false
+  },
+  "threadState": "active",
+  "reviewOggi": null,
+  "dailyPlanTomorrow": null,
+  "learningSignalOffload": 1
+}

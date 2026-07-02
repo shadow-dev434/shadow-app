@@ -1,0 +1,85 @@
+{
+  "loginRealeBeta": {
+    "status": 200,
+    "claims": {
+      "id": "cmr2nfs0v002yib00mul4uku9",
+      "sub": "cmr2nfs0v002yib00mul4uku9",
+      "email": "collaudo-beta@probe.local",
+      "name": "Collaudo Beta",
+      "tourCompleted": true,
+      "onboardingComplete": true,
+      "iat": 1782947707,
+      "exp": 1785539707,
+      "jti": "00a34525-f81b-4f70-a66f-953775f6f821"
+    }
+  },
+  "loginRealeAdmin": {
+    "status": 200,
+    "claims": {
+      "id": "cmr2nfsyn0034ib00dseug8ai",
+      "sub": "cmr2nfsyn0034ib00dseug8ai",
+      "email": "collaudo-admin@probe.local",
+      "name": "Collaudo Admin",
+      "tourCompleted": true,
+      "onboardingComplete": true,
+      "iat": 1782947708,
+      "exp": 1785539708,
+      "jti": "f8934cb7-7b9c-4fe5-8f8a-64c5dd2cc8b2"
+    }
+  },
+  "loginRealeNonbeta": {
+    "status": 200,
+    "claims": {
+      "id": "cmr2nfttn003aib00tljpwtw2",
+      "sub": "cmr2nfttn003aib00tljpwtw2",
+      "email": "collaudo-nonbeta@probe.local",
+      "name": "Collaudo Nonbeta",
+      "tourCompleted": true,
+      "onboardingComplete": true,
+      "iat": 1782947709,
+      "exp": 1785539709,
+      "jti": "4c872e43-3fad-45c3-85ff-0eccd7924bf3"
+    }
+  },
+  "flussoNextAuthBeta": {
+    "status": 200,
+    "claims": {
+      "name": "Collaudo Beta",
+      "email": "collaudo-beta@probe.local",
+      "picture": null,
+      "sub": "cmr2nfs0v002yib00mul4uku9",
+      "id": "cmr2nfs0v002yib00mul4uku9",
+      "isBetaTester": true,
+      "tourCompleted": true,
+      "onboardingComplete": true,
+      "consentGiven": true,
+      "iat": 1782947711,
+      "exp": 1785539711,
+      "jti": "89b4df84-62fa-480f-9896-1822970fbe20"
+    }
+  },
+  "sessionConCookieReale": {
+    "status": 200,
+    "user": {
+      "name": "Collaudo Beta",
+      "email": "collaudo-beta@probe.local",
+      "id": "cmr2nfs0v002yib00mul4uku9",
+      "tourCompleted": true,
+      "onboardingComplete": true,
+      "consentGiven": false,
+      "isBetaTester": false
+    }
+  },
+  "sessionConCookieMintato": {
+    "status": 200,
+    "user": {
+      "name": "Collaudo",
+      "email": "collaudo-beta@probe.local",
+      "id": "cmr2nfs0v002yib00mul4uku9",
+      "tourCompleted": true,
+      "onboardingComplete": true,
+      "consentGiven": false,
+      "isBetaTester": true
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "userMessage": "Questa tienila per domani.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr2w1yee00agib745g2okxg8",
+    "mode": "evening_review",
+    "assistantMessage": "Ti va di partire con le 5 candidate di stasera?",
+    "toolsExecuted": [
+      {
+        "name": "record_energy",
+        "input": {
+          "value": 3
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.023974650000000004,
+    "tokensIn": 205,
+    "tokensOut": 81,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 4783
+  }
+}

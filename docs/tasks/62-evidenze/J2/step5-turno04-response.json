@@ -1,0 +1,40 @@
+{
+  "userMessage": "Sì, partiamo!",
+  "status": 200,
+  "json": {
+    "threadId": "cmr2w73mz00i4ib74mnfn4s6m",
+    "mode": "evening_review",
+    "assistantMessage": "Bolletta della luce, scade domani — la chiudi?",
+    "toolsExecuted": [
+      {
+        "name": "record_energy",
+        "input": {
+          "value": 3
+        }
+      },
+      {
+        "name": "record_energy",
+        "input": {
+          "value": 3
+        }
+      },
+      {
+        "name": "set_current_entry",
+        "input": {
+          "entryId": "cmr2nfgmo0009ib00kpnd46ek"
+        },
+        "result": {
+          "entryId": "cmr2nfgmo0009ib00kpnd46ek",
+          "taskTitle": "Pagare la bolletta della luce",
+          "action": "cursor_set"
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.17460795000000004,
+    "tokensIn": 1347,
+    "tokensOut": 200,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 9031
+  }
+}

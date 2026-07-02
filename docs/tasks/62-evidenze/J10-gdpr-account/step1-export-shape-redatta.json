@@ -1,0 +1,245 @@
+{
+  "statusSenzaCookie": 401,
+  "statusJson": 200,
+  "usatoClaimBeta": false,
+  "contenuto": {
+    "tasksTotali": 2,
+    "mieiTaskPresenti": 2,
+    "threadPresente": true,
+    "messaggiNelThread": 2,
+    "profilePresente": true
+  },
+  "chiaviSensibiliMatch": [],
+  "shapeRedatta": {
+    "exportDate": "string(24)",
+    "exportVersion": "string(3)",
+    "id": "string(25)",
+    "name": "string(16)",
+    "email": "string(28)",
+    "emailVerified": null,
+    "image": null,
+    "createdAt": "string(24)",
+    "updatedAt": "string(24)",
+    "profile": {
+      "id": "string(25)",
+      "userId": "string(25)",
+      "onboardingComplete": "boolean",
+      "onboardingStep": "number",
+      "onboardingAnswers": "string(2)",
+      "onboardingAnswersVersion": "number",
+      "consentGivenAt": "string(24)",
+      "consentVersion": "string(11)",
+      "consentArt9": "boolean",
+      "tourCompleted": "boolean",
+      "tourStep": "number",
+      "role": "string(6)",
+      "occupation": "string(24)",
+      "age": "number",
+      "livingSituation": "string(0)",
+      "hasChildren": "boolean",
+      "householdManager": "boolean",
+      "mainResponsibilities": "string(17)",
+      "difficultAreas": "string(23)",
+      "dailyRoutine": "string(0)",
+      "cognitiveLoad": "number",
+      "responsibilityLoad": "number",
+      "timeConstraints": "string(0)",
+      "lifeContext": "string(0)",
+      "executionStyle": "string(0)",
+      "preferredSessionLength": "number",
+      "focusModeDefault": "string(4)",
+      "blockedApps": "string(2)",
+      "locale": "string(2)",
+      "createdAt": "string(24)",
+      "updatedAt": "string(24)"
+    },
+    "settings": {
+      "_array": 1,
+      "_itemShape": {
+        "id": "string(25)",
+        "userId": "string(25)",
+        "defaultEnergy": "number",
+        "defaultContext": "string(3)",
+        "defaultDuration": "number",
+        "defaultFormat": "string(8)",
+        "wakeTime": "string(5)",
+        "sleepTime": "string(5)",
+        "productiveSlots": "string(11)",
+        "theme": "string(6)",
+        "notificationsEnabled": "boolean",
+        "reminderMinutes": "number",
+        "eveningWindowStart": "string(5)",
+        "eveningWindowEnd": "string(5)",
+        "createdAt": "string(24)",
+        "updatedAt": "string(24)"
+      }
+    },
+    "tasks": {
+      "_array": 2,
+      "_itemShape": {
+        "id": "string(25)",
+        "title": "string(37)",
+        "description": "string(0)",
+        "importance": "number",
+        "urgency": "number",
+        "deadline": null,
+        "resistance": "number",
+        "size": "number",
+        "delegable": "boolean",
+        "category": "string(7)",
+        "context": "string(3)",
+        "avoidanceCount": "number",
+        "lastAvoidedAt": null,
+        "quadrant": "string(12)",
+        "priorityScore": "number",
+        "decision": "string(12)",
+        "decisionReason": "string(0)",
+        "status": "string(7)",
+        "microSteps": "string(2)",
+        "microStepsRaw": "string(0)",
+        "currentStepIdx": "number",
+        "executionMode": "string(4)",
+        "sessionFormat": "string(8)",
+        "sessionDuration": "number",
+        "completedAt": null,
+        "createdAt": "string(24)",
+        "updatedAt": "string(24)",
+        "userId": "string(25)",
+        "delegatedToId": null,
+        "delegationNote": "string(0)",
+        "delegationStatus": "string(0)",
+        "reminderAt": null,
+        "reminderSent": "boolean",
+        "calendarEventId": "string(0)",
+        "aiClassified": "boolean",
+        "aiClassificationData": "string(2)",
+        "postponedCount": "number",
+        "source": "string(6)",
+        "recurringTemplateId": null,
+        "occurrenceDate": null
+      }
+    },
+    "recurringTasks": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "contacts": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "streaks": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "notifications": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "patterns": {
+      "_array": 1,
+      "_itemShape": {
+        "id": "string(25)",
+        "userId": "string(25)",
+        "avoidedCategories": "string(2)",
+        "difficultTimeSlots": "string(2)",
+        "problematicCategories": "string(2)",
+        "effectiveFormats": "string(2)",
+        "averageResistance": "number",
+        "averageCompletion": "number",
+        "totalTasksCompleted": "number",
+        "totalTasksAvoided": "number",
+        "streakDays": "number",
+        "lastActiveDate": "string(0)",
+        "createdAt": "string(24)",
+        "updatedAt": "string(24)"
+      }
+    },
+    "adaptiveProfile": null,
+    "learningSignals": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "microFeedbacks": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "memories": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "strictModeSessions": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "chatThreads": {
+      "_array": 1,
+      "_itemShape": {
+        "id": "string(25)",
+        "userId": "string(25)",
+        "mode": "string(7)",
+        "state": "string(6)",
+        "title": null,
+        "contextJson": null,
+        "relatedTaskId": null,
+        "relatedSessionId": null,
+        "startedAt": "string(24)",
+        "lastTurnAt": "string(24)",
+        "endedAt": null,
+        "messages": {
+          "_array": 2,
+          "_itemShape": {
+            "id": "string(25)",
+            "threadId": "string(25)",
+            "role": "string(9)",
+            "content": "string(36)",
+            "payloadJson": null,
+            "modelUsed": null,
+            "tokensIn": null,
+            "tokensOut": null,
+            "latencyMs": null,
+            "createdAt": "string(24)"
+          }
+        }
+      }
+    },
+    "reviews": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "dailyPlans": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "calendarTokens": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "bugReports": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "betaFeedbacks": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "assessmentResponses": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "subscription": null,
+    "aiUsages": {
+      "_array": 0,
+      "_itemShape": null
+    },
+    "pushDevices": {
+      "_array": 0,
+      "_itemShape": null
+    }
+  },
+  "csv": {
+    "status": 200,
+    "contentType": "text/csv; charset=utf-8",
+    "righe": 3,
+    "header": "id,title,description,importance,urgency,resistance,size,category,context,quadrant,decision,status,priorityScore,avoidanceCount,deadline,completedAt,createdAt"
+  }
+}

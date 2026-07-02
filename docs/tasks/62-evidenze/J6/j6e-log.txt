@@ -1,0 +1,18 @@
+STEP e1 evening-signal pre: 200 {"shouldStart":true}
+STEP e2 turno1 "iniziamo" -> HTTP 200 phase=per_entry state=active tools=-
+STEP e2 turno2 "3" -> HTTP 200 phase=per_entry state=active tools=record_mood
+STEP e2 turno3 "3" -> HTTP 200 phase=per_entry state=active tools=record_energy
+STEP e2 turno4 "ok, questa tienila per domani e passa avanti" -> HTTP 200 phase=per_entry state=active tools=set_current_entry
+[photo:pre-pausa] thread.state=active reviewToday=0 plans=0
+STEP e3 pausa simulata: lastTurnAt -15min
+STEP e4 active-thread in pausa: HTTP 200 activeThread=cmr2o3w5y002oib6sgekaexm1 (8 msg) dbState=paused
+STEP e5 resume turno: HTTP 200 sameThread=true phase=per_entry state=paused
+STEP e5 risposta resume: Stavamo per iniziare il giro delle candidate. Ho "Consegnare il progetto al cliente" come prima entry — scade domani. La guardiamo?
+STEP e6 turno post-resume: HTTP 200 phase=per_entry state=paused tools=mark_entry_discussed,set_current_entry
+[photo:post-resume] thread.state=paused reviewToday=0 plans=0
+STEP e7 PATCH finestra 01:00-01:05: HTTP 200
+[photo:pre-abbandono] thread.state=paused reviewToday=0 plans=0
+STEP e8 active-thread fuori finestra: HTTP 200 activeThread=null shouldStart=false
+[photo:post-abbandono] thread.state=archived reviewToday=0 plans=0
+VERDICT archiviazione-silenziosa=true reviewMaterializzata=false intakeSoloInContextJson=true
+D45 CONFERMATO: intake (mood/energy/triage parziale) MAI materializzato, thread archiviato in silenzio

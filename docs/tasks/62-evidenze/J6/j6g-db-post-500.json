@@ -1,0 +1,17 @@
+{
+  "label": "post-500",
+  "at": "2026-07-01T22:55:28.241Z",
+  "reviewRows": [
+    {
+      "id": "cmr2obsd800cmib6s6mdxk0hn",
+      "date": "2026-07-02",
+      "mood": 3,
+      "energyEnd": 3,
+      "whatDone": "ho chiuso la relazione trimestrale",
+      "whatAvoided": "la mail al capo, di nuovo",
+      "whatBlocked": "stanchezza a fine giornata",
+      "threadId": null,
+      "reviewTaskRows": 0
+    }
+  ]
+}

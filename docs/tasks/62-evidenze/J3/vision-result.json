@@ -1,0 +1,62 @@
+{
+  "status": 200,
+  "elapsed": 6663,
+  "threadId": "cmr2vv3u8001bib74mn91v20e",
+  "tools": [
+    {
+      "name": "create_task",
+      "input": {
+        "title": "Chiamare commercialista",
+        "deadline": "2026-07-04",
+        "urgency": 4,
+        "importance": 4,
+        "category": "admin",
+        "description": "Venerdì mattina"
+      },
+      "result": {
+        "id": "cmr2w7yu700j2ib74gjtwh1xp",
+        "title": "Chiamare commercialista",
+        "urgency": 4,
+        "importance": 4,
+        "category": "admin"
+      }
+    },
+    {
+      "name": "create_task",
+      "input": {
+        "title": "Dentista",
+        "deadline": "2026-07-02",
+        "urgency": 5,
+        "importance": 4,
+        "category": "health",
+        "description": "Appuntamento alle 15:00"
+      },
+      "result": {
+        "id": "cmr2w7yyr00j4ib74641rugi1",
+        "title": "Dentista",
+        "urgency": 5,
+        "importance": 4,
+        "category": "health"
+      }
+    }
+  ],
+  "assistant": "Ho aggiunto 2 impegni: Dentista oggi alle 15:00 e Chiamare commercialista venerdì mattina. Dimmi se cambio qualcosa.",
+  "newTasks": [
+    {
+      "id": "cmr2w7yu700j2ib74gjtwh1xp",
+      "title": "Chiamare commercialista",
+      "deadline": "2026-07-04",
+      "aiClassified": true,
+      "description": "Venerdì mattina",
+      "category": "admin"
+    },
+    {
+      "id": "cmr2w7yyr00j4ib74641rugi1",
+      "title": "Dentista",
+      "deadline": "2026-07-02",
+      "aiClassified": true,
+      "description": "Appuntamento alle 15:00",
+      "category": "health"
+    }
+  ]
+}

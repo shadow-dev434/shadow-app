@@ -1,0 +1,93 @@
+{
+  "getIniziale": {
+    "status": 200,
+    "body": {
+      "responses": []
+    }
+  },
+  "patchMeta": {
+    "status": 200,
+    "body": {
+      "response": {
+        "instrument": "asrs",
+        "wave": "pre",
+        "totalScore": 19,
+        "completedAt": null,
+        "answered": 9,
+        "totalItems": 18
+      }
+    }
+  },
+  "getResume": {
+    "status": 200,
+    "bozzaAsrs": {
+      "instrument": "asrs",
+      "wave": "pre",
+      "itemScores": {
+        "a1": 2,
+        "a2": 3,
+        "a3": 2,
+        "a4": 3,
+        "a5": 1,
+        "a6": 2,
+        "b7": 3,
+        "b8": 2,
+        "b9": 1
+      },
+      "totalScore": 19,
+      "completedAt": null
+    }
+  },
+  "patchCompletamento": {
+    "status": 200,
+    "body": {
+      "response": {
+        "instrument": "asrs",
+        "wave": "pre",
+        "totalScore": 36,
+        "completedAt": "2026-07-01T23:15:23.362Z",
+        "answered": 18,
+        "totalItems": 18
+      }
+    }
+  },
+  "patchAdexi": {
+    "status": 200,
+    "body": {
+      "response": {
+        "instrument": "adexi",
+        "wave": "pre",
+        "totalScore": 44,
+        "completedAt": "2026-07-01T23:15:23.816Z",
+        "answered": 14,
+        "totalItems": 14
+      }
+    }
+  },
+  "dbRows": [
+    {
+      "instrument": "asrs",
+      "wave": "pre",
+      "totalScore": 36,
+      "completedAt": "2026-07-01T23:15:23.362Z",
+      "itemScores": "{\"a1\":2,\"a2\":3,\"a3\":2,\"a4\":3,\"a5\":1,\"a6\":2,\"b7\":3,\"b8\":2,\"b9\":1,\"b10\":2,\"b11\":3,\"b12\":1,\"b13\":2,\"b14\":3,\"b15\":1,\"b16\":2,\"b17\":2,\"b18\":1}"
+    },
+    {
+      "instrument": "adexi",
+      "wave": "pre",
+      "totalScore": 44,
+      "completedAt": "2026-07-01T23:15:23.816Z",
+      "itemScores": "{\"x1\":2,\"x2\":3,\"x3\":4,\"x4\":5,\"x5\":1,\"x6\":2,\"x7\":3,\"x8\":4,\"x9\":5,\"x10\":1,\"x11\":2,\"x12\":3,\"x13\":4,\"x14\":5}"
+    }
+  ],
+  "expectedAsrsTotal": 36,
+  "feedbackStatusDopo": {
+    "status": 200,
+    "body": {
+      "betaDay": 1,
+      "pulseDue": false,
+      "weeklyDue": false,
+      "assessmentDue": null
+    }
+  }
+}

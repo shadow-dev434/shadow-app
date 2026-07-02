@@ -1,0 +1,65 @@
+{
+  "status": 200,
+  "json": {
+    "threadId": "cmr2vxe5w005vib74jt4bbtlf",
+    "mode": "general",
+    "assistantMessage": "Fatto. Lo stretching non ricomparirà più nei giorni futuri, ma le istanze già in lista restano.",
+    "toolsExecuted": [
+      {
+        "name": "get_today_tasks",
+        "input": {},
+        "result": [
+          {
+            "id": "cmr2vtj0e000hib749f50ig9k",
+            "title": "Stretching 10 minuti",
+            "urgency": 3,
+            "importance": 3,
+            "category": "health",
+            "status": "inbox",
+            "deadline": null,
+            "recurring": true,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr2vrr5p0005ib745hw1sf22",
+            "title": "Innaffiare le piante",
+            "urgency": 3,
+            "importance": 2,
+            "category": "household",
+            "status": "inbox",
+            "deadline": "2026-07-07",
+            "recurring": true,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr2vtvoi0013ib74164zuyai",
+            "title": "Innaffiare le piante",
+            "urgency": 3,
+            "importance": 2,
+            "category": "household",
+            "status": "inbox",
+            "deadline": null,
+            "recurring": true,
+            "estimatedMinutes": 25
+          }
+        ]
+      },
+      {
+        "name": "stop_task_recurrence",
+        "input": {
+          "taskId": "cmr2vtj0e000hib749f50ig9k"
+        },
+        "result": {
+          "templateId": "cmr2vtkkx000jib741kjj9897",
+          "note": "Ricorrenza fermata per \"Stretching 10 minuti\". Le istanze già in lista restano; non se ne creeranno di nuove. Conferma all'utente."
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.004632600000000001,
+    "tokensIn": 1997,
+    "tokensOut": 173,
+    "modelUsed": "claude-haiku-4-5",
+    "latencyMs": 3860
+  }
+}

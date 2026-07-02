@@ -1,0 +1,141 @@
+[
+  {
+    "msg": "ho controllato la lista: il task della bolletta NON esiste. La bolletta scade dopodomani, crea il task per davvero.",
+    "status": 200,
+    "elapsedMs": 5936,
+    "assistant": "Scusa, creato adesso. Task \"Pagare la bolletta\" con scadenza sabato 4 luglio.",
+    "tools": [
+      {
+        "name": "create_task",
+        "input": {
+          "title": "Pagare la bolletta",
+          "deadline": "2026-07-04",
+          "urgency": 4,
+          "importance": 4,
+          "category": "admin",
+          "description": "da pagare entro dopodomani"
+        },
+        "result": {
+          "id": "cmr2vzrcf0082ib745jrp2od6",
+          "title": "Pagare la bolletta",
+          "urgency": 4,
+          "importance": 4,
+          "category": "admin"
+        }
+      }
+    ]
+  },
+  {
+    "msg": "anche la palestra non è in lista: crea davvero il task ricorrente \"palestra ogni lunedì\".",
+    "status": 200,
+    "elapsedMs": 8965,
+    "assistant": "Fatto. \"Palestra\" ricorre ogni lunedì da ora in poi — comparirà da sola senza doverla ricreare.",
+    "tools": [
+      {
+        "name": "create_task",
+        "input": {
+          "title": "Palestra",
+          "urgency": 3,
+          "importance": 3,
+          "category": "health"
+        },
+        "result": {
+          "id": "cmr2vzvyy008aib74cb7pco65",
+          "title": "Palestra",
+          "urgency": 3,
+          "importance": 3,
+          "category": "health"
+        }
+      },
+      {
+        "name": "set_task_recurrence",
+        "input": {
+          "taskId": "cmr2vzvyy008aib74cb7pco65",
+          "frequency": "weekly",
+          "weekdays": [
+            1
+          ]
+        },
+        "result": {
+          "templateId": "cmr2vzxpm008cib741o5rm85k",
+          "recurrence": "ogni lunedì",
+          "updated": false,
+          "note": "Ricorrenza impostata: ogni lunedì. Conferma all'utente in una frase che il task tornerà da solo ogni lunedì, senza doverlo ricreare."
+        }
+      }
+    ]
+  },
+  {
+    "dbTasks": [
+      {
+        "id": "cmr2vvaaz001lib74dbg62uo3",
+        "title": "Preparare documenti per il commercialista",
+        "deadline": null,
+        "aiClassified": true,
+        "status": "inbox"
+      },
+      {
+        "id": "cmr2vviju001zib74rv3vax4a",
+        "title": "Comprare il latte",
+        "deadline": null,
+        "aiClassified": true,
+        "status": "inbox"
+      },
+      {
+        "id": "cmr2vviny0021ib74zrk78b9e",
+        "title": "Chiamare l'idraulico",
+        "deadline": null,
+        "aiClassified": true,
+        "status": "inbox"
+      },
+      {
+        "id": "cmr2vvinz0023ib74q76dv7eq",
+        "title": "Prenotare il treno per Roma",
+        "deadline": null,
+        "aiClassified": true,
+        "status": "inbox"
+      },
+      {
+        "id": "cmr2vvqd9002bib74coc6o8fx",
+        "title": "Mandare preventivo al cliente",
+        "deadline": "2026-07-03",
+        "aiClassified": true,
+        "status": "inbox"
+      },
+      {
+        "id": "cmr2vzrcf0082ib745jrp2od6",
+        "title": "Pagare la bolletta",
+        "deadline": "2026-07-04",
+        "aiClassified": true,
+        "status": "inbox"
+      },
+      {
+        "id": "cmr2vzvyy008aib74cb7pco65",
+        "title": "Palestra",
+        "deadline": null,
+        "aiClassified": true,
+        "status": "inbox"
+      }
+    ],
+    "dbRecurring": [
+      {
+        "id": "cmr2vzxpm008cib741o5rm85k",
+        "userId": "cmr2vscs70000ibz4g1pa457e",
+        "title": "Palestra",
+        "description": "",
+        "category": "health",
+        "urgency": 3,
+        "importance": 3,
+        "size": 3,
+        "frequency": "weekly",
+        "weekdays": "[1]",
+        "monthDay": null,
+        "active": true,
+        "startDate": "2026-07-02",
+        "endDate": null,
+        "createdAt": "2026-07-02T02:30:10.282Z",
+        "updatedAt": "2026-07-02T02:30:10.282Z"
+      }
+    ]
+  }
+]

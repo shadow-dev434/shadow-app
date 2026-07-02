@@ -1,0 +1,121 @@
+{
+  "today": "2026-07-02",
+  "tomorrow": "2026-07-03",
+  "review": {
+    "id": "cmr2w9opq00lgib7429wc09ay",
+    "userId": "cmr2nff1e0000ib00vl75hs28",
+    "date": "2026-07-02",
+    "whatDone": "Preparare la relazione trimestrale",
+    "whatAvoided": "",
+    "whatBlocked": "",
+    "restartFrom": "",
+    "mood": 4,
+    "energyEnd": 3,
+    "createdAt": "2026-07-02T02:37:45.182Z",
+    "updatedAt": "2026-07-02T02:37:45.182Z",
+    "threadId": "cmr2w73mz00i4ib74mnfn4s6m"
+  },
+  "reviewTasks": [],
+  "planTomorrow": {
+    "id": "cmr2w9p7q00liib74ui7s46fs",
+    "userId": "cmr2nff1e0000ib00vl75hs28",
+    "date": "2026-07-03",
+    "top3Ids": "[\"cmr2nfgzg000dib00h6ndbm4j\",\"cmr2nfh43000fib00mdr7rwgw\",\"cmr2nfgmo0009ib00kpnd46ek\"]",
+    "doNowIds": "[\"cmr2nfgzg000dib00h6ndbm4j\",\"cmr2nfh43000fib00mdr7rwgw\",\"cmr2nfgmo0009ib00kpnd46ek\",\"cmr2nfh7y000hib00oa2e2qjl\",\"cmr2nfgvp000bib00gbyv7av1\"]",
+    "scheduleIds": "[]",
+    "delegateIds": "[]",
+    "postponeIds": "[]",
+    "energyLevel": 3,
+    "timeAvailable": 480,
+    "currentContext": "any",
+    "slotContextsJson": "{}",
+    "createdAt": "2026-07-02T02:37:45.830Z",
+    "updatedAt": "2026-07-02T02:37:45.830Z",
+    "threadId": "cmr2w73mz00i4ib74mnfn4s6m",
+    "pinnedIds": "[]",
+    "originalPlanJson": "{\"version\":1,\"capturedAt\":\"2026-07-02T02:37:44.850Z\",\"preview\":{\"morning\":[{\"taskId\":\"cmr2nfgzg000dib00h6ndbm4j\",\"title\":\"Riordinare la scrivania\",\"size\":3,\"durationLabel\":\"short\",\"durationMinutes\":25,\"energyHint\":null,\"pinned\":false,\"allocatedSlot\":\"morning\"}],\"afternoon\":[{\"taskId\":\"cmr2nfh43000fib00mdr7rwgw\",\"title\":\"Rispondere alle mail arretrate\",\"size\":3,\"durationLabel\":\"short\",\"durationMinutes\":25,\"energyHint\":null,\"pinned\":false,\"allocatedSlot\":\"afternoon\"}],\"evening\":[{\"taskId\":\"cmr2nfgmo0009ib00kpnd46ek\",\"title\":\"Pagare la bolletta della luce\",\"size\":3,\"durationLabel\":\"short\",\"durationMinutes\":25,\"energyHint\":null,\"pinned\":false,\"allocatedSlot\":\"evening\"},{\"taskId\":\"cmr2nfh7y000hib00oa2e2qjl\",\"title\":\"Comprare regalo per Marta\",\"size\":3,\"durationLabel\":\"short\",\"durationMinutes\":25,\"energyHint\":null,\"pinned\":false,\"allocatedSlot\":\"evening\"},{\"taskId\":\"cmr2nfgvp000bib00gbyv7av1\",\"title\":\"Chiamare il dentista per appuntamento\",\"size\":3,\"durationLabel\":\"short\",\"durationMinutes\":25,\"energyHint\":null,\"pinned\":false,\"allocatedSlot\":\"evening\"}],\"cut\":[],\"fillEstimate\":{\"used\":\"2.1h\",\"capacity\":\"9.6h\",\"state\":\"low\",\"percentage\":21.70138888888889},\"appointmentAware\":false,\"warnings\":[]},\"pinnedIds\":[]}"
+  },
+  "planTomorrowTasks": [
+    {
+      "taskId": "cmr2nfgzg000dib00h6ndbm4j",
+      "title": "Riordinare la scrivania",
+      "taskStatus": "inbox",
+      "slot": "morning"
+    },
+    {
+      "taskId": "cmr2nfh43000fib00mdr7rwgw",
+      "title": "Rispondere alle mail arretrate",
+      "taskStatus": "inbox",
+      "slot": "afternoon"
+    },
+    {
+      "taskId": "cmr2nfgmo0009ib00kpnd46ek",
+      "title": "Pagare la bolletta della luce",
+      "taskStatus": "planned",
+      "slot": "evening"
+    },
+    {
+      "taskId": "cmr2nfh7y000hib00oa2e2qjl",
+      "title": "Comprare regalo per Marta",
+      "taskStatus": "inbox",
+      "slot": "evening"
+    },
+    {
+      "taskId": "cmr2nfgvp000bib00gbyv7av1",
+      "title": "Chiamare il dentista per appuntamento",
+      "taskStatus": "planned",
+      "slot": "evening"
+    }
+  ],
+  "allTasks": [
+    {
+      "id": "cmr2nfge20007ib004da1wf30",
+      "title": "Preparare la relazione trimestrale",
+      "status": "completed",
+      "postponedCount": 0,
+      "completedAt": "2026-07-02T02:29:53.434Z"
+    },
+    {
+      "id": "cmr2nfgmo0009ib00kpnd46ek",
+      "title": "Pagare la bolletta della luce",
+      "status": "planned",
+      "postponedCount": 0,
+      "completedAt": null
+    },
+    {
+      "id": "cmr2nfgvp000bib00gbyv7av1",
+      "title": "Chiamare il dentista per appuntamento",
+      "status": "planned",
+      "postponedCount": 1,
+      "completedAt": null
+    },
+    {
+      "id": "cmr2nfgzg000dib00h6ndbm4j",
+      "title": "Riordinare la scrivania",
+      "status": "inbox",
+      "postponedCount": 1,
+      "completedAt": null
+    },
+    {
+      "id": "cmr2nfh43000fib00mdr7rwgw",
+      "title": "Rispondere alle mail arretrate",
+      "status": "inbox",
+      "postponedCount": 1,
+      "completedAt": null
+    },
+    {
+      "id": "cmr2nfh7y000hib00oa2e2qjl",
+      "title": "Comprare regalo per Marta",
+      "status": "inbox",
+      "postponedCount": 1,
+      "completedAt": null
+    },
+    {
+      "id": "cmr2nfhch000jib00mdj3ee4b",
+      "title": "Fare la spesa settimanale",
+      "status": "completed",
+      "postponedCount": 0,
+      "completedAt": "2026-07-01T22:30:19.025Z"
+    }
+  ]
+}

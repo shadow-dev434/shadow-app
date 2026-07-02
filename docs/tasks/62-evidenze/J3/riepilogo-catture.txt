@@ -1,0 +1,13 @@
+a   verdict=PASS turns=2 domande=1 ms=13065 nuovi=1 | ok
+b   verdict=PASS turns=2 domande=1 ms=9136 nuovi=3 | ok
+c   verdict=PASS turns=1 domande=0 ms=10291 nuovi=1 | deadline ok: 2026-07-03
+d   verdict=FAIL turns=3 domande=3 ms=16425 nuovi=0 | attesi >=1 task nuovi, creati 0; L8: 3 domande prima di creare (target <=1)
+e   verdict=WARN turns=3 domande=3 ms=12976 nuovi=0 | attesi >=1 task nuovi, creati 0; nessuna RecurringTask creata; L8: 3 domande prima di creare (target <=1)
+f   verdict=WARN turns=1 domande=0 ms=6695 nuovi=2 | duplicato NON riconosciuto: creato "Pagare la bolletta", "Palestra"
+g1  verdict=FAIL turns=3 domande=3 ms=12368 nuovi=0 | attesi >=1 task nuovi, creati 0; L8: 3 domande prima di creare (target <=1)
+g2  verdict=FAIL turns=3 domande=3 ms=9330 nuovi=0 | attesi >=1 task nuovi, creati 0; L8: 3 domande prima di creare (target <=1)
+g3  verdict=FAIL turns=3 domande=3 ms=9213 nuovi=0 | attesi >=1 task nuovi, creati 0; L8: 3 domande prima di creare (target <=1)
+g4  verdict=WARN turns=3 domande=3 ms=10671 nuovi=3 | deadline attesa (2026-07-04|2026-07-05|2026-07-06), trovata null; L8: 3 domande prima di creare (target <=1); task presenti ma senza create_task nei toolsExecuted (?)
+g5  verdict=FAIL turns=3 domande=3 ms=9910 nuovi=0 | attesi >=1 task nuovi, creati 0; L8: 3 domande prima di creare (target <=1)
+g6  verdict=FAIL turns=3 domande=3 ms=12065 nuovi=0 | attesi >=1 task nuovi, creati 0; L8: 3 domande prima di creare (target <=1)
+g7  verdict=FAIL turns=3 domande=3 ms=10299 nuovi=0 | attesi >=1 task nuovi, creati 0; L8: 3 domande prima di creare (target <=1)

@@ -1,0 +1,27 @@
+{
+  "post1": {
+    "status": 200,
+    "body": {
+      "feedback": {
+        "id": "cmr2p1efu00o6ib6sfbxek0ti",
+        "kind": "daily_pulse",
+        "day": "2026-07-02"
+      }
+    }
+  },
+  "post2": {
+    "status": 200,
+    "body": {
+      "feedback": null,
+      "duplicate": true
+    }
+  },
+  "dbRows": [
+    {
+      "id": "cmr2p1efu00o6ib6sfbxek0ti",
+      "day": "2026-07-02",
+      "answers": "{\"mood\":4,\"usedToday\":true,\"note\":\"primo invio collaudo\"}",
+      "createdAt": "2026-07-01T23:15:21.307Z"
+    }
+  ]
+}

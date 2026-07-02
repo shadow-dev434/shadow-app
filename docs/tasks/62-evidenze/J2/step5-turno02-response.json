@@ -1,0 +1,26 @@
+{
+  "userMessage": "Direi 4: giornata piena ma soddisfacente.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr2w73mz00i4ib74mnfn4s6m",
+    "mode": "evening_review",
+    "assistantMessage": "E di energia? 1-5.",
+    "toolsExecuted": [
+      {
+        "name": "record_mood",
+        "input": {
+          "value": 4
+        },
+        "result": {
+          "value": 4
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.02689005,
+    "tokensIn": 452,
+    "tokensOut": 50,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 4290
+  }
+}

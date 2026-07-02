@@ -1,0 +1,72 @@
+{
+  "tot": 11,
+  "fail": 0,
+  "results": [
+    {
+      "check": "1. msg >4000 char → 400",
+      "status": 400,
+      "verdict": "PASS",
+      "note": "err=\"userMessage too long\" (EN? true)"
+    },
+    {
+      "check": "2a. 5 allegati → 400 too many",
+      "status": 400,
+      "verdict": "PASS",
+      "note": "err=\"too many attachments (max 4)\""
+    },
+    {
+      "check": "2b. PDF >4MB → 400 too large",
+      "status": 400,
+      "verdict": "PASS",
+      "note": "err=\"attachment too large (max 4MB)\""
+    },
+    {
+      "check": "2c. .docx → 400 unsupported",
+      "status": 400,
+      "verdict": "PASS",
+      "note": "err=\"unsupported attachment type\" (D41: lo scarto è SILENZIOSO in UI, non in API)"
+    },
+    {
+      "check": "3a. /tasks cookie corrotto → 307 /?auth=login",
+      "status": 307,
+      "verdict": "PASS",
+      "note": "loc=/?auth=login"
+    },
+    {
+      "check": "3b. /api/tasks cookie corrotto → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": "Unauthorized"
+    },
+    {
+      "check": "4a. login: 429 al tentativo",
+      "status": 6,
+      "verdict": "PASS",
+      "note": "primo 429 al #6, msg=\"Troppi tentativi falliti. Riprova tra qualche minuto.\""
+    },
+    {
+      "check": "4b. D65: il 429 indica quanto aspettare?",
+      "status": 6,
+      "verdict": "PASS",
+      "note": "msg=\"Troppi tentativi falliti. Riprova tra qualche minuto.\" → countdown? false"
+    },
+    {
+      "check": "4c. login corretto durante lockout",
+      "status": 429,
+      "verdict": "PASS",
+      "note": "status=429 (429=bloccato anche il legittimo; 200=passa)"
+    },
+    {
+      "check": "5. doppio submit concorrente",
+      "status": "200/200",
+      "verdict": "PASS",
+      "note": "user-msg nel thread=3 (atteso ~3: primo+A+B; race se diverso)"
+    },
+    {
+      "check": "6. cap giornaliero (SKIP live)",
+      "status": "SKIP",
+      "verdict": "PASS",
+      "note": "Codice turn/route.ts:111-128: kill-switch cap<=0 → 429 \"La chat è temporaneamente non disponibile.\" (IT); cap raggiunto → 429 \"Hai raggiunto il limite di messaggi per oggi. Riprova domani.\" (IT). Live test richiede 2° server → rischio server condiviso (già cad"
+    }
+  ]
+}

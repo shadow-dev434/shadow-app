@@ -1,0 +1,23 @@
+{
+  "userMessage": "Energia 3, sono un po' stanco ma ok.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr2w1yee00agib745g2okxg8",
+    "mode": "evening_review",
+    "assistantMessage": "Stasera ho 5 candidate da attraversare con te — ti va?",
+    "toolsExecuted": [
+      {
+        "name": "record_energy",
+        "input": {
+          "value": 3
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.02393535,
+    "tokensIn": 228,
+    "tokensOut": 59,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 4383
+  }
+}

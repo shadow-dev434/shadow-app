@@ -1,0 +1,10 @@
+[
+  {
+    "memoryType": "avoidance",
+    "category": "general",
+    "key": "category_general_block_reason",
+    "value": "anxiety,too_big",
+    "strength": 0.5,
+    "evidence": 1
+  }
+]

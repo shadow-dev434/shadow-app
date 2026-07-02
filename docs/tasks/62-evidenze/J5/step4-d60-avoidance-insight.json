@@ -1,0 +1,60 @@
+{
+  "note": "adaptiveProfile.avoidanceProfile portato a 4 per pilotare il ramo (ai-assistant-engine.ts:199-212)",
+  "insight": {
+    "id": "8c23ceae-5169-4c4a-95d7-8b52a2f3df64",
+    "type": "suggestion",
+    "title": "Pattern di evitamento rilevato",
+    "message": "\"Scrivere la mail difficile al capo\" è stato evitato 6 volte. La volta scorsa ti sei bloccato perché il task era troppo ambiguo, quindi ora te lo spezzo meglio.",
+    "confidence": 0.475,
+    "basedOn": [
+      "avoidanceCount",
+      "avoidanceProfile",
+      "commonFailureReasons"
+    ],
+    "actionable": true,
+    "action": "decompose_and_suggest"
+  },
+  "allInsights": [
+    {
+      "id": "dbf53758-0290-4209-8294-77e42749ff08",
+      "type": "warning",
+      "title": "Aree ad alto rischio di blocco",
+      "message": "So che i task di tipo \"general\" ti bloccano spesso. Hai 3 task in queste categorie. Te li propongo in forma ridotta o più tardi.",
+      "confidence": 0.525,
+      "basedOn": [
+        "categoryBlockRates",
+        "avoidanceProfile"
+      ],
+      "actionable": true,
+      "action": "reduce_or_reschedule"
+    },
+    {
+      "id": "8c23ceae-5169-4c4a-95d7-8b52a2f3df64",
+      "type": "suggestion",
+      "title": "Pattern di evitamento rilevato",
+      "message": "\"Scrivere la mail difficile al capo\" è stato evitato 6 volte. La volta scorsa ti sei bloccato perché il task era troppo ambiguo, quindi ora te lo spezzo meglio.",
+      "confidence": 0.475,
+      "basedOn": [
+        "avoidanceCount",
+        "avoidanceProfile",
+        "commonFailureReasons"
+      ],
+      "actionable": true,
+      "action": "decompose_and_suggest"
+    },
+    {
+      "id": "16904f02-9a4f-487e-86ec-65f70d67e71a",
+      "type": "suggestion",
+      "title": "Strategia di rientro",
+      "message": "Ti propongo prima un task breve e gratificante, perché so che ti aiuta a entrare in momentum. Poi possiamo affrontare quelli più pesanti.",
+      "confidence": 0.42500000000000004,
+      "basedOn": [
+        "averageAvoidanceRate",
+        "rewardSensitivity",
+        "recoverySuccessRate"
+      ],
+      "actionable": true,
+      "action": "momentum_start"
+    }
+  ]
+}

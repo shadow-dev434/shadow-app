@@ -1,0 +1,25 @@
+{
+  "status": 500,
+  "body": {
+    "error": "Failed to save review"
+  },
+  "payloadSent": {
+    "whatDone": "ho chiuso la relazione trimestrale",
+    "whatAvoided": "la mail al capo, di nuovo",
+    "whatBlocked": "stanchezza a fine giornata",
+    "restartFrom": "",
+    "mood": 3,
+    "energyEnd": 3,
+    "taskReviews": [
+      {
+        "taskId": "cmr2o2cu8000pibzk5hovggiu",
+        "completed": true
+      },
+      {
+        "taskId": "cmr2o2d86000ribzke2a9u1jn",
+        "completed": false,
+        "avoided": true
+      }
+    ]
+  }
+}

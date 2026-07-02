@@ -1,0 +1,73 @@
+{
+  "hop1_post": {
+    "status": 200,
+    "body": {
+      "report": {
+        "id": "cmr2p1chl00o4ib6sgaf66zno",
+        "status": "new",
+        "createdAt": "2026-07-01T23:15:18.777Z"
+      }
+    }
+  },
+  "hop2_adminList": {
+    "status": 200,
+    "trovato": {
+      "id": "cmr2p1chl00o4ib6sgaf66zno",
+      "userId": "cmr2nfs0v002yib00mul4uku9",
+      "area": "chat",
+      "description": "COLLAUDO J10: dopo la review serale il piano di domani non mostra il terzo task che avevo confermato in chat.",
+      "expected": "Il piano di domani mostra i 3 task confermati nella review.",
+      "severityUser": "annoying",
+      "reproducibility": "sometimes",
+      "context": "{\"route\":\"/\",\"view\":\"chat\",\"collaudo\":\"J10-step4\"}",
+      "appVersion": "collaudo-62",
+      "status": "new",
+      "priority": null,
+      "adminNotes": null,
+      "resolvedAt": null,
+      "createdAt": "2026-07-01T23:15:18.777Z",
+      "updatedAt": "2026-07-01T23:15:18.777Z",
+      "user": {
+        "email": "collaudo-beta@probe.local",
+        "name": "Collaudo Beta"
+      }
+    },
+    "totale": 2
+  },
+  "hop3_adminPatch": {
+    "status": 200,
+    "body": {
+      "report": {
+        "id": "cmr2p1chl00o4ib6sgaf66zno",
+        "userId": "cmr2nfs0v002yib00mul4uku9",
+        "area": "chat",
+        "description": "COLLAUDO J10: dopo la review serale il piano di domani non mostra il terzo task che avevo confermato in chat.",
+        "expected": "Il piano di domani mostra i 3 task confermati nella review.",
+        "severityUser": "annoying",
+        "reproducibility": "sometimes",
+        "context": "{\"route\":\"/\",\"view\":\"chat\",\"collaudo\":\"J10-step4\"}",
+        "appVersion": "collaudo-62",
+        "status": "fixed",
+        "priority": "P2",
+        "adminNotes": "Collaudo J10: triage di prova, fix simulato.",
+        "resolvedAt": "2026-07-01T23:15:20.253Z",
+        "createdAt": "2026-07-01T23:15:18.777Z",
+        "updatedAt": "2026-07-01T23:15:20.255Z"
+      }
+    }
+  },
+  "hop4_testerRilegge": {
+    "status": 200,
+    "report": {
+      "id": "cmr2p1chl00o4ib6sgaf66zno",
+      "area": "chat",
+      "description": "COLLAUDO J10: dopo la review serale il piano di domani non mostra il terzo task che avevo confermato in chat.",
+      "severityUser": "annoying",
+      "status": "fixed",
+      "priority": "P2",
+      "createdAt": "2026-07-01T23:15:18.777Z",
+      "resolvedAt": "2026-07-01T23:15:20.253Z"
+    }
+  },
+  "hop5_notificheServer": []
+}

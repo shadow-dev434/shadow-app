@@ -1,0 +1,55 @@
+{
+  "preCounts": {
+    "user": 1,
+    "tasks": 2,
+    "threads": 1,
+    "messages": 2,
+    "profile": 1,
+    "settings": 1,
+    "patterns": 1
+  },
+  "sanityPreDelete": {
+    "status": 200,
+    "tasks": 2
+  },
+  "deleteSenzaConferma": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "postCounts": {
+    "user": 0,
+    "tasks": 0,
+    "threads": 0,
+    "messages": 0,
+    "profile": 0,
+    "settings": 0,
+    "patterns": 0
+  },
+  "cookieFantasma": {
+    "apiTasks": {
+      "status": 200,
+      "tasks": 0
+    },
+    "session": {
+      "status": 200,
+      "body": {
+        "user": {
+          "name": "Collaudo J10del",
+          "email": "collaudo-j10del@probe.local",
+          "id": "cmr2pespn000eibp89blhlvob",
+          "tourCompleted": true,
+          "onboardingComplete": true,
+          "consentGiven": false,
+          "isBetaTester": false
+        },
+        "expires": "2026-07-31T23:26:19.289Z"
+      }
+    },
+    "pagina": {
+      "status": 307,
+      "location": "/tour"
+    }
+  }
+}

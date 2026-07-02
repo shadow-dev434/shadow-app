@@ -1,0 +1,36 @@
+{
+  "trigger": {
+    "type": "avoidance_pattern",
+    "taskId": "cmr2nfm7z001hib009dw0vuhs",
+    "category": "general",
+    "evidence": "Task \"Compilare la dichiarazione dei redditi\" evitato 5 volte",
+    "priority": "high"
+  },
+  "status": 200,
+  "body": {
+    "response": {
+      "message": "Sembra che tu stia evitando questo task. Cosa ti blocca davvero?",
+      "followUpOptions": [
+        {
+          "value": "too_big",
+          "label": "Troppo grande"
+        },
+        {
+          "value": "too_boring",
+          "label": "Troppo noioso"
+        },
+        {
+          "value": "anxiety",
+          "label": "Ansia"
+        },
+        {
+          "value": "wrong_time",
+          "label": "Non è il momento giusto"
+        }
+      ],
+      "allowFreeText": true,
+      "insight": "Trigger: avoidance_pattern, evidence: Task \"Compilare la dichiarazione dei redditi\" evitato 5 volte",
+      "profileUpdate": {}
+    }
+  }
+}

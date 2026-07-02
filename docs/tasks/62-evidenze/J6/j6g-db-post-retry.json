@@ -1,0 +1,17 @@
+{
+  "label": "post-retry",
+  "at": "2026-07-01T22:55:29.560Z",
+  "reviewRows": [
+    {
+      "id": "cmr2obsd800cmib6s6mdxk0hn",
+      "date": "2026-07-02",
+      "mood": 3,
+      "energyEnd": 3,
+      "whatDone": "ho chiuso la relazione trimestrale",
+      "whatAvoided": "la mail al capo, di nuovo",
+      "whatBlocked": "stanchezza a fine giornata",
+      "threadId": null,
+      "reviewTaskRows": 0
+    }
+  ]
+}

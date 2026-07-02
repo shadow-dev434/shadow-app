@@ -1,0 +1,22 @@
+{
+  "codice": "tasks/page.tsx:614-625 — client-only (store+localStorage), nessun signOut()",
+  "apiTasksDopoLogoutClient": {
+    "status": 200,
+    "tasks": 2
+  },
+  "signoutGet": {
+    "status": 200,
+    "bytes": 5456
+  },
+  "signoutPost": {
+    "status": 200,
+    "setCookie": [
+      "next-auth.callback-url=<redatto>; Path=/; HttpOnly; SameSite=Lax",
+      "next-auth.session-token=<redatto>; Max-Age=0; Path=/; HttpOnly; SameSite=Lax"
+    ],
+    "azzeraSessionToken": true
+  },
+  "replayVecchioCookie": {
+    "status": 200
+  }
+}

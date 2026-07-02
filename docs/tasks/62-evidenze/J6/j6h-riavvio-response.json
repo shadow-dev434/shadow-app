@@ -1,0 +1,15 @@
+{
+  "status": 200,
+  "json": {
+    "threadId": "cmr2of2pa00jqib6ssre88atj",
+    "mode": "evening_review",
+    "assistantMessage": "Come stai stasera? 1-5.",
+    "toolsExecuted": [],
+    "quickReplies": [],
+    "costUsd": 0.0132627,
+    "tokensIn": 676,
+    "tokensOut": 15,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 2118
+  }
+}

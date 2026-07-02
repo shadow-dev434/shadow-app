@@ -1,0 +1,134 @@
+{
+ "journey": "J2 — La giornata piena (core loop dei 4 passi), utente collaudo-tipo@probe.local (cmr2nff1e0000ib00vl75hs28). Parte API completata end-to-end: bootstrap (non triggerato per ora Roma 04:27 < 05:00, fallback postTurn), morning check-in reale fino a commit_today_plan (4 turni), proposta strict one-tap arrivata nello stesso turno del commit, primo task del piano completato replicando le chiamate della UI, review serale conversazionale completa (intake → triage 5 voci → plan preview per fasce → override 'sposta le mail al pomeriggio' applicato e persistito → closing), Review+DailyPlan(domani) verificati in DB, stato retrodatato e lasciato PRONTO per il passaggio UI. Scoperta principale: un task dichiarato 'fatto' durante il triage serale non ha NESSUN percorso meccanico verso completed (outcome enum senza 'done', complete_task non esposto in evening_review) e rientra nel piano di domani perfino in Top3, nonostante la promessa esplicita di Shadow 'già fatta, la togliamo'.",
+ "steps": [
+  {
+   "step": "1. POST /api/chat/bootstrap: trigger morning check-in",
+   "verdict": "PASS",
+   "expected": "triggered:true con thread creato e Shadow che parla per prima, oppure motivo chiaro del mancato trigger",
+   "observed": "200 con body {\"triggered\":false} alle 04:27 ora di Roma: guard notturno MORNING_EARLY_HOUR=5 (bootstrap/route.ts:171). Meccanica corretta ma il body NON contiene il campo reason in questo ramo (c'è per active_thread_exists/evening_priority): il client non può distinguere 'è notte' da 'già fatto oggi'. Fallback su postTurn mode=morning_checkin come da script. Evidenza: step1-bootstrap-response.json"
+  },
+  {
+   "step": "2. Conversazione check-in fino a commit_today_plan (max 8 turni)",
+   "verdict": "PASS",
+   "expected": "ogni turno 200 + assistantMessage non vuoto (HARD); commit_today_plan entro 8 turni (WARN)",
+   "observed": "4 turni, tutti 200 con messaggio non vuoto. commit_today_plan al turno 4 con 6 taskIds e timeAvailable=300, top3 scritte in DB. 3 domande totali prima del commit (tempo disponibile, 'hai già fatto qualcosa?', 'partiamo dalla bolletta?'); mood/energia dati spontaneamente NON richiesti — buono. MA: il turno del commit risponde col fallback canned 'Fatto. Dimmi tu come proseguiamo.' (empty-response fallback orchestrator.ts:983) e l'ordine committato (top3[0]=relazione) contraddice il piano annunciato a voce ('1. bolletta... partiamo dalla bolletta?'). Costi/turno: 0.0418/0.0206/0.0174/0.0340 USD. Trascrizione: trascrizione-morning-checkin.md"
+  },
+  {
+   "step": "3. Proposta proattiva strict post-commit (QR start_strict)",
+   "verdict": "PASS",
+   "expected": "WARN se la QR non arriva; salvare la shape se arriva",
+   "observed": "Arrivata al primo colpo, stesso turno del commit (turno 4), dopo che l'utente ha chiesto aiuto per non distrarsi. Shape: {label:'Attiva strict',action:'start_strict',taskId:cmr2nfgmo0009ib00kpnd46ek (bolletta, coerente con la 'prima cosa' annunciata a voce),durationMinutes:25}. Unica QR del turno come da contratto prompt. Ma il testo che la accompagna è il fallback canned: zero spiegazione di cosa faccia lo strict (label gergale, D74). Evidenza: step2-turno4-response.json, step2-3-morning-summary.json"
+  },
+  {
+   "step": "4. Completare il primo task del piano via API come la UI (step done + task completed)",
+   "verdict": "PASS",
+   "expected": "PATCH /api/tasks/[id] per ogni step + PATCH status completed + learning signal; stato finale corretto in DB",
+   "observed": "Replicate le chiamate di page.tsx (handleStepDone:2520, handleComplete:2537, recordSignal:280) su 'Preparare la relazione trimestrale' (top3[0]): 3 PATCH microSteps/currentStepIdx tutte 200, PATCH {status:completed,completedAt} 200, POST /api/learning-signal task_started+task_completed 200. DB: status=completed, completedAt valorizzato, 3/3 step done, currentStepIdx=3, 2 LearningSignal. Evidenza: step4-completamento-task.json"
+  },
+  {
+   "step": "5. Finestra serale + review serale completa (intake, triage, plan preview, override, closing)",
+   "verdict": "WARN",
+   "expected": "PATCH /api/settings 200; ogni turno review 200 (HARD); walk completo con override del preview",
+   "observed": "PATCH settings 200. Tentativo 1 fallito per driver di test troppo rigido (il modello aspettava conferma di partenza, 20 turni loopati, thread archiviato — colpa del probe, non dell'app; trascrizione conservata). Retry: 12 turni tutti 200, walk completo: record_mood(4)/record_energy(3) → triage 5 voci (bolletta dichiarata FATTA→outcome 'kept'!, regalo/mail/scrivania/dentista postponed con motivi) → preview per fasce → override 'sposta le mail al pomeriggio' → update_plan_preview moves to:afternoon ok e PERSISTITO (slot=afternoon in DB) → confirm_plan_preview → confirm_close_review, thread completed. WARN per il triage della voce 'fatta' (vedi finding S2). Costo review: $0.8166 (+$0.3729 tentativo1). Trascrizioni: trascrizione-evening-review.md, tentativo1-trascrizione-evening-review.md"
+  },
+  {
+   "step": "6. DB check: Review(oggi) con threadId + DailyPlan(domani) con top3Ids",
+   "verdict": "PASS",
+   "expected": "Review(2026-07-02) esiste e linkata al thread; DailyPlan(2026-07-03) con top3Ids non vuoto",
+   "observed": "Review presente: mood=4, energyEnd=3, threadId=cmr2w73mz00i4ib74mnfn4s6m, whatDone='Preparare la relazione trimestrale' (la bolletta dichiarata fatta NON compare). DailyPlan(2026-07-03) presente: top3Ids=3 elementi, threadId linkato, originalPlanJson con snapshot per fasce. DailyPlanTask CON slot reali (morning/afternoon/evening) — la review SCRIVE gli slot (metà DB di D43 confermata). ReviewTask=0 righe (il triage conversazionale non popola il modello ReviewTask del tab manuale). Evidenza: step6-dbcheck-review-e-piano.json"
+  },
+  {
+   "step": "7. Retrodatazione 'ti svegli e il piano c'è già' + stato pronto per UI",
+   "verdict": "PASS",
+   "expected": "DailyPlan di domani retrodatato a oggi gestendo l'unique userId+date, stato non distrutto",
+   "observed": "Piano del commit mattutino 2026-07-02→2026-07-01 (libera la data), piano della review 2026-07-03→2026-07-02 (oggi, id cmr2w9p7q00liib74ui7s46fs, slot e top3 intatti), Review→2026-07-01, thread -24h, completedAt relazione -24h, finestra serale RIPRISTINATA 20:00-23:00 (altrimenti col mio 00:00-23:59 il prossimo bootstrap avrebbe dato priorità alla review serale in pieno giorno). Thread morning_checkin di 'ieri' lasciato volutamente 'active' (stato autentico post-giornata: il passaggio UI osserverà il guard C2/D18). Evidenza: step7-retrodate.json"
+  },
+  {
+   "step": "8. Osservazioni dossier (D43, D46, D47, D17)",
+   "verdict": "PASS",
+   "expected": "confermare le piste se incontrate",
+   "observed": "D43: metà DB CONFERMATA — la review scrive slot reali (morning/afternoon/evening) in DailyPlanTask e l'override li aggiorna; il commit mattutino invece scrive slot='today' piatto per tutti; resta al passaggio UI verificare che la Today li ignori. D46 non innescata (5 candidate entro capacity, nessun trimming). D47 non innescata (nessun pin usato nel walk). D17 non innescata (nessun add di task nuovo in preview) MA trovato il pattern affine più grave: promessa verbale 'la togliamo' senza alcun tool eseguito (finding S2). Misure L8 nei uxNotes."
+  }
+ ],
+ "findings": [
+  {
+   "title": "Task dichiarato 'fatto' nel triage serale non ha percorso meccanico: resta planned e rientra nel piano di domani (perfino in Top3) nonostante Shadow prometta 'già fatta, la togliamo'",
+   "severity": "S2",
+   "repro": "1) Utente con task planned 'Pagare la bolletta della luce' nel piano di oggi. 2) Review serale conversazionale: alla domanda sulla bolletta rispondere 'L'ho pagata stamattina, fatta!'. 3) Il modello chiama mark_entry_discussed outcome='kept' (l'enum kept/postponed/cancelled/parked/emotional_skip NON ha un outcome 'done' e complete_task NON è esposto in evening_review, tools.ts:472-476 e 564-573). 4) Al plan preview Shadow dice testualmente 'sera bolletta (già fatta, la togliamo)' ma non chiama update_plan_preview removes. 5) Confermare piano e chiudere. 6) DB: Task status=planned, completedAt=null; DailyPlan(domani) la contiene in doNowIds E in top3Ids con slot evening. L'utente si sveglia con un task già fatto in cima al piano: fiducia nel core loop rotta e Review.whatDone incompleto (solo la relazione, non la bolletta).",
+   "evidence": "docs/tasks/62-evidenze/J2/trascrizione-evening-review.md + docs/tasks/62-evidenze/J2/step6-dbcheck-review-e-piano.json",
+   "fileLine": "src/lib/chat/tools.ts:472",
+   "dossierRef": "pista NUOVA, pattern affine a D17 (promessa verbale senza tool eseguito)"
+  },
+  {
+   "title": "Empty-response fallback 'Fatto. Dimmi tu come proseguiamo.' esce proprio nel turno chiave del check-in (commit del piano + proposta strict): canned line + bottone 'Attiva strict' senza alcuna spiegazione",
+   "severity": "S3",
+   "repro": "1) Morning check-in con mood/energia/tempo dati. 2) Al 4° turno chiedere 'mi aiuterebbe qualcosa per restare concentrato senza distrarmi col telefono'. 3) Il modello esegue 6 tool (tra cui commit_today_plan e offer_strict_mode) ma chiude il turno senza prosa → l'orchestrator emette il fallback deterministico (orchestrator.ts:977-985). 4) L'utente vede solo 'Fatto. Dimmi tu come proseguiamo.' + QR 'Attiva strict': non sa che il piano è stato committato né cosa faccia lo strict mode (label gergale, D74). Osservato in un flusso felice reale, non in un edge case.",
+   "evidence": "docs/tasks/62-evidenze/J2/step2-turno4-response.json + docs/tasks/62-evidenze/J2/trascrizione-morning-checkin.md",
+   "fileLine": "src/lib/chat/orchestrator.ts:983",
+   "dossierRef": "D16 (variante: tool riusciti ma prosa vuota; il canned text è lo stesso) + D74"
+  },
+  {
+   "title": "Ordine del piano incoerente tra chat e DB: Shadow annuncia '1. bolletta... partiamo dalla bolletta?' ma commit_today_plan scrive top3=[relazione, bolletta, dentista] — la Today mostrerà un primo task diverso da quello promesso a voce",
+   "severity": "UX",
+   "repro": "1) Morning check-in con i 7 task del seed collaudo-tipo. 2) Il modello presenta il piano ordinato per urgenza ('1. Pagare la bolletta — scade domani, prima cosa') e la QR strict punta alla bolletta. 3) Ma l'input di commit_today_plan mantiene l'ordine di get_today_tasks (relazione prima) → DailyPlan.top3Ids[0]=relazione. 4) La Today (Top3 piatta) mostra la relazione come prima cosa, contraddicendo il 'partiamo dalla bolletta' appena detto in chat. Nessun vincolo lega l'ordine verbale all'ordine committato.",
+   "evidence": "docs/tasks/62-evidenze/J2/trascrizione-morning-checkin.md + docs/tasks/62-evidenze/J2/step2-dailyplan-oggi-post-commit.json",
+   "fileLine": "src/lib/chat/tools.ts:362",
+   "dossierRef": "affine a D43 (disallineamento chat/Today)"
+  },
+  {
+   "title": "Tool di intake richiamati in modo ridondante a ogni turno: nel check-in set_user_mood/energy/time rieseguiti 3-4 volte, nella review record_energy doppio nello stesso turno e set_user_energy (tool di modalità diurna) chiamato a metà walk",
+   "severity": "UX",
+   "repro": "1) Morning check-in: dare mood/energia al turno 1. 2) Osservare toolsExecuted dei turni 2-4: set_user_mood/set_user_energy/set_user_time vengono richiamati con gli stessi valori a OGNI turno. 3) Review serale: al turno di partenza del walk record_energy(3) è chiamato DUE volte nello stesso turno; ai turni 6 e 8 record_energy/set_user_energy ricompaiono senza che l'utente parli di energia (tentativo1: record_energy richiamato in 10 turni su 20). Latenza e costo inutili (ogni tool round-trip allunga il turno) e telemetria intake rumorosa.",
+   "evidence": "docs/tasks/62-evidenze/J2/trascrizione-morning-checkin.md + docs/tasks/62-evidenze/J2/trascrizione-evening-review.md + docs/tasks/62-evidenze/J2/tentativo1-step5-evening-summary.json",
+   "fileLine": "src/lib/chat/prompts.ts:140"
+  },
+  {
+   "title": "Intake review registrato con valore inventato: record_mood(3) chiamato quando l'utente NON ha mai dato un numero, nello stesso turno in cui Shadow gli sta ancora chiedendo 'dammi un numero da 1 a 5'",
+   "severity": "UX",
+   "repro": "1) Aprire la review serale. 2) Alla domanda 'Come stai stasera? 1-5' rispondere con una frase non pertinente (nel tentativo 1: 'Questa tienila per domani'). 3) Il modello chiama record_mood({value:3}) — un default inventato — mentre nel testo continua a chiedere il numero. Il mood dell'utente in Review sarebbe 3 senza che lui l'abbia mai detto. Collegato all'attrito della mappa qualitativi ristretta (D15): il modello 'ripiega' su un valore fabbricato invece di aspettare.",
+   "evidence": "docs/tasks/62-evidenze/J2/tentativo1-trascrizione-evening-review.md (turno 2)",
+   "fileLine": "src/lib/evening-review/mood-energy-parse.ts:28",
+   "dossierRef": "D15 (faccia complementare: valore fabbricato invece del rifiuto)"
+  },
+  {
+   "title": "Bootstrap {triggered:false} senza campo reason nel ramo orario/dedup: il client non può distinguere 'è notte' da 'check-in già fatto' né programmare un retry",
+   "severity": "UX",
+   "repro": "1) POST /api/chat/bootstrap prima delle 05:00 ora di Roma (o dopo un check-in già fatto oggi). 2) Risposta 200 {\"triggered\":false} nudo — i rami active_thread_exists ed evening_priority hanno reason, quello di shouldTriggerMorningCheckin no (bootstrap/route.ts:76-78). Il client (e chi fa QA) non ha osservabilità sul motivo; impossibile es. mostrare 'ci vediamo alle 5' o riprovare al momento giusto.",
+   "evidence": "docs/tasks/62-evidenze/J2/step1-bootstrap-response.json",
+   "fileLine": "src/app/api/chat/bootstrap/route.ts:76"
+  }
+ ],
+ "uxNotes": [
+  "L8 morning check-in: 3 domande prima del commit (tempo, 'hai già fatto qualcosa?', 'partiamo dalla bolletta?'); mood+energia dati spontaneamente NON sono stati richiesti — ottimo. Risposte brevi (media 142 char, max 358). Costo per turno: $0.0418/$0.0206/$0.0174/$0.0340 (tot morning $0.114).",
+  "L8 review serale (retry): 12 turni, 7 domande totali, risposte molto asciutte (media 58 char), 1 domanda per voce di triage; costo $0.817. Il rito è snello MA lo stile telegrafico ('Rispondere alle mail arretrate — dimmi.') ripetuto identico per 3 voci di fila suona da interrogatorio più che da conversazione.",
+  "L1 tap-budget (stima dal lato API): check-in→piano committato = 4 messaggi (2 sarebbero tap su QR nella UI: fascia oraria e 'niente, vai'); completare un task con 3 step = 4 interazioni (3 step + completa); review = pura conversazione, 12 turni di cui almeno 5 QR-abili.",
+  "La promessa del closing è mantenuta a livello dati: mood 4, energia 3, 5 task, override 'mail al pomeriggio' persistito (slot=afternoon in DailyPlanTask e in originalPlanJson). Il preview si è aggiornato davvero: 'Mail di pomeriggio. Altro?'.",
+  "Il piano di domani mette 'Riordinare la scrivania' (importance 2, urgency 2, la voce meno importante) come top3[0] perché l'allocazione per fasce parte dal morning: al risveglio la prima cosa proposta è la più futile. L'ordine Top3 deriva dagli slot, non dalla priorità.",
+  "3 task del piano di domani (scrivania, mail, regalo) restano status='inbox' pur essendo in doNowIds/top3Ids: se la Today filtra per status, il passaggio UI deve verificare che compaiano.",
+  "ReviewTask resta a 0 righe dopo la review conversazionale: il modello dati del tab Review manuale non viene popolato — i contatori del tab (già pista D54) non vedranno nulla di questa review.",
+  "Il triage NON ha chiesto whatBlocked/whatAvoided nemmeno di fronte a 'non l'ho chiamato: lo studio era chiuso' (motivo dato spontaneamente ma whatBlocked in Review è vuoto): l'informazione data dall'utente è andata persa.",
+  "Nel turno 2 del check-in Shadow dice 'Con 4 di energia e 5h hai spazio...' ma l'utente aveva detto '6 ore': set_user_time ha scritto 300 minuti (5h) senza segnalare l'arrotondamento.",
+  "tentativo1 (driver rotto, 20 turni): il modello ha gestito con pazienza input incoerenti senza mai colpevolizzare (bene, L5) ma non ha MAI proposto un'uscita ('vuoi rimandare la review?') dopo 15 turni di stallo — un utente ADHD confuso resterebbe nel limbo.",
+  "L3-AUTOMAZIONE: 'hai già fatto qualcosa di questa lista stamattina?' è una domanda che l'app può rispondersi da sola incrociando completedAt dei task di oggi prima del check-in.",
+  "L3-AUTOMAZIONE: se l'utente dice 'l'ho fatta' nel triage serale, il task andrebbe completato automaticamente (oggi manca perfino il percorso manuale: né outcome 'done' né complete_task in evening_review).",
+  "L3-AUTOMAZIONE: bootstrap notturno (h<5) risponde triggered:false muto — il client potrebbe schedulare il check-in per le 5:00/l'ora di sveglia dai Settings (wakeTime esiste già) invece di perdere il trigger.",
+  "L3-AUTOMAZIONE: la QR 'Attiva strict' propone durationMinutes=25 fisso anche se il task ha sessionDuration=45 nel seed: potrebbe derivare la durata dal task del piano.",
+  "L3-AUTOMAZIONE: l'override 'sposta X al pomeriggio' funziona ma serve dirlo: con slotContextsJson e i pattern orari (UserPattern) l'app potrebbe proporre da sola gli slot giusti e chiedere solo conferma."
+ ],
+ "leftForUiPass": [
+  "Today con login collaudo-tipo@probe.local (password collaudo: vedi COLLAUDO_PASSWORD in scripts/e2e/collaudo-62/seed-cohort.ts): DailyPlan di OGGI (2026-07-02) è il piano della review (id cmr2w9p7q00liib74ui7s46fs, threadId cmr2w73mz00i4ib74mnfn4s6m) con slot reali morning/afternoon/evening in DailyPlanTask. D43: la Today mostra le fasce o una Top3 piatta? Top3Ids=[scrivania, mail arretrate, bolletta].",
+  "D32: one-tap 'Inizia' dalla card Top3 — contare i tap REALI fino al lavoro e verificare se il timer parte da solo o atterra IN PAUSA (page.tsx:2810).",
+  "Verifica 'ti svegli e il piano c'è già': la Today deve mostrare il piano SENZA azioni utente; osservare anche che 3 task del piano hanno status='inbox' (scrivania, mail, regalo) — compaiono nella Today o il filtro per status li nasconde?",
+  "Effetto-fiducia del finding S2: 'Pagare la bolletta della luce' (dichiarata pagata nella review di 'ieri sera') è in Top3 di oggi con slot evening — osservare cosa prova/fa l'utente.",
+  "Chat all'apertura: thread morning_checkin di 'ieri' lasciato volutamente state='active' (cmr2vw8lp0033ib74bi43bg56, startedAt retrodatato) → bootstrap risponderà active_thread_exists (guard C2/D18): verificare cosa vede l'utente (thread riaperto? rollover al primo messaggio? morning check-in di oggi soppresso tutto il giorno).",
+  "D35: la QR 'Attiva strict' emessa nel thread morning di ieri sopravvive al reload della chat? (payloadJson non reidratato — la proposta one-tap dovrebbe sparire).",
+  "Finestra serale ripristinata a 20:00-23:00: la review serale di stasera per collaudo-tipo è di nuovo possibile (Review esiste solo per 2026-07-01).",
+  "Misura L1 completa del loop su browser (tap contati a mano): apertura→primo task avviato, step done, completamento con micro-feedback."
+ ],
+ "transcripts": [
+  "docs/tasks/62-evidenze/J2/trascrizione-morning-checkin.md",
+  "docs/tasks/62-evidenze/J2/trascrizione-evening-review.md",
+  "docs/tasks/62-evidenze/J2/tentativo1-trascrizione-evening-review.md"
+ ],
+ "spendUsd": 1.30327335
+}

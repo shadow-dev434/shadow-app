@@ -1,0 +1,20 @@
+[
+  {
+    "id": "cmr2vrr5p0005ib745hw1sf22",
+    "title": "Innaffiare le piante",
+    "status": "inbox",
+    "source": "recurring",
+    "recurringTemplateId": "cmr2vrten0007ib7401el0s2w",
+    "occurrenceDate": "2026-06-30",
+    "completedAt": null
+  },
+  {
+    "id": "cmr2vtj0e000hib749f50ig9k",
+    "title": "Stretching 10 minuti",
+    "status": "inbox",
+    "source": "recurring",
+    "recurringTemplateId": "cmr2vtkkx000jib741kjj9897",
+    "occurrenceDate": "2026-07-01",
+    "completedAt": null
+  }
+]

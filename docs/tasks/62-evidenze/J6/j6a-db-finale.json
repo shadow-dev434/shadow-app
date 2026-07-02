@@ -1,0 +1,75 @@
+{
+  "clientDate": "2026-07-02",
+  "tomorrow": "2026-07-03",
+  "threadId": "cmr2vwcld003lib74hxonr5uz",
+  "threadState": "completed",
+  "completed": true,
+  "non200": 0,
+  "candidates": [
+    {
+      "id": "cmr2nfnyz001zib00q0yjiuce",
+      "title": "Pagare il bollo auto",
+      "reason": "deadline"
+    },
+    {
+      "id": "cmr2nfnv6001xib00x7ydgocm",
+      "title": "Consegnare il progetto al cliente",
+      "reason": "deadline"
+    },
+    {
+      "id": "cmr2nfo8w0023ib002clwnfan",
+      "title": "Comprare le lampadine",
+      "reason": "new"
+    }
+  ],
+  "outcomes": {
+    "Pagare il bollo auto": "postponed",
+    "Consegnare il progetto al cliente": "postponed",
+    "Comprare le lampadine": "postponed"
+  },
+  "untouchedCandidates": [],
+  "moodIntake": {
+    "mood": 3,
+    "energyEnd": 4
+  },
+  "review": {
+    "id": "cmr2vygps007bib74gyv5pugg",
+    "date": "2026-07-02",
+    "mood": 3,
+    "energyEnd": 4,
+    "threadId": "cmr2vwcld003lib74hxonr5uz",
+    "whatDone": "",
+    "whatBlocked": ""
+  },
+  "dailyPlanTomorrow": {
+    "id": "cmr2vyh5b007dib74t3w35gx0",
+    "date": "2026-07-03",
+    "top3Ids": "[\"cmr2nfo8w0023ib002clwnfan\",\"cmr2nfnyz001zib00q0yjiuce\",\"cmr2nfnv6001xib00x7ydgocm\"]",
+    "doNowIds": "[\"cmr2nfo8w0023ib002clwnfan\",\"cmr2nfnyz001zib00q0yjiuce\",\"cmr2nfnv6001xib00x7ydgocm\"]",
+    "threadId": "cmr2vwcld003lib74hxonr5uz",
+    "originalPlanJsonPresent": true
+  },
+  "recurringInstancesMaterialized": [],
+  "taskStates": [
+    {
+      "title": "Aggiornare il curriculum",
+      "status": "planned",
+      "postponedCount": 1
+    },
+    {
+      "title": "Pagare il bollo auto",
+      "status": "planned",
+      "postponedCount": 1
+    },
+    {
+      "title": "Consegnare il progetto al cliente",
+      "status": "planned",
+      "postponedCount": 1
+    },
+    {
+      "title": "Comprare le lampadine",
+      "status": "inbox",
+      "postponedCount": 1
+    }
+  ]
+}

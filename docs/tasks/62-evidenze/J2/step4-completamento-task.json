@@ -1,0 +1,111 @@
+{
+  "calls": [
+    {
+      "call": "POST /api/learning-signal task_started",
+      "status": 200,
+      "body": {
+        "signal": {
+          "id": "cmr2vzi8f007wib749qsor2qy",
+          "userId": "cmr2nff1e0000ib00vl75hs28",
+          "signalType": "task_started",
+          "taskId": "cmr2nfge20007ib004da1wf30",
+          "category": null,
+          "context": null,
+          "timeSlot": "morning",
+          "value": 1,
+          "metadata": "{}",
+          "processed": false,
+          "processedAt": null,
+          "createdAt": "2026-07-02T02:29:50.084Z"
+        },
+        "profile": null,
+        "message": "Signal saved but no adaptive profile found to update."
+      }
+    },
+    {
+      "call": "PATCH /api/tasks/cmr2nfge20007ib004da1wf30 step 1",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "call": "PATCH /api/tasks/cmr2nfge20007ib004da1wf30 step 2",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "call": "PATCH /api/tasks/cmr2nfge20007ib004da1wf30 step 3",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "call": "PATCH complete",
+      "status": 200,
+      "body": {
+        "task": {
+          "id": "cmr2nfge20007ib004da1wf30",
+          "title": "Preparare la relazione trimestrale",
+          "description": "",
+          "importance": 5,
+          "urgency": 4,
+          "deadline": null,
+          "resistance": 3,
+          "size": 3,
+          "delegable": false,
+          "category": "general",
+          "context": "any",
+          "avoidanceCount": 0,
+          "lastAvoidedAt": null,
+          "quadrant": "do_now",
+          "priorityScore": 8.2,
+          "decision": "do_now",
+          "decisionReason": "",
+          "status": "completed",
+          "microSteps": "[{\"text\":\"Aprire il template\",\"done\":true},{\"text\":\"Compilare i dati Q2\",\"done\":true},{\"text\":\"Rileggere e inviare\",\"done\":true}]",
+          "microStepsRaw": "",
+          "currentStepIdx": 3,
+          "executionMode": "none",
+          "sessionFormat": "standard",
+          "sessionDuration": 45,
+          "completedAt": "2026-07-02T02:29:53.434Z",
+          "createdAt": "2026-07-01T22:30:17.786Z",
+          "updatedAt": "2026-07-02T02:29:54.107Z",
+          "userId": "cmr2nff1e0000ib00vl75hs28",
+          "delegatedToId": null,
+          "delegationNote": "",
+          "delegationStatus": "",
+          "reminderAt": null,
+          "reminderSent": false,
+          "calendarEventId": "",
+          "aiClassified": true,
+          "aiClassificationData": "{}",
+          "postponedCount": 0,
+          "source": "manual",
+          "recurringTemplateId": null,
+          "occurrenceDate": null
+        }
+      }
+    },
+    {
+      "call": "POST /api/learning-signal task_completed",
+      "status": 200
+    }
+  ],
+  "taskAfter": {
+    "id": "cmr2nfge20007ib004da1wf30",
+    "title": "Preparare la relazione trimestrale",
+    "status": "completed",
+    "completedAt": "2026-07-02T02:29:53.434Z",
+    "microSteps": "[{\"text\":\"Aprire il template\",\"done\":true},{\"text\":\"Compilare i dati Q2\",\"done\":true},{\"text\":\"Rileggere e inviare\",\"done\":true}]",
+    "currentStepIdx": 3
+  },
+  "learningSignals": [
+    {
+      "signalType": "task_started",
+      "createdAt": "2026-07-02T02:29:50.084Z"
+    },
+    {
+      "signalType": "task_completed",
+      "createdAt": "2026-07-02T02:29:54.622Z"
+    }
+  ]
+}

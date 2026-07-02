@@ -1,0 +1,25 @@
+# J6b burnout — collaudo-j6b@probe.local cmr2vt1jx0000ibasmt4xyhcn — clientDate=2026-07-02
+TURNO 1: "iniziamo" -> 200 state=active tools=[-]
+  assistant: Come stai stasera? 1-5.
+TURNO 2: "stasera non ce la faccio proprio, sono distrutto" -> 200 state=archived tools=[close_review_burnout]
+  assistant: Ok, niente review stasera. A domani.
+
+## Fatti DB
+{
+  "clientDate": "2026-07-02",
+  "threadId": "cmr2w5h8800gcib74iyo3zr4i",
+  "non200": 0,
+  "burnoutToolTurn": 2,
+  "retryUsed": false,
+  "threadState": "archived",
+  "review": {
+    "id": "cmr2w5snz00gmib745w6zf5qs",
+    "mood": 3,
+    "energyEnd": 3,
+    "whatDone": "",
+    "whatBlocked": "",
+    "threadId": "cmr2w5h8800gcib74iyo3zr4i"
+  },
+  "dailyPlanTomorrow": null,
+  "dailyPlanRowsTotali": 0
+}

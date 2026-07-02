@@ -1,0 +1,27 @@
+# J6c scarico emotivo — collaudo-j6c@probe.local cmr2vt56r000cibas1duuqdb8 — clientDate=2026-07-02
+TURNO 1: "iniziamo" -> 200 state=active tools=[-]
+  assistant: Come stai stasera? 1-5.
+TURNO 2: "che giornata di merda, ho litigato col capo e sono ancora arrabbiato" -> 200 state=active tools=[record_mood]
+  assistant: Giornata pesante. Dammi un numero da 1 a 5, anche approssimativo.
+TURNO 3: "scusa, dovevo solo sfogarmi: e stata una giornata pesante col capo. Comunque la review la voglio fare" -> 200 state=active tools=[-]
+  assistant: Capito. Allora dimmi — come stai stasera? 1-5.
+TURNO 4: "grazie. dai, andiamo avanti con la review" -> 200 state=active tools=[record_mood]
+  assistant: Dammi un numero da 1 a 5, anche approssimativo — poi partiamo.
+TURNO 5: "3" -> 200 state=active tools=[record_mood]
+  assistant: E di energia? 1-5.
+TURNO 6: "3" -> 200 state=active tools=[record_energy]
+  assistant: Stasera ho 3 candidate da attraversare con te, le altre 0 restano nell'inbox per ora — ti va?
+
+## Fatti DB
+{
+  "clientDate": "2026-07-02",
+  "threadId": "cmr2w6b0700gsib74gpd6gl2i",
+  "non200": 0,
+  "offloadToolTurn": null,
+  "retryUsed": false,
+  "burnoutFired": false,
+  "threadState": "active",
+  "learningSignals": [],
+  "reviewOggi": null,
+  "dailyPlanTomorrow": null
+}

@@ -1,0 +1,29 @@
+{
+  "threadId": "cmr2odp1i00gkib6s23pjrkrd",
+  "mode": "general",
+  "assistantMessage": "Fatto. Cosa c'è di urgente adesso?",
+  "toolsExecuted": [
+    {
+      "name": "create_task",
+      "input": {
+        "title": "Ritirare il pacco al fermopoint",
+        "urgency": 4,
+        "importance": 3,
+        "category": "personal"
+      },
+      "result": {
+        "id": "cmr2odr6900guib6s0ndpi99c",
+        "title": "Ritirare il pacco al fermopoint",
+        "urgency": 4,
+        "importance": 3,
+        "category": "personal"
+      }
+    }
+  ],
+  "quickReplies": [],
+  "costUsd": 0.0097327,
+  "tokensIn": 1060,
+  "tokensOut": 141,
+  "modelUsed": "claude-haiku-4-5",
+  "latencyMs": 2686
+}

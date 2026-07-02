@@ -1,0 +1,54 @@
+{
+  "insights": [
+    {
+      "id": "d3f4a1ba-911e-44d9-bfbe-c3585ae55961",
+      "type": "warning",
+      "title": "Aree ad alto rischio di blocco",
+      "message": "So che i task di tipo \"general\" ti bloccano spesso. Hai 3 task in queste categorie. Te li propongo in forma ridotta o più tardi.",
+      "confidence": 0.525,
+      "basedOn": [
+        "categoryBlockRates",
+        "avoidanceProfile"
+      ],
+      "actionable": true,
+      "action": "reduce_or_reschedule"
+    },
+    {
+      "id": "8698d4a6-7248-439d-bb9d-a2da970d6d15",
+      "type": "suggestion",
+      "title": "Strategia di rientro",
+      "message": "Ti propongo prima un task breve e gratificante, perché so che ti aiuta a entrare in momentum. Poi possiamo affrontare quelli più pesanti.",
+      "confidence": 0.42500000000000004,
+      "basedOn": [
+        "averageAvoidanceRate",
+        "rewardSensitivity",
+        "recoverySuccessRate"
+      ],
+      "actionable": true,
+      "action": "momentum_start"
+    }
+  ],
+  "triggers": [
+    {
+      "type": "avoidance_pattern",
+      "taskId": "cmr2nfmg2001jib002zwtwfol",
+      "category": "health",
+      "evidence": "Task \"Prenotare la visita medica di controllo\" evitato 4 volte",
+      "priority": "high"
+    },
+    {
+      "type": "avoidance_pattern",
+      "taskId": "cmr2nfm7z001hib009dw0vuhs",
+      "category": "general",
+      "evidence": "Task \"Compilare la dichiarazione dei redditi\" evitato 5 volte",
+      "priority": "high"
+    },
+    {
+      "type": "inconsistency",
+      "taskId": "cmr2nfmg2001jib002zwtwfol",
+      "category": "health",
+      "evidence": "Task importante (4/5) ma evitato 4 volte",
+      "priority": "high"
+    }
+  ]
+}

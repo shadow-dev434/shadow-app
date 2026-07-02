@@ -1,0 +1,5 @@
+j6e cmr2o27ef0000ibzkwztbx0f3 spendUsd=0.774676
+j6f cmr2o2ab3000cibzkgxxmz54y spendUsd=0.286749
+j6g cmr2o2bfo000iibzkzm8e4385 spendUsd=0.000000
+j6h cmr2o2dtm000sibzkm3of5okm spendUsd=0.924709
+TOTALE=1.986134

@@ -1,0 +1,134 @@
+{
+ "journey": "J7 — Ricorrenti e Cielo (utente collaudo-ricorrenti@probe.local, userId cmr2nfop90026ib00hs8vya58)",
+ "steps": [
+  {
+   "step": "0. Sanity: utente coorte pulito (0 task, 0 template, 0 thread) + dev server raggiungibile",
+   "expected": "Profilo pulito senza task",
+   "observed": "userId cmr2nfop90026ib00hs8vya58, 0 task / 0 RecurringTask / 0 thread; server 200 su / e /api/health (nota: primo curl su localhost fallito per risoluzione IPv6, ok su 127.0.0.1)",
+   "verdict": "PASS"
+  },
+  {
+   "step": "1. Ricorrenza dalla chat: 'ogni martedì e giovedì alle 18 devo innaffiare le piante, me lo ricordi?' (postTurn general)",
+   "expected": "HARD 200; WARN tool di ricorrenza chiamato; RecurringTask in DB con frequency/weekdays/startDate corretti",
+   "observed": "HTTP 200 al primo colpo, toolsExecuted=[create_task, set_task_recurrence] (zero retry). DB: template 'Innaffiare le piante' frequency=weekly weekdays=[2,4] startDate=2026-07-02 active=true; istanza legata occurrenceDate=2026-07-02, source flippato manual→recurring. NOTE UX: 'alle 18' scartato in silenzio (RecurringTask non ha orario, nessun reminder), e l'LLM ha messo deadline 2026-07-07 sulla prima istanza (le materializzate successive hanno deadline null → gemelle incoerenti).",
+   "verdict": "PASS"
+  },
+  {
+   "step": "2. Materializzazione lazy: dove avviene e chi la innesca (oggi 2026-07-02 = giovedì, matcha [2,4]; creata comunque anche la daily 'Stretching 10 minuti' via chat, tool chiamato al primo colpo)",
+   "expected": "L'istanza di oggi si materializza on-read con la chiamata che la UI fa per la Today/inbox",
+   "observed": "Censimento codice: materializeRecurringForDate è chiamata SOLO da get_today_tasks (tools.ts:1109, chat) e initEveningReview (orchestrator.ts:1248, per domani). Verifica live dopo retrodatazione delle prime istanze: GET /api/tasks → 200, GET /api/daily-plan → 200, POST /api/daily-plan → 200 e ZERO istanze materializzate; un turno chat 'cosa ho da fare oggi?' (get_today_tasks) materializza entrambe le istanze con recurringTemplateId+occurrenceDate=2026-07-02, source=recurring. La meccanica on-read funziona ma NON vive sulle superfici Today/inbox → finding S2. Bonus: il modello vede le istanze stale retrodatate come 'doppioni' e propone di archiviarle.",
+   "verdict": "WARN"
+  },
+  {
+   "step": "3. Completare l'istanza di oggi via API (stessa chiamata UI: PATCH /api/tasks/[id] {status:'completed',completedAt}, cfr. tasks/page.tsx:2545) e verificare il Cielo (GET /api/sky)",
+   "expected": "PATCH 200; contatore Cielo +1, stella di oggi accesa",
+   "observed": "PATCH 200, DB status=completed+completedAt valorizzato; GET /api/sky: litStars 0→1, freshStarGlobalIndex=0, costellazione 'La Lucciola' 1/4. Risposta salvata (03-sky-after.json).",
+   "verdict": "PASS"
+  },
+  {
+   "step": "4. Stop della ricorrenza dalla chat: 'basta stretching tutti i giorni, rimuovilo'",
+   "expected": "WARN stop tool chiamato; HARD se chiamato: active=false in DB e nessuna istanza nuova alla materializzazione ripetuta",
+   "observed": "toolsExecuted=[get_today_tasks, stop_task_recurrence] al primo colpo; template active=false in DB. Rimaterializzazione ripetuta dopo aver liberato lo slot (template,oggi): materializeRecurringForDate diretta → 0 creati; turno chat reale con get_today_tasks → 0 istanze stretching nuove per oggi. Messaggio di conferma corretto ('non ricomparirà più, le istanze già in lista restano'). NOTA: nel turno lista successivo il modello presenta ancora l'istanza stale di stretching tra le cose 'di oggi' con etichetta 'ricorrente'.",
+   "verdict": "PASS"
+  },
+  {
+   "step": "5. EDGE D25: task seed source='review_carryover' (via Prisma) reso ricorrente dalla chat → la PRIMA occorrenza accende la stella?",
+   "expected": "Da lit-stars.ts:10-14 + materialize.ts:189: NO per la prima occorrenza, SÌ dalle successive",
+   "observed": "CONFERMATO ESATTO: set_task_recurrence chiamato al primo colpo, source resta 'review_carryover' dopo il set; completamento prima occorrenza → litStars 1→1 (stella NON accesa); seconda occorrenza materializzata (source='recurring') completata → litStars 1→2. L'utente fa l'abitudine il giorno 1 e non riceve la stella, senza alcuna spiegazione.",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "6. D49: superficie per LISTARE le ricorrenze attive",
+   "expected": "Se esiste solo la chat: risposta completa e accurata a 'che ricorrenze ho attive?'",
+   "observed": "CONFERMATO: nessuna route API né UI (grep: solo l'export GDPR include recurringTasks). In chat il modello ammette 'Non ho uno strumento per elencare le ricorrenze attive' (onesto, zero allucinazioni). Follow-up sulla via che propone (get_today_tasks): risposta FUORVIANTE — presenta lo stretching FERMATO come 'ricorrente attivo', ammette di non conoscere le cadenze, ripropone di archiviare i 'doppioni' e suggerisce di 'controllare direttamente nell'app' dove non esiste alcuna superficie. Causa: il flag recurring di get_today_tasks (tools.ts:1150) è recurringTemplateId!=null sull'istanza, non lo stato active del template.",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "7. Tab Cielo visivo (stella accesa, empty state D48, comprensibilità da utente)",
+   "expected": "Verifica browser",
+   "observed": "SKIP: superficie UI riservata al passaggio seriale browser. Preparazione fatta a codice: SkyView.tsx:173-179 con 0 stelle mostra solo 'nome costellazione + 0/N stelle', nessuna spiegazione né CTA (D48 plausibile a codice); stato pronto per la verifica visiva: litStars=2, 'La Lucciola' 2/4.",
+   "verdict": "SKIP"
+  }
+ ],
+ "findings": [
+  {
+   "title": "La materializzazione dei ricorrenti non è innescata da NESSUNA superficie Today/inbox: solo un turno chat in cui il modello sceglie di chiamare get_today_tasks (o la review serale, per domani) fa comparire l'istanza di oggi",
+   "severity": "S2",
+   "repro": "1) Utente con RecurringTask attivo (daily) e nessuna istanza per oggi. 2) Chiamare ciò che la UI chiama: GET /api/tasks (inbox), GET /api/daily-plan e POST /api/daily-plan (Today). 3) Nessuna istanza creata (verificato live: 0 righe con occurrenceDate=oggi). 4) Un turno chat 'cosa ho da fare oggi?' materializza. Conseguenza: chi apre l'app e guarda solo Today/inbox senza chattare non vede l'abitudine di oggi — e la promessa detta dal modello stesso al passo 1 ('il task ti ricomparirà in lista') salta. Anche nel morning check-in la materializzazione dipende dalla SCELTA del modello di chiamare get_today_tasks, non è garantita. I giorni saltati non vengono mai recuperati.",
+   "evidence": "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\02c-ui-routes-materializzazione.json",
+   "fileLine": "src/app/api/tasks/route.ts:7 (GET senza materializeRecurringForDate; unici caller: src/lib/chat/tools.ts:1109 e src/lib/chat/orchestrator.ts:1248)",
+   "dossierRef": ""
+  },
+  {
+   "title": "Le istanze ricorrenti non completate dei giorni passati restano in inbox per sempre e si accumulano come doppioni indistinguibili; il modello le interpreta come errore e propone (due volte) di ARCHIVIARLE",
+   "severity": "S3",
+   "repro": "1) Ricorrenza daily con istanza di ieri non completata. 2) Nuovo giorno: la materializzazione crea l'istanza di oggi. 3) In lista ci sono due task identici (nessuna data visibile, solo badge 'ricorrente'); get_today_tasks li mostra entrambi (filtro occurrenceDate lte oggi, tools.ts:1119-1122). 4) In chat il modello dice 'vedo doppioni... vuoi che li archivi?' — se l'utente accetta rischia di archiviare l'istanza di OGGI. Con un'abitudine daily trascurata: +1 duplicato al giorno.",
+   "evidence": "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\02d-thread-cosa-ho-oggi.md",
+   "fileLine": "src/lib/chat/tools.ts:1119",
+   "dossierRef": ""
+  },
+  {
+   "title": "D49 confermato e aggravato: ricorrenze write-only — nessuna superficie API/UI per listarle, e il fallback chat dà una risposta fuorviante (ricorrenza FERMATA presentata come attiva, cadenze ignote, rinvio a una UI inesistente)",
+   "severity": "S3",
+   "repro": "1) Tre template in DB: piante weekly [2,4] attivo, acqua daily attivo, stretching daily FERMATO. 2) Chat: 'che ricorrenze ho attive?' → 'Non ho uno strumento per elencare le ricorrenze attive'. 3) Accettare la sua proposta ('ti mostro i task di oggi') → risponde 'Hai 3 task ricorrenti attivi' includendo lo stretching fermato, esclude l'acqua (istanza completata quindi invisibile), non sa dire le cadenze e suggerisce di 'controllare direttamente nell'app'. Causa: get_today_tasks espone recurring=recurringTemplateId!=null sull'istanza (tools.ts:1150), non active/frequency del template; unico posto dove i template escono è l'export GDPR (export/route.ts:25).",
+   "evidence": "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\06b-thread-followup-ricorrenze.md",
+   "fileLine": "src/lib/chat/tools.ts:1150",
+   "dossierRef": "D49"
+  },
+  {
+   "title": "D25 confermato live: la prima occorrenza di un ricorrente nato da task con source non-manual (review_carryover) non accende la stella del Cielo; le successive sì",
+   "severity": "S3",
+   "repro": "1) Task con source='review_carryover'. 2) Chat: 'rendilo ricorrente tutti i giorni' → set_task_recurrence ok, source resta 'review_carryover' (materialize.ts:189). 3) Completarlo via PATCH /api/tasks/[id] → GET /api/sky: litStars invariato (1→1). 4) Occorrenza materializzata del giorno dopo (source='recurring') completata → litStars 1→2. Il giorno in cui l'utente avvia l'abitudine dal riporto della review non riceve la ricompensa, senza spiegazione (edge dichiarato 'accettato in v1' nel commento di lit-stars.ts, ma resta invisibile all'utente).",
+   "evidence": "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\05-sky-prima-occorrenza.json",
+   "fileLine": "src/lib/sky/lit-stars.ts:24",
+   "dossierRef": "D25"
+  },
+  {
+   "title": "'alle 18' e 'me lo ricordi?' scartati in silenzio: la ricorrenza non ha orario né reminder e il modello conferma senza dirlo; in più l'LLM inventa una deadline (7 luglio) sulla prima istanza che le istanze materializzate non hanno",
+   "severity": "UX",
+   "repro": "1) Chat: 'ogni martedì e giovedì alle 18 devo innaffiare le piante, me lo ricordi?'. 2) Il modello risponde 'Fatto. Ogni martedì e giovedì il task ti ricomparirà in lista' — nessun cenno al fatto che alle 18 non succederà NULLA (RecurringTask non ha campo orario, nessuna notifica). 3) create_task ha incluso deadline 2026-07-07 sulla prima istanza; le materializzate hanno deadline null → in lista compaiono gemelle incoerenti ('una scade il 7 luglio, una no', parole del modello stesso al passo 4).",
+   "evidence": "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\01-turno1-response.json",
+   "fileLine": "prisma/schema.prisma:180",
+   "dossierRef": ""
+  },
+  {
+   "title": "D48 plausibile a codice: la vista Cielo con 0 stelle mostra solo 'nome costellazione + 0/N stelle', senza spiegare cosa sono le stelle né come si accendono, senza CTA",
+   "severity": "UX",
+   "repro": "1) Utente senza ricorrenti completati → GET /api/sky litStars=0. 2) SkyView.tsx renderizza solo il nome della costellazione e '0 / 4 stelle' (righe 173-179): nessun testo che leghi stelle↔task ricorrenti, nessun invito a crearne uno. Conferma visiva rimandata al passaggio UI seriale.",
+   "evidence": "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\03-sky-before.json",
+   "fileLine": "src/features/sky/SkyView.tsx:173",
+   "dossierRef": "D48"
+  }
+ ],
+ "uxNotes": [
+  "L9 (il Cielo è un'isola?): SÌ, by-design ma totale. SkyView è watch-only (dichiarato nel commento), nessun link da/verso le ricorrenze, nessuna spiegazione del legame ricorrente→stella, e al completamento di un ricorrente né l'API né la chat annunciano la stella accesa: l'utente deve scoprire da solo che qualcosa è cambiato in un altro tab. Il ponte emotivo del meccanismo (fai l'abitudine → il cielo si accende) non viene mai detto all'utente dentro l'app.",
+  "L3 (materializzazione solo on-open): peggio — solo on-CHAT. Se non apri l'app (o la apri ma non chatti) l'istanza di oggi non nasce mai e il giorno saltato non viene recuperato retroattivamente: nessuna traccia, nessun 'ieri l'hai saltato'. In compenso l'istanza materializzata e NON completata non è persa: resta in inbox per sempre come doppione indistinguibile (senza data visibile) accanto a quella nuova.",
+  "L3-AUTOMAZIONE: materializzare le istanze ricorrenti di oggi anche in GET /api/tasks e GET/POST /api/daily-plan (o con un cron giornaliero), così la Today/inbox mantiene la promessa 'ricompare da solo' anche senza turno chat.",
+  "L3-AUTOMAZIONE: ciclo di vita delle istanze ricorrenti scadute non completate — auto-archiviazione a fine giornata (o rollover esplicito con etichetta 'di ieri'), con traccia non colpevolizzante, per evitare l'accumulo di doppioni e le proposte di archiviazione del modello.",
+  "L3-AUTOMAZIONE: tool chat list_recurrences (template attivi + cadenza + prossima occorrenza) — renderebbe vera la gestione solo-chat (D49) e eliminerebbe le risposte fuorvianti del fallback get_today_tasks.",
+  "Etichetta oscura: il badge 'ricorrente' (UI page.tsx:2403 e flag chat tools.ts:1150) si basa su recurringTemplateId dell'istanza, che sopravvive allo stop del template → un task la cui ricorrenza è stata fermata continua a dichiararsi 'ricorrente' sia in UI sia in chat.",
+  "Promessa non mantenuta dal modello: alla richiesta 'me lo ricordi alle 18?' conferma 'Fatto' senza chiarire che non esiste alcun reminder a orario; l'utente ADHD che si fida scoprirà alle 18:30 che nessuno l'ha avvisato.",
+  "Rischio distruttivo guidato dall'AI: in DUE turni distinti il modello ha proposto di 'archiviare i doppioni' che in realtà sono istanze ricorrenti legittime (quella stale di ieri + quella di oggi); un 'sì' distratto cancella l'occorrenza di oggi dell'abitudine.",
+  "Positivo: le conferme post-tool sono asciutte e meccanicamente esatte ('tornerà da solo ogni martedì e giovedì', 'non ricomparirà più nei giorni futuri, le istanze già in lista restano') e il modello NON ha mai allucinato ricorrenze inesistenti — quando non sa, lo dice ('Non ho uno strumento per elencare le ricorrenze attive').",
+  "Refuso di registro nel turno D49: 'Quello che posso fare è mostrati i task... e dirvi quali' — mix dare-del-tu/voi in una sola frase (evidenza 06-thread-lista-ricorrenze.md).",
+  "Incoerenza dati visibile all'utente: la prima istanza creata dalla chat può portarsi una deadline inventata dall'LLM (2026-07-07) che le istanze materializzate non hanno → 'due Innaffiare le piante, una scade il 7 luglio e una no' (parole del modello)."
+ ],
+ "leftForUiPass": [
+  "Tab Cielo con collaudo-ricorrenti (stato pronto: litStars=2, 'La Lucciola' 2/4): la stella risulta accesa visivamente? L'animazione fresh-star/pulse si vede? La sorpresa cosmetica (twin/brighter) rende leggibile il progresso?",
+  "Empty state D48 con un utente SENZA ricorrenti (es. collaudo-tipo): il tab mostra solo '0/4 stelle' senza spiegazione né CTA? Un utente capisce DA SOLO come si accendono le stelle?",
+  "Today/inbox visivo: come appaiono i doppioni di istanze ricorrenti stale (badge 'ricorrente' senza data)? L'utente può distinguere l'istanza di oggi da quella di ieri?",
+  "Al completamento di un task ricorrente dalla UI: c'è un qualunque feedback che una stella si è accesa (toast, animazione, invito ad aprire il Cielo)? A livello API non esiste.",
+  "Badge 'ricorrente' su istanza il cui template è stato fermato (stretching): la UI lo mostra ancora? (atteso sì, page.tsx:2403 usa recurringTemplateId)."
+ ],
+ "transcripts": [
+  "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\01-thread-crea-piante.md",
+  "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\02a-thread-crea-stretching.md",
+  "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\02d-thread-cosa-ho-oggi.md",
+  "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\04-thread-stop-stretching.md",
+  "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\04-thread-lista-dopo-stop.md",
+  "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\05-thread-carryover-ricorrente.md",
+  "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\06-thread-lista-ricorrenze.md",
+  "C:\\shadow-app\\docs\\tasks\\62-evidenze\\J7\\06b-thread-followup-ricorrenze.md"
+ ],
+ "spendUsd": 0.0376
+}

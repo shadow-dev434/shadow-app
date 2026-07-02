@@ -1,0 +1,23 @@
+utente: collaudo-procrastinatore@probe.local (cmr2nflf2001aib00bjpe6yev)
+baseline: signals=4 totalSignals=0 confidence=0.3
+POST /api/micro-feedback drain_activate -> 200; updatesApplied=["totalSignals","confidenceLevel","lastUpdatedFrom"]
+POST /api/learning-signal micro_feedback -> 200; updatesApplied=["totalSignals","confidenceLevel","lastUpdatedFrom"]
+POST /api/ai-assistant micro_feedback -> 200; insightMessage="Grazie per il feedback."; profileUpdates={}
+dopo 1 micro-feedback UI: signals 4→6 (delta 2); totalSignals 0→2; confidence 0.3→0.305
+categorySuccessRates: {} → {} (drain_activate≠drain_vs_activate ⇒ atteso invariato)
+"Troppo difficile" + block_reason: statuses=[200,200,200,200,200] signals 6→10 (delta 4 per UN gesto utente)
+task.avoidanceCount 5→5 (segnale task_avoided NON tocca il contatore del task)
+ai-assistant block_reason(['anxiety','too_big']): insight="Grazie. Userò questa informazione per aiutarti meglio." updates={}
+UserMemory dopo i feedback: [{"memoryType":"avoidance","category":"general","key":"category_general_block_reason","value":"anxiety,too_big","strength":0.5,"evidence":1}]
+GET /api/ai-assistant -> 200; insights=2 triggers=3
+POST /api/ai-assistant nudge -> 200; nudge keys=id,strategy,intensity,title,message,actionLabel,dismissLabel,contextReason,adaptiveReason,delaySeconds
+nudge contiene taskId? NO (D2: il client apre il primo task non completato dello store, page.tsx:1312)
+POST /api/ai-assistant task_recommendation -> 200
+engine recovery [too_hard]: type=reduce — Il task è troppo difficile ora. Riduciamo l'ambizione. (2 step, durata 3m)
+engine recovery [avoided]: type=reformat — Hai evitato questo task. Cambiamo formato per ridurre la barriera. (2 step, durata 5m)
+engine recovery [distracted]: type=micro_reentry — Distrazione. Rientro rapido con un micro-step. (2 step, durata 5m)
+engine recovery [ran_out_of_time]: type=reduce — Tempo scaduto. Segna dove sei e continua dopo. (2 step, durata 0m)
+engine recovery [stuck]: type=change_task — Sei bloccato. Cambiamo task — qualcosa di facile per riprendere momentum. (0 step, durata 10m)
+UI (page.tsx:2884-2885): SOLO 2 opzioni hardcoded — "Micro-sessione 3 min" (reduce) e "Pausa" (break). generateRecoveryAction non è importato da nessun file (grep: solo la definizione).
+NOTA: handleRecovery("reduce") registra recovery_success SUBITO al tap (page.tsx:2686), prima che il recovery sia riuscito.
+spesa LLM utente J5 totale: $1.8604

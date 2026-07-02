@@ -1,0 +1,15 @@
+{
+  "status": 200,
+  "json": {
+    "threadId": "cmr2w0wbd008uib740fu0p7ba",
+    "mode": "general",
+    "assistantMessage": "Non ho uno strumento per elencare le ricorrenze attive. Quello che posso fare è mostrati i task di oggi e dirvi quali sono ricorrenti quando li vedi, oppure gestire una ricorrenza se sai già quale task vuoi modificare.\n\nVuoi che ti mostri i task di oggi? Così vediamo insieme cosa c'è in lista.",
+    "toolsExecuted": [],
+    "quickReplies": [],
+    "costUsd": 0.0014612000000000002,
+    "tokensIn": 421,
+    "tokensOut": 90,
+    "modelUsed": "claude-haiku-4-5",
+    "latencyMs": 2472
+  }
+}

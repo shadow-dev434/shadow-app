@@ -1,0 +1,129 @@
+{
+ "journey": "J4 — Il ritorno dopo assenza (collaudo-rientro@probe.local, userId cmr2nfity000sib009j19j8x8). Seed: thread general -4gg (2 msg), DailyPlan -4gg, Review -5gg, 2 task planned scaduti (ISEE -2gg, assicurazione -1gg). Eseguito API+DB alle 00:49-01:05 ora di Roma del 2026-07-02; nessun tool browser usato. Stato lasciato VIVO in DB per il passaggio UI seriale (due thread active: general cmr2odp1i00gkib6s23pjrkrd + evening_review cmr2oc3zn00d6ib6s63lnnf9z).",
+ "steps": [
+  {
+   "step": "1. Snapshot DB PRIMA (thread/piani/review/task)",
+   "expected": "Stato seed integro: 1 thread general active -4gg, 1 piano -4gg, 1 review -5gg, 2 task planned scaduti",
+   "observed": "Confermato: thread cmr2nfjuq0013 active startedAt=lastTurnAt=2026-06-27T22:00Z, piano 2026-06-28, review -5gg, ISEE dl 30/06 + assicurazione dl 01/07 entrambi planned. Evidenza 01-db-before.json",
+   "verdict": "PASS"
+  },
+  {
+   "step": "2. Apertura app: GET /api/chat/active-thread?clientTime=00:49&clientDate=2026-07-02 (fuori finestra serale default)",
+   "expected": "Normalizzazione osservabile senza perdita dati; shape {activeThread, eveningReview}",
+   "observed": "Rollover a giorno-calendario (Task 53): il thread general di 4 giorni viene archiviato (state active->archived, endedAt valorizzato, 2 messaggi PRESERVATI, riappare in sidebar come 'chat del 28/06/2026'). Risposta: activeThread=null, eveningReview.shouldStart=false. Spina 8c non attiva (fuori finestra) ma il rollover ne e' superset per i non-evening. Nessuna riga persa. Evidenze 02-*",
+   "verdict": "PASS"
+  },
+  {
+   "step": "3. POST /api/chat/bootstrap al rientro (ore 00:49 Roma)",
+   "expected": "Parte il morning check-in con messaggio di rientro",
+   "observed": "200 {triggered:false} SENZA campo reason: e' il gate ora-Roma<5 (bootstrap/route.ts, MORNING_EARLY_HOUR) che sopprime il check-in di notte per design. Nessun thread creato, nessun messaggio di rientro: l'utente che rientra di notte trova la chat vuota, zero guida, task scaduti mai nominati. Contenuto del check-in esercitato al passo 4 via turno diretto (simulazione del path ora>=5). Evidenza 03-bootstrap-response.json",
+   "verdict": "WARN"
+  },
+  {
+   "step": "4. Contenuto check-in (POST /api/chat/turn mode=morning_checkin __auto_start__, simulazione ora>=5)",
+   "expected": "Messaggio di rientro senza colpevolizzazione + UN passo chiaro proposto (L5, L7)",
+   "observed": "Apre con saluto standard 'Buongiorno Collaudo! Come stai di umore oggi, da 1 a 5?': NESSUN riconoscimento dell'assenza (il dato RE_ENTRY esiste solo in evening_review). Zero colpevolizzazione (bene), ma anche zero passo proposto: si parte dal mood-gate. Evidenza 03b-checkin-turn0.json",
+   "verdict": "WARN"
+  },
+  {
+   "step": "5. Conversazione da rientrante scoraggiato ('scusa se sono sparito, ho mollato tutto'), 9 turni totali",
+   "expected": "Tono senza shaming, i 2 task scaduti nominati con conteggi veri, rollover proposto, un passo chiaro",
+   "observed": "Tono caldo ('Capita.'), MAI il conteggio dei giorni, conteggi task VERI (t6: 'ISEE scaduto il 30 giugno, assicurazione il 1 luglio' — date Roma corrette; t8: 'Due cose in lista, entrambe scadute'). MA: mood chiesto 4 volte consecutive ignorando la richiesta esplicita 'dimmi solo la prima cosa da fare' (t3 risponde 'Umore da 1 a 5, veloce?'); a t5 fabbrica set_user_energy(level:3) da un messaggio che non conteneva alcun valore; a t7, DOPO che set_user_mood+set_user_energy risultano eseguiti, dichiara 'Ho ancora bisogno di registrare umore ed energia' e richiede l'energia. Il passo chiaro arriva solo a t6; commit_today_plan a t9 con rollover dei 2 scaduti nel Top3 di oggi + offer_strict_mode/QR start_strict (promessa Task 61 mantenuta). Trascrizione completa 04-trascrizione-checkin-rientro.md (20 messaggi)",
+   "verdict": "WARN"
+  },
+  {
+   "step": "6. Variante re-entry: PATCH /api/settings finestra 00:00-23:59 + retrodata lastTurnAt a -4gg + GET active-thread in finestra (spina 8c)",
+   "expected": "Spina 8c: archivia il set non-terminale, activeThread=null, shouldStart=true",
+   "observed": "Esattamente da contratto: il thread morning_checkin active viene archiviato (updateMany del set non-terminale, storia preservata), activeThread=null, eveningReview.shouldStart=true. Evidenze 05-active-thread-in-window.json, 05-diff-spina.txt",
+   "verdict": "PASS"
+  },
+  {
+   "step": "7. Avvio evening_review threadId=null 'iniziamo' -> apertura re-entry 8c",
+   "expected": "Saluto di rientro band=light senza numero di giorni, poi domanda mood (WARN+1 retry se assente)",
+   "observed": "PRIMO tentativo: 'Bentornato. Come stai stasera? 1-5.' — re-entry presente, registro direct preservato, ZERO conteggio giorni, unica domanda mood. Walk successivo (mood 2, energia 3): 'Stasera ho 2 candidate da attraversare con te — ti va?' — conteggio vero, qualitativo, nessuna archiviazione in blocco. Evidenze 05-review-turn*.json, 05-trascrizione-review-reentry.md",
+   "verdict": "PASS"
+  },
+  {
+   "step": "8. D40: GET /api/chat/threads con general + evening_review entrambi vivi",
+   "expected": "Due thread con label indistinguibile 'Oggi'",
+   "observed": "CONFERMATA: [Oggi general active isActive=true] + [Oggi evening_review active isActive=true] — label identica, entrambi isActive, nessun campo di disambiguazione per la UI oltre a mode. In piu' il thread morning_checkin di OGGI archiviato dalla spina compare come 'chat del 02/07/2026' accanto a 'Oggi'. Evidenza 06-threads-list.json, 06-d40-verdict.txt",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "9. uxNotes L5 + leftForUiPass",
+   "expected": "Giudizio L5 e consegne per il passaggio browser",
+   "observed": "Compilati (vedi uxNotes/leftForUiPass). Sintesi L5: lo stato e' coerente e nulla punisce il rientro sul piano dei DATI (storia archiviata non persa, scaduti rollati nel piano); la punizione e' sul TEMPO-AL-VALORE (9 turni e 3 gate prima del primo passo) e sul rientro notturno (chat vuota muta)",
+   "verdict": "PASS"
+  }
+ ],
+ "findings": [
+  {
+   "title": "Check-in: loop interrogatorio umore/energia con amnesia di stato — a t7 nega dati gia' registrati e ri-chiede l'energia",
+   "severity": "S3",
+   "repro": "1) Utente con task scaduti apre il morning check-in (mode=morning_checkin, __auto_start__). 2) Ai turni 1-3 scrivere richieste esplicite di azione ('dimmi solo la prima cosa da fare, una sola'): il modello ripropone la scala umore 4 volte di fila. 3) Cedere: '3' (mood), poi 'ok va bene, partiamo da quello', '2-4h'. 4) Al turno successivo scrivere 'si, va bene': il modello risponde 'Ho ancora bisogno di registrare umore ed energia' e ri-chiede l'energia, NONOSTANTE set_user_mood e set_user_energy risultino eseguiti nei turni precedenti (toolsExecuted nei payload). Il primo passo utile arriva solo al 6o turno, il commit del piano al 9o.",
+   "evidence": "docs/tasks/62-evidenze/J4/04-trascrizione-checkin-rientro.md (+ 04-convo-turn3.json, 04-convo-turn7.json)",
+   "fileLine": "src/lib/chat/prompts.ts:126",
+   "dossierRef": ""
+  },
+  {
+   "title": "Check-in fabbrica un dato: set_user_energy(level:3) registrato da un messaggio utente che non conteneva alcun valore di energia",
+   "severity": "S3",
+   "repro": "Nel morning check-in, dopo aver risposto '3' alla domanda umore, rispondere alla domanda energia con una frase senza numero ('ok va bene, partiamo da quello'): il modello esegue set_user_energy({level:3}) copiando il valore del mood e prosegue al gate del tempo, senza dichiarare l'assunzione. Il dato energia in DB (DailyPlan.energyLevel=3) non e' mai stato fornito dall'utente. Non-deterministico (scelta del modello) ma osservato al primo colpo.",
+   "evidence": "docs/tasks/62-evidenze/J4/04-convo-turn5.json",
+   "fileLine": "src/lib/chat/tools.ts:576",
+   "dossierRef": ""
+  },
+  {
+   "title": "D40 confermata: due voci 'Oggi' indistinguibili in sidebar quando general e evening_review sono entrambi attivi (entrambe isActive=true)",
+   "severity": "S3",
+   "repro": "1) Avviare la review serale (threadId=null, dentro finestra). 2) Con la review active, mandare un turno general con threadId=null (cattura al volo durante la review). 3) GET /api/chat/threads: due entry con label='Oggi', entrambe isActive=true, stessa data; l'unico discriminante nel payload e' mode, che la sidebar non mostra. Bonus: il thread di OGGI archiviato dalla spina 8c compare come 'chat del 02/07/2026' accanto a 'Oggi' — etichetta ambigua il giorno stesso.",
+   "evidence": "docs/tasks/62-evidenze/J4/06-threads-list.json",
+   "fileLine": "src/lib/chat/day-rollover.ts:117",
+   "dossierRef": "D40"
+  },
+  {
+   "title": "Rientro notturno (00:00-05:00 Roma): bootstrap sopprime il check-in senza reason e l'utente atterra in una chat vuota, senza alcun messaggio di rientro ne' guida",
+   "severity": "UX",
+   "repro": "1) Utente con dati vecchi di 4 giorni apre l'app tra le 00:00 e le 05:00 (fuori finestra serale). 2) GET active-thread: rollover archivia il vecchio thread -> activeThread=null. 3) POST bootstrap: 200 {triggered:false} SENZA campo reason (il gate ora<5 e' l'unico skip-path muto; gli altri hanno reason). Risultato: chat completamente vuota, i 2 task scaduti mai nominati, nessun 'e adesso?' (L2/L5). Il momento emotivamente piu' delicato del rientro riceve zero riconoscimento.",
+   "evidence": "docs/tasks/62-evidenze/J4/03-bootstrap-response.json",
+   "fileLine": "src/app/api/chat/bootstrap/route.ts:171",
+   "dossierRef": ""
+  },
+  {
+   "title": "Il riconoscimento di rientro (RE_ENTRY 8c) esiste SOLO nella review serale: il morning check-in dopo 4 giorni di assenza apre col saluto standard, senza riconoscere l'assenza",
+   "severity": "UX",
+   "repro": "Utente con ultimo contatto -4gg, ora Roma >=5: il check-in apre 'Buongiorno! Come stai di umore oggi, da 1 a 5?' — identico a un utente attivo ieri. Il gap di inattivita' e' calcolato solo nel ramo evening_review dell'orchestrator (buildEveningReviewModeContext); il path mattutino, che e' quello che il rientrante incontra per primo, non riceve la riga RE_ENTRY ne' alcun equivalente. Non colpevolizza (bene) ma L5 chiede riconoscimento + un passo chiaro, che arriva solo al 6o turno.",
+   "evidence": "docs/tasks/62-evidenze/J4/03b-checkin-turn0.json",
+   "fileLine": "src/lib/chat/orchestrator.ts:366",
+   "dossierRef": ""
+  }
+ ],
+ "uxNotes": [
+  "L5 sintesi: lo stato al rientro e' COERENTE e non punitivo sui dati — rollover e spina 8c archiviano senza perdere nulla (la chat di 4 giorni fa riappare in sidebar read-only), i 2 task scaduti restano planned e vengono rollati nel Top3 di oggi via commit_today_plan. La punizione e' sul tempo-al-valore: 9 turni e 3 gate (umore, energia, tempo) prima del primo passo concreto.",
+  "Zero colpevolizzazione OVUNQUE: 'Capita.' al 'scusa se sono sparito'; 'Bentornato.' senza conteggio giorni nella review; nessun lessico vietato (finalmente/dove eri finito) in nessuna trascrizione. Il nervo etico 8c regge.",
+  "L7 positivo: tutti i conteggi del modello sono veri — 'ISEE scaduto il 30 giugno', 'assicurazione il 1 luglio' (date Roma corrette dai deadline DB), '2 candidate' nella review, 'Due cose in lista, entrambe scadute' nel check-in.",
+  "L7 negativo minore: a t3 il modello dice 'ho bisogno di vedere cosa hai in lista' come scusa per il mood-gate, ma la lista e' gia' nel suo contesto (get_today_tasks disponibile): scusa non veritiera. E la stima 'ISEE (25 min)' e' inventata (il task non ha sessionDuration) senza dichiararla come stima.",
+  "L8: la richiesta esplicita e ripetuta dell'utente ('dimmi solo la prima cosa da fare, una sola') non piega il flusso: 4 richieste consecutive della scala umore. Per un utente ADHD scoraggiato che rientra, ogni domanda-gate e' un'occasione di abbandono.",
+  "bootstrap {triggered:false} senza reason per il gate notturno: gli altri skip-path hanno reason (active_thread_exists, evening_priority) — il ramo ora<5 e' muto, difficile da diagnosticare anche per il collaudo.",
+  "Sidebar: il thread di OGGI archiviato dalla spina 8c compare come 'chat del 02/07/2026' accanto a 'Oggi' — per l'utente e' la stessa giornata con due nomi diversi (L9).",
+  "Task 61 promessa mantenuta anche nel check-in: dopo commit_today_plan arriva offer_strict_mode con QR start_strict (taskId ISEE, 50min).",
+  "L3-AUTOMAZIONE: al rientro con N task scaduti l'app potrebbe proporre DA SOLA un piano di rientro precompilato (i 2 scaduti in Top3 + 'partiamo dal piu' critico') con una sola conferma, invece di ricostruirlo in 9 turni di conversazione.",
+  "L3-AUTOMAZIONE: i tre gate mood/energia/tempo del check-in sono comprimibili in un'unica card a scelta rapida (o skippabili con default quando l'utente chiede azione immediata — 'dammi una cosa da fare' dovrebbe cortocircuitare il flusso).",
+  "L3-AUTOMAZIONE: il rientro notturno (bootstrap muto) potrebbe lasciare una card statica 'Bentornato — ripartiamo da qui' con i 2 scaduti, invece della chat vuota.",
+  "L3-AUTOMAZIONE: la spina 8c gia' sa che l'utente e' un rientrante (gapDays calcolato): lo stesso dato potrebbe alimentare il morning check-in (oggi RE_ENTRY e' solo evening) senza nuovo lavoro server."
+ ],
+ "leftForUiPass": [
+  "Schermata di rientro notturna: con activeThread=null e bootstrap triggered:false, cosa vede davvero l'utente in ChatView? C'e' un empty-state con CTA o solo il campo di input? (L2/L6)",
+  "Sidebar D40 dal vivo: per collaudo-rientro sono stati LASCIATI in DB due thread active di oggi (general cmr2odp1i00gkib6s23pjrkrd + evening_review cmr2oc3zn00d6ib6s63lnnf9z, entrambi isActive=true): verificare la resa visiva delle due voci 'Oggi' e cosa fa il tap su ciascuna (con doppio isActive il click rischia il no-op backToToday).",
+  "Voce 'chat del 02/07/2026' (thread di oggi archiviato dalla spina 8c) mostrata accanto a 'Oggi': confusione visiva il giorno stesso.",
+  "Today view dopo il commit del piano di rientro: i 2 task con deadline SCADUTA sono nel Top3 di oggi (DailyPlan 2026-07-02) — come vengono mostrate le deadline passate? C'e' un badge 'scaduto' o sembrano task normali?",
+  "Card/banner EveningReviewBanner quando eveningReview.shouldStart=true al rientro serale: il tap avvia davvero su threadId=null (vincolo F7)?",
+  "QR 'Attiva strict' (start_strict, taskId ISEE, 50min) arrivata nel check-in: verificare il tap dal browser (atterraggio su focus)."
+ ],
+ "transcripts": [
+  "docs/tasks/62-evidenze/J4/04-trascrizione-checkin-rientro.md",
+  "docs/tasks/62-evidenze/J4/05-trascrizione-review-reentry.md",
+  "docs/tasks/62-evidenze/J4/06-trascrizione-general-parallela.md"
+ ],
+ "spendUsd": 0.213234
+}

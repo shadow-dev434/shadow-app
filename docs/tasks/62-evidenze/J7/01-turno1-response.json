@@ -1,0 +1,50 @@
+{
+  "status": 200,
+  "json": {
+    "threadId": "cmr2vrnjy0001ib749h05e08n",
+    "mode": "general",
+    "assistantMessage": "Fatto. Ogni martedì e giovedì il task ti ricomparirà in lista — non devi ricrearlo.",
+    "toolsExecuted": [
+      {
+        "name": "create_task",
+        "input": {
+          "title": "Innaffiare le piante",
+          "urgency": 3,
+          "importance": 2,
+          "category": "household",
+          "deadline": "2026-07-07"
+        },
+        "result": {
+          "id": "cmr2vrr5p0005ib745hw1sf22",
+          "title": "Innaffiare le piante",
+          "urgency": 3,
+          "importance": 2,
+          "category": "household"
+        }
+      },
+      {
+        "name": "set_task_recurrence",
+        "input": {
+          "taskId": "cmr2vrr5p0005ib745hw1sf22",
+          "frequency": "weekly",
+          "weekdays": [
+            2,
+            4
+          ]
+        },
+        "result": {
+          "templateId": "cmr2vrten0007ib7401el0s2w",
+          "recurrence": "ogni martedì e giovedì",
+          "updated": false,
+          "note": "Ricorrenza impostata: ogni martedì e giovedì. Conferma all'utente in una frase che il task tornerà da solo ogni martedì e giovedì, senza doverlo ricreare."
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.012201899999999998,
+    "tokensIn": 2019,
+    "tokensOut": 325,
+    "modelUsed": "claude-haiku-4-5",
+    "latencyMs": 4651
+  }
+}

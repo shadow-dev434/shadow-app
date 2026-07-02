@@ -1,0 +1,301 @@
+{
+  "threadId": "cmr2w73mz00i4ib74mnfn4s6m",
+  "completed": true,
+  "totalTurns": 12,
+  "updatePreviewSeen": [
+    {
+      "turn": 10,
+      "input": {
+        "moves": [
+          {
+            "taskId": "cmr2nfh43000fib00mdr7rwgw",
+            "to": "afternoon"
+          }
+        ]
+      },
+      "result": {
+        "ok": true
+      }
+    }
+  ],
+  "totalCostUsd": 0.8165969999999999,
+  "totalQuestionMarks": 7,
+  "avgAssistantChars": 58,
+  "turns": [
+    {
+      "turn": 1,
+      "userMessage": "Ciao Shadow, la giornata è finita: facciamo la review?",
+      "status": 200,
+      "assistantChars": 23,
+      "questionMarks": 1,
+      "tools": [],
+      "quickReplies": [],
+      "costUsd": 0.0136977,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 2,
+      "userMessage": "Direi 4: giornata piena ma soddisfacente.",
+      "status": 200,
+      "assistantChars": 18,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "record_mood",
+          "input": {
+            "value": 4
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.02689005,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 3,
+      "userMessage": "Energia 3, un po' stanco ma ok.",
+      "status": 200,
+      "assistantChars": 53,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.0265887,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 4,
+      "userMessage": "Sì, partiamo!",
+      "status": 200,
+      "assistantChars": 46,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        },
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        },
+        {
+          "name": "set_current_entry",
+          "input": {
+            "entryId": "cmr2nfgmo0009ib00kpnd46ek"
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.17460795000000004,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 5,
+      "userMessage": "La bolletta l'ho pagata stamattina appena arrivato in ufficio, fatta!",
+      "status": 200,
+      "assistantChars": 62,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "mark_entry_discussed",
+          "input": {
+            "entryId": "cmr2nfgmo0009ib00kpnd46ek",
+            "outcome": "kept"
+          }
+        },
+        {
+          "name": "set_current_entry",
+          "input": {
+            "entryId": "cmr2nfh7y000hib00oa2e2qjl"
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.0472227,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 6,
+      "userMessage": "Il regalo per Marta lo tengo per domani, ho tempo fino all'8.",
+      "status": 200,
+      "assistantChars": 39,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        },
+        {
+          "name": "mark_entry_discussed",
+          "input": {
+            "entryId": "cmr2nfh7y000hib00oa2e2qjl",
+            "outcome": "postponed"
+          }
+        },
+        {
+          "name": "set_current_entry",
+          "input": {
+            "entryId": "cmr2nfh43000fib00mdr7rwgw"
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.061213500000000004,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 7,
+      "userMessage": "Le mail non le ho toccate, tienile per domani.",
+      "status": 200,
+      "assistantChars": 32,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "mark_entry_discussed",
+          "input": {
+            "entryId": "cmr2nfh43000fib00mdr7rwgw",
+            "outcome": "postponed"
+          }
+        },
+        {
+          "name": "set_current_entry",
+          "input": {
+            "entryId": "cmr2nfgzg000dib00h6ndbm4j"
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.048584100000000005,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 8,
+      "userMessage": "La scrivania può aspettare, tienila per domani se ci sta.",
+      "status": 200,
+      "assistantChars": 46,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "set_user_energy",
+          "input": {
+            "level": 3
+          }
+        },
+        {
+          "name": "mark_entry_discussed",
+          "input": {
+            "entryId": "cmr2nfgzg000dib00h6ndbm4j",
+            "outcome": "postponed"
+          }
+        },
+        {
+          "name": "set_current_entry",
+          "input": {
+            "entryId": "cmr2nfgvp000bib00gbyv7av1"
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.0619728,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 9,
+      "userMessage": "No, il dentista non l'ho chiamato: lo studio era già chiuso quando mi sono ricordato. Rimandiamolo a domani.",
+      "status": 200,
+      "assistantChars": 198,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "mark_entry_discussed",
+          "input": {
+            "entryId": "cmr2nfgvp000bib00gbyv7av1",
+            "outcome": "postponed"
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.0362214,
+      "phaseAfter": "plan_preview",
+      "state": "active"
+    },
+    {
+      "turn": 10,
+      "userMessage": "Quasi perfetto, ma sposta le mail arretrate al pomeriggio: domattina ho una riunione.",
+      "status": 200,
+      "assistantChars": 26,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "update_plan_preview",
+          "input": {
+            "moves": [
+              {
+                "taskId": "cmr2nfh43000fib00mdr7rwgw",
+                "to": "afternoon"
+              }
+            ]
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.14701395,
+      "phaseAfter": "plan_preview",
+      "state": "active"
+    },
+    {
+      "turn": 11,
+      "userMessage": "Perfetto, confermo il piano così.",
+      "status": 200,
+      "assistantChars": 116,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "confirm_plan_preview",
+          "input": {}
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.14988659999999998,
+      "phaseAfter": "closing",
+      "state": "active"
+    },
+    {
+      "turn": 12,
+      "userMessage": "Sì, chiudi pure la review. Buonanotte!",
+      "status": 200,
+      "assistantChars": 31,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "confirm_close_review",
+          "input": {}
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.02269755,
+      "phaseAfter": "closing",
+      "state": "completed"
+    }
+  ]
+}

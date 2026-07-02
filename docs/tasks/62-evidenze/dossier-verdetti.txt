@@ -1,0 +1,77 @@
+D1|CONFERMATO|S1|src/app/tasks/page.tsx:3078-3080 vs src/app/api/review/route.ts:41-56;
+D2|CONFERMATO|S2|src/app/tasks/page.tsx:1312 + src/lib/types/shadow.ts:519-531
+D3|CONFERMATO|S2|src/app/tasks/page.tsx:1169,1210
+D4|CONFERMATO|S2|src/app/api/auth/login/route.ts:61-70; docs/tasks/62-evidenze/fase1-jo
+D5|CONFERMATO|S2|src/app/tasks/page.tsx:614-625; docs/tasks/62-evidenze/fase1-journeys/
+D6|CONFERMATO|S2|src/app/tasks/page.tsx:2945-2951 (handleStart), 3033 (bottone 'Inizia'
+D7|CONFERMATO|S2|src/app/tasks/page.tsx:2739 (Disattiva soft: solo setFocusModeActive/s
+D8|CONFERMATO|S1|src/app/tasks/page.tsx:584-603 (mount re-idrata solo body_double); src
+D9|PLAUSIBILE|S3|src/app/tasks/page.tsx:1131-1132 (handleConfirm forza status:'planned'
+D10|CONFERMATO|S3|src/app/api/strict-mode/route.ts:53-56 (updateMany su POST setta solo 
+D11|CONFERMATO|S3|src/app/tasks/page.tsx:1644-1687,1723-1740 + src/app/api/micro-feedbac
+D12|SMENTITO|n/a|src/app/api/review/route.ts:113-131 (guard tr.status==='avoided'); src
+D13|CONFERMATO|S2|src/app/tasks/page.tsx:2902-2933 + src/app/api/tasks/[id]/route.ts:51-
+D14|CONFERMATO|S3|src/app/api/tasks/route.ts:54,78-80 + src/app/api/tasks/[id]/route.ts:
+D15|CONFERMATO|UX|src/lib/chat/tools/mood-energy-parse.ts:32-41 (QUALITATIVE_MAP),60-79
+D16|CONFERMATO|S3|src/lib/chat/orchestrator.ts:766,813 (push incondizionato),977-987 (fa
+D17|CONFERMATO|S3|src/lib/chat/prompts.ts:983-996 (EDGE CASE adds con task NON in inbox)
+D18|CONFERMATO|S3|src/app/api/chat/bootstrap/route.ts:38-56
+D19|FUORI-SCOPE|n/a|src/components/native/shield-permission-gate.tsx:~105-109 (riga 'Batte
+D20|CONFERMATO|S3|src/features/body-double/useBodyDoubleSession.ts:505-511 (reason==='co
+D21|CONFERMATO|S2|public/sw.js:205-231 (share target handler)
+D22|CONFERMATO|S3|prisma/schema.prisma:259-264 (DailyPlan.top3Ids/doNowIds/...) + src/ap
+D24|CONFERMATO|S3|src/lib/engines/learning-engine.ts:250-258 (positivo 1.0 solo se metad
+D25|BY-DESIGN|S3|src/lib/sky/lit-stars.ts:10-15 (commento 'Edge accettato in v1'); docs
+D26|FUORI-SCOPE|n/a|docs/tasks/62-collaudo-totale-pre-lancio.md §12 D26 ('verificabile sol
+D27|CONFERMATO|UX|src/app/tasks/page.tsx:2491-2498 (interval: a <=1 setta isTimerRunning
+D28|CONFERMATO|S3|src/app/tasks/page.tsx:783 (<6); src/app/api/auth/register/route.ts:18
+D29|CONFERMATO|S3|src/app/api/settings/route.ts:56-61 (regex HHMM su eveningWindow) + :3
+D30|CONFERMATO|S3|src/app/api/adaptive-profile/route.ts:42-73,104-137
+D31|CONFERMATO|S2|src/features/chat/ChatView.tsx:538-560 (handleStartEveningReview); doc
+D32|CONFERMATO|S2|src/lib/strict-mode/enter.ts:100-109; src/app/tasks/page.tsx:2500-2505
+D33|CONFERMATO|UX|src/app/api/chat/turn/route.ts:123-128; src/features/chat/ChatView.tsx
+D34|CONFERMATO|UX|src/app/api/chat/turn/route.ts:66,69,83,85,96,155; src/features/chat/C
+D35|CONFERMATO|UX|src/features/chat/ChatView.tsx:294-306
+D36|CONFERMATO|UX|src/app/api/chat/active-thread/route.ts:74 (MESSAGE_LIMIT=200),88; src
+D37|CONFERMATO|S3|src/features/chat/ChatView.tsx:249-276
+D38|CONFERMATO|UX|src/app/api/chat/turn/route.ts:34 (maxDuration=60); src/features/chat/
+D39|CONFERMATO|UX|src/features/chat/ChatView.tsx:434,482-486,721-733
+D40|CONFERMATO|UX|src/lib/chat/day-rollover.ts:73-81; src/app/api/chat/threads/route.ts:
+D41|CONFERMATO|UX|src/features/chat/ChatView.tsx:166-180 (fileToPendingAttachment),512-5
+D43|CONFERMATO|S2|src/lib/evening-review/close-review.ts:230-248 (slot alpha); src/app/a
+D44|CONFERMATO|S2|src/app/tasks/page.tsx:2188-2222, 2374-2377; src/app/api/daily-plan/ro
+D45|CONFERMATO|S2|src/lib/evening-review/normalize.ts:86-95; src/app/api/chat/active-thr
+D46|CONFERMATO|S2|src/lib/chat/prompts.ts:1170-1184; src/lib/evening-review/triage.ts:98
+D47|CONFERMATO|UX|src/lib/chat/prompts.ts:1082-1088; src/lib/chat/tools/update-plan-prev
+D48|CONFERMATO|S3|src/features/sky/SkyView.tsx (empty state); src/app/tasks/page.tsx:686
+D49|CONFERMATO|S3|docs/tasks/62-evidenze/fase1-journeys/J7-aa39456f.json step6; grep: ne
+D50|CONFERMATO|S3|src/app/tasks/page.tsx:1941-1946 (Inbox/Today/Focus/Review EN vs Cielo
+D51|CONFERMATO|UX|src/features/body-double/useBodyDoubleSession.ts:222 (setError('Nessun
+D52|CONFERMATO|UX|src/app/tasks/page.tsx:2418-2419 (Button h-7 w-7 con MoreHorizontal w-
+D53|CONFERMATO|S3|src/app/api/consent/route.ts:19 (CONSENT_VERSION='0.2-draft'); src/app
+D54|CONFERMATO|S3|src/app/tasks/page.tsx:3060-3062; src/app/api/tasks/route.ts:17-26 (ne
+D55|CONFERMATO|UX|src/store/shadow-store.ts:129,280-281
+D56|CONFERMATO|UX|src/store/shadow-store.ts:110,257-258
+D57|CONFERMATO|UX|src/app/tasks/page.tsx:528 (polling) + 1289-1336 (nudge) + 1489-1597 (
+D58|CONFERMATO|S3|src/store/shadow-store.ts:225,376 + src/app/api/ai-assistant/route.ts:
+D59|CONFERMATO|UX|src/app/tasks/page.tsx:2884-2885 + src/lib/engines/execution-engine.ts
+D60|CONFERMATO|S3|src/lib/engines/ai-assistant-engine.ts:206,127-135
+D61|CONFERMATO|UX|src/lib/engines/decomposition-engine.ts:16,27-50,74-113 + src/app/task
+D62|CONFERMATO|UX|src/lib/chat/tools.ts:750-872 vs src/app/api/ai-classify/route.ts:48-1
+D63|CONFERMATO|S3|src/app/tasks/page.tsx:1215-1217,1225,2140-2141
+D64|CONFERMATO|UX|src/lib/chat/prompts.ts:85-87 (APP_KNOWLEDGE 'Ogni voce va classificat
+D65|CONFERMATO|S3|page.tsx:735-738 (auth param); page.tsx:3364-3368 (Rifai profilo beta-
+D66|CONFERMATO|S2|page.tsx:3394 (Export {isBetaTester&&}); page.tsx:3364-3368 (Rifai/Exp
+D67|CONFERMATO|S3|src/app/tasks/page.tsx:3243-3420 (SettingsView senza toggle); src/lib/
+D68|CONFERMATO|S3|public/manifest.json:42-71 (4 shortcuts) + :72-82 (share_target action
+D69|CONFERMATO|S3|src/app/api/calendar/oauth/route.ts:17-22 (500 senza env), oauth/callb
+D70|CONFERMATO|S3|src/app/api/notifications/route.ts + src/app/api/push-subscription/rou
+D71|CONFERMATO|S3|src/app/api/settings/route.ts:37-47 (allowedFields include defaultEner
+D72|CONFERMATO|S3|src/app/tasks/page.tsx:121 (quadrante 'delegate'/'Delega'); src/app/ap
+D74|CONFERMATO|UX|src/lib/chat/prompts.ts:236-237 ('un paio d'ore'); src/lib/chat/tools.
+D75|CONFERMATO|S3|src/app/api/chat/turn/route.ts:36-43 (VALID_MODES include planning/foc
+D76|CONFERMATO|S3|src/app/api/chat/active-thread/route.ts:187-196 (normalize update),216
+D-tz|CONFERMATO|S3|src/lib/evening-review/triage.ts:10-12; src/app/api/micro-feedback/rou
+D-auth|CONFERMATO|S3|src/app/tasks/page.tsx:395-403 (restore da localStorage), 764/799 (wri
+D-w7|CONFERMATO|UX|src/components/native/app-blocker-card.tsx:110 (if (!isAndroid()) retu
+D-b45|CONFERMATO|UX|src/lib/engines/profiling-engine.ts:47-52,182-183 + src/app/api/ai-cla

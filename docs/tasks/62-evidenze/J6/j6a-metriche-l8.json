@@ -1,0 +1,8 @@
+{
+  "userTurns": 8,
+  "assistantMsgs": 8,
+  "tokIn": 5868,
+  "tokOut": 869,
+  "totalAssistantLatencyMs": 54151,
+  "assistantChars": 499
+}

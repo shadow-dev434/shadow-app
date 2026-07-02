@@ -1,0 +1,23 @@
+resume thread cmr2o9p43009kib6swflpzl37 da phase=plan_preview
+[resume] turno 1: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+[resume] turno 2: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+[resume] turno 3: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+[resume] turno 4: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+[resume] turno 5: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+[resume] turno 6: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+[resume] turno 7: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+[resume] turno 8: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+[resume] turno 9: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+[resume] turno 10: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+[resume] turno 11: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+[resume] turno 12: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+[resume] turno 13: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+[resume] turno 14: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+resume: completed=false
+  Scrivere la mail difficile al capo: status=planned postponed=6 avoidance=6 microSteps=5
+  Compilare la dichiarazione dei redditi: status=planned postponed=5 avoidance=5 microSteps=0
+  Prenotare la visita medica di controllo: status=planned postponed=4 avoidance=4 microSteps=0
+  Portare il pacco alle poste: status=inbox postponed=1 avoidance=0 microSteps=0
+Review(2026-07-02): whatBlocked="ansia da pagina bianca" whatDone="quasi niente" mood=2
+DailyPlan(domani): ASSENTE
+spesa LLM utente J5: $1.6944
