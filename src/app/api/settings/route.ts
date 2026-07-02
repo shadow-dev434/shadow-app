@@ -48,11 +48,11 @@ export async function PATCH(req: NextRequest) {
     }
 
     const updateData: Record<string, unknown> = {};
-    const allowedFields = [
-      'defaultEnergy', 'defaultContext', 'defaultDuration',
-      'defaultFormat', 'wakeTime', 'sleepTime',
-      'productiveSlots', 'theme',
-    ];
+    // Task 65 (A3, D71): whitelist ridotta ai campi letti da logica reale
+    // (wake/sleep → fasce del piano). Rimossi i campi fantasma mai letti
+    // (defaultEnergy/Context/Duration/Format, productiveSlots, theme):
+    // scrivibili da API ma invisibili e senza consumatori.
+    const allowedFields = ['wakeTime', 'sleepTime'];
 
     for (const field of allowedFields) {
       if (body[field] !== undefined) {

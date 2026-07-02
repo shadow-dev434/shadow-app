@@ -3329,6 +3329,117 @@ function TaskDetailView() {
   );
 }
 
+// ─── Giornata e promemoria (Task 65 A3/D71) ─────────────────────────────────
+// Espone i soli campi Settings consumati da logica reale: wake/sleep
+// (fasce del piano, slot-allocation), finestra review serale (window.ts,
+// compute-signal) e opt-out email serale (evening-email). I campi fantasma
+// (defaultEnergy/…, productiveSlots, theme) sono usciti dalla whitelist PATCH.
+
+function DayScheduleCard() {
+  const [wakeTime, setWakeTime] = useState('07:00');
+  const [sleepTime, setSleepTime] = useState('23:00');
+  const [windowStart, setWindowStart] = useState('20:00');
+  const [windowEnd, setWindowEnd] = useState('23:00');
+  const [emailEnabled, setEmailEnabled] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiFetch('/api/settings', { skipErrorToast: true });
+        if (!res.ok) return;
+        const data = await res.json();
+        const s = data.settings;
+        if (s) {
+          if (typeof s.wakeTime === 'string') setWakeTime(s.wakeTime);
+          if (typeof s.sleepTime === 'string') setSleepTime(s.sleepTime);
+          if (typeof s.eveningWindowStart === 'string') setWindowStart(s.eveningWindowStart);
+          if (typeof s.eveningWindowEnd === 'string') setWindowEnd(s.eveningWindowEnd);
+          if (typeof s.notificationsEnabled === 'boolean') setEmailEnabled(s.notificationsEnabled);
+        }
+      } catch {
+        // Non-critical: restano i default
+      } finally {
+        setLoaded(true);
+      }
+    })();
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    setSaving(true);
+    try {
+      const res = await apiFetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wakeTime, sleepTime,
+          eveningWindowStart: windowStart, eveningWindowEnd: windowEnd,
+          notificationsEnabled: emailEnabled,
+        }),
+        skipErrorToast: true,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        toast({ title: 'Orario non valido', description: (data as { error?: string } | null)?.error ?? 'Controlla i campi', variant: 'destructive' });
+        return;
+      }
+      toast({ title: 'Impostazioni salvate' });
+    } catch {
+      toast({ title: 'Non sono riuscito a salvare', description: 'Riprova', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  }, [wakeTime, sleepTime, windowStart, windowEnd, emailEnabled]);
+
+  return (
+    <Card className="border-zinc-200 dark:border-zinc-800">
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="text-base flex items-center gap-2"><Sun className="w-4 h-4 text-amber-500" /> Giornata e promemoria</CardTitle>
+        <CardDescription className="text-xs">Shadow usa questi orari per costruire le fasce del piano e proporre la review serale.</CardDescription>
+      </CardHeader>
+      <CardContent className="p-4 pt-0 space-y-4">
+        {!loaded ? (
+          <Skeleton className="h-24 w-full" />
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="wake-time" className="text-xs text-zinc-500">Sveglia</Label>
+                <Input id="wake-time" type="time" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} className="h-10" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="sleep-time" className="text-xs text-zinc-500">A letto</Label>
+                <Input id="sleep-time" type="time" value={sleepTime} onChange={(e) => setSleepTime(e.target.value)} className="h-10" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="window-start" className="text-xs text-zinc-500">Review serale dalle</Label>
+                <Input id="window-start" type="time" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} className="h-10" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="window-end" className="text-xs text-zinc-500">alle</Label>
+                <Input id="window-end" type="time" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} className="h-10" />
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm">Email promemoria serale</p>
+                <p className="text-xs text-zinc-400">Un&apos;email quando è ora della review, se non hai aperto l&apos;app.</p>
+              </div>
+              <Switch checked={emailEnabled} onCheckedChange={setEmailEnabled} />
+            </div>
+            <Button variant="outline" size="sm" className="w-full" disabled={saving} onClick={handleSave}>
+              {saving ? 'Salvataggio...' : 'Salva'}
+            </Button>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Settings View (with Profile) ───────────────────────────────────────────
 
 function SettingsView({ onLogout }: { onLogout: () => void }) {
@@ -3482,6 +3593,10 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
           )}
         </CardContent>
       </Card>
+
+      {/* Giornata e promemoria (Task 65 A3): orari letti dalle fasce del piano
+          e dalla finestra review, opt-out email serale. */}
+      <DayScheduleCard />
 
       {/* App-picker nativo (Task 60 / B8): solo Android, si auto-gata su isAndroid().
           Sceglie le app messe in pausa dallo scudo durante lo strict mode. */}
