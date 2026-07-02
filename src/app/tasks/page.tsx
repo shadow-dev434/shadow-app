@@ -110,10 +110,17 @@ function formatMinutesLabel(min: number): string {
   return m === 0 ? `${h} ${h === 1 ? 'ora' : 'ore'}` : `${h}h ${m}min`;
 }
 
+// Task 65 (A4/D72): il quadrante 'delegate' esiste negli engine ma non ha
+// alcun flusso di assegnazione in beta (Contacts senza UI): a DISPLAY si
+// presenta come 'schedule'. Engine, store e API restano intatti — v3
+// riprende la delega con un flusso vero.
+function displayQuadrant(quadrant: string): string {
+  return quadrant === 'delegate' ? 'schedule' : quadrant;
+}
+
 const QUADRANT_CONFIG: Record<string, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
   do_now: { label: 'FAI ORA', color: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-950/30', icon: <Zap className="w-3 h-3" /> },
   schedule: { label: 'PIANIFICA', color: 'text-teal-600', bg: 'bg-teal-50 dark:bg-teal-950/30', icon: <Clock className="w-3 h-3" /> },
-  delegate: { label: 'DELEGA', color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950/30', icon: <ArrowLeft className="w-3 h-3" /> },
   eliminate: { label: 'ELIMINA', color: 'text-zinc-400', bg: 'bg-zinc-50 dark:bg-zinc-900/30', icon: <X className="w-3 h-3" /> },
 };
 
@@ -121,7 +128,6 @@ const DECISION_CONFIG: Record<string, { label: string; color: string; bg: string
   do_now: { label: 'Fai ora', color: 'text-rose-700', bg: 'bg-rose-100 dark:bg-rose-900/40' },
   decompose_then_do: { label: 'Decomponi e fai', color: 'text-amber-700', bg: 'bg-amber-100 dark:bg-amber-900/40' },
   schedule: { label: 'Pianifica', color: 'text-teal-700', bg: 'bg-teal-100 dark:bg-teal-900/40' },
-  delegate: { label: 'Delega', color: 'text-violet-700', bg: 'bg-violet-100 dark:bg-violet-900/40' },
   postpone: { label: 'Posticipa', color: 'text-zinc-500', bg: 'bg-zinc-100 dark:bg-zinc-800/40' },
   eliminate: { label: 'Elimina', color: 'text-zinc-400', bg: 'bg-zinc-100 dark:bg-zinc-800/40' },
   unclassified: { label: 'Non classificato', color: 'text-zinc-400', bg: 'bg-zinc-100 dark:bg-zinc-800/40' },
@@ -1283,8 +1289,8 @@ function PriorityConfirmDialog() {
 
   if (!classification) return null;
 
-  const quadConfig = QUADRANT_CONFIG[classification.quadrant];
-  const decConfig = DECISION_CONFIG[classification.decision];
+  const quadConfig = QUADRANT_CONFIG[displayQuadrant(classification.quadrant)];
+  const decConfig = DECISION_CONFIG[displayQuadrant(classification.decision)];
 
   return (
     <Dialog open={store.showPriorityConfirm} onOpenChange={(open) => { if (!open) { store.setShowPriorityConfirm(false); store.setPendingClassification(null); store.setPendingClassificationTaskId(null); } }}>
@@ -2653,7 +2659,7 @@ function PlanTaskCard({ task, index, onTaskClick, onStrictOneTap, onStartFocus }
         <div className="flex-1 min-w-0">
           <p className="font-medium text-sm truncate">{task.title}</p>
           <div className="flex items-center gap-2 mt-0.5">
-            <Badge className={`text-[10px] h-4 ${DECISION_CONFIG[task.decision]?.bg || ''} ${DECISION_CONFIG[task.decision]?.color || ''}`}>{DECISION_CONFIG[task.decision]?.label || task.decision}</Badge>
+            <Badge className={`text-[10px] h-4 ${DECISION_CONFIG[displayQuadrant(task.decision)]?.bg || ''} ${DECISION_CONFIG[displayQuadrant(task.decision)]?.color || ''}`}>{DECISION_CONFIG[displayQuadrant(task.decision)]?.label || task.decision}</Badge>
             {isAutoClassified(task)
               ? <span className="text-[10px] text-amber-500/90 flex items-center gap-0.5"><Sparkles className="w-3 h-3" /> Shadow</span>
               : task.aiClassified && <Sparkles className="w-3 h-3 text-amber-500" />}
@@ -3231,8 +3237,8 @@ function TaskDetailView() {
   if (!selectedTask) return <div className="max-w-2xl mx-auto px-4 py-12 text-center"><p className="text-zinc-400">Nessun task</p></div>;
 
   const microSteps = parseMicroSteps(selectedTask.microSteps);
-  const quadConfig = QUADRANT_CONFIG[selectedTask.quadrant];
-  const decConfig = DECISION_CONFIG[selectedTask.decision];
+  const quadConfig = QUADRANT_CONFIG[displayQuadrant(selectedTask.quadrant)];
+  const decConfig = DECISION_CONFIG[displayQuadrant(selectedTask.decision)];
   const aiData = selectedTask.aiClassified ? (() => { try { return JSON.parse(selectedTask.aiClassificationData); } catch { return null; } })() : null;
 
   return (
