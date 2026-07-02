@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
+import { taskStatuses } from '@/lib/types/shadow';
 
 // GET /api/tasks/[id]
 export async function GET(
@@ -46,6 +47,12 @@ export async function PATCH(
 
     const existing = await db.task.findFirst({ where: { id, userId } });
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Task 64 (B1): status fuori dominio non deve finire in DB — le viste
+    // filtrano per valori noti e un refuso renderebbe il task invisibile.
+    if (body.status !== undefined && !taskStatuses().includes(body.status)) {
+      return NextResponse.json({ error: 'status non valido' }, { status: 400 });
+    }
 
     const updateData: Record<string, unknown> = {};
     const allowedFields = [

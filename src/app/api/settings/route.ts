@@ -33,6 +33,20 @@ export async function PATCH(req: NextRequest) {
       settings = await db.settings.create({ data: { userId } });
     }
 
+    // Task 64 (B2, D29): orario malformato ("25:99") prima veniva accettato
+    // (wake/sleep) o ignorato in silenzio (finestra serale) con un 200
+    // falso-successo. Contratto esplicito: 400 col campo incriminato.
+    const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+    const timeFields = ['wakeTime', 'sleepTime', 'eveningWindowStart', 'eveningWindowEnd'] as const;
+    for (const field of timeFields) {
+      if (body[field] !== undefined && (typeof body[field] !== 'string' || !HHMM.test(body[field]))) {
+        return NextResponse.json(
+          { error: `${field} non valido: atteso orario HH:MM` },
+          { status: 400 },
+        );
+      }
+    }
+
     const updateData: Record<string, unknown> = {};
     const allowedFields = [
       'defaultEnergy', 'defaultContext', 'defaultDuration',
@@ -52,7 +66,6 @@ export async function PATCH(req: NextRequest) {
     if (body.notificationsEnabled !== undefined) {
       updateData.notificationsEnabled = Boolean(body.notificationsEnabled);
     }
-    const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
     for (const field of ['eveningWindowStart', 'eveningWindowEnd'] as const) {
       if (typeof body[field] === 'string' && HHMM.test(body[field])) {
         updateData[field] = body[field];

@@ -15,9 +15,11 @@ export async function GET(req: NextRequest) {
     : 'http://localhost:3000/api/calendar/oauth/callback';
 
   if (!clientId) {
+    // Task 64 (B3, D23): superficie orfana finché l'integrazione Google non è
+    // configurata — 404 pulito, non un 500 che suona come un guasto nostro.
     return NextResponse.json(
-      { error: 'Google Client ID non configurato. Imposta GOOGLE_CLIENT_ID nelle variabili ambiente.' },
-      { status: 500 }
+      { error: 'Integrazione Google Calendar non disponibile.' },
+      { status: 404 }
     );
   }
 

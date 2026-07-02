@@ -13,6 +13,15 @@ export type Decision =
 
 export type TaskStatus = 'inbox' | 'planned' | 'active' | 'in_progress' | 'completed' | 'abandoned' | 'archived';
 
+/**
+ * Dominio runtime completo di TaskStatus, per la validazione degli input API
+ * (Task 64, B1). Stessa forma factory di terminalTaskStatuses() qui sotto:
+ * copia fresh a ogni chiamata, niente costante condivisa mutabile.
+ */
+export function taskStatuses(): TaskStatus[] {
+  return ['inbox', 'planned', 'active', 'in_progress', 'completed', 'abandoned', 'archived'];
+}
+
 export type TerminalTaskStatus = 'completed' | 'abandoned' | 'archived';
 
 /**

@@ -113,6 +113,14 @@ describe('POST /api/chat/turn — passthrough di OrchestratorOutput (Task 41 fol
     expect(vi.mocked(orchestrate).mock.calls[0][0].mode).toBe('general');
   });
 
+  it('Task 64 (B4): i mode legacy planning/focus_companion/unblock degradano a general', async () => {
+    for (const legacy of ['planning', 'focus_companion', 'unblock']) {
+      vi.mocked(orchestrate).mockClear();
+      await POST(makeReq({ mode: legacy, userMessage: 'ciao' }));
+      expect(vi.mocked(orchestrate).mock.calls[0][0].mode).toBe('general');
+    }
+  });
+
   it('userMessage mancante -> 400, orchestrate non chiamato', async () => {
     const res = await POST(makeReq({ mode: 'general' }));
 

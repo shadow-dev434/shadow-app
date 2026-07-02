@@ -32,7 +32,7 @@ import {
   ChevronRight, Zap, Shield, ArrowLeft, Play, Check,
   AlertTriangle, Clock, TrendingUp, Brain, Sparkles,
   Flame, Activity, X, RotateCcw, Coffee, Mic, MicOff,
-  Users, Bell, BellOff, BarChart3, LogIn, LogOut, UserPlus,
+  Users, BarChart3, LogIn, LogOut, UserPlus,
   Download, Share2, RefreshCw, Send, Pencil, ShieldAlert, Lock, Unlock,
   Loader2, ChevronLeft, CheckCircle2, AlertCircle, User, Baby,
   Home, Briefcase, GraduationCap, Heart, BookOpen, FileText,

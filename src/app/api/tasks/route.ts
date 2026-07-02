@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
+import { taskStatuses } from '@/lib/types/shadow';
 
 // GET /api/tasks — list all tasks, with optional filters
 export async function GET(req: NextRequest) {
@@ -47,6 +48,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+
+    // Task 64 (B1, D14): senza title il create Prisma esplodeva in un 500
+    // opaco. Contratto esplicito: 400 con messaggio chiaro.
+    if (typeof body.title !== 'string' || body.title.trim().length === 0) {
+      return NextResponse.json({ error: 'title obbligatorio' }, { status: 400 });
+    }
+    if (body.status !== undefined && !taskStatuses().includes(body.status)) {
+      return NextResponse.json({ error: 'status non valido' }, { status: 400 });
+    }
 
     const task = await db.task.create({
       data: {

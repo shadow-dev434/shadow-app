@@ -33,11 +33,12 @@ const CHAT_DAILY_CAP = Number(process.env.CHAT_DAILY_CAP ?? '200');
  */
 export const maxDuration = 60;
 
+// Task 64 (B4, D75): solo i 3 mode realmente usati dal prodotto. I mode
+// legacy 'planning'/'focus_companion'/'unblock' erano accettati via API con
+// tool sensibili abilitati ('unblock' addirittura a prompt vuoto): un client
+// che li manda oggi degrada a 'general' come qualunque altro valore ignoto.
 const VALID_MODES: ChatMode[] = [
   'morning_checkin',
-  'planning',
-  'focus_companion',
-  'unblock',
   'evening_review',
   'general',
 ];
