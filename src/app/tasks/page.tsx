@@ -438,6 +438,53 @@ interface StreakData {
 
 // ─── Main App Component ─────────────────────────────────────────────────────
 
+// ─── URL per vista (Task 66 A/D56) ──────────────────────────────────────────
+// La vista di /tasks si riflette nell'URL (?view=…, per il detail anche
+// &taskId=…): refresh e deep-link atterrano sulla vista giusta e il back di
+// sistema (browser/TWA/Capacitor) torna alla vista precedente invece di
+// uscire dall'app. Navigazioni volontarie → pushState; transizioni di flusso
+// (completa/stop/exit strict/delete) → replaceState, così il back non riporta
+// a una vista focus/task ormai orfana. auth/onboarding/tour restano fuori
+// dall'URL (stati gated dal middleware).
+
+const URL_VIEWS: ReadonlySet<string> = new Set(['inbox', 'today', 'focus', 'task', 'sky', 'settings']);
+
+function syncViewToUrl(view: ViewMode, opts: { replace?: boolean; taskId?: string | null } = {}): void {
+  // Lo store è un singleton condiviso con la chat (/): mai riscrivere l'URL
+  // fuori da /tasks (es. enterStrictMode invocato dalla proposta proattiva).
+  if (typeof window === 'undefined' || window.location.pathname !== '/tasks') return;
+  if (!URL_VIEWS.has(view)) return;
+  const params = new URLSearchParams({ view });
+  if (view === 'task' && opts.taskId) params.set('taskId', opts.taskId);
+  try {
+    const url = `/tasks?${params.toString()}`;
+    const state = { view, taskId: view === 'task' ? (opts.taskId ?? null) : null };
+    if (opts.replace) window.history.replaceState(state, '', url);
+    else window.history.pushState(state, '', url);
+  } catch {
+    // history può fallire (quota, contesti sandbox): la vista funziona comunque.
+  }
+}
+
+/** Navigazione volontaria: cambia vista e pusha l'entry (il back ci ritorna). */
+function pushView(view: ViewMode, taskId?: string): void {
+  const st = useShadowStore.getState();
+  // Ri-tap sulla vista corrente (es. tab bar): niente entry duplicata.
+  const same =
+    st.currentView === view && (view !== 'task' || taskId === undefined || st.selectedTaskId === taskId);
+  if (taskId !== undefined) st.setSelectedTaskId(taskId);
+  st.setCurrentView(view);
+  syncViewToUrl(view, { replace: same, taskId: taskId ?? st.selectedTaskId });
+}
+
+/** Transizione di flusso: cambia vista sostituendo l'entry corrente. */
+function replaceView(view: ViewMode, taskId?: string): void {
+  const st = useShadowStore.getState();
+  if (taskId !== undefined) st.setSelectedTaskId(taskId);
+  st.setCurrentView(view);
+  syncViewToUrl(view, { replace: true, taskId: taskId ?? st.selectedTaskId });
+}
+
 export default function ShadowApp() {
   const store = useShadowStore();
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -487,13 +534,37 @@ export default function ShadowApp() {
           // getState() e non la closure: questo init è async e lo snapshot del
           // primo render non vede ciò che la chat ha appena impostato.
           const live = useShadowStore.getState();
-          if (!(live.focusModeActive && live.selectedTaskId)) {
-            store.setCurrentView('inbox');
+          // Task 66 (A/D56): deep-link ?view= (e ?taskId= per il detail). Il
+          // check D3 resta prioritario. ?view=focus senza sessione nello store
+          // → today (una eventuale sessione attiva verrà rehydratata dopo, e
+          // riporterà lei alla vista focus).
+          let urlTaskId: string | null = null;
+          if (live.focusModeActive && live.selectedTaskId) {
+            syncViewToUrl('focus', { replace: true });
+          } else {
+            const params = new URLSearchParams(window.location.search);
+            const rawView = params.get('view');
+            let initialView: ViewMode =
+              rawView && URL_VIEWS.has(rawView) ? (rawView as ViewMode) : 'inbox';
+            if (initialView === 'focus') initialView = 'today';
+            if (initialView === 'task') {
+              urlTaskId = params.get('taskId');
+              if (urlTaskId) store.setSelectedTaskId(urlTaskId);
+              else initialView = 'inbox';
+            }
+            store.setCurrentView(initialView);
+            syncViewToUrl(initialView, { replace: true, taskId: urlTaskId });
           }
 
           store.setIsLoading(true);
           const tasks = await fetchTasks();
           store.setTasks(tasks);
+          // Task 66 (A/D56): deep-link a un task inesistente (cancellato, id
+          // altrui) → inbox, senza lasciare un detail vuoto.
+          if (urlTaskId && !tasks.some((t) => t.id === urlTaskId)) {
+            store.setSelectedTaskId(null);
+            replaceView('inbox');
+          }
 
           try {
             const adaptiveRes = await apiFetch('/api/adaptive-profile', { skipErrorToast: true });
@@ -516,6 +587,35 @@ export default function ShadowApp() {
       }
     };
     init();
+  }, []);
+
+  // Task 66 (A/D56): back/forward del browser (e back di sistema su
+  // TWA/Capacitor) ripercorrono le viste invece di uscire dall'app. Lo state
+  // dell'entry è seminato da syncViewToUrl; per entry esterne (deep-link
+  // ri-raggiunto) si ripiega sul parse della query.
+  useEffect(() => {
+    const onPopState = (e: PopStateEvent) => {
+      const st = useShadowStore.getState();
+      if (!st.isAuthenticated) return;
+      const entry = e.state as { view?: string; taskId?: string | null } | null;
+      let view = typeof entry?.view === 'string' ? entry.view : null;
+      let taskId = typeof entry?.taskId === 'string' ? entry.taskId : null;
+      if (!view) {
+        const params = new URLSearchParams(window.location.search);
+        view = params.get('view');
+        taskId = params.get('taskId');
+      }
+      if (!view || !URL_VIEWS.has(view)) view = 'inbox';
+      // Vista focus orfana (sessione finita nel frattempo): meglio la Today.
+      if (view === 'focus' && !st.focusModeActive && !st.selectedTaskId) view = 'today';
+      if (view === 'task') {
+        if (taskId) st.setSelectedTaskId(taskId);
+        else if (!st.selectedTaskId) view = 'inbox';
+      }
+      st.setCurrentView(view as ViewMode);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
   // Register Service Worker — solo sul web. Nella WebView nativa il SW è
@@ -679,6 +779,9 @@ export default function ShadowApp() {
           return;
         }
         rehydrateStrictSession(s);
+        // Task 66 (A/D56): il rehydrate (con taskId) ha forzato la vista focus:
+        // l'URL seminato dall'init va allineato.
+        if (s.taskId) syncViewToUrl('focus', { replace: true });
       } catch {}
     })();
     return () => {
@@ -1229,7 +1332,7 @@ function StrictModeExitDialogConnected() {
     store.setExecutionMode('none');
     store.setFocusModeActive(false);
     store.setFocusModeType('soft');
-    store.setCurrentView('today');
+    replaceView('today');
 
     toast({ title: 'Sessione terminata', description: 'Sei uscito dalla strict mode' });
   }, [store]);
@@ -1279,8 +1382,7 @@ function PriorityConfirmDialog() {
   const handleEdit = useCallback(() => {
     const unclassifiedTask = resolveBoundTask();
     if (unclassifiedTask) {
-      store.setSelectedTaskId(unclassifiedTask.id);
-      store.setCurrentView('task');
+      pushView('task', unclassifiedTask.id);
     }
     store.setPendingClassification(null);
     store.setPendingClassificationTaskId(null);
@@ -1388,9 +1490,8 @@ function NudgeDisplay() {
       store.tasks.find(isOpen);
     if (nudgeTask) {
       // Start focus on the task
-      store.setSelectedTaskId(nudgeTask.id);
       store.setExecutionMode('launch');
-      store.setCurrentView('focus');
+      pushView('focus', nudgeTask.id);
       recordSignal('task_started', nudgeTask.id, { nudgeStrategy: nudge.strategy, accepted: true });
     }
     // Record nudge outcome
@@ -1952,14 +2053,14 @@ function MicroFeedbackDialog() {
 function AppHeader({ onLogout }: {
   onLogout: () => void;
 }) {
-  const { currentView, setCurrentView, energy, isExecuting, executionMode, focusModeActive, userProfile, authUser, strictModeState } = useShadowStore();
+  const { currentView, energy, isExecuting, executionMode, focusModeActive, userProfile, authUser, strictModeState } = useShadowStore();
 
   return (
     <header className={`sticky top-0 z-50 text-white border-b ${strictModeState === 'active_strict' ? 'bg-red-950 border-red-900' : 'bg-zinc-900 dark:bg-zinc-950 border-zinc-800'}`}>
       <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {isExecuting || currentView === 'task' ? (
-            <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white -ml-2" onClick={() => setCurrentView('today')}>
+            <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-white -ml-2" onClick={() => pushView('today')}>
               <ArrowLeft className="w-4 h-4 mr-1" /> Indietro
             </Button>
           ) : null}
@@ -2010,7 +2111,7 @@ function AppHeader({ onLogout }: {
 // ─── Bottom Navigation ──────────────────────────────────────────────────────
 
 function BottomNav() {
-  const { currentView, setCurrentView } = useShadowStore();
+  const { currentView } = useShadowStore();
 
   const tabs: { view: ViewMode; icon: React.ReactNode; label: string }[] = [
     { view: 'inbox', icon: <Inbox className="w-5 h-5" />, label: 'Inbox' },
@@ -2024,7 +2125,7 @@ function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 dark:bg-zinc-950 border-t border-zinc-800" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="max-w-2xl mx-auto flex">
         {tabs.map((tab) => (
-          <button key={tab.view} onClick={() => setCurrentView(tab.view)} className={`flex-1 flex flex-col items-center py-3 gap-1 transition-colors min-h-[56px] ${currentView === tab.view ? 'text-amber-500' : 'text-zinc-500 active:text-zinc-300'}`} aria-label={tab.label}>
+          <button key={tab.view} onClick={() => pushView(tab.view)} className={`flex-1 flex flex-col items-center py-3 gap-1 transition-colors min-h-[56px] ${currentView === tab.view ? 'text-amber-500' : 'text-zinc-500 active:text-zinc-300'}`} aria-label={tab.label}>
             {tab.icon}
             <span className="text-[10px]">{tab.label}</span>
           </button>
@@ -2247,7 +2348,7 @@ function InboxView() {
                     <StepProgressBadge task={task} />
                   </div>
                 </div>
-                <Button variant="outline" size="sm" className="text-xs h-8 shrink-0" onClick={() => { store.setSelectedTaskId(task.id); store.setCurrentView('task'); }}>
+                <Button variant="outline" size="sm" className="text-xs h-8 shrink-0" onClick={() => pushView('task', task.id)}>
                   {task.status === 'inbox' ? 'Classifica' : 'Riprendi'} <ChevronRight className="w-3 h-3 ml-1" />
                 </Button>
                 {task.status === 'inbox' && (
@@ -2275,9 +2376,8 @@ function TodayView() {
   const [recoveryMap, setRecoveryMap] = useState<Record<string, { reason: string; microStep: string }>>({});
 
   const handleTaskClick = useCallback((taskId: string) => {
-    store.setSelectedTaskId(taskId);
-    store.setCurrentView('task');
-  }, [store]);
+    pushView('task', taskId);
+  }, []);
 
   // Task 50: salva la location di una fascia (PATCH) + aggiorna lo stato locale.
   const handleSlotLocationChange = useCallback(async (slot: string, loc: string) => {
@@ -2358,6 +2458,9 @@ function TodayView() {
   // arma lo scudo nativo e porta alla vista focus (banner rosso).
   const handleStrictOneTap = useCallback((taskId: string) => {
     void enterStrictMode({ taskId });
+    // enterStrictMode ha già impostato vista focus e selectedTaskId (parte
+    // sincrona): qui si allinea solo l'URL (Task 66 A/D56).
+    syncViewToUrl('focus', {});
     recordSignal('task_started', taskId);
     recordSignal('strict_activated', taskId);
     setTimeout(() => {
@@ -2372,9 +2475,8 @@ function TodayView() {
   // compare (prima l'auto-attivazione su focusModeDefault lo nascondeva). Lo
   // strict resta one-tap via handleStrictOneTap.
   const handleStartFocus = useCallback((taskId: string, mode: 'launch' | 'hold' | 'recovery') => {
-    store.setSelectedTaskId(taskId);
     store.setExecutionMode(mode);
-    store.setCurrentView('focus');
+    pushView('focus', taskId);
     // Record learning signal for task start
     recordSignal('task_started', taskId);
     // Show micro-feedback after a short delay
@@ -2858,7 +2960,7 @@ function FocusView() {
       store.setShowMicroFeedback(true);
     }, 500);
 
-    store.setCurrentView('today');
+    replaceView('today');
     // Task 64 (A3, D48): ponte visibile completamento -> stella. Solo per i
     // task ricorrenti (sono loro ad accendere le stelle del Cielo).
     if (selectedTask.recurringTemplateId) {
@@ -2961,7 +3063,7 @@ function FocusView() {
     store.setFocusModeActive(false);
     store.setFocusModeType('soft');
     store.setFocusExitConfirmStep(0);
-    store.setCurrentView('today');
+    replaceView('today');
   }, [selectedTask, store]);
 
   const handleRecovery = useCallback(async (type: string) => {
@@ -2976,7 +3078,7 @@ function FocusView() {
       store.setIsExecuting(false);
       store.setExecutionMode('none');
       store.setFocusModeActive(false);
-      store.setCurrentView('today');
+      replaceView('today');
     }
   }, [selectedTask, store]);
 
@@ -2985,7 +3087,7 @@ function FocusView() {
       <div className="max-w-2xl mx-auto px-4 py-12 text-center space-y-3">
         <Target className="w-12 h-12 text-zinc-300 mx-auto" />
         <p className="text-zinc-400">Nessun task selezionato</p>
-        <Button variant="outline" onClick={() => store.setCurrentView('today')}>Vai a Today</Button>
+        <Button variant="outline" onClick={() => replaceView('today')}>Vai a Today</Button>
       </div>
     );
   }
@@ -3235,12 +3337,15 @@ function TaskDetailView() {
     const focusDefault = store.userProfile?.focusModeDefault;
     if (focusDefault === 'strict') {
       void enterStrictMode({ taskId: selectedTask.id });
-      return; // enterStrictMode imposta già executionMode/vista focus
+      // enterStrictMode imposta già executionMode/vista focus: qui si
+      // allinea solo l'URL (Task 66 A/D56).
+      syncViewToUrl('focus', {});
+      return;
     }
     if (focusDefault === 'soft') {
       void enterSoftMode(selectedTask.id);
     }
-    store.setCurrentView('focus');
+    pushView('focus');
   }, [selectedTask, store]);
 
   // Task 63: anche qui la conferma esplicita prima dell'eliminazione.
@@ -3250,7 +3355,7 @@ function TaskDetailView() {
     if (!selectedTask) return;
     const prev = store.tasks;
     store.removeTask(selectedTask.id);
-    store.setCurrentView('inbox');
+    replaceView('inbox');
     try {
       await deleteTaskAPI(selectedTask.id);
       toast({ title: 'Eliminato' });
