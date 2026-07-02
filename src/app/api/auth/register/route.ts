@@ -4,6 +4,7 @@ import { encode } from 'next-auth/jwt';
 import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
 import { getAuthSecret } from '@/lib/auth-secret';
+import { isBetaTesterEmail } from '@/lib/beta/admin-guard';
 
 const SESSION_COOKIE_NAME = 'next-auth.session-token';
 const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 days
@@ -55,6 +56,8 @@ export async function POST(req: NextRequest) {
 
     // ── Create NextAuth-compatible JWT and set cookie (auto-login) ──
     // Flag sempre false al register: il middleware redirige subito a /tour.
+    // isBetaTester invece si risolve subito (Task 63, D4): un invitato che si
+    // registra deve vedere la strumentazione beta senza rifare login.
     const secret = getAuthSecret();
     const token = await encode({
       token: {
@@ -64,6 +67,8 @@ export async function POST(req: NextRequest) {
         name: user.name,
         tourCompleted: false,
         onboardingComplete: false,
+        consentGiven: false,
+        isBetaTester: isBetaTesterEmail(email),
       },
       secret,
       maxAge: SESSION_MAX_AGE_SEC,

@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
+import { requireBetaSession } from '@/lib/beta/admin-guard';
 import { db } from '@/lib/db';
 import { hasGivenConsent } from '@/lib/beta/consent-guard';
 import { captureApiError } from '@/lib/observability';
@@ -61,7 +62,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { error, userId } = await requireSession(req);
+  // Gate beta server-side (Task 63, D66): i questionari clinici sono
+  // strumentazione del programma beta — il perimetro non puo' essere garantito
+  // dalla sola invisibilita' UI. 404 per chi non e' in allowlist.
+  const { error, userId } = await requireBetaSession(req);
   if (error) return error;
 
   // Sink art.9: niente persistenza di punteggi clinici senza consenso registrato.

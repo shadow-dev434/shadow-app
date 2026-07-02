@@ -5,6 +5,7 @@ import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
 import { getAuthSecret } from '@/lib/auth-secret';
 import { isLoginLocked, recordLoginFailure, clearLoginFailures } from '@/lib/login-throttle';
+import { isBetaTesterEmail } from '@/lib/beta/admin-guard';
 
 const SESSION_COOKIE_NAME = 'next-auth.session-token';
 const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 days
@@ -57,7 +58,9 @@ export async function POST(req: NextRequest) {
     // NB: questo endpoint custom bypassa la callback jwt di NextAuth, quindi
     // i flag onboarding devono essere iniettati qui nei claim, altrimenti
     // il middleware li leggerebbe come undefined → utente redirect a /tour
-    // anche se ha già completato tutto.
+    // anche se ha già completato tutto. Stesso discorso per isBetaTester e
+    // consentGiven (Task 63, D4): parità con la callback jwt di auth.ts —
+    // senza il claim, la strumentazione beta resta invisibile ai tester reali.
     const token = await encode({
       token: {
         id: user.id,
@@ -66,6 +69,8 @@ export async function POST(req: NextRequest) {
         name: user.name,
         tourCompleted: profile?.tourCompleted ?? false,
         onboardingComplete: profile?.onboardingComplete ?? false,
+        consentGiven: profile?.consentGivenAt != null,
+        isBetaTester: isBetaTesterEmail(user.email),
       },
       secret,
       maxAge: SESSION_MAX_AGE_SEC,

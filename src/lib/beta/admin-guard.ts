@@ -72,3 +72,31 @@ export async function requireAdminSession(req: NextRequest): Promise<AdminGuardR
 
   return { error: null, userId, email: email as string };
 }
+
+/**
+ * Gate beta per i sink riservati ai tester invitati (Task 63, D66): allowlist
+ * risolta a runtime dall'EMAIL nel token (non dal claim isBetaTester, che nei
+ * cookie pre-fix D4 non esiste). 404 come per l'admin: la superficie beta non
+ * deve "esistere" per chi non e' invitato.
+ */
+export async function requireBetaSession(req: NextRequest): Promise<AdminGuardResult> {
+  const token = await getToken({ req, secret: getAuthSecret() });
+
+  const userId =
+    token && typeof token.id === 'string'
+      ? token.id
+      : token && typeof token.sub === 'string'
+        ? token.sub
+        : null;
+  const email = token && typeof token.email === 'string' ? token.email : null;
+
+  if (!userId || !isBetaTesterEmail(email)) {
+    return {
+      error: NextResponse.json({ error: 'Not found' }, { status: 404 }),
+      userId: null,
+      email: null,
+    };
+  }
+
+  return { error: null, userId, email: email as string };
+}
