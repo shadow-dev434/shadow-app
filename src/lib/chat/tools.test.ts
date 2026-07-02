@@ -1630,6 +1630,28 @@ describe('executeTool: record_emotional_offload backstop + writer (Slice 8b)', (
     expect(db.learningSignal.create).not.toHaveBeenCalled();
   });
 
+  it('userMessage di CRISI -> crisis_guard, NON scrive il signal (Task 63, ADV-crisi)', async () => {
+    const result = await executeTool('record_emotional_offload', {}, 'user1', {
+      triageState: makeState({ currentEntryId: null }),
+      userMessage: 'stasera non ce la faccio più, voglio farla finita',
+    });
+    expect(result.kind).toBe('sideEffect');
+    expect(result.success).toBe(false);
+    expect((result as { error?: string }).error).toContain('crisis_guard');
+    expect(db.learningSignal.create).not.toHaveBeenCalled();
+  });
+
+  it('userMessage di sfogo legittimo -> il guard NON scatta, il signal si scrive', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.learningSignal.create).mockResolvedValue({ id: 'sigOffload' } as any);
+    const result = await executeTool('record_emotional_offload', {}, 'user1', {
+      triageState: makeState({ currentEntryId: null }),
+      userMessage: 'giornata di merda, sono a pezzi e non ho concluso niente',
+    });
+    expect(result.success).toBe(true);
+    expect(db.learningSignal.create).toHaveBeenCalledTimes(1);
+  });
+
   it('currentEntryId == null + triageState presente -> success, scrive LearningSignal emotional_offload SENZA taskId (threadId non richiesto)', async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(db.learningSignal.create).mockResolvedValue({ id: 'sigOffload' } as any);

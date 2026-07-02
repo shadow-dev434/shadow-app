@@ -51,6 +51,7 @@ import {
 } from '@/lib/evening-review/config';
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses, type MicroStep } from '@/lib/types/shadow';
+import { matchesCrisisPatterns } from './crisis-patterns';
 import {
   UPDATE_PLAN_PREVIEW_TOOL,
   type UpdatePlanPreviewArgs,
@@ -2402,6 +2403,22 @@ async function executeRecordEmotionalOffload(
   userId: string,
   context: ToolExecutionContext | undefined,
 ): Promise<ToolExecutionResult> {
+  // Guardia-crisi deterministica (Task 63, ADV-crisi): un messaggio di crisi
+  // NON è uno sfogo — etichettarlo come emotional_offload scriverebbe un
+  // LearningSignal fuorviante su un dato sensibilissimo (il prompt lo vieta
+  // gia', R6 HARD, ma l'ordine al modello non e' garantito: il dato si').
+  // Prima del backstop apertura: sulla crisi il modello deve ricevere QUESTO
+  // errore. La sua risposta all'utente (112/Telefono Amico) non cambia.
+  if (matchesCrisisPatterns(context?.userMessage)) {
+    return {
+      kind: 'sideEffect',
+      success: false,
+      error:
+        'crisis_guard: il messaggio contiene segnali di crisi, non va registrato come sfogo. ' +
+        'Rispondi con la guardia-crisi (112 / Telefono Amico), senza chiamare tool.',
+    };
+  }
+
   // Backstop apertura-only (mirror del gate getToolsForMode/D4): rigetta se
   // c'e' un'entry aperta (walk) o se manca triageState. NON richiede threadId:
   // a differenza di close_review_burnout (terminale, archivia ChatThread per
