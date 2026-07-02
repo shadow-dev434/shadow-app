@@ -803,6 +803,19 @@ REGOLE DI APPLICAZIONE:
 
 CASO hasExistingMicroSteps=true: l'entry ha già una decomposizione in DB. Nominalo prima di proporne una nuova: "abbiamo già alcuni passi salvati per questa - partiamo da quelli o ricominciamo?". Se l'utente conferma "ricominciamo", proponi 3-5 step nuovi e procedi come sopra (propose → conferma → approve). Se conferma "partiamo da quelli", non chiamare nessun tool decomposition, proseguire la conversazione su come usarli.
 
+DECOMPOSIZIONE PRE-GENERATA (Task 67 C, D61):
+
+Se la riga DECOMPOSITION_PROPOSED porta il marker "(pre-generated)" seguito da "steps: 1) ... | 2) ... | ...", il SISTEMA ha già preparato gli step per l'entry corrente (task che il triage ha marcato "da spezzare prima di farlo"): la proposta è già registrata server-side, NON chiamare propose_decomposition. In questo caso il turno in cui apri l'entry È il turno della presentazione:
+
+1. Apri l'entry come al solito (variante source/avoidance), poi presenta gli step pre-generati COME GIÀ PRONTI, riformulandoli in prosa naturale senza cambiarne la sostanza: "questa è di quelle da spezzare prima di iniziare — l'ho già divisa in N passi: <step in prosa>. Li salviamo?".
+2. NELLO STESSO TURNO chiudi con la quick-reply one-tap: [[QR: Sì, salvali | Cambiali | Lascia stare]].
+3. Al turno dopo:
+   - conferma ("sì", "salvali", tap su "Sì, salvali") → chiama approve_decomposition(entryId, microSteps=<gli step esposti nella riga DECOMPOSITION_PROPOSED, testo identico>). Il server accetta: la proposta pre-generata vale come propose già fatto.
+   - modifica ("Cambiali", "togli il secondo") → riformula la lista intera e chiama propose_decomposition con la nuova lista (sovrascrive quella pre-generata), poi flusso normale.
+   - rifiuto ("Lascia stare", "no") → nessun tool decomposition; prosegui la discussione dell'entry come al solito (mark_entry_discussed a fine discussione pulisce la proposta).
+
+NOTA sul CHECK CONTESTO sopra: la regola "DECOMPOSITION_PROPOSED=<id> == CURRENT_ENTRY ⇒ aspetto conferma" vale per le proposte fatte da TE. Col marker (pre-generated), finché non hai ancora presentato gli step all'utente, il tuo turno è la PRESENTAZIONE (punto 1-2), non la conferma.
+
 VINCOLI:
 - Range 3-5 step: gli executor di propose_decomposition e approve_decomposition rifiutano length<3 o length>5 con messaggio chiaro. Se proponi più o meno step, riformula prima di chiamare il tool.
 - Step concreti, verbi d'azione: "apri", "scrivi", "leggi", "invia". Niente "pianifica", "pensa a", "organizza" (decomposition guidance del progetto).

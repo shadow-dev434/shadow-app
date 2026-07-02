@@ -2,8 +2,11 @@ import { addDaysIso, endOfDayInZone } from './dates';
 import {
   HIGH_AVOIDANCE_THRESHOLD,
   RECENT_AVOIDANCE_HOURS,
+  MIN_MICRO_STEPS,
+  MAX_MICRO_STEPS,
 } from './config';
-import type { MicroStep } from '@/lib/types/shadow';
+import type { ExecutionContext, MicroStep } from '@/lib/types/shadow';
+import { decomposeWithAI } from '@/lib/engines/decomposition-engine';
 
 /**
  * Default timezone for evening-review triage.
@@ -39,6 +42,12 @@ export type TaskProjection = {
   // istanze materializzate per il giorno del piano entrano sempre fra i candidati
   // (reason 'recurring'), così un'abitudine ricorrente finisce nel piano di domani.
   recurringTemplateId: string | null;
+  // Task 67 C (§6.12): Task.decision dal priority engine (persistita dal flusso
+  // di classificazione). 'decompose_then_do' triggera la pre-generazione degli
+  // step al triage (pregenerateDecompositionProposals). description alimenta
+  // l'engine di decomposizione (decomposeWithAI vuole title+description).
+  decision: string;
+  description: string;
 };
 
 export type CandidateReason = 'deadline' | 'recurring' | 'new' | 'carryover';
@@ -185,11 +194,19 @@ export type EntryOutcome =
  * Workspace di decomposizione corrente (transient, vive solo in TriageState).
  * Solo level=1 viene persistito su Task.microSteps via approve_decomposition.
  * Level 2 e 3 vivono solo in chat (decisione di prodotto Slice 5).
+ *
+ * Task 67 C: pregenerated=true quando il workspace e' stato precompilato
+ * server-side (set_current_entry su entry decompose_then_do senza step, con
+ * proposte da pregenerateDecompositionProposals). Il modeContext in quel caso
+ * espone ANCHE i testi degli step (il modello non li ha in conversazione,
+ * a differenza del percorso propose_decomposition). Opzionale: workspace
+ * persistiti pre-Task-67 caricano intatti.
  */
 export type DecompositionWorkspace = {
   taskId: string;
   level: 1 | 2 | 3;
   proposedSteps: { text: string }[];
+  pregenerated?: boolean;
 };
 
 export type TriageState = {
@@ -229,6 +246,18 @@ export type TriageState = {
 
   /** Active decomposition workspace, or null when no decomposition is in progress. */
   decomposition?: DecompositionWorkspace | null;
+
+  /**
+   * Task 67 C (§6.12): step pre-generati al primo turno della review per le
+   * candidate con decision='decompose_then_do' senza microSteps (engine
+   * rule-based decomposeWithAI, zero LLM). Chiave: taskId. Consumati da
+   * executeSetCurrentEntry, che quando apre una di queste entry precompila il
+   * workspace `decomposition` (pregenerated=true) — il modello presenta gli
+   * step gia' pronti e alla conferma chiama approve_decomposition, senza il
+   * "rito" propose→conferma→approve a 3 turni. Additivo/opzionale:
+   * contextJson pre-Task-67 caricano intatti.
+   */
+  proposedStepsByTaskId?: Record<string, { text: string }[]>;
 
   /**
    * Slice 7 V1.x (Bug #8 fix): mood/energy 1-5 catturati separatamente nei
@@ -788,4 +817,40 @@ export function hasMicroSteps(task: { microSteps: string }): boolean {
   // Evita JSON.parse nel caso comunissimo "task senza decomposizione".
   if (!task.microSteps || task.microSteps === '[]') return false;
   return parseMicroSteps(task.microSteps).length > 0;
+}
+
+/**
+ * Task 67 C (§6.12, D61): pre-genera gli step per le candidate marcate
+ * decision='decompose_then_do' che NON hanno gia' microSteps, cosi' la review
+ * arriva al triage con le proposte pronte (niente "rito" di richiesta manuale).
+ *
+ * Engine: decomposeWithAI — rule-based in-house, ZERO chiamate LLM, zero costo.
+ * Contesto di esecuzione NEUTRO documentato: gli step sono per il giorno dopo,
+ * quindi energia media e mattina come slot di riferimento; il profilo utente
+ * (che raffinerebbe solo le durate stimate, scartate dal workspace {text})
+ * viene deliberatamente omesso.
+ *
+ * Vincoli allineati agli executor propose/approve (range MIN..MAX_MICRO_STEPS):
+ * l'engine puo' produrre fino a 8 step -> cap a MAX; sotto il MIN la proposta
+ * viene saltata (il modello resta libero di proporre a mano come oggi).
+ */
+export async function pregenerateDecompositionProposals(
+  candidates: Pick<TaskProjection, 'id' | 'title' | 'description' | 'decision' | 'microSteps'>[],
+): Promise<Record<string, { text: string }[]>> {
+  const neutralCtx: ExecutionContext = {
+    energy: 3,
+    timeAvailable: 30,
+    currentContext: 'any',
+    currentTimeSlot: 'morning',
+  };
+  const proposals: Record<string, { text: string }[]> = {};
+  for (const c of candidates) {
+    if (c.decision !== 'decompose_then_do') continue;
+    if (hasMicroSteps(c)) continue;
+    const { steps } = await decomposeWithAI(c.title, c.description, neutralCtx);
+    const texts = steps.slice(0, MAX_MICRO_STEPS).map((s) => ({ text: s.text }));
+    if (texts.length < MIN_MICRO_STEPS) continue;
+    proposals[c.id] = texts;
+  }
+  return proposals;
 }

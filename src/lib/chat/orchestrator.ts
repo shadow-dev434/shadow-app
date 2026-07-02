@@ -18,6 +18,7 @@ import {
   isRecentlyAvoided,
   countParked,
   hasMicroSteps,
+  pregenerateDecompositionProposals,
   type Candidate,
   type EveningReviewPhase,
   type TaskProjection,
@@ -1488,7 +1489,9 @@ function safeParseJSON<T>(json: string, fallback: T): T {
 async function loadAllNonTerminalTasks(userId: string): Promise<TaskProjection[]> {
   return db.task.findMany({
     where: { userId, status: { notIn: terminalTaskStatuses() } },
-    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true, source: true, postponedCount: true, microSteps: true, size: true, priorityScore: true, status: true, recurringTemplateId: true },
+    // Task 67 C: decision + description alimentano la pre-generazione degli
+    // step per le candidate decompose_then_do (pregenerateDecompositionProposals).
+    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true, source: true, postponedCount: true, microSteps: true, size: true, priorityScore: true, status: true, recurringTemplateId: true, decision: true, description: true },
   });
 }
 
@@ -1510,6 +1513,17 @@ async function initEveningReview(
     softCap: CANDIDATE_LIST_SOFT_CAP,
   });
 
+  // Task 67 C (§6.12): step pre-generati per le candidate decompose_then_do
+  // senza microSteps (engine rule-based, zero LLM). Consumati da
+  // set_current_entry, che precompila il workspace di decomposizione.
+  const proposedStepsByTaskId = await pregenerateDecompositionProposals(candidates);
+  if (Object.keys(proposedStepsByTaskId).length > 0) {
+    console.warn(
+      `[Task67 C pregenerate] step pre-generati per ${Object.keys(proposedStepsByTaskId).length} ` +
+      `candidate decompose_then_do (userId=${userId})`,
+    );
+  }
+
   const triageState: TriageState = {
     candidateTaskIds: candidates.map((c) => c.id),
     addedTaskIds: [],
@@ -1524,6 +1538,7 @@ async function initEveningReview(
     currentEntryId: null,
     outcomes: {},
     decomposition: null,
+    ...(Object.keys(proposedStepsByTaskId).length > 0 && { proposedStepsByTaskId }),
   };
 
   return { triageState, allTasks };
@@ -1672,7 +1687,19 @@ export function buildEveningReviewModeContext(
   // per capire se sta in fase "ho proposto, aspetto conferma" o "non ancora".
   const proposedDecomp = triageState.decomposition;
   if (proposedDecomp) {
-    lines.push(`DECOMPOSITION_PROPOSED=${proposedDecomp.taskId}`);
+    // Task 67 C: workspace precompilato server-side (entry decompose_then_do)
+    // — il modello NON ha scritto gli step in conversazione, quindi i testi
+    // vanno esposti qui. Formato una-riga coerente col resto del blocco.
+    if (proposedDecomp.pregenerated === true) {
+      const stepsInline = proposedDecomp.proposedSteps
+        .map((s, i) => `${i + 1}) ${s.text}`)
+        .join(' | ');
+      lines.push(
+        `DECOMPOSITION_PROPOSED=${proposedDecomp.taskId} (pre-generated) steps: ${stepsInline}`,
+      );
+    } else {
+      lines.push(`DECOMPOSITION_PROPOSED=${proposedDecomp.taskId}`);
+    }
   } else {
     lines.push('DECOMPOSITION_PROPOSED=none');
   }

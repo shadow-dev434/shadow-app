@@ -40,6 +40,7 @@ import {
   clearDecomposition,
   countParked,
   computeEffectiveList,
+  hasMicroSteps,
   type EntryOutcome,
   type EveningReviewPhase,
   type TriageState,
@@ -1608,9 +1609,11 @@ async function executeSetCurrentEntry(
   }
 
   // Verify ownership: prevents the model from wiring arbitrary IDs.
+  // Task 67 C: microSteps nella select per il guard "gia' decomposto" della
+  // precompilazione workspace qui sotto.
   const task = await db.task.findFirst({
     where: { id: entryId, userId },
-    select: { id: true, title: true },
+    select: { id: true, title: true, microSteps: true },
   });
   if (!task) {
     return { kind: 'sideEffect', success: false, error: `Task ${entryId} not found or not owned by user` };
@@ -1736,7 +1739,7 @@ async function executeSetCurrentEntry(
     };
   }
 
-  const newState = setCurrentEntry(triageState, entryId);
+  let newState = setCurrentEntry(triageState, entryId);
   if (newState === triageState) {
     // Pure helper returned same ref => distinguish reasons for the model.
     const effective = computeEffectiveList(triageState);
@@ -1761,6 +1764,28 @@ async function executeSetCurrentEntry(
       success: false,
       error: 'setCurrentEntry no-op for unknown reason',
     };
+  }
+
+  // Task 67 C (§6.12): l'entry appena aperta e' una decompose_then_do con
+  // step pre-generati al triage e ancora nessuna decomposizione sul task ->
+  // precompila il workspace (pregenerated=true). Il modeContext del turno
+  // espone taskId+step; il modello li presenta e alla conferma dell'utente
+  // chiama direttamente approve_decomposition (il guard "propose first"
+  // e' soddisfatto dal workspace). Rifiuto/chiusura entry: mark_entry_discussed
+  // resetta il workspace come per una proposta del modello.
+  const pregeneratedSteps = triageState.proposedStepsByTaskId?.[entryId];
+  const stillUndecomposed = !hasMicroSteps({ microSteps: task.microSteps });
+  if (pregeneratedSteps && pregeneratedSteps.length > 0 && stillUndecomposed) {
+    newState = setDecomposition(newState, {
+      taskId: entryId,
+      level: 1,
+      proposedSteps: pregeneratedSteps,
+      pregenerated: true,
+    });
+    console.warn(
+      `[Task67 C workspace] decomposizione pre-generata attivata per entry ${entryId} ` +
+      `(${pregeneratedSteps.length} step)`,
+    );
   }
 
   return {

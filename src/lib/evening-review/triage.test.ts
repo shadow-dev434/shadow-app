@@ -18,6 +18,7 @@ import {
   loadTriageStateFromContext,
   parseMicroSteps,
   hasMicroSteps,
+  pregenerateDecompositionProposals,
   type Candidate,
   type DecompositionWorkspace,
   type TaskProjection,
@@ -45,6 +46,8 @@ function makeTask(overrides: Partial<TaskProjection>): TaskProjection {
     priorityScore: 0,
     status: 'inbox',
     recurringTemplateId: null,
+    decision: 'unclassified',
+    description: '',
     ...overrides,
   };
 }
@@ -357,6 +360,8 @@ describe('reasonsFromCandidates', () => {
         priorityScore: 0,
         status: 'inbox',
         recurringTemplateId: null,
+        decision: 'unclassified',
+        description: '',
         reason: 'deadline',
       },
       {
@@ -373,6 +378,8 @@ describe('reasonsFromCandidates', () => {
         priorityScore: 0,
         status: 'inbox',
         recurringTemplateId: null,
+        decision: 'unclassified',
+        description: '',
         reason: 'carryover',
       },
     ];
@@ -936,5 +943,46 @@ describe('isPreviewPhaseActive — 0 candidate (Task 67 B, ADV-0cand)', () => {
         }),
       ),
     ).toBe(true);
+  });
+});
+
+describe('pregenerateDecompositionProposals (Task 67 C)', () => {
+  it('genera step solo per le candidate decompose_then_do senza microSteps', async () => {
+    const decompose = makeTask({
+      id: 'dec1',
+      title: 'Scrivere la relazione annuale',
+      decision: 'decompose_then_do',
+    });
+    const doNow = makeTask({ id: 'now1', decision: 'do_now' });
+    const unclassified = makeTask({ id: 'un1' });
+    const proposals = await pregenerateDecompositionProposals([
+      decompose,
+      doNow,
+      unclassified,
+    ]);
+    expect(Object.keys(proposals)).toEqual(['dec1']);
+    expect(proposals['dec1'].length).toBeGreaterThanOrEqual(3);
+    expect(proposals['dec1'].length).toBeLessThanOrEqual(5);
+    for (const s of proposals['dec1']) {
+      expect(typeof s.text).toBe('string');
+      expect(s.text.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('salta le decompose_then_do che hanno gia microSteps', async () => {
+    const already = makeTask({
+      id: 'dec2',
+      title: 'Pulire la cucina',
+      decision: 'decompose_then_do',
+      microSteps: JSON.stringify([
+        { id: 's1', text: 'sgombra il piano', done: false, estimatedSeconds: 60 },
+      ]),
+    });
+    const proposals = await pregenerateDecompositionProposals([already]);
+    expect(proposals).toEqual({});
+  });
+
+  it('input vuoto -> mappa vuota', async () => {
+    expect(await pregenerateDecompositionProposals([])).toEqual({});
   });
 });
