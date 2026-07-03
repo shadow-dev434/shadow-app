@@ -1,0 +1,26 @@
+[
+  {
+    "title": "Scrivere la mail difficile al capo",
+    "status": "planned",
+    "postponedCount": 6,
+    "avoidanceCount": 6
+  },
+  {
+    "title": "Compilare la dichiarazione dei redditi",
+    "status": "planned",
+    "postponedCount": 5,
+    "avoidanceCount": 5
+  },
+  {
+    "title": "Prenotare la visita medica di controllo",
+    "status": "planned",
+    "postponedCount": 4,
+    "avoidanceCount": 4
+  },
+  {
+    "title": "Portare il pacco alle poste",
+    "status": "inbox",
+    "postponedCount": 1,
+    "avoidanceCount": 0
+  }
+]

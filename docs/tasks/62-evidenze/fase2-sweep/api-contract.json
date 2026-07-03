@@ -1,0 +1,315 @@
+{
+  "tot": 44,
+  "fail": 9,
+  "server500": 2,
+  "results": [
+    {
+      "route": "/api/tasks",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/daily-plan",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/settings",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/review",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/patterns",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/adaptive-profile",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/profile",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/memory",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/streaks",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/sky",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/contacts",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/notifications",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/chat/threads",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/chat/bootstrap",
+      "check": "GET senza cookie → 401",
+      "status": 405,
+      "verdict": "FAIL",
+      "note": "atteso 401, body="
+    },
+    {
+      "route": "/api/chat/active-thread",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/chat/evening-signal",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/export",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/account",
+      "check": "GET senza cookie → 401",
+      "status": 405,
+      "verdict": "FAIL",
+      "note": "atteso 401, body="
+    },
+    {
+      "route": "/api/strict-mode",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/beta/feedback",
+      "check": "GET senza cookie → 401",
+      "status": 405,
+      "verdict": "FAIL",
+      "note": "atteso 401, body="
+    },
+    {
+      "route": "/api/beta/assessment",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/admin/beta/bug-reports",
+      "check": "GET senza cookie → 401",
+      "status": 404,
+      "verdict": "FAIL",
+      "note": "atteso 401, body={\"error\":\"Not found\"}"
+    },
+    {
+      "route": "/api/admin/beta/summary",
+      "check": "GET senza cookie → 401",
+      "status": 404,
+      "verdict": "FAIL",
+      "note": "atteso 401, body={\"error\":\"Not found\"}"
+    },
+    {
+      "route": "/api/calendar",
+      "check": "GET senza cookie → 401",
+      "status": 401,
+      "verdict": "PASS",
+      "note": ""
+    },
+    {
+      "route": "/api/health",
+      "check": "GET pubblico → 200 ok",
+      "status": 200,
+      "verdict": "PASS",
+      "note": "{\"status\":\"ok\",\"version\":\"0.2.0\"}"
+    },
+    {
+      "route": "/api",
+      "check": "GET stub pubblico (da rimuovere)",
+      "status": 307,
+      "verdict": "PASS",
+      "note": "status=307 body=/?auth=login"
+    },
+    {
+      "route": "/api/tasks",
+      "check": "POST senza title",
+      "status": 500,
+      "verdict": "FAIL",
+      "note": "500! body={\"error\":\"Failed to create task\"}"
+    },
+    {
+      "route": "/api/tasks/[id]",
+      "check": "PATCH status arbitrario",
+      "status": 200,
+      "verdict": "PASS",
+      "note": "200"
+    },
+    {
+      "route": "/api/settings",
+      "check": "PATCH orario 25:99",
+      "status": 200,
+      "verdict": "PASS",
+      "note": "200"
+    },
+    {
+      "route": "/api/adaptive-profile",
+      "check": "PATCH campo spazzatura",
+      "status": 404,
+      "verdict": "PASS",
+      "note": "404"
+    },
+    {
+      "route": "/api/daily-plan",
+      "check": "POST body vuoto",
+      "status": 200,
+      "verdict": "PASS",
+      "note": "200"
+    },
+    {
+      "route": "/api/review",
+      "check": "POST body vuoto",
+      "status": 200,
+      "verdict": "PASS",
+      "note": "200"
+    },
+    {
+      "route": "/api/chat/turn",
+      "check": "POST senza mode/msg",
+      "status": 400,
+      "verdict": "PASS",
+      "note": "400"
+    },
+    {
+      "route": "/api/decompose",
+      "check": "POST body vuoto",
+      "status": 400,
+      "verdict": "PASS",
+      "note": "400"
+    },
+    {
+      "route": "/api/ai-classify",
+      "check": "POST body vuoto",
+      "status": 400,
+      "verdict": "PASS",
+      "note": "400"
+    },
+    {
+      "route": "/api/micro-feedback",
+      "check": "POST body vuoto",
+      "status": 400,
+      "verdict": "PASS",
+      "note": "400"
+    },
+    {
+      "route": "/api/learning-signal",
+      "check": "POST body vuoto",
+      "status": 400,
+      "verdict": "PASS",
+      "note": "400"
+    },
+    {
+      "route": "/api/contacts",
+      "check": "POST body vuoto",
+      "status": 400,
+      "verdict": "PASS",
+      "note": "400"
+    },
+    {
+      "route": "/api/strict-mode",
+      "check": "POST body vuoto",
+      "status": 400,
+      "verdict": "PASS",
+      "note": "400"
+    },
+    {
+      "route": "/api/tasks/[id]",
+      "check": "PATCH id inesistente",
+      "status": 404,
+      "verdict": "PASS",
+      "note": "404"
+    },
+    {
+      "route": "/api/calendar/oauth",
+      "check": "GET senza env (D23)",
+      "status": 500,
+      "verdict": "FAIL",
+      "note": "500! body={\"error\":\"Google Client ID non configurato. Imposta GOOGLE_CLIENT_ID nelle variabili ambiente.\"}"
+    },
+    {
+      "route": "/api/settings",
+      "check": "D29: 25:99 respinto (finestra NON corrotta)",
+      "status": 200,
+      "verdict": "PASS",
+      "note": "eveningWindowStart ora = undefined"
+    },
+    {
+      "route": "/api/tasks",
+      "check": "D14: POST senza title status",
+      "status": 500,
+      "verdict": "FAIL",
+      "note": "status=500 (500=D14 confermato)"
+    },
+    {
+      "route": "/api/tasks/[id]",
+      "check": "D14: PATCH status arbitrario finisce in DB?",
+      "status": 200,
+      "verdict": "FAIL",
+      "note": "status in DB = stato_fuori_dominio (fuori dominio = confermato)"
+    }
+  ]
+}

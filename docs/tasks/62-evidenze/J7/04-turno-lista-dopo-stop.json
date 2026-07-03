@@ -1,0 +1,55 @@
+{
+  "status": 200,
+  "json": {
+    "threadId": "cmr2vxn60006hib74v6bv9flk",
+    "mode": "general",
+    "assistantMessage": "Ecco cosa hai oggi:\n\n1. **Stretching 10 minuti** — health, ricorrente\n2. **Innaffiare le piante** — household, ricorrente (due istanze, una scade il 7 luglio)\n\nTutto in inbox, niente ancora classificato. Vuoi iniziare a organizzare la giornata?",
+    "toolsExecuted": [
+      {
+        "name": "get_today_tasks",
+        "input": {},
+        "result": [
+          {
+            "id": "cmr2vtj0e000hib749f50ig9k",
+            "title": "Stretching 10 minuti",
+            "urgency": 3,
+            "importance": 3,
+            "category": "health",
+            "status": "inbox",
+            "deadline": null,
+            "recurring": true,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr2vrr5p0005ib745hw1sf22",
+            "title": "Innaffiare le piante",
+            "urgency": 3,
+            "importance": 2,
+            "category": "household",
+            "status": "inbox",
+            "deadline": "2026-07-07",
+            "recurring": true,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr2vtvoi0013ib74164zuyai",
+            "title": "Innaffiare le piante",
+            "urgency": 3,
+            "importance": 2,
+            "category": "household",
+            "status": "inbox",
+            "deadline": null,
+            "recurring": true,
+            "estimatedMinutes": 25
+          }
+        ]
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.0029284000000000003,
+    "tokensIn": 1103,
+    "tokensOut": 129,
+    "modelUsed": "claude-haiku-4-5",
+    "latencyMs": 3427
+  }
+}

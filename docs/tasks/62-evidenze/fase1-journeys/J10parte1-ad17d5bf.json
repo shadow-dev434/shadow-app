@@ -1,0 +1,86 @@
+{
+ "journey": "J10 parte 1 — Multiutente e gate beta/admin (collaudo-beta, collaudo-admin, collaudo-nonbeta; login REALE via POST /api/auth/login + confronto con cookie mintato e con flusso NextAuth callback/credentials). Script: scripts/e2e/collaudo-62/j10-gates-beta-admin.ts; evidenze in docs/tasks/62-evidenze/J10-multiutente-gate/. Nessun turno LLM usato (spesa 0).",
+ "steps": [
+  {
+   "step": "1. D4: login reale collaudo-beta/admin → decode JWT (next-auth/jwt) → claim isBetaTester/admin presenti?",
+   "expected": "Il token del login reale contiene isBetaTester (true per beta e admin); per admin un eventuale claim admin.",
+   "observed": "CONFERMATO D4: il token mintato da POST /api/auth/login contiene SOLO {id,sub,email,name,tourCompleted,onboardingComplete} (login/route.ts:61-70) — niente isBetaTester ne' consentGiven, per nessuno dei 3 utenti. Controprova: lo STESSO utente collaudo-beta via flusso NextAuth vero (POST /api/auth/callback/credentials) ottiene isBetaTester:true + consentGiven:true → l'allowlist BETA_TESTERS e' corretta, il buco e' solo nel login custom. Claim admin non esiste in NESSUN flusso (by design: admin-guard.ts:64 riverifica l'email contro ADMIN_EMAILS a ogni request). Conseguenza misurata: GET /api/auth/session con cookie reale → session.user.isBetaTester=false; con cookie mintato → true.",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "2. Superfici API beta con cookie login reale vs cookie mintato {isBetaTester:true}",
+   "expected": "Delta reale-vs-mintato documentato (prova di D4): o 403 col reale, o identici.",
+   "observed": "GET /api/beta/bug-report, GET /api/beta/assessment, GET /api/beta/feedback/status → 200 IDENTICI con entrambi i cookie: le route beta usano solo requireSession, nessun gate isBetaTester server-side. Il delta di D4 e' quindi tutto in /api/auth/session (step 1): le API funzionerebbero, ma la UI che le chiama (BugReportDialog.tsx:444, BetaCheckinCard.tsx:155, tasks/page.tsx:3364,3394) ritorna null con isBetaTester=false → il tester reale non arriva mai a chiamarle.",
+   "verdict": "PASS"
+  },
+  {
+   "step": "3. collaudo-nonbeta (login reale): API beta → 403? Pagina /beta/assessment raggiungibile? (D66)",
+   "expected": "API beta → 403 per non-beta; pagina /beta/assessment idealmente non raggiungibile.",
+   "observed": "CONFERMATO D66: tutte le API beta rispondono 200 al non-beta: GET/POST bug-report (report creato), POST feedback daily_pulse (riga scritta), PATCH /api/beta/assessment con item ASRS → 200 e punteggio clinico art.9 PERSISTITO per un utente fuori dal programma. Pagina GET /beta/assessment da autenticato non-beta → 200 (shell client 24KB, il questionario si monta client-side). Il perimetro art.9 dichiarato in admin-guard.ts:36-38 (non invitati = zero raccolta clinica) e' garantito solo dall'invisibilita' UI, non dai gate server.",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "4. Bug report end-to-end: tester POST → admin lista+triage 'fixed' → tester rivede lo status",
+   "expected": "Ogni hop funziona; il tester vede status fixed.",
+   "observed": "hop1 POST beta → 200 id=cmr2p1chl00o4ib6sgaf66zno; hop2 GET /api/admin/beta/bug-reports?status=new (admin, login reale) → 200, report trovato con email tester visibile; hop3 PATCH {status:'fixed',priority:'P2',adminNotes} → 200, resolvedAt stampato; hop4 GET /api/beta/bug-report (tester) → 200, status=fixed resolvedAt presente priority=P2; hop5: 0 righe Notification server — il 'toast risolta' e' solo client-side (BugReportDialog.tsx:87-114, confronto resolvedAt vs localStorage al mount). Nota: il gate admin funziona col login reale perche' usa l'email del token, non un claim.",
+   "verdict": "PASS"
+  },
+  {
+   "step": "5. Pulse giornaliero: doppio POST stesso giorno",
+   "expected": "Idempotente o aggiornamento, mai duplicato.",
+   "observed": "POST 1 → 200 con id; POST 2 stesso giorno (answers diverse) → 200 {feedback:null,duplicate:true}; DB: 1 sola riga, answers del PRIMO invio (la prima risposta vince, il secondo invio e' scartato in silenzio). Nessun duplicato. Nota UX: una correzione dell'umore andrebbe persa senza feedback, ma da UI la card si nasconde dopo il primo invio (pulseDue=false).",
+   "verdict": "PASS"
+  },
+  {
+   "step": "6. Questionario T0: compila meta', riprendi (resume), completa",
+   "expected": "Risposte parziali salvate, resume riparte da meta', completamento con punteggio server-side.",
+   "observed": "GET iniziale → 0 responses; PATCH 9/18 item ASRS → 200 answered=9 completedAt=null; GET resume → bozza con 9/18 item restituiti (resume funziona); PATCH restanti 9 + completed:true → totalScore=36 (= somma attesa ricalcolata server-side) completedAt valorizzato; ADEXI pre completato (14/14, total=44); GET feedback/status dopo T0 → betaDay=1, assessmentDue=null (il questionario non viene piu' richiesto).",
+   "verdict": "PASS"
+  },
+  {
+   "step": "7. Gate admin: /admin/beta e /api/admin/* per admin, non-admin, anonimo",
+   "expected": "200 per admin (login reale); 404 per non-admin; API admin 403/404 per non-admin.",
+   "observed": "GET /admin/beta: admin reale → 200 (24KB); nonbeta → 404 ('non esiste', come promesso); anonimo → 307 /?auth=login. API: GET/PATCH /api/admin/beta/bug-reports e /summary → 404 {error:'Not found'} per nonbeta, per beta-non-admin e per anonimo (per anonimo 404 invece del 401 standard: coerente col design 'la superficie non esiste'). PATCH ostile del nonbeta sul report → 404 e status DB invariato (fixed).",
+   "verdict": "PASS"
+  }
+ ],
+ "findings": [
+  {
+   "title": "D4 CONFERMATO: il login custom non minta isBetaTester → tutta la strumentazione beta e' invisibile ai tester reali",
+   "severity": "S2",
+   "repro": "1) Utente con email in BETA_TESTERS (es. collaudo-beta@probe.local); 2) login dal form reale dell'app (tasks/page.tsx:753 → POST /api/auth/login); 3) decode del cookie next-auth.session-token: nessun claim isBetaTester (ne' consentGiven); 4) GET /api/auth/session → session.user.isBetaTester=false; 5) BugReportDialog.tsx:444, BetaCheckinCard.tsx:155 e le card beta di tasks/page.tsx:3364,3394 ritornano null → niente icona bug, niente pulse, niente questionari T0. Controprova: stesso utente via POST /api/auth/callback/credentials (flusso NextAuth con la callback jwt di auth.ts:50) → isBetaTester:true. Il programma beta raccoglie zero dati senza che nessuno se ne accorga; il claim mancante non si autoripara mai perche' la callback jwt di NextAuth non riesegue il ramo `if (user)` sui token gia' emessi.",
+   "evidence": "docs/tasks/62-evidenze/J10-multiutente-gate/step1-d4-claims.json",
+   "fileLine": "src/app/api/auth/login/route.ts:61-70",
+   "dossierRef": "D4"
+  },
+  {
+   "title": "D66 CONFERMATO: gate beta solo client-side — un autenticato non-beta puo' scrivere bug report, pulse e punteggi clinici art.9 via API, e raggiunge /beta/assessment via URL",
+   "severity": "S3",
+   "repro": "1) Login reale come collaudo-nonbeta (email NON in BETA_TESTERS); 2) POST /api/beta/bug-report → 200, report creato; 3) POST /api/beta/feedback {kind:'daily_pulse'} → 200, riga scritta; 4) PATCH /api/beta/assessment {instrument:'asrs',wave:'pre',itemScores:{a1:2}} → 200, punteggio clinico ASRS persistito in AssessmentResponse per un utente fuori dal programma beta; 5) GET /beta/assessment (pagina) → 200, il questionario si monta client-side. Le route beta usano solo requireSession + hasGivenConsent (consenso generico onboarding), mai isBetaTesterEmail: il perimetro art.9 promesso in admin-guard.ts:36-38 ('un registrante non invitato vede un'app pulita, senza raccolta di dati di categoria particolare fuori dal programma beta') regge solo finche' nessuno digita l'URL o chiama l'API.",
+   "evidence": "docs/tasks/62-evidenze/J10-multiutente-gate/step3-nonbeta-superfici.json",
+   "fileLine": "src/app/api/beta/assessment/route.ts:63-70",
+   "dossierRef": "D66"
+  }
+ ],
+ "uxNotes": [
+  "L7 gate incoerenti (asse del journey): il gate beta esiste in 3 versioni diverse — UI (claim JWT isBetaTester, rotto dal login custom D4), API beta (nessun gate: solo requireSession+consenso, D66), admin (email riverificata contro env a ogni request, robusto). Solo il terzo modello e' coerente: allineare gli altri due ad esso (check email server-side) risolverebbe D4 e D66 insieme.",
+  "D4 lato tester ADHD: il fallimento e' completamente silenzioso — il tester invitato non sa cosa dovrebbe vedere, quindi non puo' nemmeno segnalare che manca l'icona bug (il canale di segnalazione e' esso stesso la cosa nascosta). Vicolo cieco perfetto.",
+  "Il gate admin che risponde 404 anche all'anonimo su /api/admin/* (invece del 401 standard delle altre API) e' un'asimmetria intenzionale e buona ('la superficie non esiste'), ma va documentata: un monitoraggio che distingue 401/404 la leggerebbe come rotta mancante.",
+  "Pulse: il secondo invio nello stesso giorno risponde 200 {duplicate:true} e scarta in silenzio le nuove risposte (la prima vince). Da UI la card si nasconde dopo l'invio quindi il caso e' raro, ma un retry offline con risposte corrette perderebbe la correzione senza alcun feedback all'utente.",
+  "Resume del questionario T0: ottimo per ADHD — salvataggio incrementale per item, GET restituisce la bozza (9/18) e si riparte da dove si era; punteggio ricalcolato server-side (mai fidarsi del client). Pattern da replicare altrove (es. onboarding).",
+  "Toast 'Segnalazione risolta' basato su localStorage (shadow-beta-fixed-seen-at) + fetch al mount: su un secondo dispositivo il tester rivede il toast (lastSeen=0), e se non riapre l'app non lo vede mai. Nessuna notifica server (0 righe Notification).",
+  "L3-AUTOMAZIONE: al PATCH admin status→'fixed' non parte nessuna notifica al tester (ne' email ne' riga Notification): il loop di gratificazione promesso ('un tester che vede i suoi bug morire segnala di piu'') dipende dal caso. Seme: creare Notification/email al passaggio a fixed, riusando il ponte email della review serale.",
+  "L3-AUTOMAZIONE: l'attivazione di un beta tester richiede: edit env BETA_TESTERS su Vercel + redeploy + LOGOUT/LOGIN dell'utente (il claim si minta solo al sign-in, e col login custom nemmeno li' — D4). Seme: leggere il flag da DB (colonna User.isBetaTester o check email runtime come fa l'admin) cosi' l'invito e' istantaneo e senza re-login.",
+  "L3-AUTOMAZIONE: il triage admin e' un PATCH per singolo report senza bulk ne' filtri per priorita' in API (solo ?status=): con decine di report il costo per Antonio cresce linearmente."
+ ],
+ "leftForUiPass": [
+  "Icona bug visibile SOLO ai beta [UI]: verificare nel browser che con login reale l'icona NON compaia (conseguenza D4 gia' provata via /api/auth/session) e che compaia dopo il fix o con cookie mintato.",
+  "Banner/card check-in beta (BetaCheckinCard) in ChatView nella finestra serale [UI]: montaggio, dismissione, pulseDue→invio dal widget.",
+  "Card Export dati / Rifai profilo in settings per beta vs nonbeta [UI] (perimetro D66 lato GDPR, parte 2 del journey).",
+  "Toast 'Segnalazione risolta 🎉' al tester al primo mount dopo il fix (localStorage shadow-beta-fixed-seen-at) [UI].",
+  "Pagina /beta/assessment aperta da non-beta nel browser [UI]: cosa vede davvero l'utente (il questionario clinico si monta client-side? nessun avviso 'sei fuori dal programma'?).",
+  "Dashboard /admin/beta [UI]: lista, filtri, triage e adminNotes dal browser con login reale admin."
+ ],
+ "transcripts": [],
+ "spendUsd": 0
+}

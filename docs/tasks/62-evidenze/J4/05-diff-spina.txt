@@ -1,0 +1,1 @@
+thread cmr2o586t003sib6s40pqcgl8 (morning_checkin): state active->archived, endedAt null->2026-07-01T22:55:38.739Z

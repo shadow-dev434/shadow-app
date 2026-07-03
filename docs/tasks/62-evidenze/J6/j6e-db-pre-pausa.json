@@ -1,0 +1,13 @@
+{
+  "label": "pre-pausa",
+  "at": "2026-07-01T22:49:51.731Z",
+  "thread": {
+    "state": "active",
+    "mode": "evening_review",
+    "lastTurnAt": "2026-07-01T22:49:49.649Z",
+    "endedAt": null,
+    "contextJson": "{\"triage\":{\"candidateTaskIds\":[\"cmr2o28oo0007ibzkfskf4qcr\",\"cmr2o295k000bibzkblu63d51\"],\"addedTaskIds\":[],\"excludedTaskIds\":[],\"reasonsByTaskId\":{\"cmr2o28oo0007ibzkfskf4qcr\":\"deadline\",\"cmr2o295k000bibzkblu63d51\":\"new\"},\"computedAt\":\"2026-07-01T22:49:20.697Z\",\"clientDate\":\"2026-07-02\",\"currentEntryId\":\"cmr2o28oo0007ibzkfskf4qcr\",\"outcomes\":{},\"decomposition\":null,\"lastTurnWasTextOnly\":false,\"moodIntake\":{\"mood\":3,\"energyEnd\":3}},\"previewState\":{\"pinnedTaskIds\":[],\"removedTaskIds\":[],\"addedTaskIds\":[],\"blockedSlots\":[],\"perTaskOverrides\":{},\"slotLocations\":{}},\"phase\":\"per_entry\"}"
+  },
+  "reviewRowsToday": [],
+  "dailyPlanRows": []
+}

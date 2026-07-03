@@ -1,0 +1,82 @@
+{
+  "actions": [
+    "DailyPlan cmr2nfhky000lib00y7pg7qtf: 2026-07-02 -> 2026-07-01",
+    "DailyPlan cmr2w9p7q00liib74ui7s46fs: 2026-07-03 -> 2026-07-02 (piano della review, ora visibile in Today)",
+    "Review cmr2w9opq00lgib7429wc09ay: 2026-07-02 -> 2026-07-01",
+    "ChatThread cmr2w1yee00agib745g2okxg8 (evening_review, archived): -24h",
+    "ChatThread cmr2w73mz00i4ib74mnfn4s6m (evening_review, completed): -24h",
+    "ChatThread cmr2vw8lp0033ib74bi43bg56 (morning_checkin, active): -24h",
+    "Task cmr2nfge20007ib004da1wf30 completedAt: -24h",
+    "Settings: eveningWindow ripristinata 20:00-23:00"
+  ],
+  "statoFinale": {
+    "plans": [
+      {
+        "id": "cmr2nfhky000lib00y7pg7qtf",
+        "date": "2026-07-01",
+        "top3Ids": "[\"cmr2nfge20007ib004da1wf30\",\"cmr2nfgmo0009ib00kpnd46ek\",\"cmr2nfgvp000bib00gbyv7av1\"]",
+        "threadId": null
+      },
+      {
+        "id": "cmr2w9p7q00liib74ui7s46fs",
+        "date": "2026-07-02",
+        "top3Ids": "[\"cmr2nfgzg000dib00h6ndbm4j\",\"cmr2nfh43000fib00mdr7rwgw\",\"cmr2nfgmo0009ib00kpnd46ek\"]",
+        "threadId": "cmr2w73mz00i4ib74mnfn4s6m"
+      }
+    ],
+    "reviews": [
+      {
+        "id": "cmr2w9opq00lgib7429wc09ay",
+        "date": "2026-07-01",
+        "threadId": "cmr2w73mz00i4ib74mnfn4s6m"
+      }
+    ],
+    "threads": [
+      {
+        "id": "cmr2w1yee00agib745g2okxg8",
+        "mode": "evening_review",
+        "state": "archived",
+        "startedAt": "2026-07-01T02:31:44.487Z"
+      },
+      {
+        "id": "cmr2w73mz00i4ib74mnfn4s6m",
+        "mode": "evening_review",
+        "state": "completed",
+        "startedAt": "2026-07-01T02:35:44.555Z"
+      },
+      {
+        "id": "cmr2vw8lp0033ib74bi43bg56",
+        "mode": "morning_checkin",
+        "state": "active",
+        "startedAt": "2026-07-01T02:27:17.773Z"
+      }
+    ],
+    "planOggiTasks": [
+      {
+        "title": "Riordinare la scrivania",
+        "status": "inbox",
+        "slot": "morning"
+      },
+      {
+        "title": "Rispondere alle mail arretrate",
+        "status": "inbox",
+        "slot": "afternoon"
+      },
+      {
+        "title": "Pagare la bolletta della luce",
+        "status": "planned",
+        "slot": "evening"
+      },
+      {
+        "title": "Comprare regalo per Marta",
+        "status": "inbox",
+        "slot": "evening"
+      },
+      {
+        "title": "Chiamare il dentista per appuntamento",
+        "status": "planned",
+        "slot": "evening"
+      }
+    ]
+  }
+}

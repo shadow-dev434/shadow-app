@@ -1,0 +1,81 @@
+{
+  "threadId": "cmr2o586t003sib6s40pqcgl8",
+  "mode": "morning_checkin",
+  "assistantMessage": "Ok. Due cose in lista, entrambe scadute — ISEE e assicurazione auto. In totale ~50 min, stai dentro le 2-4h.\n\nPartiamo dall'ISEE: è il più critico. Poi l'assicurazione. Confermo il piano?",
+  "toolsExecuted": [
+    {
+      "name": "set_user_energy",
+      "input": {
+        "level": 3
+      },
+      "result": {
+        "level": 3
+      }
+    },
+    {
+      "name": "set_user_mood",
+      "input": {
+        "level": 3
+      },
+      "result": {
+        "level": 3
+      }
+    },
+    {
+      "name": "set_user_time",
+      "input": {
+        "minutes": 180
+      },
+      "result": {
+        "minutes": 180
+      }
+    },
+    {
+      "name": "get_today_tasks",
+      "input": {},
+      "result": [
+        {
+          "id": "cmr2nfjmb000zib0040hiqnzv",
+          "title": "Inviare il modulo ISEE",
+          "urgency": 5,
+          "importance": 5,
+          "category": "general",
+          "status": "planned",
+          "deadline": "2026-06-30",
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr2nfjq80011ib00elr0idnw",
+          "title": "Rinnovare assicurazione auto",
+          "urgency": 4,
+          "importance": 4,
+          "category": "general",
+          "status": "planned",
+          "deadline": "2026-07-01",
+          "recurring": false,
+          "estimatedMinutes": 25
+        }
+      ]
+    }
+  ],
+  "quickReplies": [
+    {
+      "label": "sì, partiamo",
+      "value": "sì, partiamo"
+    },
+    {
+      "label": "cambiamo ordine",
+      "value": "cambiamo ordine"
+    },
+    {
+      "label": "solo uno",
+      "value": "solo uno"
+    }
+  ],
+  "costUsd": 0.015342600000000001,
+  "tokensIn": 790,
+  "tokensOut": 269,
+  "modelUsed": "claude-sonnet-4-6",
+  "latencyMs": 7781
+}

@@ -1,0 +1,328 @@
+{
+  "threadId": "cmr2w1yee00agib745g2okxg8",
+  "completed": false,
+  "totalTurns": 20,
+  "updatePreviewSeen": null,
+  "totalCostUsd": 0.3729250499999999,
+  "totalQuestionMarks": 5,
+  "avgAssistantChars": 28,
+  "turns": [
+    {
+      "turn": 1,
+      "userMessage": "Ciao Shadow, la giornata è finita: facciamo la review?",
+      "status": 200,
+      "assistantChars": 23,
+      "questionMarks": 1,
+      "tools": [],
+      "quickReplies": [],
+      "costUsd": 0.0136977,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 2,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 69,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "record_mood",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.0295923,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 3,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 41,
+      "questionMarks": 1,
+      "tools": [],
+      "quickReplies": [],
+      "costUsd": 0.01146405,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 4,
+      "userMessage": "Energia 3, sono un po' stanco ma ok.",
+      "status": 200,
+      "assistantChars": 54,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.02393535,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 5,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 54,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.0239661,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 6,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 47,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.023974650000000004,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 7,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 48,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.02392035,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 8,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 35,
+      "questionMarks": 0,
+      "tools": [],
+      "quickReplies": [],
+      "costUsd": 0.011433449999999998,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 9,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 28,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.02416305,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 10,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 28,
+      "questionMarks": 0,
+      "tools": [],
+      "quickReplies": [],
+      "costUsd": 0.01137585,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 11,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 50,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.02390475,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 12,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 20,
+      "questionMarks": 0,
+      "tools": [],
+      "quickReplies": [],
+      "costUsd": 0.0113871,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 13,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 13,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.0237831,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 14,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 3,
+      "questionMarks": 0,
+      "tools": [],
+      "quickReplies": [],
+      "costUsd": 0.011272350000000002,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 15,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 3,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.02366655,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 16,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 3,
+      "questionMarks": 0,
+      "tools": [],
+      "quickReplies": [],
+      "costUsd": 0.01126875,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 17,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 30,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.023793150000000002,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 18,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 3,
+      "questionMarks": 0,
+      "tools": [],
+      "quickReplies": [],
+      "costUsd": 0.011308950000000002,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 19,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 3,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.023725950000000003,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 20,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "assistantChars": 3,
+      "questionMarks": 0,
+      "tools": [],
+      "quickReplies": [],
+      "costUsd": 0.011291550000000001,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    }
+  ]
+}

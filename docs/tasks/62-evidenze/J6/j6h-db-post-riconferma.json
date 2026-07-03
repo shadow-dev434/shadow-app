@@ -1,0 +1,32 @@
+{
+  "label": "post-riconferma",
+  "at": "2026-07-01T22:57:58.886Z",
+  "reviewRowsToday": [
+    {
+      "id": "cmr2oesrb00j8ib6sk44006vj",
+      "mood": 3,
+      "energyEnd": 3,
+      "threadId": "cmr2od47k00ekib6sdh8r20at"
+    }
+  ],
+  "dailyPlanTomorrow": [
+    {
+      "id": "cmr2oet7p00jaib6saw4jqtg2",
+      "top3Ids": "[\"cmr2o2ek6000zibzkhmmysm4c\",\"cmr2o2ery0013ibzkshdb7yd3\"]",
+      "doNowIds": "[\"cmr2o2ek6000zibzkhmmysm4c\",\"cmr2o2ery0013ibzkshdb7yd3\"]",
+      "threadId": "cmr2od47k00ekib6sdh8r20at"
+    }
+  ],
+  "threads": [
+    {
+      "id": "cmr2od47k00ekib6sdh8r20at",
+      "mode": "evening_review",
+      "state": "completed"
+    },
+    {
+      "id": "cmr2oexg800jiib6sdzo4cgfi",
+      "mode": "general",
+      "state": "active"
+    }
+  ]
+}

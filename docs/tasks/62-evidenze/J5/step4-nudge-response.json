@@ -1,0 +1,14 @@
+{
+  "nudge": {
+    "id": "b39a4224-6ab2-4f26-a228-5abd4c11ea62",
+    "strategy": "urgency",
+    "intensity": "firm",
+    "title": "Devi fare questo ora",
+    "message": "\"Compilare la dichiarazione dei redditi\" non può più aspettare. Ogni minuto conta. Fai il primo passo, anche solo apri il file.",
+    "actionLabel": "Fallo ORA",
+    "dismissLabel": "Non posso",
+    "contextReason": "evitato 5 volte, scadenza vicina, alta resistenza",
+    "adaptiveReason": "Strategia urgency scelta per motivazione , evitamento 3.0/5, stile direct",
+    "delaySeconds": 0
+  }
+}

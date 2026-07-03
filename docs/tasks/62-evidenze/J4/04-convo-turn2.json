@@ -1,0 +1,33 @@
+{
+  "threadId": "cmr2o586t003sib6s40pqcgl8",
+  "mode": "morning_checkin",
+  "assistantMessage": "Ok, ci pensiamo insieme. Prima dimmi: umore da 1 a 5?",
+  "toolsExecuted": [],
+  "quickReplies": [
+    {
+      "label": "1 - giù",
+      "value": "1 - giù"
+    },
+    {
+      "label": "2",
+      "value": "2"
+    },
+    {
+      "label": "3",
+      "value": "3"
+    },
+    {
+      "label": "4",
+      "value": "4"
+    },
+    {
+      "label": "5 - alla grande",
+      "value": "5 - alla grande"
+    }
+  ],
+  "costUsd": 0.00389895,
+  "tokensIn": 28,
+  "tokensOut": 56,
+  "modelUsed": "claude-sonnet-4-6",
+  "latencyMs": 2665
+}

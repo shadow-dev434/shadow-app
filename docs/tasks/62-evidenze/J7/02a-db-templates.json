@@ -1,0 +1,38 @@
+[
+  {
+    "id": "cmr2vrten0007ib7401el0s2w",
+    "userId": "cmr2nfop90026ib00hs8vya58",
+    "title": "Innaffiare le piante",
+    "description": "",
+    "category": "household",
+    "urgency": 3,
+    "importance": 2,
+    "size": 3,
+    "frequency": "weekly",
+    "weekdays": "[2,4]",
+    "monthDay": null,
+    "active": true,
+    "startDate": "2026-07-02",
+    "endDate": null,
+    "createdAt": "2026-07-02T02:23:51.455Z",
+    "updatedAt": "2026-07-02T02:23:51.455Z"
+  },
+  {
+    "id": "cmr2vtkkx000jib741kjj9897",
+    "userId": "cmr2nfop90026ib00hs8vya58",
+    "title": "Stretching 10 minuti",
+    "description": "",
+    "category": "health",
+    "urgency": 3,
+    "importance": 3,
+    "size": 3,
+    "frequency": "daily",
+    "weekdays": "[]",
+    "monthDay": null,
+    "active": true,
+    "startDate": "2026-07-02",
+    "endDate": null,
+    "createdAt": "2026-07-02T02:25:13.329Z",
+    "updatedAt": "2026-07-02T02:25:13.329Z"
+  }
+]

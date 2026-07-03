@@ -1,0 +1,23 @@
+{
+  "status": 200,
+  "body": {
+    "settings": {
+      "id": "cmr2nfje3000vib00yurcyr77",
+      "userId": "cmr2nfity000sib009j19j8x8",
+      "defaultEnergy": 3,
+      "defaultContext": "any",
+      "defaultDuration": 25,
+      "defaultFormat": "standard",
+      "wakeTime": "07:00",
+      "sleepTime": "23:00",
+      "productiveSlots": "[\"morning\"]",
+      "theme": "system",
+      "notificationsEnabled": true,
+      "reminderMinutes": 15,
+      "eveningWindowStart": "00:00",
+      "eveningWindowEnd": "23:59",
+      "createdAt": "2026-07-01T22:30:21.675Z",
+      "updatedAt": "2026-07-01T22:55:35.884Z"
+    }
+  }
+}

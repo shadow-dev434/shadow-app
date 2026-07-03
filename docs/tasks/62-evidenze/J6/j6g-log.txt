@@ -1,0 +1,11 @@
+STEP g0 seed: completed=cmr2o2cu8000pibzk5hovggiu avoided=cmr2o2d86000ribzke2a9u1jn (avoidanceCount=2)
+STEP g1 evening-signal PRE: 200 {"shouldStart":true}
+[photo:pre-post] reviewRows=0 reviewTaskRows=0
+STEP g2 POST /api/review (payload client): HTTP 500 body={"error":"Failed to save review"}
+[photo:post-500] reviewRows=1 reviewTaskRows=0
+STEP g3 retry POST: HTTP 500
+[photo:post-retry] reviewRows=1 reviewTaskRows=0
+STEP g4 evening-signal POST-conflitto: 200 {"shouldStart":false}
+STEP g5 active-thread: HTTP 200 activeThread=null eveningReview.shouldStart=false
+VERDICT D1 CONFERMATO: POST=500, Review-oggi upsertata=true (reviewTask=0), shouldStart post=false
+STEP g6 avoidanceCount dopo 2 POST: 2 (era 2)

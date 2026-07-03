@@ -1,0 +1,162 @@
+{
+ "journey": "J6 (porte e-h) — Review serale: interruzioni e conflitti. Utenti dedicati collaudo-j6e/j6f/j6g/j6h@probe.local (seed pattern seed-cohort: profilo completo + task triage con deadline domani e carryover; j6f volutamente senza task). Finestra serale aperta via PATCH /api/settings. Esercitate: (e) review interrotta con pausa/resume/abbandono oltre finestra, (f) review con 0 candidate, (g) conflitto col tab Review manuale (replica esatta payload client), (h) idempotenza chiusura + ri-avvio stesso giorno. Solo API+DB, nessun tool browser. Script in scripts/e2e/collaudo-62/j6-seed-eh.ts, j6e-review-interrotta.ts, j6f-zero-candidate.ts, j6f-chiudi-esplicito.ts, j6g-conflitto-review-manuale.ts, j6h-idempotenza-chiusura.ts, j6eh-spend.ts. Evidenze in docs/tasks/62-evidenze/J6/ (prefisso j6e/f/g/h).",
+ "steps": [
+  {
+   "step": "Seed 4 utenti j6e-j6h (profilo completo + task candidate triage; j6f senza task) + apertura finestra serale 00:00-23:59 via PATCH /api/settings",
+   "expected": "4 utenti creati, PATCH 200 per ognuno",
+   "observed": "OK: 4 utenti creati, PATCH 200, window=00:00-23:59 confermata nel body di risposta (j6eh-seed.txt)",
+   "verdict": "PASS"
+  },
+  {
+   "step": "(e) evening-signal di controllo pre-review per j6e",
+   "expected": "shouldStart:true dentro finestra, nessuna Review-oggi",
+   "observed": "200 {\"shouldStart\":true}",
+   "verdict": "PASS"
+  },
+  {
+   "step": "(e) avvio review + intake mood/energy + 1 turno triage (4 turni)",
+   "expected": "HTTP 200, phase per_entry, mood/energy registrati",
+   "observed": "4x HTTP 200; record_mood, record_energy, set_current_entry eseguiti; contextJson.moodIntake={mood:3,energyEnd:3}; state=active",
+   "verdict": "PASS"
+  },
+  {
+   "step": "(e) pausa simulata (lastTurnAt -15min, soglia 10) + GET active-thread dentro finestra",
+   "expected": "thread reidratato, state normalizzato a paused, nessuna archiviazione",
+   "observed": "activeThread presente con 8 messaggi, dbState=paused",
+   "verdict": "PASS"
+  },
+  {
+   "step": "(e) resume con nuovo turno DENTRO la finestra: il contesto tiene?",
+   "expected": "stesso thread, walk riprende dall'entry corrente",
+   "observed": "200 stesso thread, Shadow riprende citando l'entry corrente (\"Consegnare il progetto al cliente — scade domani. La guardiamo?\") e il turno successivo esegue mark_entry_discussed+set_current_entry. Nota: state resta 'paused' in DB anche dopo 2 turni riusciti (riattivazione solo al prossimo GET active-thread); frase di resume leggermente imprecisa (\"stavamo per iniziare il giro\" quando un'entry era già aperta)",
+   "verdict": "PASS"
+  },
+  {
+   "step": "(e) abbandono oltre finestra: PATCH finestra 01:00-01:05 + GET active-thread → archiviazione silenziosa? intake perso? (D45)",
+   "expected": "finding atteso D45: archiviazione lazy silenziosa, Review parziale non materializzata",
+   "observed": "CONFERMATO: GET ritorna activeThread=null shouldStart=false senza alcun segnale; thread archived+endedAt; Review-oggi=0, DailyPlan=0; mood/energy/esiti triage restano SOLO nel contextJson del thread archiviato (invisibile all'utente). Sopravvivono i soli side-effect per-task (postponedCount+1, LearningSignal task_postponed)",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "(f) review con 0 candidate (utente senza task): avvio e intake",
+   "expected": "messaggio sensato o rito vuoto?",
+   "observed": "Avvio ok, messaggio iniziale sensato (\"Stasera non ho niente in lista — inbox vuota. Puoi chiudere qui senza pensieri.\"); intake mood/energy comunque richiesto (2 turni per sentirsi dire che non c'è nulla)",
+   "verdict": "WARN"
+  },
+  {
+   "step": "(f) chiusura review con 0 candidate (incl. retry con 'chiudi la review' + 'si, confermo, chiudi' espliciti)",
+   "expected": "chiusura materializzata: Review row + DailyPlan domani con top3 vuoto (path D3 di closeReview)",
+   "observed": "FAIL RIPRODOTTO 2 VOLTE: il modello dichiara \"Chiuso. A domani.\" (3 volte nel walk) ma NESSUN confirm_close_review è mai eseguibile — phase resta per_entry (isPreviewPhaseActive ritorna false con lista vuota, triage.ts:620) e in per_entry i tool confirm_* non sono esposti (tools.ts:545). Review=ASSENTE, DailyPlan=ASSENTE, thread resta active (che sopprime anche il segnale serale). Tool no-op set_user_mood/set_user_energy ripetuti 6+ volte",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "(g) evening-signal di controllo pre-conflitto per j6g",
+   "expected": "shouldStart:true",
+   "observed": "200 {\"shouldStart\":true}",
+   "verdict": "PASS"
+  },
+  {
+   "step": "(g) POST /api/review con payload ESATTO del tab Review manuale (taskReviews {completed/avoided} senza campo status) — D1",
+   "expected": "bug atteso D1: 500 per ReviewTask.status NOT NULL con Review già upsertata",
+   "observed": "CONFERMATO: HTTP 500 {\"error\":\"Failed to save review\"}; Review-oggi upsertata a metà (row presente, testi salvati, 0 ReviewTask); retry utente → di nuovo 500 identico (vicolo cieco permanente); avoidanceCount NON incrementato (updatePatternsFromReview mai raggiunto)",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "(g) conseguenza D1: soppressione della review conversazionale dello stesso giorno",
+   "expected": "evening-signal/bootstrap non offrono più la review",
+   "observed": "CONFERMATO: evening-signal passa da shouldStart:true a shouldStart:false; GET active-thread → eveningReview.shouldStart=false. La Review orfana del 500 sopprime il rito conversazionale per tutto il giorno",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "(h) walk completo fino al closing con conferma",
+   "expected": "thread completed, Review-oggi + DailyPlan-domani creati",
+   "observed": "Chiusura corretta in 10 turni: confirm_plan_preview + confirm_close_review eseguiti, state=completed, Review=1, DailyPlan domani=1 con top3",
+   "verdict": "PASS"
+  },
+  {
+   "step": "(h) RI-CONFERMA ('si' di nuovo nello stesso thread completed)",
+   "expected": "alreadyClosed / nessun doppio DailyPlan (unique userId+date)",
+   "observed": "Nessun doppione: Review=1, DailyPlan=1, planId invariato. Meccanica: path BUG #C dell'orchestrator → crea in silenzio un thread GENERAL nuovo e risponde con saluto generico (\"Ciao Collaudo! Cosa posso fare per te adesso?\"), senza dire che la review era già chiusa",
+   "verdict": "PASS"
+  },
+  {
+   "step": "(h) ri-avvio review lo stesso giorno (threadId=null, mode=evening_review): cosa dice? doppia Review impossibile?",
+   "expected": "consapevolezza della review già chiusa; nessuna seconda Review row",
+   "observed": "Nessuna doppia row (unique regge: Review=1, DailyPlan=1) MA initEveningReview riparte da ZERO (\"Come stai stasera? 1-5.\") senza alcuna menzione della review già completata; se portata a chiusura sovrascriverebbe mood/piano della review precedente (upsert). In più al 2° turno Shadow ha richiesto il mood appena registrato (domanda ripetuta)",
+   "verdict": "WARN"
+  },
+  {
+   "step": "Trascrizioni complete via dumpThread per tutti i thread usati",
+   "expected": "trascrizioni integrali salvate",
+   "observed": "5 trascrizioni salvate: j6e-review-interrotta.md, j6f-zero-candidate.md (include il follow-up chiudi-esplicito), j6h-review-completa.md, j6h-thread-riconferma.md, j6h-thread-riavvio.md",
+   "verdict": "PASS"
+  }
+ ],
+ "findings": [
+  {
+   "title": "D1 confermato: il tab Review manuale produce 500 con Review upsertata a metà e sopprime la review conversazionale per tutto il giorno",
+   "severity": "S2",
+   "repro": "1) Utente con 1 task completed + 1 task con avoidanceCount>0. 2) POST /api/review col payload esatto del client (page.tsx:3068-3083): taskReviews=[{taskId,completed:true},{taskId,completed:false,avoided:true}] SENZA campo status. 3) L'API passa tr.status (undefined) a ReviewTask.status NOT NULL → Prisma error → 500, ma la Review era già stata upsertata prima del loop. 4) Retry → sempre 500 (la UI mostra solo toast 'Errore'). 5) GET /api/chat/evening-signal → shouldStart:false: la Review orfana sopprime il rito conversazionale fino a domani",
+   "evidence": "docs/tasks/62-evidenze/J6/j6g-post-review-response.json (+ j6g-db-post-500.json, j6g-signal-pre.json vs j6g-signal-post.json, j6g-log.txt)",
+   "fileLine": "src/app/api/review/route.ts:53",
+   "dossierRef": "D1"
+  },
+  {
+   "title": "Review serale con 0 candidate NON chiudibile: il modello dichiara 'Chiuso. A domani.' ma non esiste alcun tool per chiudere — nessuna Review, nessun DailyPlan, thread zombie",
+   "severity": "S2",
+   "repro": "1) Utente senza task (es. utente nuovo al primo giorno). 2) Avvia la review serale, dai mood/energy. 3) Shadow dice correttamente che non c'è niente, poi chiede 'dimmi chiudi e la blocco'. 4) Di' 'chiudi la review' e poi 'si, confermo, chiudi'. 5) Il modello risponde 'Chiuso. A domani.' MA: phase resta per_entry (isPreviewPhaseActive ritorna false con lista effective vuota, triage.ts:620, incoerente con allOutcomesAssigned che sulla lista vuota ritorna true), quindi confirm_close_review non è mai fra i tool esposti (gating tools.ts:545-548). Risultato: 0 Review row, 0 DailyPlan, thread evening resta active (che sopprime pure il segnale serale). Riprodotto 2 volte (walk + retry con conferma esplicita); 3 dichiarazioni di chiusura false in trascrizione",
+   "evidence": "docs/tasks/62-evidenze/J6/j6f-db-post-chiudi.json (+ j6f-zero-candidate.md trascrizione completa, j6f-log.txt, j6f-log-chiudi.txt)",
+   "fileLine": "src/lib/evening-review/triage.ts:620"
+  },
+  {
+   "title": "D45 confermato: review interrotta abbandonata oltre finestra = archiviazione silenziosa, intake (mood/energia/triage parziale) mai materializzato",
+   "severity": "S3",
+   "repro": "1) Avvia la review serale, dai mood 3 / energy 3, fai 2 turni di triage (un esito postponed registrato). 2) Interrompi. 3) Quando la finestra serale si chiude, al primo GET /api/chat/active-thread (= riapertura app) il thread viene archiviato in silenzio: activeThread=null, shouldStart=false, nessun messaggio. 4) DB: Review-oggi=0, DailyPlan=0; moodIntake e outcomes vivono solo nel contextJson del thread archiviato (invisibile all'utente). Sopravvivono i soli side-effect per-task (postponedCount, LearningSignal task_postponed). La sera dopo il rito riparte da zero richiedendo di nuovo mood/energia",
+   "evidence": "docs/tasks/62-evidenze/J6/j6e-db-post-abbandono.json (+ j6e-active-thread-abbandono.json, j6e-sideeffects-superstiti.json, j6e-review-interrotta.md)",
+   "fileLine": "src/lib/evening-review/normalize.ts:87",
+   "dossierRef": "D45"
+  },
+  {
+   "title": "Ri-conferma dopo chiusura: 'sì' sul thread completed apre in silenzio una chat general nuova con saluto generico, senza dire che la review è già chiusa",
+   "severity": "UX",
+   "repro": "1) Completa la review fino al closing confermato. 2) Scrivi 'si' di nuovo nello stesso thread. 3) L'orchestrator (path BUG #C) crea un thread general fresco e risponde 'Ciao Collaudo! Cosa posso fare per te adesso?' — contesto della review sparito, nessun 'la review è già chiusa'. Meccanicamente sicuro (Review=1, DailyPlan=1, planId invariato) ma disorientante",
+   "evidence": "docs/tasks/62-evidenze/J6/j6h-riconferma-response.json (+ j6h-db-post-riconferma.json, j6h-thread-riconferma.md)",
+   "fileLine": "src/lib/chat/orchestrator.ts:196"
+  },
+  {
+   "title": "Ri-avvio review lo stesso giorno: riparte da zero senza rilevare la Review già chiusa; se completata sovrascriverebbe mood e piano della review precedente",
+   "severity": "UX",
+   "repro": "1) Review completata e chiusa oggi. 2) Nuovo turno mode=evening_review threadId=null ('vorrei rifare la review di stasera'). 3) initEveningReview parte da zero ('Come stai stasera? 1-5.') senza alcuna menzione della review esistente; al turno dopo richiede il mood appena registrato. Doppia Review row impossibile (unique userId+date, verificato: resta 1) ma la chiusura del secondo rito farebbe upsert sovrascrivendo mood/energyEnd/piano della prima — nessun guard e nessuna trasparenza per l'utente",
+   "evidence": "docs/tasks/62-evidenze/J6/j6h-riavvio-response.json (+ j6h-db-post-riavvio.json, j6h-thread-riavvio.md)",
+   "fileLine": "src/lib/chat/orchestrator.ts:1241"
+  }
+ ],
+ "uxNotes": [
+  "L4 (perdono, porta e): abbandonando una review a metà si perdono mood, energia e il rito nel suo complesso (nessuna Review, nessun DailyPlan per domani); sopravvivono solo postponedCount/LearningSignal per-task. Unica traccia utente = la trascrizione della chat archiviata nello storico sidebar; nessun 'ieri abbiamo lasciato a metà' la sera dopo: il rito riparte da zero e richiede daccapo mood/energia già dati.",
+  "Resume dentro finestra (porta e): funziona bene — Shadow riprende dall'entry corrente con contesto integro. Piccola imprecisione narrativa: 'Stavamo per iniziare il giro' quando un'entry era già stata aperta e discussa.",
+  "Incoerenza di stato (porta e): dopo un turno di resume riuscito il thread resta state='paused' in DB (il POST /api/chat/turn non riattiva; solo il successivo GET active-thread lo farebbe). Nessun impatto osservato ma è uno stato bugiardo per qualunque consumer futuro.",
+  "Porta f, 0 candidate: il primo messaggio è ottimo per un utente ADHD ('Puoi chiudere qui senza pensieri') ma il rito diventa un vicolo cieco gentile: Shadow chiede conferme di chiusura che non può onorare e dichiara il falso 3 volte ('Chiuso. A domani.'). Promessa del modello non mantenuta = erosione di fiducia proprio sul rito core.",
+  "Tool no-op ripetuti (porte f,h): set_user_mood/set_user_energy richiamati 6+ volte con gli stessi valori dentro la review (dove esistono già record_mood/record_energy) — rumore di orchestrazione, costo inutile per turno.",
+  "L8 (lunghezza rito): walk felice con 2 candidate = 10 turni totali di cui 3 fissi (apertura+mood+energia). Con 0 candidate servono comunque 3 turni per sentirsi dire che non c'è nulla. L'intake mood/energia potrebbe collassare in una domanda sola o essere saltabile.",
+  "Domanda ripetuta (porta h): nella seconda review del giorno, subito dopo record_mood eseguito, Shadow richiede il mood ('Dammi un numero da 1 a 5').",
+  "D40 (osservato a livello DB): a fine giornata j6h ha 3 thread (evening completed + general active + evening active) — in sidebar diventerebbero voci 'Oggi' multiple indistinguibili; da verificare nel passaggio UI.",
+  "L3-AUTOMAZIONE: all'archiviazione lazy di una review interrotta, materializzare automaticamente una Review parziale (mood/energia sono già in contextJson) o almeno accodare un prompt di ripresa per la sera dopo — i dati ci sono già, oggi vengono buttati.",
+  "L3-AUTOMAZIONE: con 0 candidate la review potrebbe auto-chiudersi light dopo l'intake (Review row + niente DailyPlan, pattern closeReviewBurnout già esistente) invece di chiedere una conferma che il tool-gating non permette di onorare.",
+  "L3-AUTOMAZIONE: dopo il 500 del tab Review manuale, l'app sa che esiste una Review orfana di oggi (row senza ReviewTask): potrebbe auto-ripararla o almeno non usare quella row per sopprimere la review conversazionale."
+ ],
+ "leftForUiPass": [
+  "Porta (i) J6: tap 'Inizia la review' dalla card — Shadow parla per prima o schermo vuoto? (D31, esplicitamente fuori dal mandato API di questo run)",
+  "Tab Review manuale in /tasks: verifica visiva del toast 'Errore' generico sul 500 D1 (l'utente non ha alcun indizio del perché) e dei contatori Completati/Evitati senza filtro data (D54: contano tutto lo storico)",
+  "Sidebar durante/dopo review multiple: voci 'Oggi' doppie/triple indistinguibili (D40) — per j6h restano in DB 3 thread dello stesso giorno, riscontro visivo da fare",
+  "ChatView al rientro dopo archiviazione lazy della review interrotta: cosa vede l'utente? la chat sparisce senza spiegazione? (complemento UI del finding D45)",
+  "Verifica visiva del vicolo cieco 0-candidate: cosa mostra la UI mentre Shadow dichiara 'Chiuso' senza chiudere (banner review che resta? card che riappare?)"
+ ],
+ "transcripts": [
+  "docs/tasks/62-evidenze/J6/j6e-review-interrotta.md",
+  "docs/tasks/62-evidenze/J6/j6f-zero-candidate.md",
+  "docs/tasks/62-evidenze/J6/j6h-review-completa.md",
+  "docs/tasks/62-evidenze/J6/j6h-thread-riconferma.md",
+  "docs/tasks/62-evidenze/J6/j6h-thread-riavvio.md"
+ ],
+ "spendUsd": 1.986134
+}

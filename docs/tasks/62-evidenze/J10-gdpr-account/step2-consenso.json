@@ -1,0 +1,49 @@
+{
+  "prePage": {
+    "status": 200
+  },
+  "revoke": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "dbDopoRevoca": {
+    "consentGivenAt": null,
+    "consentArt9": false,
+    "consentVersion": "collaudo-62"
+  },
+  "postPage": {
+    "status": 307,
+    "location": "/consent"
+  },
+  "apiConConsensoRevocato": {
+    "status": 200,
+    "tasks": 2
+  },
+  "chatTurnConConsensoRevocato": {
+    "status": 200,
+    "threadId": "cmr2pf7x300osib6sdwfp2bpx",
+    "error": null
+  },
+  "riconsensoParziale": {
+    "status": 400,
+    "body": {
+      "error": "Entrambi i consensi sono obbligatori: Termini di servizio e dati relativi alla salute (art. 9)."
+    }
+  },
+  "riconsensoCompleto": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "dbDopoRiconsenso": {
+    "consentGivenAt": "2026-07-01T23:26:12.905Z",
+    "consentArt9": true,
+    "consentVersion": "0.2-draft"
+  },
+  "pageDopoRiconsenso": {
+    "status": 200
+  }
+}

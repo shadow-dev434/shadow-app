@@ -1,0 +1,30 @@
+{
+  "userMessage": "No, il dentista non l'ho chiamato: lo studio era già chiuso quando mi sono ricordato. Rimandiamolo a domani.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr2w73mz00i4ib74mnfn4s6m",
+    "mode": "evening_review",
+    "assistantMessage": "Ci siamo. Ecco il piano per domani: mattina le mail arretrate, pomeriggio la scrivania, sera bolletta (già fatta, la togliamo), regalo per Marta e dentista. Giornata leggera nel complesso. Ti torna?",
+    "toolsExecuted": [
+      {
+        "name": "mark_entry_discussed",
+        "input": {
+          "entryId": "cmr2nfgvp000bib00gbyv7av1",
+          "outcome": "postponed"
+        },
+        "result": {
+          "entryId": "cmr2nfgvp000bib00gbyv7av1",
+          "taskTitle": "Chiamare il dentista per appuntamento",
+          "outcome": "postponed",
+          "action": "marked_discussed"
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.0362214,
+    "tokensIn": 669,
+    "tokensOut": 162,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 7653
+  }
+}

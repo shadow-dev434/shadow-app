@@ -1,0 +1,31 @@
+{
+  "userMessage": "Quasi perfetto, ma sposta le mail arretrate al pomeriggio: domattina ho una riunione.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr2w73mz00i4ib74mnfn4s6m",
+    "mode": "evening_review",
+    "assistantMessage": "Mail di pomeriggio. Altro?",
+    "toolsExecuted": [
+      {
+        "name": "update_plan_preview",
+        "input": {
+          "moves": [
+            {
+              "taskId": "cmr2nfh43000fib00mdr7rwgw",
+              "to": "afternoon"
+            }
+          ]
+        },
+        "result": {
+          "ok": true
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.14701395,
+    "tokensIn": 262,
+    "tokensOut": 99,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 4458
+  }
+}

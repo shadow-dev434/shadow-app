@@ -1,0 +1,166 @@
+{
+  "userId": "cmr2nfop90026ib00hs8vya58",
+  "spendUsd": 0.03755190000000001,
+  "templates": [
+    {
+      "id": "cmr2vrten0007ib7401el0s2w",
+      "userId": "cmr2nfop90026ib00hs8vya58",
+      "title": "Innaffiare le piante",
+      "description": "",
+      "category": "household",
+      "urgency": 3,
+      "importance": 2,
+      "size": 3,
+      "frequency": "weekly",
+      "weekdays": "[2,4]",
+      "monthDay": null,
+      "active": true,
+      "startDate": "2026-06-30",
+      "endDate": null,
+      "createdAt": "2026-07-02T02:23:51.455Z",
+      "updatedAt": "2026-07-02T02:25:18.726Z"
+    },
+    {
+      "id": "cmr2vtkkx000jib741kjj9897",
+      "userId": "cmr2nfop90026ib00hs8vya58",
+      "title": "Stretching 10 minuti",
+      "description": "",
+      "category": "health",
+      "urgency": 3,
+      "importance": 3,
+      "size": 3,
+      "frequency": "daily",
+      "weekdays": "[]",
+      "monthDay": null,
+      "active": false,
+      "startDate": "2026-07-01",
+      "endDate": null,
+      "createdAt": "2026-07-02T02:25:13.329Z",
+      "updatedAt": "2026-07-02T02:28:17.761Z"
+    },
+    {
+      "id": "cmr2vz9v5007qib74hneeatqj",
+      "userId": "cmr2nfop90026ib00hs8vya58",
+      "title": "Bere due litri d'acqua",
+      "description": "",
+      "category": "health",
+      "urgency": 2,
+      "importance": 3,
+      "size": 3,
+      "frequency": "daily",
+      "weekdays": "[]",
+      "monthDay": null,
+      "active": true,
+      "startDate": "2026-07-02",
+      "endDate": null,
+      "createdAt": "2026-07-02T02:29:39.377Z",
+      "updatedAt": "2026-07-02T02:29:39.377Z"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "cmr2vrr5p0005ib745hw1sf22",
+      "title": "Innaffiare le piante",
+      "status": "inbox",
+      "source": "recurring",
+      "recurringTemplateId": "cmr2vrten0007ib7401el0s2w",
+      "occurrenceDate": "2026-06-30",
+      "completedAt": null,
+      "deadline": "2026-07-07T00:00:00.000Z"
+    },
+    {
+      "id": "cmr2vtj0e000hib749f50ig9k",
+      "title": "Stretching 10 minuti",
+      "status": "inbox",
+      "source": "recurring",
+      "recurringTemplateId": "cmr2vtkkx000jib741kjj9897",
+      "occurrenceDate": "2026-07-01",
+      "completedAt": null,
+      "deadline": null
+    },
+    {
+      "id": "cmr2vtvoi0013ib74164zuyai",
+      "title": "Innaffiare le piante",
+      "status": "inbox",
+      "source": "recurring",
+      "recurringTemplateId": "cmr2vrten0007ib7401el0s2w",
+      "occurrenceDate": "2026-07-02",
+      "completedAt": null,
+      "deadline": null
+    },
+    {
+      "id": "cmr2vtvxz0015ib74a72slxjc",
+      "title": "Stretching 10 minuti",
+      "status": "completed",
+      "source": "recurring",
+      "recurringTemplateId": "cmr2vtkkx000jib741kjj9897",
+      "occurrenceDate": "2026-06-30",
+      "completedAt": "2026-07-02T02:27:04.064Z",
+      "deadline": null
+    },
+    {
+      "id": "cmr2vz3xr0001ibagtwzpukuy",
+      "title": "Bere due litri d'acqua",
+      "status": "completed",
+      "source": "review_carryover",
+      "recurringTemplateId": "cmr2vz9v5007qib74hneeatqj",
+      "occurrenceDate": "2026-07-01",
+      "completedAt": "2026-07-02T02:29:44.981Z",
+      "deadline": null
+    },
+    {
+      "id": "cmr2vzh500003ibagun4wdzyx",
+      "title": "Bere due litri d'acqua",
+      "status": "completed",
+      "source": "recurring",
+      "recurringTemplateId": "cmr2vz9v5007qib74hneeatqj",
+      "occurrenceDate": "2026-07-02",
+      "completedAt": "2026-07-02T02:29:49.479Z",
+      "deadline": null
+    }
+  ],
+  "threads": [
+    {
+      "id": "cmr2vxe5w005vib74jt4bbtlf",
+      "mode": "general",
+      "state": "active",
+      "startedAt": "2026-07-02T02:28:11.637Z"
+    },
+    {
+      "id": "cmr2vz4n1007mib74qqf6iq3v",
+      "mode": "general",
+      "state": "active",
+      "startedAt": "2026-07-02T02:29:32.441Z"
+    },
+    {
+      "id": "cmr2w0wbd008uib740fu0p7ba",
+      "mode": "general",
+      "state": "active",
+      "startedAt": "2026-07-02T02:30:55.130Z"
+    },
+    {
+      "id": "cmr2vxn60006hib74v6bv9flk",
+      "mode": "general",
+      "state": "active",
+      "startedAt": "2026-07-02T02:28:23.304Z"
+    },
+    {
+      "id": "cmr2vrnjy0001ib749h05e08n",
+      "mode": "general",
+      "state": "active",
+      "startedAt": "2026-07-02T02:23:43.870Z"
+    },
+    {
+      "id": "cmr2vtgnw000dib74yq6hnuw0",
+      "mode": "general",
+      "state": "active",
+      "startedAt": "2026-07-02T02:25:08.253Z"
+    },
+    {
+      "id": "cmr2vtsuu000zib748irayyzz",
+      "mode": "general",
+      "state": "active",
+      "startedAt": "2026-07-02T02:25:23.908Z"
+    }
+  ]
+}

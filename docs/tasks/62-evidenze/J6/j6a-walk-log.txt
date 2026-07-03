@@ -1,0 +1,88 @@
+# J6a walk felice — collaudo-review cmr2nfn2h001qib005rx59d50 — clientDate=2026-07-02
+TURNO 1: "iniziamo" -> 200 (9319ms) phase=per_entry state=active tools=[-] cost=$0.1400
+TURNO 2: "3" -> 200 (11238ms) phase=per_entry state=active tools=[record_mood] cost=$0.2749
+TURNO 3: "4" -> 200 (9105ms) phase=per_entry state=active tools=[record_energy] cost=$0.1511
+TURNO 4: "ok, questa tienila per domani e passa avanti" -> 200 (16491ms) phase=per_entry state=active tools=[set_current_entry,mark_entry_discussed,set_current_entry] cost=$0.1799
+TURNO 5: "ok, questa tienila per domani e passa avanti" -> 200 (15279ms) phase=per_entry state=active tools=[mark_entry_discussed,set_current_entry] cost=$0.0458
+TURNO 6: "ok, questa tienila per domani e passa avanti" -> 200 (13962ms) phase=plan_preview state=active tools=[mark_entry_discussed] cost=$0.0326
+TURNO 7: "perfetto, confermo il piano cosi" -> 200 (14184ms) phase=closing state=active tools=[confirm_plan_preview] cost=$0.2640
+TURNO 8: "si, chiudi pure la review" -> 200 (11811ms) phase=closing state=completed tools=[confirm_close_review] cost=$0.0222
+
+completed=true non200=0 threadId=cmr2vwcld003lib74hxonr5uz
+
+## Stato finale
+{
+  "clientDate": "2026-07-02",
+  "tomorrow": "2026-07-03",
+  "threadId": "cmr2vwcld003lib74hxonr5uz",
+  "threadState": "completed",
+  "completed": true,
+  "non200": 0,
+  "candidates": [
+    {
+      "id": "cmr2nfnyz001zib00q0yjiuce",
+      "title": "Pagare il bollo auto",
+      "reason": "deadline"
+    },
+    {
+      "id": "cmr2nfnv6001xib00x7ydgocm",
+      "title": "Consegnare il progetto al cliente",
+      "reason": "deadline"
+    },
+    {
+      "id": "cmr2nfo8w0023ib002clwnfan",
+      "title": "Comprare le lampadine",
+      "reason": "new"
+    }
+  ],
+  "outcomes": {
+    "Pagare il bollo auto": "postponed",
+    "Consegnare il progetto al cliente": "postponed",
+    "Comprare le lampadine": "postponed"
+  },
+  "untouchedCandidates": [],
+  "moodIntake": {
+    "mood": 3,
+    "energyEnd": 4
+  },
+  "review": {
+    "id": "cmr2vygps007bib74gyv5pugg",
+    "date": "2026-07-02",
+    "mood": 3,
+    "energyEnd": 4,
+    "threadId": "cmr2vwcld003lib74hxonr5uz",
+    "whatDone": "",
+    "whatBlocked": ""
+  },
+  "dailyPlanTomorrow": {
+    "id": "cmr2vyh5b007dib74t3w35gx0",
+    "date": "2026-07-03",
+    "top3Ids": "[\"cmr2nfo8w0023ib002clwnfan\",\"cmr2nfnyz001zib00q0yjiuce\",\"cmr2nfnv6001xib00x7ydgocm\"]",
+    "doNowIds": "[\"cmr2nfo8w0023ib002clwnfan\",\"cmr2nfnyz001zib00q0yjiuce\",\"cmr2nfnv6001xib00x7ydgocm\"]",
+    "threadId": "cmr2vwcld003lib74hxonr5uz",
+    "originalPlanJsonPresent": true
+  },
+  "recurringInstancesMaterialized": [],
+  "taskStates": [
+    {
+      "title": "Aggiornare il curriculum",
+      "status": "planned",
+      "postponedCount": 1
+    },
+    {
+      "title": "Pagare il bollo auto",
+      "status": "planned",
+      "postponedCount": 1
+    },
+    {
+      "title": "Consegnare il progetto al cliente",
+      "status": "planned",
+      "postponedCount": 1
+    },
+    {
+      "title": "Comprare le lampadine",
+      "status": "inbox",
+      "postponedCount": 1
+    }
+  ]
+}

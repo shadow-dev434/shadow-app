@@ -1,0 +1,18 @@
+{
+  "userId": "cmr2nff1e0000ib00vl75hs28",
+  "spendUsd": 1.30327335,
+  "rows": [
+    {
+      "id": "cmr2vweho003vib74bup6pt1q",
+      "userId": "cmr2nff1e0000ib00vl75hs28",
+      "day": "2026-07-02",
+      "taskClass": "chat",
+      "calls": 36,
+      "tokensIn": 22116,
+      "tokensOut": 3595,
+      "costUsd": 1.30327335,
+      "modelMix": "{\"chat-turn\":{\"calls\":36,\"tokensIn\":22116,\"tokensOut\":3595,\"costUsd\":1.3032733499999998}}",
+      "updatedAt": "2026-07-02T02:37:52.475Z"
+    }
+  ]
+}

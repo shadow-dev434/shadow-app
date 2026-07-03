@@ -1,0 +1,21 @@
+STEP h1 turno1 "iniziamo" -> HTTP 200 phase=per_entry state=active tools=-
+STEP h1 turno2 "3" -> HTTP 200 phase=per_entry state=active tools=record_mood
+STEP h1 turno3 "3" -> HTTP 200 phase=per_entry state=active tools=record_energy
+STEP h1 turno4 "ok, questa tienila per domani e passa avanti" -> HTTP 200 phase=per_entry state=active tools=set_user_mood,set_user_energy
+STEP h1 turno5 "ok, questa tienila per domani e passa avanti" -> HTTP 200 phase=per_entry state=active tools=-
+STEP h1 turno6 "ok, questa tienila per domani e passa avanti" -> HTTP 200 phase=per_entry state=active tools=set_current_entry,mark_entry_discussed
+STEP h1 turno7 "ok, questa tienila per domani e passa avanti" -> HTTP 200 phase=per_entry state=active tools=set_current_entry,set_current_entry
+STEP h1 turno8 "ok, questa tienila per domani e passa avanti" -> HTTP 200 phase=plan_preview state=active tools=mark_entry_discussed
+STEP h1 turno9 "perfetto, confermo il piano cosi" -> HTTP 200 phase=closing state=active tools=confirm_plan_preview
+STEP h1 turno10 "si, chiudi pure la review" -> HTTP 200 phase=closing state=completed tools=confirm_close_review
+[photo:post-chiusura] review=1 planDomani=1 threads=evening_review:completed
+STEP h2 ri-conferma "si" su thread completed: HTTP 200 threadRisposta=cmr2oexg800jiib6sdzo4cgfi (stesso=false) tools=-
+  assistant: Ciao Collaudo! Cosa posso fare per te adesso?
+[photo:post-riconferma] review=1 planDomani=1 threads=evening_review:completed general:active
+VERDICT h2 doppioni: review=1 (atteso 1) planDomani=1 (atteso 1) planId invariato=true
+STEP h3 ri-avvio review (thread nuovo): HTTP 200 thread=cmr2of2pa00jqib6ssre88atj mode=evening_review state=active phase=per_entry
+  assistant: Come stai stasera? 1-5.
+STEP h4 secondo turno ri-avvio: HTTP 200 phase=per_entry state=active tools=record_mood
+  assistant: Come stai stasera? Dammi un numero da 1 a 5.
+[photo:post-riavvio] review=1 planDomani=1 threads=evening_review:completed general:active evening_review:active
+VERDICT h3 dopo ri-avvio: review=1 (atteso 1, unique) planDomani=1

@@ -1,0 +1,24 @@
+{
+  "userMessage": "Perfetto, confermo il piano così.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr2w73mz00i4ib74mnfn4s6m",
+    "mode": "evening_review",
+    "assistantMessage": "Piano bloccato. Ora siamo in chiusura — mood 4, energia 3, 5 task selezionati per domani. Blocco la review e chiudo?",
+    "toolsExecuted": [
+      {
+        "name": "confirm_plan_preview",
+        "input": {},
+        "result": {
+          "ok": true
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.14988659999999998,
+    "tokensIn": 110,
+    "tokensOut": 85,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 4637
+  }
+}

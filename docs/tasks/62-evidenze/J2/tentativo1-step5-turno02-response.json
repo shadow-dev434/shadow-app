@@ -1,0 +1,23 @@
+{
+  "userMessage": "Questa tienila per domani.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr2w1yee00agib745g2okxg8",
+    "mode": "evening_review",
+    "assistantMessage": "Dammi un numero da 1 a 5, anche approssimativo — serve per la review.",
+    "toolsExecuted": [
+      {
+        "name": "record_mood",
+        "input": {
+          "value": 3
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.0295923,
+    "tokensIn": 213,
+    "tokensOut": 65,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 4275
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "resendKeyPresente": true,
+  "forgotEsistente": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "message": "Se l’email è registrata, riceverai un link per reimpostare la password. Controlla anche lo spam."
+    }
+  },
+  "forgotInesistente": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "message": "Se l’email è registrata, riceverai un link per reimpostare la password. Controlla anche lo spam."
+    }
+  },
+  "forgotInvalida": {
+    "status": 400,
+    "body": {
+      "error": "Email non valida"
+    }
+  },
+  "tokenInDbDopoForgot": 1,
+  "reset5char": {
+    "status": 400,
+    "body": {
+      "error": "Password deve essere almeno 6 caratteri"
+    }
+  },
+  "reset6char": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "tokenDopoReset": 0,
+  "loginConPassword6": {
+    "status": 200
+  },
+  "registerConPassword7": {
+    "status": 400,
+    "body": {
+      "error": "La password deve essere di almeno 8 caratteri"
+    },
+    "utenteCreato": 0
+  },
+  "floodForgot": {
+    "status": [
+      200,
+      200,
+      200,
+      200
+    ],
+    "tokenAttiviDopo": 3
+  },
+  "ripristino": {
+    "loginStatus": 200
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "status": 200,
+  "json": {
+    "threadId": "cmr2w0wbd008uib740fu0p7ba",
+    "mode": "general",
+    "assistantMessage": "Hai 3 task ricorrenti attivi:\n\n1. **Stretching 10 minuti** (health) — ricorrente, nessuna scadenza specifica\n2. **Innaffiare le piante** (household) — ricorrente, scadenza 7 luglio\n3. **Innaffiare le piante** (household) — ricorrente, nessuna scadenza\n\nNoto che hai due \"Innaffiare le piante\" quasi identiche. Probabilmente una è un doppione o hanno cadenze diverse, ma il sistema non mi dice la cadenza esatta (daily, settimanale, ecc.).\n\nVuoi che archivi uno dei due doppioni, o preferisci controllare direttamente nell'app per capire quale tenere?",
+    "toolsExecuted": [
+      {
+        "name": "get_today_tasks",
+        "input": {},
+        "result": [
+          {
+            "id": "cmr2vtj0e000hib749f50ig9k",
+            "title": "Stretching 10 minuti",
+            "urgency": 3,
+            "importance": 3,
+            "category": "health",
+            "status": "inbox",
+            "deadline": null,
+            "recurring": true,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr2vrr5p0005ib745hw1sf22",
+            "title": "Innaffiare le piante",
+            "urgency": 3,
+            "importance": 2,
+            "category": "household",
+            "status": "inbox",
+            "deadline": "2026-07-07",
+            "recurring": true,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr2vtvoi0013ib74164zuyai",
+            "title": "Innaffiare le piante",
+            "urgency": 3,
+            "importance": 2,
+            "category": "household",
+            "status": "inbox",
+            "deadline": null,
+            "recurring": true,
+            "estimatedMinutes": 25
+          }
+        ]
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.0033472000000000003,
+    "tokensIn": 331,
+    "tokensOut": 230,
+    "modelUsed": "claude-haiku-4-5",
+    "latencyMs": 4725
+  }
+}

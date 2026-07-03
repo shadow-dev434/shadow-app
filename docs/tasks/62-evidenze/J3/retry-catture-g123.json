@@ -1,0 +1,128 @@
+{
+  "status": 200,
+  "tools": [
+    {
+      "name": "create_task",
+      "input": {
+        "title": "Portare la macchina dal meccanico per il tagliando",
+        "urgency": 2,
+        "importance": 3,
+        "category": "admin"
+      },
+      "result": {
+        "id": "cmr2w3m3900cqib74gycdqe3w",
+        "title": "Portare la macchina dal meccanico per il tagliando",
+        "urgency": 2,
+        "importance": 3,
+        "category": "admin"
+      }
+    },
+    {
+      "name": "create_task",
+      "input": {
+        "title": "Riunione condominio",
+        "deadline": "2026-07-09",
+        "urgency": 3,
+        "importance": 3,
+        "category": "admin",
+        "description": "Giovedì alle 15"
+      },
+      "result": {
+        "id": "cmr2w3m7a00csib74qclnwvd2",
+        "title": "Riunione condominio",
+        "urgency": 3,
+        "importance": 3,
+        "category": "admin"
+      }
+    },
+    {
+      "name": "create_task",
+      "input": {
+        "title": "Ritirare le analisi del sangue",
+        "urgency": 2,
+        "importance": 3,
+        "category": "health"
+      },
+      "result": {
+        "id": "cmr2w3m7g00cuib747oqq4tnl",
+        "title": "Ritirare le analisi del sangue",
+        "urgency": 2,
+        "importance": 3,
+        "category": "health"
+      }
+    }
+  ],
+  "assistant": "Fatto. Tutti e tre i task creati adesso:\n- Riunione condominio giovedì 9 luglio alle 15\n- Ritirare le analisi del sangue (senza data)\n- Tagliando dal meccanico (senza data)\n\nCosa vuoi fare adesso?",
+  "dbTasks": [
+    {
+      "id": "cmr2vvaaz001lib74dbg62uo3",
+      "title": "Preparare documenti per il commercialista",
+      "deadline": null,
+      "aiClassified": true,
+      "description": "Raccogliere e organizzare i documenti necessari per le tasse"
+    },
+    {
+      "id": "cmr2vviju001zib74rv3vax4a",
+      "title": "Comprare il latte",
+      "deadline": null,
+      "aiClassified": true,
+      "description": ""
+    },
+    {
+      "id": "cmr2vviny0021ib74zrk78b9e",
+      "title": "Chiamare l'idraulico",
+      "deadline": null,
+      "aiClassified": true,
+      "description": ""
+    },
+    {
+      "id": "cmr2vvinz0023ib74q76dv7eq",
+      "title": "Prenotare il treno per Roma",
+      "deadline": null,
+      "aiClassified": true,
+      "description": ""
+    },
+    {
+      "id": "cmr2vvqd9002bib74coc6o8fx",
+      "title": "Mandare preventivo al cliente",
+      "deadline": "2026-07-03",
+      "aiClassified": true,
+      "description": ""
+    },
+    {
+      "id": "cmr2vzrcf0082ib745jrp2od6",
+      "title": "Pagare la bolletta",
+      "deadline": "2026-07-04",
+      "aiClassified": true,
+      "description": "da pagare entro dopodomani"
+    },
+    {
+      "id": "cmr2vzvyy008aib74cb7pco65",
+      "title": "Palestra",
+      "deadline": null,
+      "aiClassified": true,
+      "description": ""
+    },
+    {
+      "id": "cmr2w3m3900cqib74gycdqe3w",
+      "title": "Portare la macchina dal meccanico per il tagliando",
+      "deadline": null,
+      "aiClassified": true,
+      "description": ""
+    },
+    {
+      "id": "cmr2w3m7a00csib74qclnwvd2",
+      "title": "Riunione condominio",
+      "deadline": "2026-07-09",
+      "aiClassified": true,
+      "description": "Giovedì alle 15"
+    },
+    {
+      "id": "cmr2w3m7g00cuib747oqq4tnl",
+      "title": "Ritirare le analisi del sangue",
+      "deadline": null,
+      "aiClassified": true,
+      "description": ""
+    }
+  ]
+}

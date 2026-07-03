@@ -1,0 +1,75 @@
+{
+  "status": 200,
+  "json": {
+    "threadId": "cmr2vtsuu000zib748irayyzz",
+    "mode": "general",
+    "assistantMessage": "Hai 4 task, ma vedo doppioni: due \"Stretching 10 minuti\" e due \"Innaffiare le piante\" (una con scadenza al 7 luglio, una senza). Sono ricorrenti.\n\nVuoi che archivi i doppioni e teniamo solo una versione di ciascuno?",
+    "toolsExecuted": [
+      {
+        "name": "get_today_tasks",
+        "input": {},
+        "result": [
+          {
+            "id": "cmr2vtj0e000hib749f50ig9k",
+            "title": "Stretching 10 minuti",
+            "urgency": 3,
+            "importance": 3,
+            "category": "health",
+            "status": "inbox",
+            "deadline": null,
+            "recurring": true,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr2vrr5p0005ib745hw1sf22",
+            "title": "Innaffiare le piante",
+            "urgency": 3,
+            "importance": 2,
+            "category": "household",
+            "status": "inbox",
+            "deadline": "2026-07-07",
+            "recurring": true,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr2vtvoi0013ib74164zuyai",
+            "title": "Innaffiare le piante",
+            "urgency": 3,
+            "importance": 2,
+            "category": "household",
+            "status": "inbox",
+            "deadline": null,
+            "recurring": true,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr2vtvxz0015ib74a72slxjc",
+            "title": "Stretching 10 minuti",
+            "urgency": 3,
+            "importance": 3,
+            "category": "health",
+            "status": "inbox",
+            "deadline": null,
+            "recurring": true,
+            "estimatedMinutes": 25
+          }
+        ]
+      }
+    ],
+    "quickReplies": [
+      {
+        "label": "Sì, archiviali",
+        "value": "Sì, archiviali"
+      },
+      {
+        "label": "No, lascia stare",
+        "value": "No, lascia stare"
+      }
+    ],
+    "costUsd": 0.0031264,
+    "tokensIn": 1166,
+    "tokensOut": 156,
+    "modelUsed": "claude-haiku-4-5",
+    "latencyMs": 3829
+  }
+}

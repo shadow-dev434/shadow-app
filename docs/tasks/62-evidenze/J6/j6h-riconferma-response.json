@@ -1,0 +1,15 @@
+{
+  "status": 200,
+  "json": {
+    "threadId": "cmr2oexg800jiib6sdzo4cgfi",
+    "mode": "general",
+    "assistantMessage": "Ciao Collaudo! Cosa posso fare per te adesso?",
+    "toolsExecuted": [],
+    "quickReplies": [],
+    "costUsd": 0.0011062000000000001,
+    "tokensIn": 411,
+    "tokensOut": 21,
+    "modelUsed": "claude-haiku-4-5",
+    "latencyMs": 1314
+  }
+}

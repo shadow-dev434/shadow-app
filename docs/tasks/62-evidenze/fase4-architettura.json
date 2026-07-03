@@ -1,0 +1,464 @@
+{
+  "summary": "Fase 4 collaudo Task 62: mappa superfici sul core loop, conferma orfani/morti/doppioni via lettura codice",
+  "agentCount": 4,
+  "logs": [],
+  "result": {
+    "completed": 4,
+    "areas": [
+      {
+        "area": "Feature ORFANE/MORTE (parte 1): reminder, shortcuts/share/push, Google Calendar, notifiche in-app+push, modi latenti orchestrator",
+        "findings": [
+          {
+            "item": "D13 — Reminder task: campi Task.reminderAt/reminderSent, UI nel task detail, dispatcher, SW syncReminders",
+            "dossierRef": "D13",
+            "verdict": "CONFERMATO",
+            "evidence": "src/store/shadow-store.ts:44-45 (campi reminderAt/reminderSent); src/app/tasks/page.tsx:2902-2903,2914-2918 (stato reminderDate/reminderTime IDRATATO da selectedTask.reminderAt ma MAI reso come input: nessun <Input> reminder nel render del TaskDetailView 2974-3018, e handleSave 2922-2933 non include reminder → impossibile impostarlo da UI); nessun dispatcher setta reminderSent=true (grep reminderSent → solo notifications/route.ts:68 lo azzera a false, PATCH task lo accetterebbe ma nessuno lo chiama); public/sw.js:257-278 syncReminders chiama GET /api/tasks?reminder=true&before=... ma src/app/api/tasks/route.ts:12-25 ignora del tutto i param 'reminder'/'before' (legge solo status/category/decision) → ritorna TUTTI i task, il filtro before/reminderSent non esiste; inoltre il sync 'shadow-sync-reminders' non è mai registrato (grep sync.register/periodicSync → 0 match). Promessa end-to-end MORTA in ogni anello: input, dispatcher, API filtro, registrazione sync.",
+            "recommendation": "RIMUOVI",
+            "effort": "S",
+            "loopFit": "Non aggancia nessuno dei 4 passi: è una promessa (promemoria push su task) mai mantenuta. Per la beta va nascosto (togliere lo stato reminder morto dal detail e la sezione syncReminders dal SW) per non far apparire una feature inesistente. Post-lancio è un COLLEGA al passo 4 (esecuzione), ma richiede l'intera infra push (D68/D70).",
+            "prelancio": true
+          },
+          {
+            "item": "D68 — Shortcuts manifest + query ?action=share|inbox|today|voice|focus, quick-capture offline SW, push handler senza sender",
+            "dossierRef": "D68",
+            "verdict": "CONFERMATO",
+            "evidence": "public/manifest.json:42-71 (4 shortcuts url=/?action=inbox|today|voice|focus) + :72-81 (share_target action=/?action=share); public/sw.js:225,228 redirige a /?action=share|inbox e :270 crea notifica con url /?action=focus. NESSUN client legge il param 'action': grep get('action') in src → 0 match; l'unico reader di URL params è ChatView.tsx:735 ('auth') e :249 ('plan'), page.tsx:2371 scrive '?plan=today'. Quindi tutti gli ?action= atterrano su chat/inbox default, ignorati. Quick-capture offline: public/sw.js:236-255 processQuickCapture legge IndexedDB store 'pending-captures', ma grep pending-captures/indexedDB in src → 0 match (nessun client ci scrive mai) e il sync 'shadow-quick-capture' non è mai registrato. Push: public/sw.js:167-196 handler pushsubscriptionchange + src/app/api/push-subscription/route.ts salvano subscription, ma grep web-push/sendNotification/VAPID in src → 0 match (nessun sender esiste; solo docs). Tutto morto.",
+            "recommendation": "RIMUOVI",
+            "effort": "S",
+            "loopFit": "Le shortcut punterebbero ai passi 1 (cattura/inbox/voice), 3-4 (today/focus) ma non funzionano. Per la beta (web dev + APK): o si implementa il reader ?action (aggancio S al loop, vale solo su PWA installata) o si rimuovono gli shortcut dal manifest per non promettere scorciatoie che aprono sempre la chat. Push/quick-capture offline vanno rimossi dal SW (infra assente). Raccomando RIMUOVI per la beta; il reader ?action è un quick-win post-lancio.",
+            "prelancio": false
+          },
+          {
+            "item": "D69 — Google Calendar: route /api/calendar/**, entry UI, callback ?action=settings&calendar= letto, token consumati",
+            "dossierRef": "D69",
+            "verdict": "CONFERMATO",
+            "evidence": "Route esistono: src/app/api/calendar/oauth/route.ts (redirect consenso Google), oauth/callback/route.ts:82 (salva CalendarToken, redirect /?action=settings&calendar=connected), calendar/route.ts (GET eventi da task, POST salva token, PUT importa eventi passati DAL CLIENT). Orfano end-to-end: (1) nessuna entry UI verso /api/calendar/oauth — grep calendar/oauth|Connetti Calendar in src → solo middleware allowlist:51 e le route stesse, zero bottoni/link client; (2) il redirect ?action=settings&calendar=connected non è letto da nessuno (vedi D68: nessun reader di 'action', né di 'calendar'); (3) CalendarToken viene SALVATO ma consumato solo da export/route.ts:38 — nessun client fetcha gli eventi Google con quel token (la PUT :95 importa eventi solo se il client glieli passa, ma nessuno chiama PUT). OAuth senza env → oauth/route.ts:17-22 JSON 500 nudo. Feature completa lato server, zero superficie utente.",
+            "recommendation": "RIMUOVI",
+            "effort": "S",
+            "loopFit": "Google Calendar è fuori scope beta per decisione (spec §1: 'route esistono ma orfane da UI'). NON sta nel core loop dei 4 passi della beta (la guida non lo promette). Per la beta va lasciato inerte ma NON deve confondere: già ora è invisibile (nessuna entry UI), quindi il rischio è solo la superficie API che non deve rompere. Confermare che nessun testo utente lo menzioni. Post-v3 W8 lo aggancerà come ingest verso il passo 1.",
+            "prelancio": false
+          },
+          {
+            "item": "D70 — /api/notifications + /api/push-subscription: UI (Bell renderizzata?), Notification del cron mostrate in-app",
+            "dossierRef": "D70",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/api/notifications/route.ts (GET lista+unreadCount, POST crea, PATCH mark-read) e push-subscription/route.ts (POST/GET/DELETE) completi. ZERO UI: l'icona Bell/BellOff è importata a src/app/tasks/page.tsx:31 ma MAI usata (grep Bell in page.tsx → solo l'import riga 31, nessun <Bell/> renderizzato); nessun client fetcha GET /api/notifications (grep fetch('/api/notifications') → 0 match, l'unico caller di db.notification è la route stessa e il cron). Il cron crea Notification type='evening_review_prompt' (src/app/api/cron/evening-review/route.ts:74,89) SOLO come marcatore di dedup idempotenza — mai mostrate in-app perché nessuna superficie legge la lista. push-subscription salva subscription che nessun sender usa (vedi D68: web-push/VAPID assenti).",
+            "recommendation": "RIMUOVI",
+            "effort": "S",
+            "loopFit": "Un centro notifiche in-app sarebbe un COLLEGA ai passi 3-4 (il prompt review serale, i reminder), ma oggi è API senza superficie. Per la beta: rimuovere l'import morto Bell/BellOff da page.tsx (quick-win) e non esporre le route come feature. Le Notification del cron restano legittime come marker di dedup (non è codice morto, è infrastruttura del ponte email di Task 58). Post-lancio un mini centro notifiche aggancerebbe il loop.",
+            "prelancio": false
+          },
+          {
+            "item": "D75 — Modi latenti orchestrator planning/focus_companion/unblock: accettati da /api/chat/turn, tool esposti, unblock prompt vuoto",
+            "dossierRef": "D75",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/api/chat/turn/route.ts:36-43 VALID_MODES include 'planning','focus_companion','unblock' → un POST con quei mode è accettato (:158-160). src/lib/chat/orchestrator.ts:65-71 li dichiara nel type ChatMode; con threadId=null il thread viene CREATO col mode del client (orchestrator.ts:235-247) — il guard anti mode-spoof (:212-233) degrada a thread.mode SOLO su thread esistente non-terminale, quindi con thread nuovo il mode client passa. Tool esposti: src/lib/chat/tools.ts getToolsForMode :572-590 dà a planning CHAT_TOOLS+TASK_MANAGEMENT_TOOLS+RECURRENCE_TOOLS + COMMIT_TODAY_PLAN(:577)+FIT_TODAY_PLAN(:579)+OFFER_STRICT(:581)+BODY_DOUBLE(:588); focus_companion ottiene i tool base+body-double; unblock cade nel ramo generico (tutti i tool base task/recurrence, niente commit). Prompt: prompts.ts getModePrompt :1730-1731 case 'unblock' → return '' (nessuna istruzione di modo, solo CORE_IDENTITY+contesto); planning/focus_companion :1726-1729 → BODY_DOUBLE_OFFER_PROMPT. Nessun client usa questi mode: ChatView usa solo general/morning_checkin/evening_review (ChatView.tsx:207 init 'general', :256 morning, adotta data.mode dal server; grep planning/focus_companion/unblock in ChatView → 0 match; store non li conosce). Sono raggiungibili SOLO con una richiesta API a mano.",
+            "recommendation": "FIX",
+            "effort": "S",
+            "loopFit": "planning/focus_companion sono varianti mai cablate del passo 2/4 (BODY_DOUBLE_OFFER già coperto da 'general'); unblock è un guscio col prompt vuoto ma con tool mutator esposti (create/update/complete task, ricorrenze) senza alcuna istruzione → comportamento imprevedibile se un client buggato/malevolo lo invoca. Non è un rischio di sicurezza (requireSession + isolamento userId reggono), ma è superficie latente non voluta. FIX minimo pre-lancio: restringere VALID_MODES a {morning_checkin, evening_review, general} in turn/route.ts:36-43 (i 3 realmente usati), lasciando i mode nel type per evoluzione futura. Effort S, zero impatto UX.",
+            "prelancio": true
+          }
+        ]
+      },
+      {
+        "area": "Feature ORFANE/MORTE (parte 2) + campi morti",
+        "findings": [
+          {
+            "item": "D71 — Modello Settings: quali campi sono editabili da UI vs morti",
+            "dossierRef": "D71",
+            "verdict": "CONFERMATO",
+            "evidence": "Schema: prisma/schema.prisma:347-369 (defaultEnergy/defaultContext/defaultDuration/defaultFormat/wakeTime/sleepTime/productiveSlots/theme/reminderMinutes/notificationsEnabled/eveningWindow*). Route PATCH accetta i primi 8 + notificationsEnabled + eveningWindow* (src/app/api/settings/route.ts:37-60). MA nessun caller: grep '/api/settings' in src trova solo la route stessa + un commento (evening-email.ts:46) — la SettingsView (src/app/tasks/page.tsx:3243-3416) non ha NESSUN input per alcun campo Settings (solo Account, Profilo read-only, StrictStats read-only, AppBlockerCard, Export). Consumo backend: wakeTime/sleepTime letti da slot-allocation.ts:78-79 e preview-reconstruction.ts:105-106; theme mai letto (sonner.tsx usa next-themes indipendente); defaultEnergy/defaultContext/defaultDuration/defaultFormat/productiveSlots/reminderMinutes mai letti in tutto src.",
+            "recommendation": "RIMUOVI",
+            "loopFit": "Nessuno di questi campi tocca il core loop dei 4 passi. wakeTime/sleepTime alimentano lo slot-allocation della review (passo 3) ma non sono impostabili; gli altri 7 sono zavorra pura.",
+            "effort": "S",
+            "prelancio": false
+          },
+          {
+            "item": "D67 — Finestra serale + opt-out email NON impostabili da UI",
+            "dossierRef": "D67",
+            "verdict": "CONFERMATO",
+            "evidence": "L'API espone la scrittura (settings/route.ts:52-60 valida notificationsEnabled + eveningWindowStart/End con regex HHMM) e il backend le consuma davvero (cron filtra where notificationsEnabled:true a cron/evening-review/route.ts:50; la finestra e' letta da window.ts:22-56 e compute-signal.ts:53). MA la SettingsView (page.tsx:3243-3416) NON contiene alcun toggle notifiche ne input finestra serale. L'email serale (evening-email.ts:46) dice all'utente di disattivare 'nelle impostazioni' un toggle che non esiste: promessa disattesa (L7).",
+            "recommendation": "COLLEGA",
+            "loopFit": "La review serale (passo 3) e' innescata/ricordata da questa finestra + email; l'utente non ha alcun modo di regolare l'orario ne di silenziare l'email pur essendo il DB gia' pronto. Aggancio minimo: due controlli nella SettingsView che facciano PATCH /api/settings.",
+            "effort": "S",
+            "prelancio": true
+          },
+          {
+            "item": "D72 — Delega: quadrante 'delegate', Contact CRUD, flusso task→contatto",
+            "dossierRef": "D72",
+            "verdict": "CONFERMATO",
+            "evidence": "Il quadrante 'delegate'/'DELEGA' esiste solo come etichetta di classificazione (page.tsx:113,121). Contact CRUD API completa (src/app/api/contacts/route.ts GET/POST, contacts/[id]/route.ts PATCH/DELETE) ma ZERO caller nella UI: grep 'contacts' su tutti i .tsx = nessun risultato; grep '/api/contacts' in src trova solo le route. delegatedToId/delegationStatus/delegationNote esistono in schema (schema.prisma:127-130) e nel tipo store (shadow-store.ts:40-42) ma nulla li SETTA mai su un task — l'unico uso e' il reset in contacts/[id] DELETE. Nessun flusso di assegnazione task→contatto esiste.",
+            "recommendation": "RIMUOVI",
+            "loopFit": "La delega non e' nel core loop (cattura→organizza→review→fai). E' una feature monca: promette (quadrante Delega) senza mantenere. Nascondere il quadrante 'delegate' dalla classificazione beta ed eliminare le route contacts orfane.",
+            "effort": "M",
+            "prelancio": false
+          },
+          {
+            "item": "next-intl installato e mai usato",
+            "dossierRef": "D (fase 4 orfani)",
+            "verdict": "CONFERMATO",
+            "evidence": "package.json:78 dichiara 'next-intl':'^4.3.4' ma grep 'next-intl' in src/ = 0 import reali (compare solo in docs, package.json, bun.lock e negli artefatti .next-stale). Nessun provider/useTranslations/messages caricato: dipendenza morta (i18n runtime e' fuori scope beta, IT-only).",
+            "recommendation": "RIMUOVI",
+            "loopFit": "Fuori dal loop. Dipendenza fantasma dal piano v3 W4 mai cablata. Puo' restare in package.json senza danni funzionali ma e' peso morto; rimozione a costo nullo o rinvio post-lancio.",
+            "effort": "S",
+            "prelancio": false
+          },
+          {
+            "item": "Stub GET /api (src/app/api/route.ts): cosa restituisce, chi lo chiama",
+            "dossierRef": "§8.1 / dossier route pubbliche",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/api/route.ts:3-4 ritorna NextResponse.json({message:'Hello, world!'}). Nessun caller: grep di fetch('/api') e 'Hello, world' in src trova solo la route stessa. Endpoint pubblico placeholder senza scopo.",
+            "recommendation": "RIMUOVI",
+            "loopFit": "Fuori dal loop, nessuna funzione. Rimuovere il file (endpoint di scaffolding). Nota gia' segnalata in spec §8.1 come 'da segnalare per rimozione'.",
+            "effort": "S",
+            "prelancio": false
+          },
+          {
+            "item": "D59 — Recovery engine 5 strategie vs UI 2 opzioni",
+            "dossierRef": "D59",
+            "verdict": "CONFERMATO",
+            "evidence": "L'engine generateRecoveryAction (execution-engine.ts:156-275) implementa 5 strategie ricche per failureType (too_hard→reduce, avoided→reformat, distracted→micro_reentry, ran_out_of_time→reduce, stuck→change_task) con newSteps/newDuration/newFormat/alternativeTaskId su misura. MA grep 'generateRecoveryAction' in src = SOLO la definizione: nessun caller. La UI (page.tsx:2880-2886, handler handleRecovery 2679-2693) offre 2 bottoni hardcoded ('Micro-sessione 3 min' → timer 3min + recovery_success; 'Pausa' → chiude), ignorando completamente l'engine e le sue micro-step personalizzate.",
+            "recommendation": "COLLEGA",
+            "loopFit": "Il recovery e' il ramo 'lo fai con lei' (passo 4) quando l'utente si blocca: e' esattamente dove l'app dovrebbe fare da sola. Oggi butta via 5 strategie gia' scritte e non passa nemmeno il failureType raccolto (il bottone 'Troppo difficile' a page.tsx:2869 registra i segnali ma non aziona l'engine). Aggancio: far chiamare generateRecoveryAction con il failureType e renderizzare la strategia risultante.",
+            "effort": "M",
+            "prelancio": false
+          },
+          {
+            "item": "Raccomandazione task adattiva: endpoint mai chiamato",
+            "dossierRef": "D (fase 4 orfani)",
+            "verdict": "CONFERMATO",
+            "evidence": "L'azione 'task_recommendation' esiste in POST /api/ai-assistant (route.ts:200-244) e chiama generateTaskRecommendation. MA i soli action richiesti dal client (page.tsx) sono: 'proactive' (499), 'nudge' (547), 'nudge_outcome' (1322/1341/1508/1559), 'micro_feedback' (1747), + GET (487/1400 per insights/triggers). 'task_recommendation' non e' MAI inviato: endpoint morto. L'engine adattivo (AdaptiveProfile, 60+ dimensioni) produce raccomandazioni che nessuno consuma.",
+            "recommendation": "COLLEGA",
+            "loopFit": "La raccomandazione adattiva sarebbe l'automazione che sceglie il prossimo task per l'utente (passo 4, 'lo fai con lei'), il cuore della lente ADHD (fai meno, ottieni piu'). Oggi la Today mostra una Top3 statica del piano; il motore che potrebbe dire 'fai questo adesso' esiste ma e' scollegato. Aggancio: invocare task_recommendation e sorfacciarne l'output come 'prossima cosa'.",
+            "effort": "M",
+            "prelancio": false
+          },
+          {
+            "item": "Contact CRUD (/api/contacts) orfano end-to-end",
+            "dossierRef": "D72",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/api/contacts/route.ts (GET/POST) e contacts/[id]/route.ts (PATCH/DELETE) implementati e protetti, ma nessuna UI li tocca (grep 'contacts' su .tsx = 0; nessun fetch a /api/contacts). Superficie API completa senza alcun ingresso utente.",
+            "recommendation": "RIMUOVI",
+            "loopFit": "Sottoinsieme della delega (D72), fuori dal loop. Route da rimuovere insieme al flusso delega monco per non lasciare superficie non collaudata in beta.",
+            "effort": "S",
+            "prelancio": false
+          }
+        ]
+      },
+      {
+        "area": "DOPPIONI e MAL COLLEGATI",
+        "findings": [
+          {
+            "item": "D1/L9 — Review manuale (tab) vs review serale conversazionale: stessa tabella Review, 500 e soppressione della review conversazionale",
+            "dossierRef": "D1 / L9",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/tasks/page.tsx:3078-3080 il tab Review invia taskReviews come {taskId, completed:true} / {taskId, completed:false, avoided:true}; src/app/api/review/route.ts:44-55 legge tr.status e crea ReviewTask con status: tr.status; prisma/schema.prisma:322 ReviewTask.status String (NOT NULL). Con taskReviews non vuoti -> status undefined -> insert Prisma fallisce -> catch -> 500 (route.ts:62-65). Nota: l'upsert su Review (route.ts:18-38) avviene PRIMA del loop, quindi la riga Review(oggi) resta scritta anche dopo il 500: la review serale conversazionale che fa upsert sulla stessa chiave userId_date=oggi la trova gia' presente. Sia il tab manuale sia la chat scrivono la STESSA riga Review (schema.prisma:295-316, @@unique userId+date).",
+            "recommendation": "RIMUOVI",
+            "loopFit": "La cattura del feedback serale nel loop e' il passo (3) conversazionale (review chat -> DailyPlan domani). Il tab Review manuale e' una seconda superficie che duplica lo stesso concetto, scrive sulla stessa tabella con payload incompatibile e non produce il piano di domani (nessun DailyPlan). Fuori dal loop dei 4 passi.",
+            "effort": "S",
+            "prelancio": true
+          },
+          {
+            "item": "'/' vs '/chat' — stessa ChatView",
+            "dossierRef": "D (fase 4 doppioni)",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/page.tsx:48 (loggato) return <ChatView />; src/app/chat/page.tsx:1-7 return <ChatView />. Stesso componente src/features/chat/ChatView.tsx montato da entrambe le route senza differenze di props. '/' aggiunge solo il gate auth/idratazione sessione (page.tsx:24-45), '/chat' e' un wrapper nudo.",
+            "recommendation": "UNIFICA",
+            "loopFit": "La chat E' il passo (1) e (3) del loop: una sola superficie va bene. Due URL per la stessa vista sono ridondanti; non danneggiano ma confondono deep-link/nav. '/chat' e' un doppione tecnico di '/'.",
+            "effort": "S",
+            "prelancio": false
+          },
+          {
+            "item": "D44 — Due generatori del DailyPlan che si sovrascrivono senza conferma: 'Rigenera piano ora' (POST /api/daily-plan) vs 'Pianifica con Shadow'/commit_today_plan",
+            "dossierRef": "D44",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/tasks/page.tsx:2374-2378 bottone 'Rigenera piano ora' -> handleRegenerate -> apiFetch('/api/daily-plan', POST) (page.tsx:2188-2193); src/app/api/daily-plan/route.ts:153-171 upsert su DailyPlan userId_date=today con top3/doNow/schedule/delegate/postpone dall'engine + riscrittura di TUTTI i DailyPlanTask (deleteMany 117 + create 167-171). src/app/tasks/page.tsx:2371-2372 bottone 'Pianifica con Shadow' -> window.location.href='/?plan=today' -> chat -> commit_today_plan (src/lib/chat/tools.ts:361-402, 768) -> src/lib/daily-plan/commit-today-plan.ts:134-146 upsert sulla STESSA riga userId_date=today, azzerando esplicitamente schedule/delegate/postpone (righe 127-129) e riscrivendo i DailyPlanTask con slot 'today'. Entrambi upsert sulla stessa @@unique (schema.prisma:282) SENZA leggere/conservare l'altro output e SENZA dialog di conferma: l'ultimo che gira vince e cancella il piano dell'altro (i pin sono preservati solo dal lato /api/daily-plan, route.ts:120-138; commit_today_plan preserva solo pinnedTaskIds passati dal modello).",
+            "recommendation": "UNIFICA",
+            "loopFit": "Il piano di domani/oggi deve nascere UNA volta, nel loop dalla review serale/morning check-in (passo 3, commit_today_plan). Il bottone deterministico 'Rigenera piano ora' e' un secondo generatore fuori loop che sovrascrive silenziosamente il piano conversazionale. Tenere solo il percorso conversazionale (o rendere 'Rigenera' un'azione che passa dalla chat).",
+            "effort": "M",
+            "prelancio": true
+          },
+          {
+            "item": "tab Focus vs route /focus — stesso nome, esperienze diverse",
+            "dossierRef": "D (fase 4 doppioni) / D51",
+            "verdict": "CONFERMATO",
+            "evidence": "Nav 'Focus' -> store.currentView='focus' rende la FocusView dentro il monolite src/app/tasks/page.tsx (esecuzione task/strict; ingresso da handleStartFocus page.tsx:2242-2245 che setta currentView='focus'). Route separata src/app/focus/page.tsx:8-14 -> FocusPageClient = sessione body doubling ('Fallo con Shadow', v3 W7, doc 37 nel commento del file). Stesso label 'Focus' per due esperienze diverse (esecuzione/strict vs body doubling). Il tab Focus senza task selezionato e' anche un vicolo cieco (D51).",
+            "recommendation": "UNIFICA",
+            "loopFit": "Il passo (4) 'lo fai con lei' e' il body doubling /focus ('Fallo con Shadow'). Il tab Focus del monolite e' la vecchia superficie di esecuzione/strict. Due cose diverse con lo stesso nome violano L9 e disorientano. Unificare naming o fondere le due superfici d'esecuzione.",
+            "effort": "L",
+            "prelancio": false
+          },
+          {
+            "item": "Doppia contabilita' streak: modello Streak vs UserPattern.streakDays — con algoritmi diversi; Streak mai scritto",
+            "dossierRef": "D (fase 4 doppioni)",
+            "verdict": "CONFERMATO",
+            "evidence": "prisma/schema.prisma:226-238 model Streak (per-giorno) e :339 UserPattern.streakDays. Chi scrive UserPattern.streakDays: (a) src/app/api/review/route.ts:142-159 (streak+=1 se lastActive==ieri/oggi) invocato dal tab Review manuale; (b) src/app/api/streaks/route.ts:86-127 POST che scrive SIA db.streak.upsert SIA UserPattern.streakDays con algoritmo DIVERSO (Math.max, +1 se lo Streak di ieri aveva completamenti, e reincrementa totalTasksCompleted). Ma il POST /api/streaks NON ha alcun caller in src (grep '/api/streaks' trova solo la route stessa): la tabella Streak non viene MAI popolata da scritture live, mentre GET /api/streaks (streaks/route.ts:16-61) la LEGGE per calcolare currentStreak -> currentStreak sara' sempre 0. Due fonti di verita' per lo streak, con la piu' ricca (Streak) orfana in scrittura.",
+            "recommendation": "UNIFICA",
+            "loopFit": "Lo streak e' feedback (Cielo/progressi) del loop. Avere due contatori con logiche divergenti e una tabella mai scritta produce numeri incoerenti. Unificare su un'unica fonte (UserPattern.streakDays) aggiornata dal punto autorevole del loop (chiusura review conversazionale), e togliere il modello Streak morto o collegarlo.",
+            "effort": "M",
+            "prelancio": false
+          },
+          {
+            "item": "D43 — slot del piano (DailyPlanTask.slot / slotContextsJson) scritti in DB e ignorati dalla Today (Top3 piatta)",
+            "dossierRef": "D43",
+            "verdict": "CONFERMATO",
+            "evidence": "Scrittura slot: src/app/api/daily-plan/route.ts:159-171 (slot top3/doNow/schedule/delegate/postpone) e src/lib/daily-plan/commit-today-plan.ts:142-144 (slot 'today'); slotContextsJson in DailyPlan (schema.prisma:270). Lettura Today: src/app/tasks/page.tsx:2263-2296 idrata il piano dal breakdown top3/doNow/... e :2308-2320 costruisce 'Le 3 cose di oggi' da dp.top3 (=top3Ids) e mette TUTTO il resto in un'unica lista 'Altro' collassata. Nessuna resa per fasce orarie basata su DailyPlanTask.slot; slotContextsJson (righe 2272-2279) viene letto solo per popolare i Select 'Dove sarai oggi', non per organizzare i task in fasce. Confermato: la Today legge top3Ids e ignora la struttura a slot.",
+            "recommendation": "COLLEGA",
+            "loopFit": "Il passo (3) promette 'ti svegli e il piano c'e' gia'' con un piano organizzato (per fasce in review); la Today lo appiattisce in Top3 + 'Altro', perdendo l'organizzazione temporale che l'utente ha concordato. Aggancio minimo: rendere le fasce/slot gia' persistiti (perdono zero, dati gia' in DB).",
+            "effort": "M",
+            "prelancio": false
+          },
+          {
+            "item": "D2 — Nudge 'accetta' apre il PRIMO task non completato dello store, non quello del nudge",
+            "dossierRef": "D2",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/tasks/page.tsx:1312 const nudgeTask = store.tasks.find(t => t.status !== 'completed' && t.status !== 'abandoned'); poi :1315-1318 setSelectedTaskId(nudgeTask.id)+setCurrentView('focus'). Il nudge (store.activeNudge) non porta un taskId proprio e handleAccept non lo usa: qualunque task il nudge suggerisse, l'utente atterra sul primo task aperto in ordine di store. Insight/nudge parlano di un task ma non ci portano davvero.",
+            "recommendation": "FIX",
+            "loopFit": "Nudge/insight sono spinte verso il passo (4) 'fallo'. Se il tap 'accetta' apre il task sbagliato, la spinta e' inutile o dannosa (fiducia L7). Va corretto legando il nudge al taskId reale; se non c'e' un taskId affidabile, degradare a CTA generica.",
+            "effort": "S",
+            "prelancio": true
+          },
+          {
+            "item": "D62/D64 — la chat crea task gia' classificati mentre l'inbox no (tripla/doppia pipeline)",
+            "dossierRef": "D62 / D64",
+            "verdict": "CONFERMATO",
+            "evidence": "Chat: src/lib/chat/tools.ts:861-874 create_task crea con status:'inbox' MA aiClassified:true e aiClassificationData {via:'chat', urgency, importance, category} presi dal modello, senza conferma. Inbox: src/app/tasks/page.tsx:181-185 createTask invia solo {title, status:'inbox'} (nessun aiClassified) -> il task resta non classificato e richiede il PriorityConfirmDialog (Haiku + conferma) prima di diventare 'planned' (page.tsx:1167-1204). Quindi due esiti diversi per lo stesso gesto 'aggiungi un task': da chat -> gia' classificato e nessuna conferma; da inbox -> non classificato, dialog di conferma. APP_KNOWLEDGE che spiega il flusso inbox->Classifica non regge per i task da chat (D64).",
+            "recommendation": "UNIFICA",
+            "loopFit": "La cattura e' il passo (1); l'organizzazione (classificazione) e' il passo (2). Due pipeline con esiti diversi rompono la coerenza: l'utente non sa se un task e' 'classificato' o no a seconda di dove l'ha catturato. Unificare la classificazione (un solo motore/soglia post-cattura).",
+            "effort": "M",
+            "prelancio": false
+          },
+          {
+            "item": "D-strict — AppBlockerCard solo Android, nessun equivalente web nemmeno informativo",
+            "dossierRef": "D-strict / D-w7",
+            "verdict": "CONFERMATO",
+            "evidence": "src/components/native/app-blocker-card.tsx:110 if (!isAndroid()) return null; -> su web/iOS la card 'App da bloccare' non e' renderizzata affatto. Montata in Settings a src/app/tasks/page.tsx:3391 <AppBlockerCard/>. Su web lo strict one-tap attiva la sessione ma lo scudo e' no-op (nessuna app da bloccare configurabile) e non c'e' NESSUNA superficie, nemmeno un testo, che spieghi che il blocco reale e' solo su Android. blockedApps resta [] e resolveBlockedApps (src/lib/strict-mode/enter.ts) restituisce lista vuota.",
+            "recommendation": "COLLEGA",
+            "loopFit": "Lo strict serve il passo (4) 'fallo con lei' (anti-distrazione). Su web la promessa 'blocca le app' non e' mantenibile e l'utente non ha modo di capirlo -> rottura di fiducia (L7). Aggancio minimo: una riga informativa su web ('il blocco reale delle app e' disponibile nell'app Android') invece del silenzio.",
+            "effort": "S",
+            "prelancio": true
+          }
+        ]
+      },
+      {
+        "area": "Navigazione e coerenza nomi/lingua",
+        "findings": [
+          {
+            "item": "D56 — Nessuna URL per vista: refresh su /tasks torna sempre all'inbox, niente deep-link, niente back button",
+            "dossierRef": "D56",
+            "verdict": "CONFERMATO",
+            "evidence": "src/store/shadow-store.ts:110-111,257-258 (currentView è stato Zustand, NON in URL); src/app/tasks/page.tsx:1937-1958 (BottomNav chiama solo setCurrentView, mai router); src/app/tasks/page.tsx:426-428 (all'init, se non c'è focus attivo, forza SEMPRE setCurrentView('inbox')). Refresh su /tasks → sempre inbox, qualunque vista fossi. Il back button del browser non cambia vista (nessuna history entry per vista). Zero deep-link a today/review/cielo/settings.",
+            "recommendation": "COLLEGA",
+            "loopFit": "La navigazione fra le superfici del loop (Today passo 4, Review passo 3, Cielo feedback) non è indirizzabile né condivisibile né recuperabile al refresh: rompe il rientro (L5). Aggancio minimo = sincronizzare currentView con ?view= (searchParam) o con path reali.",
+            "effort": "M",
+            "prelancio": false
+          },
+          {
+            "item": "D56 — Icona chat nell'header = full page reload (window.location.href='/'), non navigazione SPA",
+            "dossierRef": "D56",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/tasks/page.tsx:1892-1899 il bottone MessageCircle fa `window.location.href = '/'` (hard reload dell'intero documento), mentre il percorso inverso ChatView→/tasks usa router.push (src/features/chat/ChatView.tsx:636,688). Asimmetria: da chat a tasks è SPA, da tasks a chat è full reload (perde stato store, ri-scarica bundle).",
+            "recommendation": "FIX",
+            "loopFit": "Il ponte fra il passo 1 (cattura in chat) e i passi 2-4 (organizza/Today/fai) è il tragitto più battuto del loop; un full reload a ogni ritorno alla chat è latenza e flash bianco gratuiti.",
+            "effort": "S",
+            "prelancio": true
+          },
+          {
+            "item": "D5 — Logout finto: nessun signOut server, il cookie next-auth (JWT 30gg) resta valido → si rientra",
+            "dossierRef": "D5",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/tasks/page.tsx:614-625 handleLogout azzera solo store + localStorage.removeItem('shadow-user'), NON chiama signOut() di next-auth. Il cookie di sessione sopravvive; alla successiva visita di / HomePage legge status==='authenticated' (src/app/page.tsx:42-48) e mostra di nuovo ChatView → utente ancora dentro. Nota: SettingsView delega a onLogout (page.tsx:3266-3268), stesso difetto; invece delete account (3287) e revoca consenso usano bene signOut/redirect.",
+            "recommendation": "FIX",
+            "loopFit": "Fuori dal loop ma promessa di sicurezza rotta: 'Esci' non esce. Su dispositivo condiviso/beta è un problema di privacy (dati ADHD).",
+            "effort": "S",
+            "prelancio": true
+          },
+          {
+            "item": "D5 — Nessun logout dalla home chat (la superficie primaria loggata non ha via d'uscita)",
+            "dossierRef": "D5",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/page.tsx:48 la home loggata è <ChatView/>; grep su src/features/chat/ChatView.tsx per signOut/LogOut/Esci = 0 risultati. Il logout esiste solo dentro /tasks (AppHeader 1925-1927 e SettingsView 3306). Per uscire l'utente deve prima raggiungere /tasks.",
+            "recommendation": "COLLEGA",
+            "loopFit": "La chat è l'ingresso del loop (passo 1) e la home di default: deve avere accesso ad account/logout senza deviare su /tasks.",
+            "effort": "S",
+            "prelancio": false
+          },
+          {
+            "item": "D-auth — Doppia fonte di verità client (localStorage 'shadow-user' vs cookie next-auth): /tasks può mostrare il form login a utente loggato",
+            "dossierRef": "D-auth",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/tasks/page.tsx:395-445 l'init di TasksApp decide l'auth SOLO da localStorage 'shadow-user' (395) e, se assente, fa store.setCurrentView('auth') (444) → mostra AuthGateView (form login). Ma il middleware ha già fatto passare la richiesta perché il COOKIE JWT è valido. Su /tasks caricata a freddo (WebView killata, localStorage svuotato, o dopo il 'logout finto' D5 che rimuove shadow-user ma lascia il cookie) un utente autenticato vede il login. Divergenza: cookie=loggato, localStorage=anonimo. Nota: / (HomePage) è già stato riparato per derivare l'auth dalla sessione (B5, page.tsx:24-45), ma /tasks caricata direttamente no.",
+            "recommendation": "FIX",
+            "loopFit": "Vicolo cieco d'ingresso: l'utente loggato che apre /tasks direttamente sbatte su un login che non gli serve. Allineare /tasks alla stessa idratazione-da-sessione di HomePage.",
+            "effort": "M",
+            "prelancio": true
+          },
+          {
+            "item": "D50 — Enum grezze EN esposte in UI IT: strictModeState raw in Settings + focusModeDefault raw",
+            "dossierRef": "D50",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/tasks/page.tsx:3378 Stato strict = `store.strictModeState.replace('_',' ')` con class capitalize → rende 'Active strict' / 'Active soft' / 'Pending exit' / 'Idle' (valori enum tecnici, non tradotti). src/app/tasks/page.tsx:3362 'Focus mode' mostra `profile.focusModeDefault` grezzo ('soft'/'strict'). Entrambi dentro il pannello Impostazioni IT.",
+            "recommendation": "FIX",
+            "loopFit": "Feedback/impostazioni: gergo tecnico nella lente ADHD (L6/L9). Mappare a etichette IT ('Attiva', 'Morbida', 'In uscita', 'Inattiva'; 'Morbido'/'Rigido').",
+            "effort": "S",
+            "prelancio": false
+          },
+          {
+            "item": "D50 — LAUNCH/HOLD/RECOVERY in maiuscolo EN mostrati nell'header e nella FocusView accanto a testo IT",
+            "dossierRef": "D50",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/tasks/page.tsx:127-132 MODE_CONFIG label = 'LAUNCH'/'HOLD'/'RECOVERY' con desc IT ('Sblocca e inizia'/'Mantieni il ritmo'/'Rientro graduale'). Renderizzate: header esecuzione page.tsx:1908 (`MODE_CONFIG[executionMode].label`) e FocusView page.tsx:2793 (`modeConfig.label`) affiancata a modeConfig.desc IT (2794). Mix EN/IT nella stessa riga.",
+            "recommendation": "FIX",
+            "loopFit": "Passo 4 (fai con lei): l'etichetta di modalità durante l'esecuzione è EN mentre tutto il resto è IT. O tradurre le label o tenerle come 'sigla' ma documentarne il senso.",
+            "effort": "S",
+            "prelancio": false
+          },
+          {
+            "item": "D50/L9 — Barra di navigazione con nomi metà EN metà IT: Inbox/Today/Focus/Review vs Cielo/Impost.",
+            "dossierRef": "D50",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/tasks/page.tsx:1939-1946 BottomNav: label 'Inbox','Today','Focus','Review' (EN) accanto a 'Cielo','Impost.' (IT). Incoerenza di lingua nella superficie più visibile dell'app.",
+            "recommendation": "UNIFICA",
+            "loopFit": "La nav è la mappa del loop per l'utente; nomi bilingui casuali abbassano la comprensione in 10 secondi (L6) e la fiducia. Decidere una lingua sola (beta è IT-only): es. 'In arrivo'/'Oggi'/'Concentrazione'/'Bilancio'/'Cielo'/'Impostazioni'.",
+            "effort": "S",
+            "prelancio": true
+          },
+          {
+            "item": "L9 — Collisione di nome 'Focus': tab Focus (esecuzione/strict dentro /tasks) vs route /focus (body doubling), esperienze diverse stesso nome",
+            "dossierRef": "D50 / Fase4 Navigazione",
+            "verdict": "CONFERMATO",
+            "evidence": "tab Focus = currentView 'focus' → FocusView (timer/strict/execution), src/app/tasks/page.tsx:683,1942. Route /focus = src/app/focus/page.tsx:8 → FocusPageClient = sessione body doubling (v3 W7). Due destinazioni con lo stesso nome 'Focus', raggiunte da ingressi diversi, con UX diverse.",
+            "recommendation": "UNIFICA",
+            "loopFit": "Entrambe stanno nel passo 4 ma confondono: l'utente non sa se 'Focus' = concentrarsi da solo o con Shadow. Rinominare una delle due (es. tab 'Concentrazione' vs 'Con Shadow'/'Insieme').",
+            "effort": "M",
+            "prelancio": false
+          },
+          {
+            "item": "L9/Fase4 — Doppione di superficie chat: / e /chat renderizzano entrambe lo stesso ChatView",
+            "dossierRef": "Fase4 Doppioni",
+            "verdict": "CONFERMATO",
+            "evidence": "src/app/page.tsx:48 (home loggata → <ChatView/>) e src/app/chat/page.tsx:5-7 (<ChatView/>). Stessa vista a due URL; /chat è nel matcher middleware (src/middleware.ts:232) ma non è linkata da nessuna nav → route ridondante.",
+            "recommendation": "RIMUOVI",
+            "loopFit": "Passo 1 del loop duplicato senza motivo: due URL per la stessa chat aumentano la superficie da mantenere/testare. Rimuovere /chat (o farla redirect a /).",
+            "effort": "S",
+            "prelancio": false
+          },
+          {
+            "item": "L9 — 'Review' (tab EN in /tasks, form manuale) vs 'review serale' conversazionale in chat: stesso concetto, nomi e superfici diverse",
+            "dossierRef": "D50 / D1 / Fase4 Doppioni",
+            "verdict": "CONFERMATO",
+            "evidence": "tab 'Review' src/app/tasks/page.tsx:1943 → ReviewView (form manuale whatDone/whatAvoided/whatBlocked, 3050-3062) che scrive sulla stessa tabella Review della review serale conversazionale (chat, passo 3 del loop). Due porte allo stesso rito con nomi diversi (tab 'Review' EN vs 'review serale' IT).",
+            "recommendation": "UNIFICA",
+            "loopFit": "Passo 3 del loop (review serale prepara il piano di domani) è promesso conversazionale nella guida; il tab manuale 'Review' è una seconda strada che confonde e collide sui dati (cfr. D1). Coerenza minima: stesso nome IT e un solo ingresso, o il tab come 'apri la review con Shadow'.",
+            "effort": "M",
+            "prelancio": false
+          },
+          {
+            "item": "D50/L9 — Categorie/quadrant/decision: label IT curate ma con fallback all'enum grezzo per valori fuori dominio",
+            "dossierRef": "D50",
+            "verdict": "PARZIALE",
+            "evidence": "CATEGORIES/QUADRANT_CONFIG/DECISION_CONFIG sono tradotti (src/app/tasks/page.tsx:47-125). Il badge categoria fa fallback all'enum grezzo se non mappata: page.tsx:2135 `CATEGORIES.find(...)?.label || task.category`. Con status/quadrant arbitrari accettati dal PATCH (dossier D14) il fallback mostrerebbe il valore raw EN. In condizioni normali le enum NON sono grezze — la pista 'enum grezze come category/quadrant esposte' è solo un edge, non sistemica.",
+            "recommendation": "TIENI",
+            "loopFit": "Marginale: solo su dati corrotti. Le vere enum grezze sistemiche sono strictModeState e focusModeDefault (finding sopra).",
+            "effort": "S",
+            "prelancio": false
+          }
+        ]
+      }
+    ],
+    "totalFindings": 34
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Analisi"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "orfani-morti-1",
+      "phaseIndex": 1,
+      "phaseTitle": "Analisi",
+      "agentId": "a4fcd660a7623d767",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782959219772,
+      "queuedAt": 1782959219754,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Feature ORFANE/MORTE (parte 1): reminder, shortcuts/share/p…",
+      "promptPreview": "Sei un agente di COLLAUDO (Task 62, Fase 4) dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA del codice (Read/Grep/Glob). NON modificare nulla, NON avviare server, NON toccare il DB. Non usare i tool browser.\nCompito: per ogni superficie/feature della tua area, dai un verdetto sulla pista del dossier (spec docs/tasks/62-collaudo-totale-pre-lancio.md sezioni 10 e 12) fondato su file:riga REALI…",
+      "lastProgressAt": 1782959504677,
+      "tokens": 105748,
+      "toolCalls": 39,
+      "durationMs": 284905,
+      "resultPreview": "{\"area\":\"Feature ORFANE/MORTE (parte 1): reminder, shortcuts/share/push, Google Calendar, notifiche in-app+push, modi latenti orchestrator\",\"findings\":[{\"item\":\"D13 — Reminder task: campi Task.reminderAt/reminderSent, UI nel task detail, dispatcher, SW syncReminders\",\"dossierRef\":\"D13\",\"verdict\":\"CONFERMATO\",\"evidence\":\"src/store/shadow-store.ts:44-45 (campi reminderAt/reminderSent); src/app/tasks…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "orfani-morti-2",
+      "phaseIndex": 1,
+      "phaseTitle": "Analisi",
+      "agentId": "aa272632bd6def095",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782959219775,
+      "queuedAt": 1782959219754,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Feature ORFANE/MORTE (parte 2) + campi morti",
+      "promptPreview": "Sei un agente di COLLAUDO (Task 62, Fase 4) dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA del codice (Read/Grep/Glob). NON modificare nulla, NON avviare server, NON toccare il DB. Non usare i tool browser.\nCompito: per ogni superficie/feature della tua area, dai un verdetto sulla pista del dossier (spec docs/tasks/62-collaudo-totale-pre-lancio.md sezioni 10 e 12) fondato su file:riga REALI…",
+      "lastProgressAt": 1782959474299,
+      "tokens": 102724,
+      "toolCalls": 38,
+      "durationMs": 254524,
+      "resultPreview": "{\"area\":\"Feature ORFANE/MORTE (parte 2) + campi morti\",\"findings\":[{\"item\":\"D71 — Modello Settings: quali campi sono editabili da UI vs morti\",\"dossierRef\":\"D71\",\"verdict\":\"CONFERMATO\",\"evidence\":\"Schema: prisma/schema.prisma:347-369 (defaultEnergy/defaultContext/defaultDuration/defaultFormat/wakeTime/sleepTime/productiveSlots/theme/reminderMinutes/notificationsEnabled/eveningWindow*). Route PATCH…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "doppioni-mal-collegati",
+      "phaseIndex": 1,
+      "phaseTitle": "Analisi",
+      "agentId": "a2ea4e851aa0e128c",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782959219777,
+      "queuedAt": 1782959219754,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "DOPPIONI e MAL COLLEGATI",
+      "promptPreview": "Sei un agente di COLLAUDO (Task 62, Fase 4) dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA del codice (Read/Grep/Glob). NON modificare nulla, NON avviare server, NON toccare il DB. Non usare i tool browser.\nCompito: per ogni superficie/feature della tua area, dai un verdetto sulla pista del dossier (spec docs/tasks/62-collaudo-totale-pre-lancio.md sezioni 10 e 12) fondato su file:riga REALI…",
+      "lastProgressAt": 1782959389693,
+      "tokens": 97610,
+      "toolCalls": 25,
+      "durationMs": 169916,
+      "resultPreview": "{\"area\":\"DOPPIONI e MAL COLLEGATI\",\"findings\":[{\"item\":\"D1/L9 — Review manuale (tab) vs review serale conversazionale: stessa tabella Review, 500 e soppressione della review conversazionale\",\"dossierRef\":\"D1 / L9\",\"verdict\":\"CONFERMATO\",\"evidence\":\"src/app/tasks/page.tsx:3078-3080 il tab Review invia taskReviews come {taskId, completed:true} / {taskId, completed:false, avoided:true}; src/app/api/r…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "navigazione-coerenza",
+      "phaseIndex": 1,
+      "phaseTitle": "Analisi",
+      "agentId": "a5a5bd37a7e61fc41",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782959219778,
+      "queuedAt": 1782959219754,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Navigazione e coerenza nomi/lingua",
+      "promptPreview": "Sei un agente di COLLAUDO (Task 62, Fase 4) dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA del codice (Read/Grep/Glob). NON modificare nulla, NON avviare server, NON toccare il DB. Non usare i tool browser.\nCompito: per ogni superficie/feature della tua area, dai un verdetto sulla pista del dossier (spec docs/tasks/62-collaudo-totale-pre-lancio.md sezioni 10 e 12) fondato su file:riga REALI…",
+      "lastProgressAt": 1782959372178,
+      "tokens": 100312,
+      "toolCalls": 21,
+      "durationMs": 152400,
+      "resultPreview": "{\"area\":\"Navigazione e coerenza nomi/lingua\",\"findings\":[{\"item\":\"D56 — Nessuna URL per vista: refresh su /tasks torna sempre all'inbox, niente deep-link, niente back button\",\"dossierRef\":\"D56\",\"verdict\":\"CONFERMATO\",\"evidence\":\"src/store/shadow-store.ts:110-111,257-258 (currentView è stato Zustand, NON in URL); src/app/tasks/page.tsx:1937-1958 (BottomNav chiama solo setCurrentView, mai router); s…"
+    }
+  ],
+  "totalTokens": 406394,
+  "totalToolCalls": 123
+}

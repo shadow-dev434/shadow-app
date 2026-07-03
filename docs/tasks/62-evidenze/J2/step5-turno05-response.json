@@ -1,0 +1,41 @@
+{
+  "userMessage": "La bolletta l'ho pagata stamattina appena arrivato in ufficio, fatta!",
+  "status": 200,
+  "json": {
+    "threadId": "cmr2w73mz00i4ib74mnfn4s6m",
+    "mode": "evening_review",
+    "assistantMessage": "Ottimo. Comprare regalo per Marta — scade tra 6 giorni, dimmi.",
+    "toolsExecuted": [
+      {
+        "name": "mark_entry_discussed",
+        "input": {
+          "entryId": "cmr2nfgmo0009ib00kpnd46ek",
+          "outcome": "kept"
+        },
+        "result": {
+          "entryId": "cmr2nfgmo0009ib00kpnd46ek",
+          "taskTitle": "Pagare la bolletta della luce",
+          "outcome": "kept",
+          "action": "marked_discussed"
+        }
+      },
+      {
+        "name": "set_current_entry",
+        "input": {
+          "entryId": "cmr2nfh7y000hib00oa2e2qjl"
+        },
+        "result": {
+          "entryId": "cmr2nfh7y000hib00oa2e2qjl",
+          "taskTitle": "Comprare regalo per Marta",
+          "action": "cursor_set"
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.0472227,
+    "tokensIn": 1567,
+    "tokensOut": 195,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 15607
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "userMessage": "La scrivania può aspettare, tienila per domani se ci sta.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr2w73mz00i4ib74mnfn4s6m",
+    "mode": "evening_review",
+    "assistantMessage": "Chiamare il dentista per appuntamento — dimmi.",
+    "toolsExecuted": [
+      {
+        "name": "set_user_energy",
+        "input": {
+          "level": 3
+        },
+        "result": {
+          "level": 3
+        }
+      },
+      {
+        "name": "mark_entry_discussed",
+        "input": {
+          "entryId": "cmr2nfgzg000dib00h6ndbm4j",
+          "outcome": "postponed"
+        },
+        "result": {
+          "entryId": "cmr2nfgzg000dib00h6ndbm4j",
+          "taskTitle": "Riordinare la scrivania",
+          "outcome": "postponed",
+          "action": "marked_discussed"
+        }
+      },
+      {
+        "name": "set_current_entry",
+        "input": {
+          "entryId": "cmr2nfgvp000bib00gbyv7av1"
+        },
+        "result": {
+          "entryId": "cmr2nfgvp000bib00gbyv7av1",
+          "taskTitle": "Chiamare il dentista per appuntamento",
+          "action": "cursor_set"
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.0619728,
+    "tokensIn": 2033,
+    "tokensOut": 239,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 9903
+  }
+}

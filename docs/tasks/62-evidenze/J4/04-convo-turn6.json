@@ -1,0 +1,81 @@
+{
+  "threadId": "cmr2o586t003sib6s40pqcgl8",
+  "mode": "morning_checkin",
+  "assistantMessage": "Il modulo ISEE è scaduto il 30 giugno e l'assicurazione auto il 1° luglio — entrambi urgenti. Partirei dall'ISEE (25 min): è il più critico. Poi l'assicurazione. Entrambi stanno nelle tue 2-4h.\n\nDa dove vuoi partire?",
+  "toolsExecuted": [
+    {
+      "name": "set_user_mood",
+      "input": {
+        "level": 3
+      },
+      "result": {
+        "level": 3
+      }
+    },
+    {
+      "name": "set_user_energy",
+      "input": {
+        "level": 3
+      },
+      "result": {
+        "level": 3
+      }
+    },
+    {
+      "name": "set_user_time",
+      "input": {
+        "minutes": 180
+      },
+      "result": {
+        "minutes": 180
+      }
+    },
+    {
+      "name": "get_today_tasks",
+      "input": {},
+      "result": [
+        {
+          "id": "cmr2nfjmb000zib0040hiqnzv",
+          "title": "Inviare il modulo ISEE",
+          "urgency": 5,
+          "importance": 5,
+          "category": "general",
+          "status": "planned",
+          "deadline": "2026-06-30",
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr2nfjq80011ib00elr0idnw",
+          "title": "Rinnovare assicurazione auto",
+          "urgency": 4,
+          "importance": 4,
+          "category": "general",
+          "status": "planned",
+          "deadline": "2026-07-01",
+          "recurring": false,
+          "estimatedMinutes": 25
+        }
+      ]
+    }
+  ],
+  "quickReplies": [
+    {
+      "label": "ISEE",
+      "value": "ISEE"
+    },
+    {
+      "label": "Assicurazione",
+      "value": "Assicurazione"
+    },
+    {
+      "label": "dammi un momento",
+      "value": "dammi un momento"
+    }
+  ],
+  "costUsd": 0.0190869,
+  "tokensIn": 1011,
+  "tokensOut": 298,
+  "modelUsed": "claude-sonnet-4-6",
+  "latencyMs": 9943
+}

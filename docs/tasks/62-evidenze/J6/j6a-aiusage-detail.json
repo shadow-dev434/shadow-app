@@ -1,0 +1,15 @@
+{
+  "totale": 1.11066255,
+  "rows": [
+    {
+      "day": "2026-07-02",
+      "taskClass": "chat",
+      "calls": 8,
+      "costUsd": 1.11066255,
+      "tokensIn": 5868,
+      "tokensOut": 869,
+      "modelMix": "{\"chat-turn\":{\"calls\":8,\"tokensIn\":5868,\"tokensOut\":869,\"costUsd\":1.1106625499999998}}",
+      "updatedAt": "2026-07-02T02:29:08.361Z"
+    }
+  ]
+}

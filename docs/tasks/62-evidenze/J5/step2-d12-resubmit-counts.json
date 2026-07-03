@@ -1,0 +1,146 @@
+{
+  "patternBefore": {
+    "totalTasksAvoided": 0,
+    "streakDays": 0
+  },
+  "afterUiPayload": [
+    {
+      "id": "cmr2nfmk7001lib00gk9m4rf3",
+      "title": "Scrivere la mail difficile al capo",
+      "status": "planned",
+      "postponedCount": 6,
+      "avoidanceCount": 4,
+      "lastAvoidedAt": "2026-07-01T22:30:25.782Z",
+      "microSteps": "[{\"id\":\"step_9be535d4-a8c5-43bd-ac39-0b7b719a38dc\",\"text\":\"Apri una bozza vuota senza aprire la casella mail\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_6f2326bd-ed8a-4289-bead-04c2703cd63c\",\"text\":\"Scrivi solo l'oggetto della mail\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_8f7f13dd-8306-40c6-bfdb-71f8a833db0b\",\"text\":\"Annota in tre parole cosa vuoi dire al capo\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_f25001a5-dc61-46fb-961a-3fda2723d34c\",\"text\":\"Scrivi due righe di bozza partendo da quelle tre parole\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_247e3cbe-1f98-4a48-851f-a50116163aa1\",\"text\":\"Rileggi e decidi se inviare o tenere in bozza\",\"done\":false,\"estimatedSeconds\":0}]",
+      "decision": "decompose_then_do"
+    },
+    {
+      "id": "cmr2nfm7z001hib009dw0vuhs",
+      "title": "Compilare la dichiarazione dei redditi",
+      "status": "planned",
+      "postponedCount": 5,
+      "avoidanceCount": 3,
+      "lastAvoidedAt": "2026-07-01T22:30:25.342Z",
+      "microSteps": "[]",
+      "decision": "decompose_then_do"
+    },
+    {
+      "id": "cmr2nfmg2001jib002zwtwfol",
+      "title": "Prenotare la visita medica di controllo",
+      "status": "planned",
+      "postponedCount": 4,
+      "avoidanceCount": 2,
+      "lastAvoidedAt": "2026-07-01T22:30:25.633Z",
+      "microSteps": "[]",
+      "decision": "do_now"
+    },
+    {
+      "id": "cmr2nfmp2001nib00r2kuglgn",
+      "title": "Portare il pacco alle poste",
+      "status": "inbox",
+      "postponedCount": 1,
+      "avoidanceCount": 0,
+      "lastAvoidedAt": null,
+      "microSteps": "[]",
+      "decision": "unclassified"
+    }
+  ],
+  "submits": [
+    {
+      "label": "submit1",
+      "tasks": [
+        {
+          "id": "cmr2nfmk7001lib00gk9m4rf3",
+          "title": "Scrivere la mail difficile al capo",
+          "status": "planned",
+          "postponedCount": 6,
+          "avoidanceCount": 5,
+          "lastAvoidedAt": "2026-07-01T22:57:34.395Z",
+          "microSteps": "[{\"id\":\"step_9be535d4-a8c5-43bd-ac39-0b7b719a38dc\",\"text\":\"Apri una bozza vuota senza aprire la casella mail\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_6f2326bd-ed8a-4289-bead-04c2703cd63c\",\"text\":\"Scrivi solo l'oggetto della mail\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_8f7f13dd-8306-40c6-bfdb-71f8a833db0b\",\"text\":\"Annota in tre parole cosa vuoi dire al capo\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_f25001a5-dc61-46fb-961a-3fda2723d34c\",\"text\":\"Scrivi due righe di bozza partendo da quelle tre parole\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_247e3cbe-1f98-4a48-851f-a50116163aa1\",\"text\":\"Rileggi e decidi se inviare o tenere in bozza\",\"done\":false,\"estimatedSeconds\":0}]",
+          "decision": "decompose_then_do"
+        },
+        {
+          "id": "cmr2nfm7z001hib009dw0vuhs",
+          "title": "Compilare la dichiarazione dei redditi",
+          "status": "planned",
+          "postponedCount": 5,
+          "avoidanceCount": 4,
+          "lastAvoidedAt": "2026-07-01T22:57:34.873Z",
+          "microSteps": "[]",
+          "decision": "decompose_then_do"
+        },
+        {
+          "id": "cmr2nfmg2001jib002zwtwfol",
+          "title": "Prenotare la visita medica di controllo",
+          "status": "planned",
+          "postponedCount": 4,
+          "avoidanceCount": 3,
+          "lastAvoidedAt": "2026-07-01T22:57:35.202Z",
+          "microSteps": "[]",
+          "decision": "do_now"
+        },
+        {
+          "id": "cmr2nfmp2001nib00r2kuglgn",
+          "title": "Portare il pacco alle poste",
+          "status": "inbox",
+          "postponedCount": 1,
+          "avoidanceCount": 0,
+          "lastAvoidedAt": null,
+          "microSteps": "[]",
+          "decision": "unclassified"
+        }
+      ],
+      "pattern": {
+        "totalTasksAvoided": 3
+      }
+    },
+    {
+      "label": "submit2",
+      "tasks": [
+        {
+          "id": "cmr2nfmk7001lib00gk9m4rf3",
+          "title": "Scrivere la mail difficile al capo",
+          "status": "planned",
+          "postponedCount": 6,
+          "avoidanceCount": 6,
+          "lastAvoidedAt": "2026-07-01T22:57:39.394Z",
+          "microSteps": "[{\"id\":\"step_9be535d4-a8c5-43bd-ac39-0b7b719a38dc\",\"text\":\"Apri una bozza vuota senza aprire la casella mail\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_6f2326bd-ed8a-4289-bead-04c2703cd63c\",\"text\":\"Scrivi solo l'oggetto della mail\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_8f7f13dd-8306-40c6-bfdb-71f8a833db0b\",\"text\":\"Annota in tre parole cosa vuoi dire al capo\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_f25001a5-dc61-46fb-961a-3fda2723d34c\",\"text\":\"Scrivi due righe di bozza partendo da quelle tre parole\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_247e3cbe-1f98-4a48-851f-a50116163aa1\",\"text\":\"Rileggi e decidi se inviare o tenere in bozza\",\"done\":false,\"estimatedSeconds\":0}]",
+          "decision": "decompose_then_do"
+        },
+        {
+          "id": "cmr2nfm7z001hib009dw0vuhs",
+          "title": "Compilare la dichiarazione dei redditi",
+          "status": "planned",
+          "postponedCount": 5,
+          "avoidanceCount": 5,
+          "lastAvoidedAt": "2026-07-01T22:57:39.706Z",
+          "microSteps": "[]",
+          "decision": "decompose_then_do"
+        },
+        {
+          "id": "cmr2nfmg2001jib002zwtwfol",
+          "title": "Prenotare la visita medica di controllo",
+          "status": "planned",
+          "postponedCount": 4,
+          "avoidanceCount": 4,
+          "lastAvoidedAt": "2026-07-01T22:57:40.048Z",
+          "microSteps": "[]",
+          "decision": "do_now"
+        },
+        {
+          "id": "cmr2nfmp2001nib00r2kuglgn",
+          "title": "Portare il pacco alle poste",
+          "status": "inbox",
+          "postponedCount": 1,
+          "avoidanceCount": 0,
+          "lastAvoidedAt": null,
+          "microSteps": "[]",
+          "decision": "unclassified"
+        }
+      ],
+      "pattern": {
+        "totalTasksAvoided": 6
+      }
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+userId=cmr2vscs70000ibz4g1pa457e
+spendUsd=0.08654475

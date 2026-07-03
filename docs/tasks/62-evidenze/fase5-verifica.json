@@ -1,0 +1,835 @@
+{
+  "summary": "Fase 5 collaudo Task 62: verifica adversariale finding + cross-check dossier §12",
+  "agentCount": 11,
+  "logs": [],
+  "result": {
+    "adversariale": [
+      {
+        "id": "ADV-hallucinated-create",
+        "verdict": "CONFERMATO",
+        "severity": "S1",
+        "evidence": "docs/tasks/62-evidenze/J3/trascrizione-thread-cmr2vv3u8001bib74mn91v20e.md:45-166 (turni 'Creato'/'È già creato' con toolsExecuted=[]) + riepilogo-catture.txt:4-13 (d,e,g1-g7 nuovi=0) + retry-catture-de.json:9,35 (create_task fira solo dopo contestazione) + db-tasks-post-catture.json (righe scritte solo post-retry) + src/lib/chat/orchestrator.ts:971-985 (§8b guarda solo risposta vuota, nessun check claim-vs-tool) + src/lib/chat/prompts.ts:95-124 (mode general: nessun guardrail 'non dichiarare creazione senza tool_result')",
+        "reasoning": "Ho provato a smontarlo su tre fronti e nessuno regge. (1) 'Tasks realmente persi?' — sì al momento della cattura: riepilogo-catture.txt segna nuovi=0 su d,e,g1-g7 e i payload nel thread mostrano toolsExecuted=[] mentre il testo dice 'Creato con scadenza dopodomani (sabato 4 luglio)'; le righe DB compaiono SOLO dopo i retry accusatori ('crea per davvero'). Che il DB finale abbia tutti i 14 task è merito della vigilanza del test, non del sistema: un utente che si fida della cattura li perde. (2) 'Artefatto di test/guasto di gating?' — no: create_task fira in modo affidabile nei turni di retry dentro lo STESSO thread (retry-catture-de.json), quindi il tool è esposto e raggiungibile in mode general; è un fallimento comportamentale del modello fast-tier correlato alla crescita del contesto (prime 3 catture OK, degrado da ~15 messaggi in poi), riprodotto in 3 chunk distinti e aggravato dal design 'una chat al giorno' (thread crescente). (3) 'Esiste un guard?' — no: ho letto l'orchestrator, l'unico fallback (§8b) copre solo la risposta vuota; non c'è alcuna verifica che un testo che afferma una creazione sia sostenuto da un tool_result, e prompts.ts (mode general) non contiene alcuna direttiva anti-allucinazione. Aggravante confermata a runtime: sull'insistenza il modello raddoppia ('È già creato. Non c'è altro da fare su questo', righe 82/144/164) = gaslighting involontario. Unica sfumatura: 'perse silenziosamente' è framing di perdita permanente mentre qui nulla è andato perso definitivamente, ed essendo comportamento LLM stocastico non è un path deterministico dimostrabile da solo codice; ma l'evidenza è una riproduzione runtime reale e ripetuta, non una mera plausibilità. S1 giustificato: l'affidabilità della cattura è la promessa core e il fallimento è invisibile all'utente."
+      },
+      {
+        "id": "ADV-crisis-offload",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/lib/chat/tools.ts:2401-2417 (gate solo su currentEntryId, nessun controllo crisi); prompts.ts:348,356,434 (R6 divieti HARD); docs/tasks/62-evidenze/J6/j6d-db-finale.json (learningSignalOffload:1)",
+        "reasoning": "Tutte e tre le sotto-affermazioni verificate a codice/evidenza. (1) R6 nel prompt: prompts.ts:348 'i divieti sono HARD', :356 'NON produrre artefatti', :434 'NESSUN tool (NON record_emotional_offload ... decisione R6)' — la crisi seria vieta ogni tool. (2) Nessuna guardia server-side: l'unico gate in executeRecordEmotionalOffload (tools.ts:2411) e' `!context?.triageState || context.triageState.currentEntryId != null`, che rigetta SOLO durante il walk (entry aperta); in apertura review (currentEntryId==null) il tool passa. Nessun rilevamento di contenuto-crisi nell'executor, nel dispatch (tools.ts:804) ne' nell'orchestrator (0 match per crisi/112/suicid). L'handler stesso non ha guard (record-emotional-offload-handler.ts:40-51, documentato alla riga 17 'L'handler offload non ha guard'). (3) Il LearningSignal e' stato scritto: j6d-db-finale.json learningSignalOffload:1, toolsTurno2:['record_emotional_offload']; trascrizione payload result:{recorded:'emotional_offload'}. Scenario esatto: messaggio di crisi al primo turno con MOOD_INTAKE=pending/CURRENT_ENTRY=none -> il gate apertura-only lascia passare e scrive. Tentativi di smontaggio falliti: (a) il gate NON blocca l'apertura, e la crisi in J6d e' proprio in apertura; (b) l'handler non ha guard di fallback; (c) l'evidenza DB conferma il write reale, non ipotetico. NOTA severita': la risposta utente e' corretta (112, Telefono Amico, review sospesa) e non c'e' danno all'utente ne' comportamento di sicurezza errato; il difetto e' un write interno silenzioso che etichetta una crisi come 'emotional_offload' (inquinamento dati di learning) e viola la regola HARD senza difesa in profondita' server-side. S2 come filed e' accettabile ma leggermente alto dato zero impatto user-facing: e' piu' un gap di integrita'-dati/robustezza (verso S3). Il finding come descritto e' comunque accurato e reale."
+      },
+      {
+        "id": "ADV-revoca-consenso",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/middleware.ts:136-143 (passthrough /api/*) + :114 (DB re-read gated a !/api/) + :207-212 (gate consenso solo page); src/lib/beta/consent-guard.ts:9-15 (hasGivenConsent) usato SOLO in src/app/api/beta/assessment/route.ts:68 e feedback/route.ts:26; docs/tasks/62-evidenze/J10-gdpr-account/step2-turn-con-consenso-revocato.md (POST /api/chat/turn 200 Haiku a consenso revocato); src/app/tasks/page.tsx:3314 (promessa UI)",
+        "reasoning": "Finding riprodotto e dimostrato a codice + runtime. Distinzione chiave rispettata: il rimbalzo pagina /tasks→307 /consent al hop successivo E' corretto e by-design (middleware.ts:207-212, alimentato dal DB re-read dbEdge di middleware.ts:114-131). IL DIFETTO e' altro: il ramo API del middleware (middleware.ts:136-143) fa puro passthrough (forward x-user-id, next()), e il DB re-read del consenso e' esplicitamente escluso per le API (guardia `&& !pathname.startsWith('/api/')` a riga 114). Nessuna route API generale rilegge consentGivenAt: l'unico sink-guard hasGivenConsent (consent-guard.ts) e' cablato SOLO su /api/beta/assessment e /api/beta/feedback (endpoint che persistono questionari clinici art.9); /api/chat/turn, /api/tasks, e requireSession/auth-guard e orchestrator NON hanno alcun check consenso. Evidenza runtime del collaudo: dopo DELETE /api/consent (consentGivenAt=null, consentArt9=false in DB), POST /api/chat/turn ha restituito 200 con risposta Haiku completa (chiamata reale a Claude API, in=419/out=189, persistita in ChatThread) e GET /api/tasks 200. Contraddice direttamente la promessa UI a page.tsx:3314 'Revocare il consenso ferma l'app finche' non lo riconcedi': una tab SPA gia' aperta e tutte le API (chat LLM su dato salute-adiacente compreso) continuano a trattare dati a consenso revocato — rilevante art.7(3) e art.9 GDPR. Tentativi di smontaggio falliti: (a) il DB re-read non copre le API per guardia esplicita; (b) e' distinto dal rimbalzo pagina previsto; (c) non e' fuori-scopo: e' il flusso consenso beta core (non v3/billing/i18n), la beta IT-only non cambia l'applicabilita' GDPR. Non e' by-design: nessun doc 60/61 documenta un consenso che ferma solo la navigazione. Severita' S2 confermata: promessa privacy piu' delicata dell'app mantenuta a meta'; mitigante minore: consentVersion resta '0.2-draft' (copy legale ancora bozza)."
+      },
+      {
+        "id": "ADV-delete-no-confirm",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/app/api/account/route.ts:11-25; src/app/tasks/page.tsx:3282; src/lib/auth-guard.ts:16-38; src/lib/auth.ts:41; docs/tasks/62-evidenze/J10-gdpr-account/j10-parte2-log.md:30-35",
+        "reasoning": "Tutte e tre le sotto-affermazioni sono provate da codice + evidenza runtime, e ho provato a smontarle senza riuscirci. (1) NESSUNA conferma server-side: route.ts:11-25 esegue la DELETE senza leggere alcun body/payload; l'unico controllo della stringa 'ELIMINA' e' client-side (tasks/page.tsx:3282, 'if (deleteConfirmText !== ELIMINA) return'). Probe runtime: 'DELETE /api/account SENZA stringa di conferma -> 200 body={ok:true}' (j10-parte2-log.md:30). (2) CASCADE REALE: schema.prisma ha 31 onDelete:Cascade e 0 Restrict; db.user.delete + rcWebhookEvent.deleteMany in una $transaction (route.ts:16-19); dump DB post-delete tutto a 0: user:0,tasks:0,threads:0,messages:0,profile:0,settings:0,patterns:0 (log:31). (3) SESSIONE FANTASMA D5: session strategy 'jwt' (auth.ts:41) + requireSession decodifica il JWT firmato via getToken() SENZA alcun check di esistenza dell'utente in DB (auth-guard.ts:16-38). Runtime: dopo la delete il vecchio cookie da' GET /api/tasks -> 200 e /api/auth/session -> 200 con il payload dell'utente cancellato (log:32-33); il JWT resta accettato fino alla scadenza (~30gg). Contro-argomenti valutati e respinti: la UI mitiga con signOut() (page.tsx:3287) ma un cookie catturato/replayato sopravvive lato server (strategy jwt non revocabile); la distruzione e' scoped al solo utente stesso (id dal JWT, non escalation) percio' S2 e non S1 - il rischio reale e' delete irreversibile senza safeguard server + finestra di sessione che sopravvive all'account. Finding accurato."
+      },
+      {
+        "id": "ADV-review-0-candidate",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/lib/evening-review/triage.ts:618-622 (isPreviewPhaseActive); src/lib/chat/orchestrator.ts:1305-1309 (derivePhase); src/lib/chat/tools.ts:546-549,2225-2246,2317-2328; docs/tasks/62-evidenze/J6/j6f-zero-candidate.md; docs/tasks/62-evidenze/J6/j6f-db-post-chiudi.json; docs/tasks/62-evidenze/J6/j6f-log-chiudi.txt",
+        "reasoning": "Riprodotto a livello di codice + evidenza. Meccanismo: la review chiude SOLO via confirm_close_review, unico chiamante di closeReview() (l'unico che materializza Review+DailyPlan+state='completed'). confirm_close_review e' registrato SOLO in fase 'closing' (tools.ts:548-549). L'unica transizione a 'closing' arriva da confirm_plan_preview (tools.ts:2238-2245 phaseMutator newPhase), registrato SOLO in fase 'plan_preview' (tools.ts:546). La fase raggiunge 'plan_preview' solo se derivePhase la deriva da isPreviewPhaseActive(triageState) (orchestrator.ts:1307-1308), che pero' ritorna FALSE quando computeEffectiveList e' vuoto: triage.ts:619-620 `if (effective.length === 0) return false`. Con 0 candidate (computeEffectiveList = candidateTaskIds+addedTaskIds-excluded = [], triage.ts:414-425) la catena per_entry->plan_preview->closing e' spezzata: ne' confirm_plan_preview ne' confirm_close_review vengono mai esposti al modello. Il modello, senza tool di chiusura, produce solo testo ('Chiuso. A domani.') eseguendo unicamente set_user_mood/set_user_energy (trascrizione j6f, turno 22:52:15 e 22:53:36) — zero side-effect DB. Coerente con j6f-db-post-chiudi.json: finalThreadState='active', review=null, dailyPlanTomorrow=null. Ho tentato di smontarlo: (1) il layer closeReview() SUPPORTA esplicitamente il preview vuoto (D3, close-review.ts:11-13, test close-review.test.ts:260), quindi NON e' by-design che una review vuota sia non-chiudibile — la chiusura DOVREBBE funzionare; il difetto e' che il phase-router non ci arriva mai da 0-candidate, rendendo il path D3 irraggiungibile in questo caso. (2) Nessun percorso alternativo: pendingPhase='closing' arriva solo da phaseMutator di confirm_plan_preview; il gate mid-loop orchestrator.ts:881 richiede phasePrev==='per_entry' && phasePost!=='per_entry', ma phasePost resta 'per_entry' (isPreviewPhaseActive=false), quindi non scatta. Ri-proposta il giorno dopo confermata: computeEveningReviewSignal (compute-signal.ts:62-79) sopprime shouldStart solo se esiste Review-oggi o un thread evening active/paused; nessuna Review viene mai scritta, e al mount del giorno dopo il day-rollover/normalize archivia il thread stale del giorno prima (active-thread/route.ts:219 'archived previous-day thread on mount') senza creare Review -> il segnale torna shouldStart:true (j6f-signal-pre.json shouldStart:true). Severita' S2: non crash ma il core loop (review serale) non e' completabile nei giorni a inbox vuota, il modello mente sulla chiusura e l'app rincorre l'utente il giorno seguente; limitato al caso 0-candidate (edge), da cui S2 e non S1."
+      },
+      {
+        "id": "ADV-ricorrenti-non-materializzati",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/app/api/tasks/route.ts:7-41 (GET senza materializeRecurringForDate); src/app/api/daily-plan/route.ts:227-312 (GET/POST/PATCH senza materializeRecurringForDate); src/lib/recurring/materialize.ts:58 (unici caller prod: src/lib/chat/tools.ts:1109 e src/lib/chat/orchestrator.ts:1248, entrambi chat-only); docs/tasks/62-evidenze/J7/02c-ui-routes-materializzazione.json (materializedTodayByUiRoutes:[]); docs/tasks/62-evidenze/J7/02d-db-dopo-chat.json (istanze 2026-07-02 create solo dopo il turno chat); docs/tasks/46-task-ricorrenti.md:162-163",
+        "reasoning": "Riprodotto a runtime e fondato sul codice. I DUE unici caller di materializeRecurringForDate in produzione sono percorsi chat: executeGetTodayTasks (tools.ts:1109) e la review serale per domani (orchestrator.ts:1248). Le superfici HTTP che alimentano inbox/Today NON la chiamano: GET /api/tasks (route.ts:7-41) fa una plain findMany; GET /api/daily-plan (route.ts:227-312) legge solo il piano committato e ritorna {plan:null} se assente; POST /api/daily-plan riscora i task esistenti senza materializzare; nessuna route sotto src/app/api la invoca (grep vuoto). La pagina Today/inbox (tasks/page.tsx) si idrata da /api/tasks (fetchTasks, riga 174) e GET /api/daily-plan (riga 2263) all'apertura -> chi apre l'app e guarda inbox/Today NON vede l'istanza di oggi finche' non fa un turno chat. Prova adversariale by-design SMENTITA: la spec Task 46 (46-task-ricorrenti.md:158-163) richiedeva DUE punti di iniezione lato Today: (1) executeGetTodayTasks [fatto] e (2) 'GET /api/daily-plan prima di idratare/ritornare ... cosi' la schermata Oggi materializza le istanze del giorno all'apertura, anche senza review serale' [NON fatto]. Quindi non e' comportamento voluto ma un gap spec-vs-implementazione. Evidenza runtime decisiva: il probe J7 (02c) ha colpito le UI routes con oggi=2026-07-02 e ha ottenuto materializedTodayByUiRoutes:[] (DB in 02b aveva solo istanze 06-30/07-01, nessuna 07-02); un turno chat 'cosa ho oggi' (02d) ha poi creato le due istanze 07-02. S2: gap funzionale su feature core beta (ricorrenti invisibili nel flusso mattutino non-chat, molto comune per ADHD), nessuna perdita dati, workaround = un turno chat."
+      }
+    ],
+    "dossier": [
+      {
+        "id": "D31",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/features/chat/ChatView.tsx:538-560 (handleStartEveningReview); docs/tasks/62-evidenze/J6i-inizia-review-card/journal.md",
+        "reasoning": "handleStartEveningReview fa solo setMessages([]), setMode('evening_review'), setThreadId(null), setEveningReviewShouldStart(false) e focus input: NON invia alcun turno. Con eveningReviewShouldStart=false e messages vuoti, ChatView:655-658 renderizza EmptyState generico (SUGGESTED_PROMPTS 'Pianifichiamo oggi'/'Ho un task nuovo'...), fuori contesto per la review. Shadow non parla per primo e nessun thread viene creato (evidenza runtime J6i: 0 ChatThread dopo il tap). La review è avviabile solo scrivendo a mano."
+      },
+      {
+        "id": "D34",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/app/api/chat/turn/route.ts:66,69,83,85,96,155; src/features/chat/ChatView.tsx:711",
+        "reasoning": "validateAttachments e la validazione userMessage restituiscono messaggi in inglese ('attachment too large (max 4MB)', 'too many attachments (max 4)', 'unsupported attachment type', 'attachments total too large', 'userMessage too long', 'attachments must be an array'). Sono passati come {error} nel body 400 e la UI li mostra grezzi via `Errore: ${error.message}` (ChatView:711) in un'app IT-only. Nota: il messaggio 429 del cap è invece in italiano."
+      },
+      {
+        "id": "D33",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/app/api/chat/turn/route.ts:123-128; src/features/chat/ChatView.tsx:721-733,485-486",
+        "reasoning": "Al cap giornaliero l'endpoint torna 429 con messaggio IT. In ChatView il catch salva lastFailedRef e mostra il box errore; poiché status!==404, appare il bottone 'Riprova' che ri-esegue sendMessage(isRetry) → stessa POST /api/chat/turn → stesso 429. Nessun'altra affordance: 'Riprova' è un vicolo cieco identico fino al reset del cap (domani)."
+      },
+      {
+        "id": "D35",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/features/chat/ChatView.tsx:294-306",
+        "reasoning": "Il rehydrate da /api/chat/active-thread mappa i messaggi rehydrated con SOLO id/role/content/createdAt (righe 298-303); toolsExecuted e quickReplies non sono presenti perché l'endpoint esclude payloadJson per design (commento 294-297). Quindi al reload spariscono le card 'task creato' e le quick-reply, inclusa la proposta strict one-tap (che vive come quickReply con action)."
+      },
+      {
+        "id": "D36",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/app/api/chat/active-thread/route.ts:74 (MESSAGE_LIMIT=200),88; src/features/chat/ChatView.tsx:291-292 (TODO); src/app/api/chat/threads/[id]/route.ts:31 (MESSAGE_LIMIT=500),52-54",
+        "reasoning": "active-thread ritorna gli ultimi 200 messaggi e calcola hasMore, ma il client lo ignora (TODO esplicito ChatView:291-292): nessuna affordance 'carica precedenti'. La vista storico (threads/[id]) usa orderBy createdAt asc + take:500 → conserva i 500 messaggi PIÙ VECCHI, troncando i più recenti su thread lunghi. Entrambe le piste sono esatte."
+      },
+      {
+        "id": "D37",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/features/chat/ChatView.tsx:249-276",
+        "reasoning": "Il branch ?plan=today fa replaceState (rimuove il param) PRIMA della fetch; setMessages avviene solo dentro `if (res.ok)`. Se la POST /api/chat/turn fallisce (o !ok), il catch/branch non-ok logga solo su console e il finally setBootstrapping(false): l'utente resta su chat vuota (EmptyState), senza thread né errore visibile. Il param è già stato consumato, quindi il refresh non ritenta. Silenzio totale confermato."
+      },
+      {
+        "id": "D38",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/app/api/chat/turn/route.ts:34 (maxDuration=60); src/features/chat/ChatView.tsx:437-462,704",
+        "reasoning": "/api/chat/turn è una POST sincrona che ritorna NextResponse.json (nessuno streaming/SSE/EventSource nel codice). Il client attende la risposta completa mostrando solo ThinkingIndicator (3 puntini, ChatView:704) fino a maxDuration=60s; su timeout/errore mostra il box rosso secco. Nessun token incrementale."
+      },
+      {
+        "id": "D39",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/features/chat/ChatView.tsx:434,482-486,721-733",
+        "reasoning": "Al submit setInput('') svuota il campo (riga 434) prima della fetch; su errore il testo fallito vive solo in lastFailedRef, recuperabile unicamente col bottone 'Riprova'. Se l'utente scrive e invia altro testo, sendMessage sovrascrive lastFailedRef (riga 485) e il testo del turno fallito è perso definitivamente. Confermato."
+      },
+      {
+        "id": "D40",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/lib/chat/day-rollover.ts:73-81; src/app/api/chat/threads/route.ts:45-79; src/features/chat/ChatView.tsx:538-560 (comment: il thread general resta 'active')",
+        "reasoning": "threadSidebarLabel torna 'Oggi' per QUALSIASI thread state='active' iniziato oggi. Durante la review serale il thread general resta 'active' in DB (per design, commento handleStartEveningReview) e il thread evening_review è anch'esso 'active' e iniziato oggi. Il route /api/chat/threads lista entrambi (con messaggi>0) → due voci 'Oggi' con isActive=true, indistinguibili; il click su entrambe cade su backToToday(). Confermato a livello di codice (visibile solo dopo il primo turno evening che genera messaggi user/assistant)."
+      },
+      {
+        "id": "D41",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/features/chat/ChatView.tsx:166-180 (fileToPendingAttachment),512-523 (handleFilesSelected); src/app/api/chat/turn/route.ts:83,96; docs/tasks/62-evidenze/J9-error-path/j9.json:27",
+        "reasoning": "fileToPendingAttachment ritorna null per tipi non supportati (es. .docx) e handleFilesSelected fa .catch(()=>null) + filter: lo scarto è totalmente silenzioso lato UI (nessun toast/errore). Il PDF non ha alcun controllo dimensione lato client, viene messo in coda e fallisce solo al submit con l'errore EN 'attachment too large (max 4MB)' (turn:83). J9 conferma lo scarto silenzioso. Confermato."
+      },
+      {
+        "id": "D18",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/api/chat/bootstrap/route.ts:38-56",
+        "reasoning": "Il guard C2 skippa il morning check-in se esiste QUALSIASI thread state='active' per l'utente. Un thread general creato dopo mezzanotte (stesso giorno) resta attivo e sopprime il check-in per tutto il giorno. Il comportamento è documentato nel commento come 'Trade-off accettato consapevolmente per la beta' (righe 38-42) → di fatto BY-DESIGN documentato, ma la pista è reale: il morning check-in può non triggerare mai in quella giornata. Confermato come comportamento; è un trade-off dichiarato, non un bug latente."
+      },
+      {
+        "id": "D76",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/api/chat/active-thread/route.ts:187-196 (normalize update),216-222 (rollover update)",
+        "reasoning": "Il GET /api/chat/active-thread esegue db.chatThread.update: (1) normalizzazione state dei thread evening_review (archived/active/paused, righe 187-196) e (2) rollover/archiviazione del thread del giorno precedente (righe 216-222). Un GET con side effect di scrittura è un anti-pattern: un monitor/probe che chiama ripetutamente il GET muta lo stato in DB. La normalizzazione single-writer è documentata come intenzionale (commenti Slice 3), quindi in parte by-design, ma la pista 'GET muta stato' è confermata dal codice."
+      },
+      {
+        "id": "D16",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/lib/chat/orchestrator.ts:766,813 (push incondizionato),977-987 (fallback)",
+        "reasoning": "toolsExecuted.push avviene per OGNI tool call indipendentemente da result.success (righe 766 e 813: push di {name,input,result:result.data} anche sui fallimenti, che hanno result.data strutturato). Nel fallback empty-response (977-987) la condizione è `toolsExecuted.length > 0` → mostra 'Fatto. Dimmi tu come proseguiamo.' anche se TUTTI i tool sono falliti, comunicando falso successo all'utente. Confermato."
+      },
+      {
+        "id": "D15",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/lib/chat/tools/mood-energy-parse.ts:32-41 (QUALITATIVE_MAP),60-79",
+        "reasoning": "La mappa qualitativa è ristretta (malissimo/a terra/esausto/schifo/male/ok/normale/bene/alla grande/sul pezzo): 'benissimo' e 'stanco' NON sono presenti → null (rifiutati). I digit 1-5 sono parsati, ma '3 o 4' produce DUE candidati (3 e 4) → la funzione torna null perché >1 candidato = ambiguo (righe 78-79). Quindi tutti e tre gli esempi del dossier vengono rifiutati; attrito in intake review confermato."
+      },
+      {
+        "id": "D17",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/lib/chat/prompts.ts:983-996 (EDGE CASE adds con task NON in inbox)",
+        "reasoning": "Il few-shot PIANO_PREVIEW istruisce esplicitamente: per un task nuovo non in inbox, 'NON chiamare adds', 'Comportamento corretto: prometti al volo, niente tool', con esempio 'Lo metto in inbox e lo recuperiamo... [NON chiamare adds]'. Nessun create_task viene eseguito: Shadow promette di mettere in inbox ma non crea nulla → perdita percepita dall'utente. Confermato dal prompt."
+      },
+      {
+        "id": "D74",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/lib/chat/prompts.ts:236-237 ('un paio d'ore'); src/lib/chat/tools.ts:1099 (durationMinutes default 50)",
+        "reasoning": "Il prompt di proposta strict suggerisce il copy 'Vuoi attivare la modalità strict per un paio d'ore...' (~2h) mentre offer_strict_mode calcola durationMinutes = durationInput ?? task.sessionDuration ?? 50 (default 50 minuti). Mismatch copy vs durata reale confermato. La label 'Attiva strict' resta gergo e la regola 'proponi UNA volta' è affidata al prompt senza stato server persistente (nessun flag anti-ripetizione lato DB). Tutte le sotto-piste confermate a codice."
+      },
+      {
+        "id": "D75",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/api/chat/turn/route.ts:36-43 (VALID_MODES include planning/focus_companion/unblock); src/lib/chat/tools.ts:572-590 (getToolsForMode); src/lib/chat/prompts.ts:1730-1731 (unblock '')",
+        "reasoning": "planning/focus_companion/unblock sono in VALID_MODES quindi accettati da POST /api/chat/turn pur non essendo raggiungibili dalla UI. Per 'planning' getToolsForMode espone tool sensibili: COMMIT_TODAY_PLAN_TOOL, FIT_TODAY_PLAN_TOOL, OFFER_STRICT_MODE_TOOL, BODY_DOUBLE_TOOLS oltre a TASK_MANAGEMENT/RECURRENCE sempre attivi. 'unblock' ha getModePrompt che ritorna '' (prompt vuoto). Confermato. Nota: gli effetti restano scoped a userId (executeTool), quindi non è escalation cross-utente ma superficie latente non testata."
+      },
+      {
+        "id": "D64",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/lib/chat/prompts.ts:85-87 (APP_KNOWLEDGE 'Ogni voce va classificata col bottone Classifica'); src/lib/chat/tools.ts (create_task auto-classifica)",
+        "reasoning": "APP_KNOWLEDGE descrive l'inbox come punto dove 'Ogni voce va poi classificata col bottone Classifica per entrare nelle liste vere', includendo esplicitamente i 'task creati qui in chat'. Ma i task creati via create_task dalla chat vengono già classificati (quadrante Eisenhower assegnato), quindi non passano dal flusso Classifica descritto: la spiegazione data all'utente non è più vera per i task nati da chat (asimmetria chat vs inbox, correlata a D62). Confermato."
+      },
+      {
+        "id": "D1",
+        "verdict": "CONFERMATO",
+        "severity": "S1",
+        "evidence": "src/app/tasks/page.tsx:3078-3080 vs src/app/api/review/route.ts:41-56; prisma/schema.prisma:322; src/lib/evening-review/compute-signal.ts:63-67",
+        "reasoning": "Il client invia taskReviews come {taskId, completed:true}/{taskId, completed:false, avoided:true} (page.tsx:3078-3080), senza campo status. L'API fa db.reviewTask.create({data:{...,status:tr.status}}) (route.ts:50-53) con ReviewTask.status String NOT NULL (schema:322): status=undefined -> Prisma valida errore -> catch -> 500 (route.ts:62-64). MA il db.review.upsert (route.ts:15-38) e' gia' andato a buon fine PRIMA del loop, quindi la Review-oggi esiste. compute-signal.ts:63-67 e bootstrap/route.ts:126-131 sopprimono il segnale della review conversazionale se esiste una Review-oggi -> la review serale conversazionale del giorno viene soppressa. Doppio finding (500 + soppressione) confermato a codice. Lo sweep fase2 non ha esercitato questo path con il payload reale del client, ma la catena e' deterministica."
+      },
+      {
+        "id": "D43",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/lib/evening-review/close-review.ts:230-248 (slot alpha); src/app/api/daily-plan/route.ts:246-308 (GET); src/app/tasks/page.tsx:2210",
+        "reasoning": "La review conversazionale scrive DailyPlanTask con slot temporale 'morning'/'afternoon'/'evening' (allocatedSlot, close-review.ts:235-248). Ma GET /api/daily-plan (route.ts:246-308) legge SOLO le colonne JSON top3Ids/doNowIds/scheduleIds/... del DailyPlan e ritorna un breakdown Eisenhower (top3/doNow/schedule/delegate/postpone); la join table DailyPlanTask e i suoi slot alpha NON vengono mai riletti. La Today renderizza top3 piatta (page.tsx:2210 top3:pick(data.breakdown.top3)). Gli slot per fascia sono scritti e ignorati dalla UI."
+      },
+      {
+        "id": "D44",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/app/tasks/page.tsx:2188-2222, 2374-2377; src/app/api/daily-plan/route.ts:117-171",
+        "reasoning": "handleRegenerate (page.tsx:2188) parte immediato al click su 'Rigenera piano ora' (page.tsx:2374), senza dialog di conferma. Il POST /api/daily-plan ricostruisce il piano con l'engine euristico e fa upsert del DailyPlan sovrascrivendo top3Ids/doNowIds/... (route.ts:145-157) e cancella+riscrive DailyPlanTask con slot Eisenhower (route.ts:117, 159-170). Preserva solo i pin (existingPinned, route.ts:138-150), coerente col 'pin a parte' del dossier. Il resto del piano serale conversazionale (e gli slot per fascia) viene silenziosamente sovrascritto."
+      },
+      {
+        "id": "D45",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/lib/evening-review/normalize.ts:86-95; src/app/api/chat/active-thread/route.ts:186-198",
+        "reasoning": "Un thread evening_review in pausa/attivo riaperto fuori finestra serale viene normalizzato a desiredState:'archived' (normalize.ts:86-95, ramo outside_window_archive). active-thread/route.ts:186-198 persiste state:'archived'+endedAt e poi thread=null (riga 197), cadendo su una review nuova. L'archiviazione NON chiama close-review.ts: nessun DailyPlan/ReviewTask scritto, il triage e l'eventuale plan-preview costruiti nella review interrotta non vengono mai materializzati. I messaggi restano nel thread archiviato (read-only) ma il lavoro di intake/piano e' perso senza alcun avviso all'utente."
+      },
+      {
+        "id": "D46",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/lib/chat/prompts.ts:1170-1184; src/lib/evening-review/triage.ts:98-116; src/lib/evening-review/trimming.ts + plan-preview.ts + close-review.ts (nessun bump avoidance/carryover)",
+        "reasoning": "Il prompt promette 'le altre due dopodomani' (prompts.ts:1172-1184) ma non esiste alcun meccanismo di ripescaggio dei task tagliati dal trimming. pickReason (triage.ts:98-116) riammette un task nei candidati solo se: deadline entro cutoff, ricorrente, avoidanceCount>=1, oppure createdAt==oggi. Il trimming (trimming.ts/plan-preview.ts/close-review.ts) NON incrementa avoidanceCount ne crea task review_carryover per gli item tagliati (grep vuoto). Quindi un task tagliato senza deadline, non ricorrente, avoidance=0, creato in un giorno precedente sparisce dai triage futuri: la promessa 'dopodomani' non e' supportata da nessuna logica."
+      },
+      {
+        "id": "D47",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/lib/chat/prompts.ts:1082-1088; src/lib/chat/tools/update-plan-preview-tool.ts (solo pin additivo, nessun unpin)",
+        "reasoning": "Confermato a codice: non esiste operazione per togliere un singolo pin. update-plan-preview-tool.ts espone pin (additivo) e removes (rimuove il task dal piano), ma nessun unpin. Il prompt (prompts.ts:1082-1088) dichiara esplicitamente 'In V1 non c'e un'operazione dedicata per togliere un pin singolo' e propone il workaround (removes / lasciare pinnato fino a fine review). Gap UX reale; e' pero' un vincolo V1 documentato nel prompt (parzialmente by-design)."
+      },
+      {
+        "id": "D12",
+        "verdict": "SMENTITO",
+        "severity": "n/a",
+        "evidence": "src/app/api/review/route.ts:113-131 (guard tr.status==='avoided'); src/app/tasks/page.tsx:3078-3080 (payload senza status); route.ts:41-59 (ordine di esecuzione)",
+        "reasoning": "Il codice a route.ts:118-124 e' effettivamente non idempotente (avoidanceCount:{increment:1} a ogni chiamata), ma il branch e' guardato da tr.status==='avoided' (route.ts:115). L'unico chiamante (page.tsx:3068) invia {taskId, completed:false, avoided:true} SENZA status, quindi tr.status e' undefined e la condizione e' sempre falsa: l'increment non parte mai. Inoltre updatePatternsFromReview (route.ts:59) e' invocato DOPO il loop reviewTask.create che lancia (D1) -> con il payload reale la funzione non viene nemmeno raggiunta. Il re-incremento a ogni re-submit descritto in D12 non e' riproducibile con l'app reale (doppiamente bloccato: guard morto + 500 di D1)."
+      },
+      {
+        "id": "D54",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/tasks/page.tsx:3060-3062; src/app/api/tasks/route.ts:17-26 (nessun filtro data)",
+        "reasoning": "completedToday = store.tasks.filter(t=>t.status==='completed') e avoidedToday = filter(t=>t.avoidanceCount>0 && status!=='completed') (page.tsx:3060-3062): filtrano solo su status/avoidanceCount, senza alcun check su completedAt/data odierna. store.tasks e' la lista completa caricata da GET /api/tasks, che filtra solo per userId/status/category/decision (route.ts:17-26), mai per data. Quindi i contatori 'Review di oggi' contano tutto lo storico: un task completato giorni fa risulta 'completato oggi'."
+      },
+      {
+        "id": "D67",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/tasks/page.tsx:3243-3420 (SettingsView senza toggle); src/lib/evening-review/evening-email.ts:47; vercel.json:4-5; src/lib/evening-review/priority.ts:53-63; src/app/api/settings/route.ts:52-56",
+        "reasoning": "UI: SettingsView (page.tsx:3243+) ha solo logout/revoca consenso/elimina account/rifai profilo/export; nessun controllo per eveningWindowStart/End (schema:362-363) ne per notificationsEnabled. L'email dice 'disattiva le notifiche nelle impostazioni di Shadow' (evening-email.ts:47) ma quel toggle in UI non esiste (istruzione morta) — nota: PATCH /api/settings LO accetta (route.ts:52-56, B4 applicato lato API), ma manca il controllo UI. Cron fisso 19:30 UTC (vercel.json:5) vs finestre custom per-utente: un solo fire/giorno non serve finestre arbitrarie. eveningReviewHasPriority (priority.ts:53-63) non controlla che l'inbox abbia qualcosa da triagiare -> email/segnale scattano anche a chi non ha nulla. Tutte le sotto-affermazioni confermate."
+      },
+      {
+        "id": "D-tz",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/lib/evening-review/triage.ts:10-12; src/app/api/micro-feedback/route.ts:57-62; src/app/api/ai-assistant/route.ts:98-104",
+        "reasoning": "triage.ts:10-12 hardcoda TRIAGE_ZONE='Europe/Rome' con TODO esplicito 'leggere settings.timezone quando il campo esiste (V1.1)'. micro-feedback/route.ts:57 e ai-assistant/route.ts:99 usano new Date().getHours() per bucketizzare il timeSlot: e' l'ora LOCALE del server, che su Vercel e' UTC. Quindi l'attribuzione morning/afternoon/evening/night e' sfasata dell'offset (es. 23:00 Rome = 21:00 UTC -> classificato 'night' invece che 'evening'), corrompendo timeSlotPerformance nel profilo. Confermate tutte e tre le componenti."
+      },
+      {
+        "id": "D2",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/app/tasks/page.tsx:1312 + src/lib/types/shadow.ts:519-531",
+        "reasoning": "NudgeMessage NON ha alcun campo taskId (types/shadow.ts:519-531). Il nudge viene generato per top3[0] (page.tsx:541-570), ma handleAccept (page.tsx:1312) fa store.tasks.find(t=>t.status!=='completed'&&t.status!=='abandoned') = PRIMO task non completato dello store, che quasi mai coincide col task del nudge. Corroborato da J5 (fase1-journeys/J5): contratto rende impossibile aprire il task giusto."
+      },
+      {
+        "id": "D3",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/app/tasks/page.tsx:1169,1210",
+        "reasoning": "PriorityConfirmDialog non lega alcun taskId: handleConfirm (1169) e handleEdit (1210) fanno entrambi store.tasks.find(t=>t.status==='inbox'&&!t.aiClassified) = primo inbox non classificato. Con 2 catture rapide consecutive il dialog applica la classificazione del task A al primo inbox trovato (che può essere B). pendingClassification non porta id."
+      },
+      {
+        "id": "D63",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/tasks/page.tsx:1215-1217,1225,2140-2141",
+        "reasoning": "Chiudere il dialog via X (onOpenChange 1225) o 'Classifica'/edit (handleEdit 1209-1217) azzera pendingClassification/showPriorityConfirm senza settare status:'planned' (che avviene solo in handleConfirm 1185/1201): il task resta 'inbox', nessun toast/re-invito. Il bottone 'Classifica' in inbox (2140-2141) NON rilancia l'AI: fa solo setCurrentView('task') = form manuale con slider. Nessuna via per ri-eseguire la classificazione AI."
+      },
+      {
+        "id": "D62",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/lib/chat/tools.ts:750-872 vs src/app/api/ai-classify/route.ts:48-119 vs src/app/tasks/page.tsx:2045-2046",
+        "reasoning": "Pipeline distinte: (1) chat create_task (tools.ts:750-872) — il modello del turno fornisce importance/urgency/category inline, marca aiClassified:true via:'chat' (871-872), NESSUN dialog di conferma, sottoinsieme di campi; (2) inbox /api/ai-classify (route.ts) — classifyTaskWithAI (LLM o fallback euristico) + priority-engine per quadrant/decision, POI PriorityConfirmDialog con conferma utente (page.tsx:2045-2046); (3) vision passa per la stessa via chat (turn route + orchestrator create_task), quindi no-confirm come la chat. Esiti/UX diversi per lo stesso concetto."
+      },
+      {
+        "id": "D61",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/lib/engines/decomposition-engine.ts:16,27-50,74-113 + src/app/tasks/page.tsx:119,2939",
+        "reasoning": "decomposeWithAI (decomposition-engine.ts:8-16) chiama subito fallbackDecomposition: nessun callLLM. È pattern-matching su lower.includes('scriv'|'fattur'|'studi'|'pul'|'email'|'chiam'...) (27-45) → step template fissi per categoria; stesso titolo → step fotocopia. genericDecomposition (113) per i non-match dà boilerplate. Inoltre decision='decompose_then_do' è solo una label (page.tsx:119); decomposeTask parte solo su azione utente esplicita (2939/2511), nessuna auto-decomposizione."
+      },
+      {
+        "id": "D11",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/tasks/page.tsx:1644-1687,1723-1740 + src/app/api/micro-feedback/route.ts:71-84",
+        "reasoning": "Doppio LearningSignal: il POST /api/micro-feedback crea un LearningSignal (route.ts:84) E il client chiama recordSignal('micro_feedback',...) (page.tsx:1737) che ne crea un secondo. Mismatch dei type: MICRO_FEEDBACK_CONFIGS usa chiavi start_experience/drain_activate/block_reason/decomp_preference (1651-1686) ma la route arricchisce metadata solo per difficulty_rating/drain_vs_activate/decomposition_preference/block_report/session_experience (route.ts:71-84) → i rami di enrichment sono morti per i submit reali. Corroborato da J5."
+      },
+      {
+        "id": "D60",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/lib/engines/ai-assistant-engine.ts:206,127-135",
+        "reasoning": "generateAIInsights hardcoda il claim 'La volta scorsa ti sei bloccato perché il task era troppo ambiguo, quindi ora te lo spezzo meglio' (ai-assistant-engine.ts:206) indipendentemente dal vero motivo di blocco; action:'decompose_and_suggest' è enum grezza esposta in UI (page.tsx:1455). Le risposte al popup proattivo non aggiornano nulla: fallbackProactiveResponse ritorna profileUpdate:{} (133)."
+      },
+      {
+        "id": "D59",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/app/tasks/page.tsx:2884-2885 + src/lib/engines/execution-engine.ts:156-272 + src/lib/types/shadow.ts (RecoveryAction)",
+        "reasoning": "UI recovery espone solo 2 bottoni hardcoded: handleRecovery('reduce') e ('break') (page.tsx:2884-2885). L'engine generateRecoveryAction (execution-engine.ts:156-272) produce azioni context-aware con RecoveryAction.type a 5 varianti (reduce|reformat|micro_reentry|change_task|break, shadow.ts). generateRecoveryAction non viene mai chiamato dalla UI: le 2 opzioni sono statiche."
+      },
+      {
+        "id": "D58",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/store/shadow-store.ts:225,376 + src/app/api/ai-assistant/route.ts:357-371 + src/lib/engines/nudge-engine.ts:354,366",
+        "reasoning": "maxDailyNudges:8 (nudge-engine.ts:354) è enforce da shouldShowNudge (366) usando nudgesShownToday PASSATO dal client (route.ts:357-371). nudgesShownToday vive nello store Zustand (shadow-store.ts:225, init 0 a :376) SENZA persist (CLAUDE.md: 'Zustand senza persist'; nessun middleware persist nel file). Al refresh torna 0 → cap bypassabile, spam possibile. Idem lastNudgeTime (volatile)."
+      },
+      {
+        "id": "D57",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/app/tasks/page.tsx:528 (polling) + 1289-1336 (nudge) + 1489-1597 (proactive) + 1689-1768 (micro-feedback)",
+        "reasoning": "Polling proattivo: setInterval(checkTriggers, 5*60*1000) = POST LLM /api/ai-assistant ogni 5 min (page.tsx:528). Coesistono nella stessa zona/superficie ProactiveChatbot popup (1489+), nudge (1289+), MicroFeedbackDialog (1689+) e banner: nessun coordinamento di esclusività tra queste sorgenti di interruzione. Confermato a codice."
+      },
+      {
+        "id": "D55",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/store/shadow-store.ts:129,280-281",
+        "reasoning": "energy vive nello store (shadow-store.ts:129, init 3 a :280-281), store senza persist. Timer/tempo e energy della Today non sono persistiti lato client né riletti da DailyPlan.energyLevel dopo refresh: al remount tornano al default/valore del piano. Coerente col codice (nessun persist, nessun writeback dedicato di questi controlli)."
+      },
+      {
+        "id": "D56",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/store/shadow-store.ts:110,257-258",
+        "reasoning": "currentView è stato nello store (shadow-store.ts:110), default 'onboarding' (257), senza sync con l'URL né router. Nessun deep-link per vista: al refresh la vista si reinizializza (poi il bootstrap la porta a inbox/chat), non alla vista corrente. Nessun uso di searchParams per pilotare currentView."
+      },
+      {
+        "id": "D14",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/api/tasks/route.ts:54,78-80 + src/app/api/tasks/[id]/route.ts:51-60 + fase2-sweep/api-contract.json",
+        "reasoning": "POST /api/tasks passa body.title diretto a Prisma senza validazione (route.ts:54); title non-null in schema → throw → catch generico → 500 'Failed to create task'. Confermato a runtime dalla sweep (api-contract.json: 'POST senza title' → 500, body {error:'Failed to create task'}). PATCH /api/tasks/[id] copia allowedFields inclusi status senza enum/dominio (61 [id]:51-60) → sweep 'PATCH status arbitrario' → 200 (accettato). Entrambe le sottopiste confermate."
+      },
+      {
+        "id": "D22",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "prisma/schema.prisma:259-264 (DailyPlan.top3Ids/doNowIds/...) + src/app/api/tasks/[id]/route.ts:99-102 (DELETE)",
+        "reasoning": "DailyPlan memorizza gli id come array JSON string (top3Ids/doNowIds/scheduleIds/delegateIds/postponeIds, schema:259-264; pinnedIds/originalPlanJson). Il DELETE task ripulisce solo le tabelle relazionali DailyPlanTask e ReviewTask (route [id]:99-101) ma NON gli array JSON di id nel DailyPlan → l'id cancellato resta in top3Ids et al.: Top3 che diventa Top2 senza spiegazione. Confermato a codice."
+      },
+      {
+        "id": "D13",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/app/tasks/page.tsx:2902-2933 + src/app/api/tasks/[id]/route.ts:51-60 + public/sw.js:257-283 + src/app/api/tasks/route.ts:13-18",
+        "reasoning": "Reminder morto end-to-end: reminderDate/reminderTime sono solo display da selectedTask.reminderAt (page.tsx:2914-2918); handleSave salva solo formState che NON include reminderAt (2922-2933) → nessun input persiste il reminder. reminderSent/reminderAt non sono in allowedFields del PATCH [id] (grep vuoto) → la PATCH del SW è no-op. syncReminders del SW (sw.js:257) fa GET /api/tasks?reminder=true&before=... ma la GET filtra solo per status (route.ts:13-18), ignora quei query param. Nessun dispatcher server setta reminderSent=true. Promessa disattesa."
+      },
+      {
+        "id": "D30",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/api/adaptive-profile/route.ts:42-73,104-137",
+        "reasoning": "POST e PATCH /api/adaptive-profile scrivono i campi tramite allowlist (14 jsonFields + 25 directFields) MA senza alcuna validazione di valore/range/tipo: updateData[field]=body[field] diretto (133-135), jsonFields accettano qualsiasi shape (JSON.stringify di qualsiasi cosa, 112-116). Es. avoidanceProfile:9999 o confidenceLevel:-5 accettati → profilo (che alimenta gli engine) corrompibile da client buggato. NB: la sweep vede 404 solo perché l'utente di test non aveva profilo (PATCH richiede profilo esistente), non perché il campo venga rifiutato; la pista sui valori non validati resta confermata."
+      },
+      {
+        "id": "D-b45",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/lib/engines/profiling-engine.ts:47-52,182-183 + src/app/api/ai-classify/route.ts:96,117",
+        "reasoning": "classifyTaskWithAI su errore del ramo LLM (profiling-engine.ts:47) fa return heuristicClassification (52), che ritorna confidence:0.3 e reason 'Classificazione euristica (fallback)' (182-183). Il route /api/ai-classify marca comunque aiClassified:true (route.ts:96) e propaga confidence:result.confidence (117); il write-back del dialog rimette aiClassified:true (page.tsx:1183/1199). Dopo un outage LLM i task appaiono 'Classificato da AI'/badge AI con valori mediocri (0.3). Confermato."
+      },
+      {
+        "id": "D8",
+        "verdict": "CONFERMATO",
+        "severity": "S1",
+        "evidence": "src/app/tasks/page.tsx:584-603 (mount re-idrata solo body_double); src/store/shadow-store.ts:1 (create senza persist, 0 occorrenze 'persist'); src/app/api/strict-mode/route.ts:53-56",
+        "reasoning": "Lo store Zustand non ha persist, quindi dopo location.reload() strictModeState torna 'inactive'. L'unico effect di mount che interroga /api/strict-mode (584-603) reidrata SOLO le sessioni triggerType==='body_double'; una sessione active_strict non viene mai reidratata (setStrictModeState('active_strict') compare solo negli handler di attivazione 1113/2598/2607, mai in un effect di mount). Nessuna PATCH di uscita parte al refresh: la sessione resta active_strict in DB (orfana) e l'utente sfugge del tutto alla friction. Riproducibile e coerente con evidenza J8 passo 4."
+      },
+      {
+        "id": "D32",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/lib/strict-mode/enter.ts:100-109; src/app/tasks/page.tsx:2500-2505 (mount inizializza timerSeconds ma non isTimerRunning), 2810 ('In pausa'), 2813 (Play per avviare)",
+        "reasoning": "enterStrictMode NON avvia il timer: imposta focus/strict e delega l'init del timer alla FocusView, il cui effect (2500-2505) setta solo timerSeconds alla durata, lasciando isTimerRunning=false. La riga 2810 mostra quindi 'In pausa' e serve un tap ulteriore sul Play (2813) per far partire il conteggio. Rompe la promessa Task 61 (un gesto solo). Confermato anche da evidenza J8 passo 2."
+      },
+      {
+        "id": "D6",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/app/tasks/page.tsx:2945-2951 (handleStart), 3033 (bottone 'Inizia' del TaskDetail)",
+        "reasoning": "Il bottone 'Inizia' del TaskDetail chiama handleStart che, con focusModeDefault settato, imposta solo focusModeType/focusModeActive e naviga a focus; NON chiama startStrictModeSession/POST /api/strict-mode e NON setta strictModeState='active_strict'. Risultato: focus visivamente 'strict' ma senza sessione server, senza armamento scudo e senza friction d'uscita (che scatta solo con strictModeState==='active_strict'). Strict apparente."
+      },
+      {
+        "id": "D7",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/app/tasks/page.tsx:2739 (Disattiva soft: solo setFocusModeActive/setFocusModeType/setStrictModeState('inactive')) vs 2656-2657 (handleEndSession chiama endStrictModeSession per soft)",
+        "reasoning": "Il bottone 'Disattiva' dell'indicatore FOCUS SOFT non chiama endStrictModeSession/PATCH: aggiorna solo lo store locale. La StrictModeSession creata come active_soft in handleStartSession (2621-2626) resta aperta sul server. Inoltre non resetta isExecuting, lasciando sporca la execution view. Sessione server orfana confermata a codice."
+      },
+      {
+        "id": "D9",
+        "verdict": "PLAUSIBILE",
+        "severity": "S3",
+        "evidence": "src/app/tasks/page.tsx:1131-1132 (handleConfirm forza status:'planned' incondizionato)",
+        "reasoning": "handleConfirm (uscita friction strict) forza sempre il task a 'planned' senza guardare lo stato precedente: se era 'in_progress' viene retrocesso. Il forcing incondizionato e' reale a codice. Tuttavia nel flusso strict di questa UI non ho individuato un percorso che porti il task a 'in_progress' prima dell'uscita (i task restano 'planned'; cfr. memoria Task 56 'status planned falso colpevole'); l'evidenza J8 passo 8 lo marca plausibile perche' lo stato in_progress-all'uscita non e' isolabile a runtime. Difetto plausibile ma non riprodotto con task realmente in_progress."
+      },
+      {
+        "id": "D10",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/api/strict-mode/route.ts:53-56 (updateMany su POST setta solo status='exited'+exitedAt); prisma/schema.prisma:469 (actualDurationMinutes @default(0)), :460 (exitReason @default(\"\"))",
+        "reasoning": "Al POST di una nuova sessione, l'updateMany che chiude le sessioni attive precedenti (chiusura-per-sostituzione) setta solo status/exitedAt: non calcola actualDurationMinutes ne' valorizza exitReason. Restano ai default schema (0 e stringa vuota). Ogni sessione chiusa per sostituzione risulta 'uscita' a 0 minuti senza motivo -> statistiche di durata/efficacia sporche. Confermato da J8 passo 7."
+      },
+      {
+        "id": "D24",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/lib/engines/learning-engine.ts:250-258 (positivo 1.0 solo se metadata.taskCompleted); src/app/tasks/page.tsx:2664 (unico recordSignal('strict_exited') con taskCompleted:false hardcoded); grep: nessun altro strict_exited in src/",
+        "reasoning": "strictModeEffectiveness si aggiorna solo su 'strict_exited': ramo 1.0 (EMA verso alto) richiede metadata.taskCompleted=true. L'UNICA emissione di 'strict_exited' in tutto il codice (page.tsx:2664, nel ramo soft/no-strict di handleEndSession) hardcoda taskCompleted:false -> EMA verso 0.0. Al completamento (page.tsx:2571) si emette 'task_completed', non strict_exited; l'uscita-friction handleConfirm (1121-1148) non emette alcun signal. Quindi il ramo positivo (learning-engine.ts:255) e' codice morto: la metrica puo' solo decadere o restare. Confermato."
+      },
+      {
+        "id": "D27",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/app/tasks/page.tsx:2491-2498 (interval: a <=1 setta isTimerRunning(false) e ritorna 0, nient'altro), 2810 ('Terminato'), 2721 ('Finisce alle')",
+        "reasoning": "Quando il timer raggiunge 0 l'unico effetto e' setIsTimerRunning(false)+return 0: nessun avviso, nessuna fine sessione, nessun enforcement. La label 'Finisce alle HH:MM' del banner strict e' puramente dichiarativa: su web non chiude la sessione ne' rimuove lo scudo. Confermato."
+      },
+      {
+        "id": "D51",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/features/body-double/useBodyDoubleSession.ts:222 (setError('Nessun task selezionato per la sessione.')); src/features/body-double/BodyDoubleView.tsx:76,98 (unico bottone 'Torna ai task'); src/app/focus/FocusPageClient.tsx:8-9",
+        "reasoning": "Accedendo a /focus senza ?taskId valido, la sessione fallisce con 'Nessun task selezionato' e BodyDoubleView mostra come unica azione 'Torna ai task'. Non esiste alcun modo di scegliere un task da questa schermata: vicolo cieco confermato (J8 passo 10)."
+      },
+      {
+        "id": "D52",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/app/tasks/page.tsx:2418-2419 (Button h-7 w-7 con MoreHorizontal w-4 h-4, aria-label='Altre modalità', title presente, nessun testo visibile)",
+        "reasoning": "Il trigger 'Altre modalità' (soft/body doubling) sulla card Top3 e' un bottone icona ~28px (h-7 w-7) senza etichetta VISIBILE. Ha pero' aria-label e title, quindi non e' del tutto privo di label per gli assistive tech. Il difetto di scopribilita' UX (bare icon, poco scopribile) e' confermato; la sfumatura 'senza label' vale solo per il testo visibile."
+      },
+      {
+        "id": "D19",
+        "verdict": "FUORI-SCOPE",
+        "severity": "n/a",
+        "evidence": "src/components/native/shield-permission-gate.tsx:~105-109 (riga 'Batteria senza limiti' con granted hardcoded false)",
+        "reasoning": "Il fatto e' confermato a codice (la riga permesso batteria passa 'false' come stato di concessione, non riflette lo stato reale). Ma e' funzionalita' APK/native on-device (Task 59), esplicitamente FUORI dal perimetro beta web (fuori scope: APK on-device). Il dossier stesso etichetta la riga [APK]."
+      },
+      {
+        "id": "D20",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/features/body-double/useBodyDoubleSession.ts:505-511 (reason==='completed' -> PATCH task status='completed') vs :519 (taskCompleted: all.length > 0 && all.every(done))",
+        "reasoning": "Chiudendo il body doubling con 'Ho finito' (reason='completed') su un task SENZA step, il task viene marcato completed (505-511) ma il PATCH sessione invia taskCompletedDuringSession=false perche' all.length>0 e' false quando non ci sono step (519). Incongruenza confermata: sessione registrata come 'task non completato' mentre il task e' effettivamente completato -> segnale strict/efficacia falsato."
+      },
+      {
+        "id": "D-w7",
+        "verdict": "CONFERMATO",
+        "severity": "UX",
+        "evidence": "src/components/native/app-blocker-card.tsx:110 (if (!isAndroid()) return null); tasks/page.tsx:3391 (unico render di AppBlockerCard); grep blockedApps: nessun'altra superficie UI",
+        "reasoning": "AppBlockerCard e' l'unica superficie per preparare blockedApps (PATCH /api/profile) e ritorna null fuori da Android (linea 110). Su web NON esiste alcuna superficie, nemmeno informativa, per impostare le app da bloccare (nel collaudo si sono dovute settare via seed). L'API /api/profile accetta blockedApps, ma manca del tutto l'entry UI web. Confermato (J8 passo 3)."
+      },
+      {
+        "id": "D4",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/app/api/auth/login/route.ts:61-70; docs/tasks/62-evidenze/fase1-journeys/J10parte1-ad17d5bf.json step1",
+        "reasoning": "Il login custom encode() mette nel token solo {id,sub,email,name,tourCompleted,onboardingComplete} — niente isBetaTester. J10 dimostra a runtime: GET /api/auth/session con cookie del login reale → isBetaTester=false; lo STESSO utente via callback NextAuth (auth.ts:79-85 legge token.isBetaTester) → true. Le API beta usano solo requireSession (funzionano), ma la UII (BugReportDialog/BetaCheckinCard/card Export) è gated su isBetaTester e resta nulla per il tester reale → strumentazione invisibile. Il register ha lo stesso buco."
+      },
+      {
+        "id": "D5",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "src/app/tasks/page.tsx:614-625; docs/tasks/62-evidenze/fase1-journeys/J10(parte2)-a673004b.json step5",
+        "reasoning": "handleLogout tocca solo store Zustand + localStorage + setCurrentView('auth'), zero chiamata server. Strategy JWT senza revoca: il cookie httpOnly (maxAge 30gg) resta valido. J10 conferma: GET /api/tasks post-'logout' → 200 coi task; il toast 'Disconnesso' è falso. Esiste /api/auth/signout ma non è cablato dall'header; anche il replay del vecchio cookie dopo signout resta 200 (stessa radice della sessione fantasma post-delete)."
+      },
+      {
+        "id": "D28",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/tasks/page.tsx:783 (<6); src/app/api/auth/register/route.ts:18 (<8); src/app/api/auth/reset-password/route.ts:19 (<6)",
+        "reasoning": "Tre policy divergenti verificate a codice: client login/register accetta ≥6, server register esige ≥8, reset esige ≥6. Placeholder 'Almeno 6 caratteri' + rifiuto server 'almeno 8' riprodotto in J1 (journal passo 3). Incoerenza reale ma solo attrito/fiducia, non falla di sicurezza (il gate forte è il server register a 8)."
+      },
+      {
+        "id": "D65",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "page.tsx:735-738 (auth param); page.tsx:3364-3368 (Rifai profilo beta-gated); login/route.ts:26-27 (429 senza countdown); forgot-password/route.ts:15",
+        "reasoning": "Tutti e 4 i rami confermati. (1) ?auth=error ignorato: page.tsx:736 gestisce solo 'login'/'forgot' (J1 passo 2). (2) 'Rifai il profilo' è dentro {isBetaTester && ...} → non-beta non può rifare l'onboarding. (3) Lockout: 429 'Riprova tra qualche minuto' mostrato as-is al client, nessun countdown. (4) forgot ritorna sempre 'Se l'email è registrata riceverai un link' anche con Resend giù (J10 parte2 step6: probe.local non riceve nulla ma il messaggio promette)."
+      },
+      {
+        "id": "D66",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "page.tsx:3394 (Export {isBetaTester&&}); page.tsx:3364-3368 (Rifai/Export beta); docs/tasks/62-evidenze/fase1-journeys/J10parte1-ad17d5bf.json step3 + J10(parte2) step1/step4",
+        "reasoning": "Tre asimmetrie confermate a runtime. (a) Export è diritto GDPR ma la card UI è beta-only (l'API /api/export invece NON è gated: J10 parte2 step1 → 200 al non-beta, quindi il diritto è tecnicamente esercitabile via URL ma non c'è affordance per il non-beta). (b) /account-deletion §5 istruisce 'Esporta JSON' verso una card che i non-beta non hanno (J10 parte2 step4). (c) /beta/assessment raggiungibile da qualunque autenticato: PATCH con item ASRS da non-beta → 200 e punteggio clinico art.9 persistito (J10 parte1 step3). Il perimetro art.9 (admin-guard.ts:36-38) è garantito solo dall'invisibilità UI, non da gate server."
+      },
+      {
+        "id": "D53",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/api/consent/route.ts:19 (CONSENT_VERSION='0.2-draft'); src/app/privacy/page.tsx:12,18,40,101 (apostrofi); src/app/tasks/page.tsx:851 + reset-password-form.tsx:61 (tagline)",
+        "reasoning": "Consenso versione '0.2-draft' scritto in DB a ogni ri-consenso (J10 parte2 step2 conferma consentVersion riscritta a '0.2-draft'), e mostrato in fondo alla pagina /consent (J1 passo 6). /privacy usa apostrofi al posto delle accentate (e', perche', puo', finche', gia'). Tagline 'il tuo executive function esterno' presente. Nota: C1/C2 legale è dichiarato fuori scope-fix dalla spec (§1), ma la discrepanza resta un finding di fiducia da riportare."
+      },
+      {
+        "id": "D-auth",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/tasks/page.tsx:395-403 (restore da localStorage), 764/799 (write shadow-user); commento :393-396",
+        "reasoning": "Doppia fonte di verità: /tasks ripristina l'auth da localStorage 'shadow-user' indipendentemente dal cookie (il commento stesso ammette 'legacy localStorage; il source-of-truth per il middleware è il cookie'). Se localStorage e cookie divergono (es. cookie scaduto/rimosso ma localStorage presente, o viceversa) lo stato client può contraddire il gate server; combinato con D5 (logout non tocca il cookie) e la sessione fantasma post-delete, la UI può mostrare stato loggato incoerente. Coerente col codice; l'edge estremo 'form login a utente loggato' non è stato riprodotto qui ma la doppia fonte è dimostrata."
+      },
+      {
+        "id": "D21",
+        "verdict": "CONFERMATO",
+        "severity": "S2",
+        "evidence": "public/sw.js:205-231 (share target handler)",
+        "reasoning": "Il SW su POST '/' legge il formData, fa fetch('/api/tasks', POST) senza controllare res.ok/status, poi Response.redirect('/?action=share&...', 303) SEMPRE. Con sessione scaduta il /api/tasks torna 401 (il fetch si risolve comunque) → l'utente viene rediretto come se avesse salvato, ma nessun task è creato (contenuto perso). Inoltre ?action=share non è letto da nessun client (cfr. D68) → nessuna conferma visiva → creazione ripetuta = doppioni. Verificato a codice; la parte on-device (Android share) è nella checklist Antonio ma la logica del difetto è nel SW web."
+      },
+      {
+        "id": "D68",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "public/manifest.json:42-71 (4 shortcuts) + :72-82 (share_target action=/?action=share); grep in src/app+src/features: nessun reader di 'action' (solo 'plan'=today in ChatView.tsx:249 e 'auth' in page.tsx:735)",
+        "reasoning": "Il manifest dichiara 4 shortcuts (?action=inbox|today|voice|focus) e share_target verso /?action=share, ma nessun componente legge il param 'action': ChatView legge solo ?plan=today, page.tsx solo ?auth. Quindi shortcuts e share redirigono sulla chat/inbox di default, ignorando l'intento. La quick-capture offline del SW e il push handler senza sender rientrano nella stessa area morta (confermata anche in fase4 area orfane). By-design non è: è una promessa PWA non mantenuta."
+      },
+      {
+        "id": "D69",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/api/calendar/oauth/route.ts:17-22 (500 senza env), oauth/callback/route.ts (redirect ?action=settings&calendar= mai letto), calendar/route.ts; docs/tasks/62-evidenze/fase4-architettura.json linee 32-38 + fase2-sweep/NOTES.md (D23)",
+        "reasoning": "Google Calendar orfano end-to-end: route complete server-side ma zero entry UI (grep calendar/oauth in src → solo middleware allowlist e le route), il redirect ?action=settings&calendar=connected non è letto (cfr. D68), CalendarToken salvato ma consumato solo da export/route.ts, nessun client fetcha eventi. GET /api/calendar/oauth senza env → 500 JSON nudo (D23 CONFERMATO in fase2 NOTES). Google Calendar è dichiarato FUORI SCOPE beta dalla spec §1, ma la superficie non deve confondere: è già invisibile, resta solo il 500 nudo dell'oauth come difetto minore."
+      },
+      {
+        "id": "D70",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/api/notifications/route.ts + src/app/api/push-subscription/route.ts (completi); src/app/tasks/page.tsx:31 (Bell,BellOff importati, mai renderizzati); fase4-architettura.json linee 42-47",
+        "reasoning": "Route notifications (GET/POST/PATCH) e push-subscription (POST/GET/DELETE) complete, ma zero UI: l'icona Bell/BellOff è solo importata a page.tsx:31 e mai usata in JSX (grep '<Bell' su src/app → 0 match); nessun client fetcha /api/notifications. Le Notification create dal cron sono solo marcatori di dedup email (Task 58), mai mostrate in-app. Feature API senza superficie utente — orfano confermato."
+      },
+      {
+        "id": "D71",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/api/settings/route.ts:37-47 (allowedFields include defaultEnergy/defaultContext/defaultDuration/defaultFormat/wakeTime/sleepTime/productiveSlots/theme ma la UI non li espone); fase4-architettura.json linea 417 (D71 CONFERMATO)",
+        "reasoning": "Il modello Settings ha molti campi (defaultEnergy/Context/Duration/Format, wakeTime/sleepTime, productiveSlots, theme, reminderMinutes) scrivibili dall'API PATCH ma senza controllo UI corrispondente: la SettingsView non offre input per questi (grep in page.tsx negativo). Editabili da UI restano di fatto solo notificationsEnabled + eveningWindow (aggiunti in B4). Campi morti confermati via sweep fase2/fase4."
+      },
+      {
+        "id": "D72",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/tasks/page.tsx:121 (quadrante 'delegate'/'Delega'); src/app/api/contacts/route.ts + contacts/[id]/route.ts (CRUD completo); fase4-architettura.json linee 87-92",
+        "reasoning": "Delega monca confermata: il quadrante 'delegate' esiste solo come etichetta di classificazione (page.tsx:121), Contact CRUD API è completa ma ZERO caller nella UI (grep 'contacts'/'api/contacts' nei .tsx → nessun risultato), i campi delegatedToId/delegationStatus/delegationNote esistono in schema/store ma nulla li setta mai su un task. Nessun flusso di assegnazione task→contatto. Fuori dal core loop."
+      },
+      {
+        "id": "D25",
+        "verdict": "BY-DESIGN",
+        "severity": "S3",
+        "evidence": "src/lib/sky/lit-stars.ts:10-15 (commento 'Edge accettato in v1'); docs/tasks/62-evidenze/fase1-journeys/J7-aa39456f.json step5",
+        "reasoning": "Riproducibile ESATTAMENTE (J7 step5: task source='review_carryover' reso ricorrente → prima occorrenza completata NON accende la stella, la seconda 'recurring' sì). MA è una scelta documentata e motivata a codice: lit-stars.ts filtra su source='recurring' per garantire monotonia loss-free (le stelle non spariscono mai qualunque cosa accada al template), preferendo una sottostima ≤1 per abitudine alla non-monotonia dell'alternativa. Comportamento voluto e annotato → BY-DESIGN. Resta un difetto UX minore (nessuna spiegazione all'utente il giorno 1), ma non è un bug."
+      },
+      {
+        "id": "D48",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/features/sky/SkyView.tsx (empty state); src/app/tasks/page.tsx:686 (monta SkyView); fase4-architettura.json (Cielo isolato)",
+        "reasoning": "Il Cielo per chi non ha ricorrenti mostra il conteggio (es. 0/4 costellazione) senza spiegazione di come si accendono le stelle né CTA a creare un ricorrente (l'unica via è la chat, cfr. D49). Nessun ponte da completamento→stella né invito attivo. Confermato come vicolo semi-cieco/isola: la superficie non insegna a se stessa. UX, non bug."
+      },
+      {
+        "id": "D49",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "docs/tasks/62-evidenze/fase1-journeys/J7-aa39456f.json step6; grep: nessuna route API né UI per listare/editare ricorrenze (solo export GDPR le include)",
+        "reasoning": "Le ricorrenze sono gestibili SOLO via chat: nessuna lista/edit/stop da UI. J7 step6 conferma a runtime che non esiste route/UI e che in chat il modello ammette 'Non ho uno strumento per elencare le ricorrenze attive' e, peggio, presenta una ricorrenza FERMATA come 'attiva' (risposta fuorviante via get_today_tasks). L'utente non ha alcun modo affidabile di vedere/gestire le proprie ricorrenze."
+      },
+      {
+        "id": "D50",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/tasks/page.tsx:1941-1946 (Inbox/Today/Focus/Review EN vs Cielo/Impost. IT); :128-130 (LAUNCH/HOLD/RECOVERY hardcoded EN); fase4-architettura.json linee 317-322",
+        "reasoning": "Lingua mista sistemica confermata a codice nella superficie più visibile: la BottomNav mescola label EN (Inbox/Today/Focus/Review) e IT (Cielo/Impost.), più badge hardcoded LAUNCH/HOLD/RECOVERY in EN e enum grezze (focusModeDefault, categorie 'admin'/'night' viste in J1). Beta dichiarata IT-only → incoerenza reale che abbassa comprensione (L6) e fiducia. UX/coerenza."
+      },
+      {
+        "id": "D26",
+        "verdict": "FUORI-SCOPE",
+        "severity": "n/a",
+        "evidence": "docs/tasks/62-collaudo-totale-pre-lancio.md §12 D26 ('verificabile solo in prod → checklist Antonio'); Task 60 B6",
+        "reasoning": "Il prefisso __Secure- sul cookie next-auth dipende dall'ambiente https di produzione (in dev su http non si applica) → per definizione non riproducibile in dev locale, come dichiarato dalla stessa spec (§12 D26, marcato 'prod'). Rientra nella checklist on-device/prod per Antonio, fuori dal perimetro del collaudo dev."
+      },
+      {
+        "id": "D29",
+        "verdict": "CONFERMATO",
+        "severity": "S3",
+        "evidence": "src/app/api/settings/route.ts:56-61 (regex HHMM su eveningWindow) + :37-47 (wakeTime/sleepTime senza validazione); docs/tasks/62-evidenze/fase2-sweep/NOTES.md linea 17",
+        "reasoning": "Chiarito col codice+sweep: PATCH /api/settings {eveningWindowStart:'25:99'} → HTTP 200 ma il valore NON viene persistito (regex /^([01]\\d|2[0-3]):[0-5]\\d$/ lo scarta in silenzio; DB tiene i default). Quindi niente corruzione della finestra serale — la 'paura' è smentita. Resta però il difetto minore confermato: 200 di falso-successo (nessun 4xx che dica al client 'rifiutato'), e i campi wakeTime/sleepTime in allowedFields passano SENZA validazione (orari invalidi lì sarebbero accettati, ma sono campi morti — D71). Item confermato nella forma 'falso-successo silenzioso'."
+      }
+    ],
+    "counts": {
+      "adv": 6,
+      "dossier": 77,
+      "confermati": 72,
+      "smentiti": 1,
+      "byDesign": 1,
+      "fuoriScope": 2,
+      "nonRipro": 0
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Adversariale"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Dossier"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "ADV-hallucinated-create",
+      "phaseIndex": 1,
+      "phaseTitle": "Adversariale",
+      "agentId": "a294bcdf90500196f",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782961359417,
+      "queuedAt": 1782961359403,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Sei un VERIFICATORE SCETTICO del collaudo Task 62 dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA (Read/Grep/Glob/Bash read-only). Dev server attivo su :3000 (DB dev), NON modificarlo, NON scrivere sul DB (puoi fare fetch GET/POST read-only e query Prisma di sola lettura via 'bun run dotenv -e .env.local -- bun -e ...'). NON usare curl (si blocca nel sandbox: usa fetch in bun). Non usare too…",
+      "lastProgressAt": 1782961450538,
+      "tokens": 95321,
+      "toolCalls": 11,
+      "durationMs": 91121,
+      "resultPreview": "{\"items\":[{\"id\":\"ADV-hallucinated-create\",\"verdict\":\"CONFERMATO\",\"severity\":\"S1\",\"evidence\":\"docs/tasks/62-evidenze/J3/trascrizione-thread-cmr2vv3u8001bib74mn91v20e.md:45-166 (turni 'Creato'/'È già creato' con toolsExecuted=[]) + riepilogo-catture.txt:4-13 (d,e,g1-g7 nuovi=0) + retry-catture-de.json:9,35 (create_task fira solo dopo contestazione) + db-tasks-post-catture.json (righe scritte solo po…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "ADV-crisis-offload",
+      "phaseIndex": 1,
+      "phaseTitle": "Adversariale",
+      "agentId": "a496d5e0c33e350f2",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782961359420,
+      "queuedAt": 1782961359403,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Sei un VERIFICATORE SCETTICO del collaudo Task 62 dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA (Read/Grep/Glob/Bash read-only). Dev server attivo su :3000 (DB dev), NON modificarlo, NON scrivere sul DB (puoi fare fetch GET/POST read-only e query Prisma di sola lettura via 'bun run dotenv -e .env.local -- bun -e ...'). NON usare curl (si blocca nel sandbox: usa fetch in bun). Non usare too…",
+      "lastProgressAt": 1782961424127,
+      "tokens": 54436,
+      "toolCalls": 11,
+      "durationMs": 64707,
+      "resultPreview": "{\"items\":[{\"id\":\"ADV-crisis-offload\",\"verdict\":\"CONFERMATO\",\"severity\":\"S2\",\"evidence\":\"src/lib/chat/tools.ts:2401-2417 (gate solo su currentEntryId, nessun controllo crisi); prompts.ts:348,356,434 (R6 divieti HARD); docs/tasks/62-evidenze/J6/j6d-db-finale.json (learningSignalOffload:1)\",\"reasoning\":\"Tutte e tre le sotto-affermazioni verificate a codice/evidenza. (1) R6 nel prompt: prompts.ts:348 …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "ADV-revoca-consenso",
+      "phaseIndex": 1,
+      "phaseTitle": "Adversariale",
+      "agentId": "ababe523a1104d1b7",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782961359422,
+      "queuedAt": 1782961359403,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Sei un VERIFICATORE SCETTICO del collaudo Task 62 dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA (Read/Grep/Glob/Bash read-only). Dev server attivo su :3000 (DB dev), NON modificarlo, NON scrivere sul DB (puoi fare fetch GET/POST read-only e query Prisma di sola lettura via 'bun run dotenv -e .env.local -- bun -e ...'). NON usare curl (si blocca nel sandbox: usa fetch in bun). Non usare too…",
+      "lastProgressAt": 1782961434292,
+      "tokens": 59423,
+      "toolCalls": 13,
+      "durationMs": 74870,
+      "resultPreview": "{\"items\":[{\"id\":\"ADV-revoca-consenso\",\"verdict\":\"CONFERMATO\",\"severity\":\"S2\",\"evidence\":\"src/middleware.ts:136-143 (passthrough /api/*) + :114 (DB re-read gated a !/api/) + :207-212 (gate consenso solo page); src/lib/beta/consent-guard.ts:9-15 (hasGivenConsent) usato SOLO in src/app/api/beta/assessment/route.ts:68 e feedback/route.ts:26; docs/tasks/62-evidenze/J10-gdpr-account/step2-turn-con-conse…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "ADV-delete-no-confirm",
+      "phaseIndex": 1,
+      "phaseTitle": "Adversariale",
+      "agentId": "ac33f17845d352ff2",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782961359424,
+      "queuedAt": 1782961359403,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Sei un VERIFICATORE SCETTICO del collaudo Task 62 dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA (Read/Grep/Glob/Bash read-only). Dev server attivo su :3000 (DB dev), NON modificarlo, NON scrivere sul DB (puoi fare fetch GET/POST read-only e query Prisma di sola lettura via 'bun run dotenv -e .env.local -- bun -e ...'). NON usare curl (si blocca nel sandbox: usa fetch in bun). Non usare too…",
+      "lastProgressAt": 1782961452419,
+      "tokens": 53393,
+      "toolCalls": 10,
+      "durationMs": 92995,
+      "resultPreview": "{\"items\":[{\"id\":\"ADV-delete-no-confirm\",\"verdict\":\"CONFERMATO\",\"severity\":\"S2\",\"evidence\":\"src/app/api/account/route.ts:11-25; src/app/tasks/page.tsx:3282; src/lib/auth-guard.ts:16-38; src/lib/auth.ts:41; docs/tasks/62-evidenze/J10-gdpr-account/j10-parte2-log.md:30-35\",\"reasoning\":\"Tutte e tre le sotto-affermazioni sono provate da codice + evidenza runtime, e ho provato a smontarle senza riuscirci…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "ADV-review-0-candidate",
+      "phaseIndex": 1,
+      "phaseTitle": "Adversariale",
+      "agentId": "a6b6dd85e8c530a56",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782961359427,
+      "queuedAt": 1782961359403,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Sei un VERIFICATORE SCETTICO del collaudo Task 62 dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA (Read/Grep/Glob/Bash read-only). Dev server attivo su :3000 (DB dev), NON modificarlo, NON scrivere sul DB (puoi fare fetch GET/POST read-only e query Prisma di sola lettura via 'bun run dotenv -e .env.local -- bun -e ...'). NON usare curl (si blocca nel sandbox: usa fetch in bun). Non usare too…",
+      "lastProgressAt": 1782961523362,
+      "tokens": 67202,
+      "toolCalls": 18,
+      "durationMs": 163935,
+      "resultPreview": "{\"items\":[{\"id\":\"ADV-review-0-candidate\",\"verdict\":\"CONFERMATO\",\"severity\":\"S2\",\"evidence\":\"src/lib/evening-review/triage.ts:618-622 (isPreviewPhaseActive); src/lib/chat/orchestrator.ts:1305-1309 (derivePhase); src/lib/chat/tools.ts:546-549,2225-2246,2317-2328; docs/tasks/62-evidenze/J6/j6f-zero-candidate.md; docs/tasks/62-evidenze/J6/j6f-db-post-chiudi.json; docs/tasks/62-evidenze/J6/j6f-log-chiu…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "ADV-ricorrenti-non-materializzati",
+      "phaseIndex": 1,
+      "phaseTitle": "Adversariale",
+      "agentId": "a5542dac4c3586be3",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782961359430,
+      "queuedAt": 1782961359403,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Sei un VERIFICATORE SCETTICO del collaudo Task 62 dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA (Read/Grep/Glob/Bash read-only). Dev server attivo su :3000 (DB dev), NON modificarlo, NON scrivere sul DB (puoi fare fetch GET/POST read-only e query Prisma di sola lettura via 'bun run dotenv -e .env.local -- bun -e ...'). NON usare curl (si blocca nel sandbox: usa fetch in bun). Non usare too…",
+      "lastProgressAt": 1782961481672,
+      "tokens": 62867,
+      "toolCalls": 16,
+      "durationMs": 122242,
+      "resultPreview": "{\"items\":[{\"id\":\"ADV-ricorrenti-non-materializzati\",\"verdict\":\"CONFERMATO\",\"severity\":\"S2\",\"evidence\":\"src/app/api/tasks/route.ts:7-41 (GET senza materializeRecurringForDate); src/app/api/daily-plan/route.ts:227-312 (GET/POST/PATCH senza materializeRecurringForDate); src/lib/recurring/materialize.ts:58 (unici caller prod: src/lib/chat/tools.ts:1109 e src/lib/chat/orchestrator.ts:1248, entrambi cha…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "dossier-chat",
+      "phaseIndex": 2,
+      "phaseTitle": "Dossier",
+      "agentId": "ac33da81a49a01e2b",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782961523377,
+      "queuedAt": 1782961523373,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Sei un VERIFICATORE SCETTICO del collaudo Task 62 dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA (Read/Grep/Glob/Bash read-only). Dev server attivo su :3000 (DB dev), NON modificarlo, NON scrivere sul DB (puoi fare fetch GET/POST read-only e query Prisma di sola lettura via 'bun run dotenv -e .env.local -- bun -e ...'). NON usare curl (si blocca nel sandbox: usa fetch in bun). Non usare too…",
+      "lastProgressAt": 1782961814784,
+      "tokens": 84651,
+      "toolCalls": 29,
+      "durationMs": 291407,
+      "resultPreview": "{\"items\":[{\"id\":\"D31\",\"verdict\":\"CONFERMATO\",\"severity\":\"S2\",\"evidence\":\"src/features/chat/ChatView.tsx:538-560 (handleStartEveningReview); docs/tasks/62-evidenze/J6i-inizia-review-card/journal.md\",\"reasoning\":\"handleStartEveningReview fa solo setMessages([]), setMode('evening_review'), setThreadId(null), setEveningReviewShouldStart(false) e focus input: NON invia alcun turno. Con eveningReviewSho…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 8,
+      "label": "dossier-review-plan",
+      "phaseIndex": 2,
+      "phaseTitle": "Dossier",
+      "agentId": "a5c3fd89ace06b82e",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782961523379,
+      "queuedAt": 1782961523374,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Sei un VERIFICATORE SCETTICO del collaudo Task 62 dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA (Read/Grep/Glob/Bash read-only). Dev server attivo su :3000 (DB dev), NON modificarlo, NON scrivere sul DB (puoi fare fetch GET/POST read-only e query Prisma di sola lettura via 'bun run dotenv -e .env.local -- bun -e ...'). NON usare curl (si blocca nel sandbox: usa fetch in bun). Non usare too…",
+      "lastProgressAt": 1782961872448,
+      "tokens": 81917,
+      "toolCalls": 42,
+      "durationMs": 349069,
+      "resultPreview": "{\"items\":[{\"id\":\"D1\",\"verdict\":\"CONFERMATO\",\"severity\":\"S1\",\"evidence\":\"src/app/tasks/page.tsx:3078-3080 vs src/app/api/review/route.ts:41-56; prisma/schema.prisma:322; src/lib/evening-review/compute-signal.ts:63-67\",\"reasoning\":\"Il client invia taskReviews come {taskId, completed:true}/{taskId, completed:false, avoided:true} (page.tsx:3078-3080), senza campo status. L'API fa db.reviewTask.create(…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 9,
+      "label": "dossier-today-engine",
+      "phaseIndex": 2,
+      "phaseTitle": "Dossier",
+      "agentId": "a986e10c814fc18d0",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782961523381,
+      "queuedAt": 1782961523374,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Sei un VERIFICATORE SCETTICO del collaudo Task 62 dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA (Read/Grep/Glob/Bash read-only). Dev server attivo su :3000 (DB dev), NON modificarlo, NON scrivere sul DB (puoi fare fetch GET/POST read-only e query Prisma di sola lettura via 'bun run dotenv -e .env.local -- bun -e ...'). NON usare curl (si blocca nel sandbox: usa fetch in bun). Non usare too…",
+      "lastProgressAt": 1782961902597,
+      "tokens": 102358,
+      "toolCalls": 44,
+      "durationMs": 379216,
+      "resultPreview": "{\"items\":[{\"id\":\"D2\",\"verdict\":\"CONFERMATO\",\"severity\":\"S2\",\"evidence\":\"src/app/tasks/page.tsx:1312 + src/lib/types/shadow.ts:519-531\",\"reasoning\":\"NudgeMessage NON ha alcun campo taskId (types/shadow.ts:519-531). Il nudge viene generato per top3[0] (page.tsx:541-570), ma handleAccept (page.tsx:1312) fa store.tasks.find(t=>t.status!=='completed'&&t.status!=='abandoned') = PRIMO task non completato…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 10,
+      "label": "dossier-strict-focus",
+      "phaseIndex": 2,
+      "phaseTitle": "Dossier",
+      "agentId": "a30f60fd78d77c0da",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782961523382,
+      "queuedAt": 1782961523374,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Sei un VERIFICATORE SCETTICO del collaudo Task 62 dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA (Read/Grep/Glob/Bash read-only). Dev server attivo su :3000 (DB dev), NON modificarlo, NON scrivere sul DB (puoi fare fetch GET/POST read-only e query Prisma di sola lettura via 'bun run dotenv -e .env.local -- bun -e ...'). NON usare curl (si blocca nel sandbox: usa fetch in bun). Non usare too…",
+      "lastProgressAt": 1782961827377,
+      "tokens": 78971,
+      "toolCalls": 36,
+      "durationMs": 303995,
+      "resultPreview": "{\"items\":[{\"id\":\"D8\",\"verdict\":\"CONFERMATO\",\"severity\":\"S1\",\"evidence\":\"src/app/tasks/page.tsx:584-603 (mount re-idrata solo body_double); src/store/shadow-store.ts:1 (create senza persist, 0 occorrenze 'persist'); src/app/api/strict-mode/route.ts:53-56\",\"reasoning\":\"Lo store Zustand non ha persist, quindi dopo location.reload() strictModeState torna 'inactive'. L'unico effect di mount che interro…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 11,
+      "label": "dossier-auth-periferia",
+      "phaseIndex": 2,
+      "phaseTitle": "Dossier",
+      "agentId": "ad09a82a54eb4f60c",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1782961523383,
+      "queuedAt": 1782961523374,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "promptPreview": "Sei un VERIFICATORE SCETTICO del collaudo Task 62 dell'app Shadow (ADHD) in C:\\shadow-app. SOLO LETTURA (Read/Grep/Glob/Bash read-only). Dev server attivo su :3000 (DB dev), NON modificarlo, NON scrivere sul DB (puoi fare fetch GET/POST read-only e query Prisma di sola lettura via 'bun run dotenv -e .env.local -- bun -e ...'). NON usare curl (si blocca nel sandbox: usa fetch in bun). Non usare too…",
+      "lastProgressAt": 1782961810015,
+      "tokens": 98175,
+      "toolCalls": 20,
+      "durationMs": 286632,
+      "resultPreview": "{\"items\":[{\"id\":\"D4\",\"verdict\":\"CONFERMATO\",\"severity\":\"S2\",\"evidence\":\"src/app/api/auth/login/route.ts:61-70; docs/tasks/62-evidenze/fase1-journeys/J10parte1-ad17d5bf.json step1\",\"reasoning\":\"Il login custom encode() mette nel token solo {id,sub,email,name,tourCompleted,onboardingComplete} — niente isBetaTester. J10 dimostra a runtime: GET /api/auth/session con cookie del login reale → isBetaTest…"
+    }
+  ],
+  "totalTokens": 838714,
+  "totalToolCalls": 250
+}

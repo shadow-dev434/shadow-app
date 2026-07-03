@@ -1,0 +1,16 @@
+[
+  {
+    "id": "cmr2vtj0e000hib749f50ig9k",
+    "title": "Stretching 10 minuti",
+    "status": "inbox",
+    "occurrenceDate": "2026-07-01",
+    "completedAt": null
+  },
+  {
+    "id": "cmr2vtvxz0015ib74a72slxjc",
+    "title": "Stretching 10 minuti",
+    "status": "completed",
+    "occurrenceDate": "2026-06-30",
+    "completedAt": "2026-07-02T02:27:04.064Z"
+  }
+]

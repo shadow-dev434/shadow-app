@@ -1,0 +1,114 @@
+[
+  {
+    "turn": 1,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.018837600000000003
+  },
+  {
+    "turn": 2,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.01122345
+  },
+  {
+    "turn": 3,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.011380350000000003
+  },
+  {
+    "turn": 4,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.01125975
+  },
+  {
+    "turn": 5,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.011438400000000001
+  },
+  {
+    "turn": 6,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.0112425
+  },
+  {
+    "turn": 7,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.011189550000000001
+  },
+  {
+    "turn": 8,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.01933635
+  },
+  {
+    "turn": 9,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.01934385
+  },
+  {
+    "turn": 10,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.01926885
+  },
+  {
+    "turn": 11,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.019190099999999998
+  },
+  {
+    "turn": 12,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.0191076
+  },
+  {
+    "turn": 13,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.0190476
+  },
+  {
+    "turn": 14,
+    "msg": "ok, va bene il piano così",
+    "phase": "plan_preview",
+    "state": "active",
+    "tools": [],
+    "costUsd": 0.0189876
+  }
+]

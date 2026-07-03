@@ -1,0 +1,20 @@
+[
+  {
+    "id": "cmr2vzxpm008cib741o5rm85k",
+    "userId": "cmr2vscs70000ibz4g1pa457e",
+    "title": "Palestra",
+    "description": "",
+    "category": "health",
+    "urgency": 3,
+    "importance": 3,
+    "size": 3,
+    "frequency": "weekly",
+    "weekdays": "[1]",
+    "monthDay": null,
+    "active": true,
+    "startDate": "2026-07-02",
+    "endDate": null,
+    "createdAt": "2026-07-02T02:30:10.282Z",
+    "updatedAt": "2026-07-02T02:30:10.282Z"
+  }
+]

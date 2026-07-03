@@ -1,0 +1,141 @@
+{
+ "journey": "J10 (parte 2) — GDPR e ciclo di vita account (export, consenso, eliminazione, /account-deletion, logout D5, forgot/reset). Utenti dedicati: collaudo-j10gdpr@probe.local (VIVO a fine collaudo, password standard ripristinata) e collaudo-j10del@probe.local (ELIMINATO by design). Script: scripts/e2e/collaudo-62/j10gdpr-lifecycle.ts; evidenze in docs/tasks/62-evidenze/J10-gdpr-account/.",
+ "steps": [
+  {
+   "step": "Seed utenti dedicati (pattern seed-cohort: profilo completo + 2 task + 1 thread con 2 messaggi + password bcrypt cost 12)",
+   "expected": "2 utenti creati con sottografo completo",
+   "observed": "gdpr=cmr2pepqa0000ibp8suvh0cb1, del=cmr2pespn000eibp89blhlvob; sanity DB pre-test: user/tasks/thread/messages/profile/settings/patterns tutti presenti",
+   "verdict": "PASS"
+  },
+  {
+   "step": "1. EXPORT GDPR: GET /api/export?format=json e ?format=csv con cookie j10gdpr SENZA claim beta; 401 senza cookie; scan chiavi sensibili",
+   "expected": "Export completo dei propri dati; niente password/adminNotes/token; eventuale 403 da documentare (D66)",
+   "observed": "401 anonimo OK. JSON 200 SENZA claim beta (l'API NON è gate beta: solo la card UI lo è, tasks/page.tsx:3394). Contenuto completo: 2/2 task, 1/1 thread con 2 messaggi, profile presente. 155 chiavi scansionate: ZERO match su password/adminNotes/token/secret (limite: bugReports/calendarTokens/pushDevices vuoti su utente fresco — esclusioni verificate a codice nei select di export/route.ts:38-60). CSV 200 ma copre SOLO i task (non è export GDPR completo). Shape redatta in step1-export-shape-redatta.json",
+   "verdict": "PASS"
+  },
+  {
+   "step": "2. REVOCA CONSENSO: DELETE /api/consent → rimbalzo pagina → API ancora aperte? → ri-consenso (parziale poi completo)",
+   "expected": "Rimbalzo su /consent al hop successivo; capire se il middleware legge DB o token; app ferma come promesso; ri-consenso ripristina",
+   "observed": "DELETE 200, DB: consentGivenAt=null consentArt9=false (consentVersion resta come storico). GET /tasks → 307 /consent: il middleware legge dal DB (dbEdge re-read middleware.ts:114-131 — provato: il token mintato NON ha claim consentGiven eppure PRIMA della revoca /tasks era 200). MA le /api/* non sono gated: GET /api/tasks → 200 e POST /api/chat/turn → 200 con risposta LLM completa A CONSENSO REVOCATO (trascrizione step2-turn-con-consenso-revocato.md). Ri-consenso: parziale {acceptTerms} → 400 corretto; completo → 200, consentVersion riscritta a '0.2-draft' (copy legale ancora bozza). /tasks di nuovo 200. Utente usabile",
+   "verdict": "WARN"
+  },
+  {
+   "step": "3. ELIMINAZIONE ACCOUNT (j10del): DELETE /api/account senza stringa 'ELIMINA' (atteso 4xx), poi cascade reale + invalidazione cookie",
+   "expected": "4xx senza conferma; con conferma 200 + cascade totale + cookie invalidato (richiesta successiva 401/redirect login)",
+   "observed": "DELETE SENZA alcuna conferma → 200 {ok:true} e l'account è GIÀ eliminato: la stringa ELIMINA esiste solo client-side (tasks/page.tsx:3282), il server (account/route.ts:11-25) elimina incondizionatamente. Cascade REALE verificata: user/tasks/threads/messages/profile/settings/patterns tutti a 0. Cookie POST-delete NON invalidato: GET /api/tasks → 200 tasks=0, GET /api/auth/session → 200 con l'utente fantasma completo, GET /tasks → 307 /tour (utente inesistente invitato a rifare il tour). La UI mitiga con signOut() (page.tsx:3287) ma il JWT resta accettato da requireSession (nessun check di esistenza)",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "4. /account-deletion PUBBLICA: GET senza cookie; testo vs flusso reale (D66)",
+   "expected": "200 anonimo; istruzioni corrispondenti a card/flussi che esistono per TUTTI gli utenti",
+   "observed": "200 anonimo (fuori matcher middleware), 33KB. Metodo 1 (Impost. → Account → Elimina account e dati → digita ELIMINA) è ACCURATO e la card è per tutti (non beta-gated; label 'Impost.' esiste, page.tsx:1945). MA la §5 istruisce 'sezione Esporta dati → Esporta JSON': quella card è SOLO beta (page.tsx:3394 isBetaTester) → un non-beta segue le istruzioni e non trova nulla (D66 confermato sul ramo export). HTML salvato in step4-account-deletion-page.html",
+   "verdict": "WARN"
+  },
+  {
+   "step": "5. LOGOUT FINTO D5: lettura page.tsx:614-625 + simulazione (cookie riusato dopo logout client) + /api/auth/signout",
+   "expected": "Capire se il logout è server o client-only; il cookie resta valido? esiste signout NextAuth usabile?",
+   "observed": "D5 CONFERMATO: handleLogout (tasks/page.tsx:614-625) tocca SOLO store Zustand + localStorage + setCurrentView('auth'), zero chiamate server — il cookie httpOnly resta valido: GET /api/tasks post-'logout' → 200 con i task. Toast 'Disconnesso' = promessa falsa. /api/auth/signout esiste: GET → pagina HTML di conferma; POST con csrfToken → 200 e Set-Cookie azzera il session-token nel browser. MA il replay del VECCHIO cookie dopo il signout → ancora 200: strategy JWT, nessuna revoca server-side (stessa radice della sessione fantasma post-delete)",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "6. FORGOT/RESET PASSWORD: flusso reale + D65 (promessa email) + D28 (tre policy password) + rate limit token",
+   "expected": "Email o fallback documentato; messaggio onesto; reset con 6 char per confermare le tre policy",
+   "observed": "RESEND_API_KEY presente in dev (booleano, valore mai letto). POST forgot (email esistente e inesistente) → 200 IDENTICO 'riceverai un link' (anti-enumeration OK, ma promessa incondizionata anche quando Resend non può consegnare — sandbox consegna solo al titolare, probe.local non riceve nulla: D65). Email invalida → 400 pulito. In DB solo sha256 del token (raw irrecuperabile) → token fabbricato via DB con stessa pipeline: reset con 5 char → 400 'almeno 6'; con 6 char → 200 e login reale con la nuova password 6 char → 200. Register con 7 char → 400 'almeno 8' (nessun utente creato). D28 CONFERMATO end-to-end: client 6 (page.tsx:781) / register server 8 (register/route.ts:18) / reset 6 (reset-password/route.ts:19). Token monouso: 0 residui post-reset. Rate limit: 4 forgot consecutivi → 4x200 identici, token attivi cap a 3 (la 4a ignorata in silenzio). Le sessioni JWT emesse restano valide dopo il reset (commento esplicito nel codice: limite accettato beta)",
+   "verdict": "WARN"
+  },
+  {
+   "step": "Stato finale coorte: j10gdpr VIVO e usabile, j10del eliminato",
+   "expected": "j10gdpr vivo con password standard; j10del sparito",
+   "observed": "j10gdpr VIVO (password Collaudo62!pass ripristinata via DB + login di verifica 200, token reset purgati, consenso ri-concesso); j10del ELIMINATO (user count 0). Utenti collaudo-beta/admin/nonbeta MAI toccati",
+   "verdict": "PASS"
+  }
+ ],
+ "findings": [
+  {
+   "title": "La revoca del consenso non ferma il trattamento: tutte le API (inclusa la chat LLM) continuano a processare dati a consenso revocato",
+   "severity": "S2",
+   "repro": "1) DELETE /api/consent con cookie valido (200, consentGivenAt=null in DB). 2) GET /tasks → 307 /consent (gate pagina OK). 3) GET /api/tasks → 200 con i task; POST /api/chat/turn {mode:general, userMessage:'ciao...'} → 200 con risposta Haiku completa e messaggi persistiti in ChatThread. Il gate consenso vive SOLO nel ramo pagina del middleware (middleware.ts:114-131); il ramo /api/* (middleware.ts:136-143) fa passthrough e nessuna route API rilegge consentGivenAt. La UI promette 'Revocare il consenso ferma l'app finché non lo riconcedi' (tasks/page.tsx:3314): una tab SPA già aperta continua a funzionare integralmente, invio a Claude API compreso (rilevante art. 7(3) GDPR su dati art. 9)",
+   "evidence": "docs/tasks/62-evidenze/J10-gdpr-account/step2-consenso.json + step2-turn-con-consenso-revocato.md",
+   "fileLine": "src/middleware.ts:136",
+   "dossierRef": ""
+  },
+  {
+   "title": "DELETE /api/account elimina TUTTO senza alcuna conferma server-side: la stringa 'ELIMINA' è solo client-side",
+   "severity": "S2",
+   "repro": "DELETE /api/account con solo il cookie di sessione, nessun body/parametro → 200 {ok:true} e cascade completa immediata (user, task, thread, messaggi, profilo, settings, patterns tutti a 0 in DB). La spec attendeva 4xx senza stringa di conferma: il check deleteConfirmText!=='ELIMINA' esiste solo in tasks/page.tsx:3282. Una singola chiamata accidentale/scriptata (estensione browser, bug del client, replay) distrugge irreversibilmente l'account di un utente ADHD senza attrito né grace period",
+   "evidence": "docs/tasks/62-evidenze/J10-gdpr-account/step3-delete-account.json",
+   "fileLine": "src/app/api/account/route.ts:11",
+   "dossierRef": ""
+  },
+  {
+   "title": "Logout finto (D5 confermato a runtime): client-only, il cookie next-auth resta valido 30 giorni e si rientra senza credenziali",
+   "severity": "S2",
+   "repro": "1) Dall'header di /tasks premi 'Esci': handleLogout (tasks/page.tsx:614-625) pulisce solo store Zustand + localStorage e mostra il toast 'Disconnesso' — nessuna chiamata server, nessun signOut(). 2) Riusa il cookie (o riapri il browser): GET /api/tasks → 200 con tutti i task. Su device condiviso i dati (salute-adiacenti, art. 9) restano accessibili a chiunque per 30gg. signOut() esiste ed è già usato nel flusso delete (page.tsx:3287): basterebbe chiamarlo anche qui",
+   "evidence": "docs/tasks/62-evidenze/J10-gdpr-account/step5-logout-d5.json",
+   "fileLine": "src/app/tasks/page.tsx:614",
+   "dossierRef": "D5"
+  },
+  {
+   "title": "Sessione fantasma: il JWT resta accettato dopo l'eliminazione dell'account (e dopo signout/reset password) — l'utente eliminato rimbalza su /tour",
+   "severity": "S3",
+   "repro": "1) Elimina l'account (DELETE /api/account, 200). 2) Con lo STESSO cookie: GET /api/tasks → 200 (lista vuota), GET /api/auth/session → 200 con l'identità completa dell'utente inesistente, GET /tasks → 307 /tour (il middleware non trova il profilo → tourCompleted=false → un utente ELIMINATO viene invitato a rifare il tour: vicolo cieco). requireSession (auth-guard.ts) decodifica il JWT senza verificare l'esistenza dell'utente; stessa radice: il replay del vecchio cookie dopo POST /api/auth/signout dà ancora 200, e il reset password non revoca le sessioni emesse",
+   "evidence": "docs/tasks/62-evidenze/J10-gdpr-account/step3-delete-account.json + step5-logout-d5.json",
+   "fileLine": "src/lib/auth-guard.ts:16",
+   "dossierRef": "D5"
+  },
+  {
+   "title": "D28 confermato end-to-end: tre policy password diverse (client 6 / register server 8 / reset 6)",
+   "severity": "S3",
+   "repro": "1) POST /api/auth/register con password di 7 char → 400 'almeno 8 caratteri' MA il client valida solo ≥6 (tasks/page.tsx:781): l'utente supera la validazione del form e prende un errore server. 2) POST /api/auth/reset-password con token valido e password 'sei123' (6 char) → 200; login reale con quella password → 200. Il reset permette di impostare una password che il register rifiuterebbe",
+   "evidence": "docs/tasks/62-evidenze/J10-gdpr-account/step6-forgot-reset.json",
+   "fileLine": "src/app/api/auth/reset-password/route.ts:19",
+   "dossierRef": "D28"
+  },
+  {
+   "title": "D66 (ramo export): il diritto GDPR di portabilità ha come UNICA affordance UI una card beta-only, e /account-deletion §5 istruisce tutti gli utenti verso quella card inesistente per i non-beta",
+   "severity": "S3",
+   "repro": "1) GET /api/export?format=json con cookie senza claim beta → 200 (l'API NON è gate beta: buona notizia vs ipotesi dossier). 2) Ma la card 'Esporta dati' in Impostazioni monta solo se session.user.isBetaTester (tasks/page.tsx:3394) — e col login reale il claim non arriva nemmeno ai beta (D4, parte 1). 3) La pagina pubblica /account-deletion §5 dice a TUTTI: 'nella sezione Esporta dati tocca Esporta JSON' → un non-beta non trova la sezione. Bonus: il CSV esporta SOLO i task",
+   "evidence": "docs/tasks/62-evidenze/J10-gdpr-account/step1-export-shape-redatta.json + step4-account-deletion-page.html",
+   "fileLine": "src/app/tasks/page.tsx:3394",
+   "dossierRef": "D66"
+  },
+  {
+   "title": "D65 confermato: forgot-password promette 'riceverai un link' incondizionatamente, anche quando l'email non può partire",
+   "severity": "UX",
+   "repro": "POST /api/auth/forgot-password → sempre 200 'Se l'email è registrata, riceverai un link... Controlla anche lo spam.' — identico se: Resend sandbox non può consegnare (solo al titolare: in beta con dominio non verificato NESSUN tester riceve nulla), RESEND_API_KEY assente, o rate limit token scattato (4a richiesta ignorata in silenzio, verificato: cap 3 token attivi). L'anti-enumeration giustifica il messaggio identico esistente/inesistente, ma non l'assenza di monitoraggio del fallimento di invio: l'utente aspetta un'email che non arriverà mai, senza contatto alternativo nel messaggio",
+   "evidence": "docs/tasks/62-evidenze/J10-gdpr-account/step6-forgot-reset.json",
+   "fileLine": "src/app/api/auth/forgot-password/route.ts:12",
+   "dossierRef": "D65"
+  }
+ ],
+ "uxNotes": [
+  "PROMESSA vs REALTÀ (L7): 'Revocare il consenso ferma l'app finché non lo riconcedi' (Impostazioni) — vero solo per la navigazione pagine; API e chat LLM continuano a processare. La promessa più delicata dell'app (art. 9) è mantenuta a metà.",
+  "PROMESSA vs REALTÀ: il toast di logout dice 'Disconnesso' ma non disconnette nulla lato server (D5): su PC condiviso chi riapre il browser è dentro. Per utenti ADHD che usano device di famiglia è un rischio privacy concreto.",
+  "PROMESSA vs REALTÀ: /account-deletion dice 'vieni disconnesso da Shadow' dopo l'eliminazione — vero solo nel browser corrente; su altri device il cookie resta 'valido' 30gg (sessione fantasma che rimbalza l'utente eliminato su /tour: vicolo cieco surreale, un morto invitato al tour di benvenuto).",
+  "PROMESSA vs REALTÀ: /account-deletion §5 istruisce verso la card 'Esporta dati' che i non-beta non hanno (D66); il Metodo 1 di eliminazione invece è accurato parola per parola (verificato contro page.tsx: label 'Impost.', sezione Account, stringa ELIMINA, bottone 'Elimina definitivamente').",
+  "PROMESSA vs REALTÀ: 'riceverai un link' del forgot-password è incondizionato (D65); in più il rate limit (3/ora) è silenzioso: alla 4a richiesta l'utente riceve la stessa promessa ma non verrà creato nessun token — doppia attesa a vuoto senza indicazione del contatto email di fallback.",
+  "LENTE ADHD sull'eliminazione: l'unico attrito tra un impulso e la distruzione irreversibile di TUTTI i dati è digitare ELIMINA (e solo client-side). Per il pubblico target servirebbe un grace period soft-delete (es. 7 giorni) o almeno un'email di conferma post-eliminazione.",
+  "Incoerenza password: il form register accetta 6-7 caratteri (validazione client min 6) e poi il server risponde 400 'almeno 8' — l'utente vede un errore che il form non aveva anticipato (D28). Il messaggio del reset dice 'almeno 6': stessa app, due verità.",
+  "Il consenso ri-concesso viene registrato con consentVersion '0.2-draft': il copy legale è ancora in bozza anche a runtime (conferma la riconciliazione C1/C2 pendente segnalata nell'audit pre-beta).",
+  "Il CSV di /api/export contiene SOLO i task (17 colonne): nessuna indicazione in UI o in /account-deletion che il CSV sia parziale rispetto al JSON.",
+  "L3-AUTOMAZIONE: export GDPR self-service per TUTTI gli utenti (non solo beta) con generazione asincrona e invio via email — oggi il diritto è esercitabile solo da API o da tester con la card beta.",
+  "L3-AUTOMAZIONE: revoca del consenso dovrebbe propagare automaticamente un blocco server-side su tutte le route API (guard riusabile tipo requireConsent accanto a requireSession) invece di affidarsi al solo rimbalzo di navigazione.",
+  "L3-AUTOMAZIONE: invalidazione automatica delle sessioni al delete-account/reset-password (es. claim passwordChangedAt/userVersion verificato in requireSession) — oggi nessun evento revoca i JWT emessi.",
+  "L3-AUTOMAZIONE: monitor/alert sui fallimenti di invio Resend (oggi solo console.error): l'utente che non riceve l'email di reset è invisibile a chiunque."
+ ],
+ "transcripts": [
+  "docs/tasks/62-evidenze/J10-gdpr-account/seed-thread-j10gdpr.md",
+  "docs/tasks/62-evidenze/J10-gdpr-account/seed-thread-j10del-pre-delete.md",
+  "docs/tasks/62-evidenze/J10-gdpr-account/step2-turn-con-consenso-revocato.md"
+ ],
+ "leftForUiPass": [
+  "Flusso eliminazione da browser: input ELIMINA (uppercase forzato onChange), stato disabled del bottone, messaggio 'Il testo non corrisponde', signOut + atterraggio su / dopo la delete.",
+  "Revoca consenso da browser: toast 'Consenso revocato' + router.replace('/') → verifica visiva dell'atterraggio su /consent e di cosa vede una tab SPA rimasta aperta (che per il finding S2 continua a funzionare).",
+  "Card 'Esporta dati' visibile SOLO con claim beta (e per D4 nemmeno i beta col login reale la vedono): verificare a occhio con cookie mintato vs login reale.",
+  "Logout dall'header: verifica visiva che dopo 'Esci' basti back/refresh per rientrare (D5 lato UX percepita).",
+  "Pagina /reset-password (form client): validazione min 6 lato form, messaggi di errore, UX del link scaduto.",
+  "Rendering di /account-deletion e /privacy per coerenza visiva coi testi verificati via HTML.",
+  "Throttle login 6 tentativi → 429 e messaggio senza countdown: fuori dal mio scope (spettava alla parte 1 J10 / sweep), non testato qui per non sporcare il lockout di collaudo-j10gdpr."
+ ],
+ "spendUsd": 0.0087415
+}

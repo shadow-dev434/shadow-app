@@ -1,0 +1,49 @@
+collaudo-review userId=cmr2nfn2h001qib005rx59d50
+{
+  "tasks": [
+    {
+      "id": "cmr2nfnv6001xib00x7ydgocm",
+      "title": "Consegnare il progetto al cliente",
+      "status": "planned",
+      "deadline": "2026-07-02T22:00:00.000Z",
+      "source": "manual",
+      "postponedCount": 0
+    },
+    {
+      "id": "cmr2nfnyz001zib00q0yjiuce",
+      "title": "Pagare il bollo auto",
+      "status": "planned",
+      "deadline": "2026-06-30T22:00:00.000Z",
+      "source": "manual",
+      "postponedCount": 0
+    },
+    {
+      "id": "cmr2nfo530021ib002ktat1gg",
+      "title": "Aggiornare il curriculum",
+      "status": "planned",
+      "deadline": null,
+      "source": "review_carryover",
+      "postponedCount": 1
+    },
+    {
+      "id": "cmr2nfo8w0023ib002clwnfan",
+      "title": "Comprare le lampadine",
+      "status": "inbox",
+      "deadline": null,
+      "source": "manual",
+      "postponedCount": 0
+    }
+  ],
+  "recurring": [
+    {
+      "id": "cmr2nfocs0025ib00a2r41xp3",
+      "title": "Palestra",
+      "frequency": "weekly",
+      "weekdays": "[1,3]",
+      "active": true
+    }
+  ]
+}
+collaudo-j6b userId=cmr2vt1jx0000ibasmt4xyhcn
+collaudo-j6c userId=cmr2vt56r000cibas1duuqdb8
+collaudo-j6d userId=cmr2vt7ac000oibaslqdyyfug

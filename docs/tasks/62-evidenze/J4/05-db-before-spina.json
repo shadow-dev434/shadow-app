@@ -1,0 +1,80 @@
+{
+  "takenAt": "2026-07-01T22:55:38.727Z",
+  "user": {
+    "id": "cmr2nfity000sib009j19j8x8",
+    "email": "collaudo-rientro@probe.local"
+  },
+  "threads": [
+    {
+      "id": "cmr2nfjuq0013ib00myvzhzim",
+      "mode": "general",
+      "state": "archived",
+      "startedAt": "2026-06-27T22:00:00.000Z",
+      "lastTurnAt": "2026-06-27T22:00:00.000Z",
+      "endedAt": "2026-07-01T22:49:31.177Z",
+      "messageCount": 2
+    },
+    {
+      "id": "cmr2o586t003sib6s40pqcgl8",
+      "mode": "morning_checkin",
+      "state": "active",
+      "startedAt": "2026-07-01T22:50:20.214Z",
+      "lastTurnAt": "2026-06-27T22:00:00.000Z",
+      "endedAt": null,
+      "messageCount": 20
+    }
+  ],
+  "tasks": [
+    {
+      "id": "cmr2nfjmb000zib0040hiqnzv",
+      "title": "Inviare il modulo ISEE",
+      "status": "planned",
+      "deadline": "2026-06-29T22:00:00.000Z",
+      "createdAt": "2026-06-27T22:00:00.000Z",
+      "importance": 5,
+      "urgency": 5,
+      "postponedCount": 0
+    },
+    {
+      "id": "cmr2nfjq80011ib00elr0idnw",
+      "title": "Rinnovare assicurazione auto",
+      "status": "planned",
+      "deadline": "2026-06-30T22:00:00.000Z",
+      "createdAt": "2026-06-27T22:00:00.000Z",
+      "importance": 4,
+      "urgency": 4,
+      "postponedCount": 0
+    }
+  ],
+  "dailyPlans": [
+    {
+      "id": "cmr2nfkt50017ib00elemblrq",
+      "date": "2026-06-28",
+      "top3Ids": "[\"cmr2nfjmb000zib0040hiqnzv\",\"cmr2nfjq80011ib00elr0idnw\"]",
+      "energyLevel": 3,
+      "createdAt": "2026-06-27T22:00:00.000Z",
+      "threadId": "cmr2nfjuq0013ib00myvzhzim"
+    },
+    {
+      "id": "cmr2o6zn6005qib6s958sak9o",
+      "date": "2026-07-02",
+      "top3Ids": "[\"cmr2nfjmb000zib0040hiqnzv\",\"cmr2nfjq80011ib00elr0idnw\"]",
+      "energyLevel": 3,
+      "createdAt": "2026-07-01T22:51:42.450Z",
+      "threadId": null
+    }
+  ],
+  "reviews": [
+    {
+      "id": "cmr2nfl140019ib00kzqrmh9f",
+      "date": "2026-06-27",
+      "mood": 3,
+      "whatDone": "spesa",
+      "createdAt": "2026-06-26T22:00:00.000Z"
+    }
+  ],
+  "settings": {
+    "eveningWindowStart": "00:00",
+    "eveningWindowEnd": "23:59"
+  }
+}

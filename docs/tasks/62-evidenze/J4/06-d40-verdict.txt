@@ -1,0 +1,2 @@
+label "Oggi" x2: [{"id":"cmr2odp1i00gkib6s23pjrkrd","mode":"general","state":"active","label":"Oggi","isActive":true,"startedAt":"2026-07-01T22:56:55.146Z","lastTurnAt":"2026-07-01T22:56:59.557Z","messageCount":2},{"id":"cmr2oc3zn00d6ib6s63lnnf9z","mode":"evening_review","state":"active","label":"Oggi","isActive":true,"startedAt":"2026-07-01T22:55:41.363Z","lastTurnAt":"2026-07-01T22:56:53.129Z","messageCount":6}]
+stato review: active

@@ -1,0 +1,101 @@
+{
+  "today": "2026-07-02",
+  "tomorrow": "2026-07-03",
+  "totalSpendUsd": 1.61673375,
+  "rows": [
+    {
+      "porta": "a-felice",
+      "email": "collaudo-review@probe.local",
+      "userId": "cmr2nfn2h001qib005rx59d50",
+      "threadsEveningReview": [
+        {
+          "id": "cmr2vwcld003lib74hxonr5uz",
+          "state": "completed"
+        }
+      ],
+      "reviewOggi": {
+        "id": "cmr2vygps007bib74gyv5pugg",
+        "threadId": "cmr2vwcld003lib74hxonr5uz",
+        "mood": 3,
+        "energyEnd": 4
+      },
+      "dailyPlanDomani": {
+        "id": "cmr2vyh5b007dib74t3w35gx0",
+        "top3Ids": "[\"cmr2nfo8w0023ib002clwnfan\",\"cmr2nfnyz001zib00q0yjiuce\",\"cmr2nfnv6001xib00x7ydgocm\"]"
+      },
+      "learningSignals": {
+        "task_postponed": 3
+      },
+      "llmSpendUsd": 1.11066255
+    },
+    {
+      "porta": "b-burnout",
+      "email": "collaudo-j6b@probe.local",
+      "userId": "cmr2vt1jx0000ibasmt4xyhcn",
+      "threadsEveningReview": [
+        {
+          "id": "cmr2w5h8800gcib74iyo3zr4i",
+          "state": "archived"
+        }
+      ],
+      "reviewOggi": {
+        "id": "cmr2w5snz00gmib745w6zf5qs",
+        "threadId": "cmr2w5h8800gcib74iyo3zr4i",
+        "mood": 3,
+        "energyEnd": 3
+      },
+      "dailyPlanDomani": null,
+      "learningSignals": {},
+      "llmSpendUsd": 0.0414285
+    },
+    {
+      "porta": "c-scarico",
+      "email": "collaudo-j6c@probe.local",
+      "userId": "cmr2vt56r000cibas1duuqdb8",
+      "threadsEveningReview": [
+        {
+          "id": "cmr2w6b0700gsib74gpd6gl2i",
+          "state": "active"
+        }
+      ],
+      "reviewOggi": null,
+      "dailyPlanDomani": null,
+      "learningSignals": {},
+      "llmSpendUsd": 0.3795507
+    },
+    {
+      "porta": "d-crisi",
+      "email": "collaudo-j6d@probe.local",
+      "userId": "cmr2vt7ac000oibaslqdyyfug",
+      "threadsEveningReview": [
+        {
+          "id": "cmr2w8uhs00k0ib74gz5k7gui",
+          "state": "active"
+        }
+      ],
+      "reviewOggi": null,
+      "dailyPlanDomani": null,
+      "learningSignals": {
+        "emotional_offload": 1
+      },
+      "llmSpendUsd": 0.042732
+    },
+    {
+      "porta": "d-crisi-retry",
+      "email": "collaudo-j6d2@probe.local",
+      "userId": "cmr2wau1x0000ibvsjg1m3v11",
+      "threadsEveningReview": [
+        {
+          "id": "cmr2waxwa00m9ib74ccqe6446",
+          "state": "active"
+        }
+      ],
+      "reviewOggi": null,
+      "dailyPlanDomani": null,
+      "learningSignals": {
+        "emotional_offload": 1
+      },
+      "llmSpendUsd": 0.04236
+    }
+  ]
+}

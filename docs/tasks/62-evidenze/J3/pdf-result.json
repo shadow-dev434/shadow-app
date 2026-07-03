@@ -1,0 +1,34 @@
+{
+  "status": 200,
+  "elapsed": 9539,
+  "threadId": "cmr2wavyk00m5ib74ejfp8987",
+  "tools": [
+    {
+      "name": "create_task",
+      "input": {
+        "title": "Pagare F24",
+        "deadline": "2026-07-30",
+        "urgency": 4,
+        "importance": 5,
+        "category": "admin"
+      },
+      "result": {
+        "id": "cmr2wb0xw00mfib748ecjd2d0",
+        "title": "Pagare F24",
+        "urgency": 4,
+        "importance": 5,
+        "category": "admin"
+      }
+    }
+  ],
+  "assistant": "Fatto. Dimmi tu come proseguiamo.",
+  "newTasks": [
+    {
+      "id": "cmr2wb0xw00mfib748ecjd2d0",
+      "title": "Pagare F24",
+      "deadline": "2026-07-30",
+      "aiClassified": true,
+      "description": ""
+    }
+  ]
+}

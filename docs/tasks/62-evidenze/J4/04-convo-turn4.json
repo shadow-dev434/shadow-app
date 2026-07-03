@@ -1,0 +1,43 @@
+{
+  "threadId": "cmr2o586t003sib6s40pqcgl8",
+  "mode": "morning_checkin",
+  "assistantMessage": "E di energia, da 1 a 5?",
+  "toolsExecuted": [
+    {
+      "name": "set_user_mood",
+      "input": {
+        "level": 3
+      },
+      "result": {
+        "level": 3
+      }
+    }
+  ],
+  "quickReplies": [
+    {
+      "label": "1",
+      "value": "1"
+    },
+    {
+      "label": "2",
+      "value": "2"
+    },
+    {
+      "label": "3",
+      "value": "3"
+    },
+    {
+      "label": "4",
+      "value": "4"
+    },
+    {
+      "label": "5",
+      "value": "5"
+    }
+  ],
+  "costUsd": 0.007642649999999999,
+  "tokensIn": 102,
+  "tokensOut": 95,
+  "modelUsed": "claude-sonnet-4-6",
+  "latencyMs": 7311
+}

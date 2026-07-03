@@ -1,0 +1,47 @@
+{
+  "getBugReport": {
+    "status": 200,
+    "body": {
+      "reports": []
+    }
+  },
+  "postBugReport": {
+    "status": 200,
+    "body": {
+      "report": {
+        "id": "cmr2p19xu00nyib6s8malcl5r",
+        "status": "new",
+        "createdAt": "2026-07-01T23:15:15.474Z"
+      }
+    }
+  },
+  "postPulse": {
+    "status": 200,
+    "body": {
+      "feedback": {
+        "id": "cmr2p1amb00o0ib6smxhegn9v",
+        "kind": "daily_pulse",
+        "day": "2026-07-02"
+      }
+    }
+  },
+  "patchAssessment": {
+    "status": 200,
+    "body": {
+      "response": {
+        "instrument": "asrs",
+        "wave": "pre",
+        "totalScore": 2,
+        "completedAt": null,
+        "answered": 1,
+        "totalItems": 18
+      }
+    }
+  },
+  "paginaBetaAssessment": {
+    "status": 200,
+    "location": null,
+    "htmlBytes": 24436,
+    "primi500": "<!DOCTYPE html><html lang=\"it\" class=\"dark\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover\"/><link rel=\"stylesheet\" href=\"/_next/static/chunks/%5Broot-of-the-server%5D__02nfq85._.css\" data-precedence=\"next_static/chunks/[root-of-the-server]__02nfq85._.css\"/><link rel=\"preload\" as=\"script\" fetchPriority=\"low\" href=\"/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0do-~k"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "contesto": "walk1 turno 24 + resume 14 turni: in phase=plan_preview lo user conferma il piano con 'ok, va bene il piano così' per 15 volte consecutive; il modello risponde SEMPRE 'Ti ascolto.' (script post-chiusura prompts.ts:1436/1450) senza mai chiamare confirm_plan_preview; thread active, Review/DailyPlan mai scritti fino allo sblocco",
+  "sblocco": {
+    "msg": "sì, chiudi la review",
+    "tools": [
+      "confirm_plan_preview",
+      "confirm_close_review"
+    ],
+    "statoFinale": "completed",
+    "reply": "Chiuso. A domani."
+  },
+  "threadId": "cmr2o9p43009kib6swflpzl37"
+}

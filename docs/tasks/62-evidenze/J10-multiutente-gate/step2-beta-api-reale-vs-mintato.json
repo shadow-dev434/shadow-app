@@ -1,0 +1,50 @@
+{
+  "GET /api/beta/bug-report": {
+    "reale": {
+      "status": 200,
+      "body": {
+        "reports": []
+      }
+    },
+    "mintato": {
+      "status": 200,
+      "body": {
+        "reports": []
+      }
+    }
+  },
+  "GET /api/beta/assessment": {
+    "reale": {
+      "status": 200,
+      "body": {
+        "responses": []
+      }
+    },
+    "mintato": {
+      "status": 200,
+      "body": {
+        "responses": []
+      }
+    }
+  },
+  "GET /api/beta/feedback/status?clientDate=2026-07-02&clientTime=21:00": {
+    "reale": {
+      "status": 200,
+      "body": {
+        "betaDay": 1,
+        "pulseDue": true,
+        "weeklyDue": false,
+        "assessmentDue": "pre"
+      }
+    },
+    "mintato": {
+      "status": 200,
+      "body": {
+        "betaDay": 1,
+        "pulseDue": true,
+        "weeklyDue": false,
+        "assessmentDue": "pre"
+      }
+    }
+  }
+}

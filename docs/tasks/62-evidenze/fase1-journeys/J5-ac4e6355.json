@@ -1,0 +1,190 @@
+{
+ "journey": "J5 — Il procrastinatore (collaudo-procrastinatore@probe.local, userId cmr2nflf2001aib00bjpe6yev). Seed: 3 task con postponedCount 3-5/avoidanceCount 2-4 + 1 inbox + DailyPlan oggi vuoto. Review serale conversazionale completa con persona \"non ho fatto niente, non ci riesco\" (38 turni + sblocco), DB check contatori, D12 re-submit review manuale, replica micro-feedback D11, route nudge/insight, engine recovery D59. Nota setup: il seed non crea AdaptiveProfile (gli utenti reali lo hanno dall'onboarding) — creato con i default via Prisma prima del walk, annotato in evidenza.",
+ "steps": [
+  {
+   "step": "1a. PATCH /api/settings finestra serale 00:00-23:59",
+   "expected": "HTTP 200",
+   "observed": "HTTP 200",
+   "verdict": "PASS"
+  },
+  {
+   "step": "1b. Review serale completa via postTurn evening_review (persona procrastinatore) — HARD 200 per turno",
+   "expected": "200 a ogni turno",
+   "observed": "40/40 turni HTTP 200 (24 walk + 14 resume + 2 probe di sblocco). Trascrizione completa salvata",
+   "verdict": "PASS"
+  },
+  {
+   "step": "1c. Arriva la domanda whatBlocked?",
+   "expected": "mark_what_blocked_asked su entry recentlyPostponed",
+   "observed": "SÌ, al primo entry utile (turno 4: \"La mail al capo è ancora qui. Cosa ti ha fermato l'ultima volta?\") e su redditi (turno 17). MA il modello ri-chiama il tool 5 volte sulla stessa entry contro la regola del prompt → duplicati in whatBlocked (finding)",
+   "verdict": "PASS"
+  },
+  {
+   "step": "1d. Decomposizione opportunistica dei task con postponedCount alto?",
+   "expected": "propose_decomposition (WARN + 1 retry se assente)",
+   "observed": "SÌ al primo giro, nessun retry necessario: 7 propose_decomposition, 1 approve (5 microSteps persistiti su 'mail al capo'). Al secondo sì esplicito dell'utente (turno 11) il modello NON ha chiamato approve_decomposition: gli step promessi per 'dichiarazione redditi' mai salvati (microSteps=0 a fine review)",
+   "verdict": "WARN"
+  },
+  {
+   "step": "1e. Chiusura della review (plan preview → closing → completed)",
+   "expected": "confirm_plan_preview + confirm_close_review su conferma utente",
+   "observed": "DEADLOCK: a \"ok, va bene il piano così\" ripetuto 15 volte in phase=plan_preview il modello risponde sempre \"Ti ascolto.\" (script post-chiusura prompts.ts:1436/1450) senza chiamare tool; Review/DailyPlan mai scritti. Sbloccato al primo colpo da \"sì, chiudi la review\" → confirm_plan_preview+confirm_close_review, state=completed",
+   "verdict": "WARN"
+  },
+  {
+   "step": "2a. DB check post-review: postponedCount/avoidanceCount/Review.whatBlocked/DailyPlan domani",
+   "expected": "contatori coerenti, whatBlocked popolato, piano di domani creato",
+   "observed": "postponedCount +1 per ogni entry postponed (5→6, 4→5, 3→4, 0→1); avoidanceCount INVARIATO dal percorso conversazionale (corretto by-design); Review.whatBlocked popolato MA con la stessa voce duplicata 5 volte (finding); DailyPlan(2026-07-03) creato con top3+doNow×4 e threadId linkato",
+   "verdict": "WARN"
+  },
+  {
+   "step": "2b. D12: secondo giro di review manuale lo stesso giorno (payload contratto status:'avoided' ×2)",
+   "expected": "idempotente",
+   "observed": "BUG CONFERMATO: ogni submit identico re-incrementa avoidanceCount di +1 su ogni task (4→5→6, 3→4→5, 2→3→4) e UserPattern.totalTasksAvoided 0→3→6",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "2c. D1: POST /api/review con payload forma-UI {completed/avoided}",
+   "expected": "4xx pulito o accettazione",
+   "observed": "HTTP 500 (tr.status undefined su ReviewTask.status NOT NULL) CON Review già upsertata (scrittura parziale: riga creata con campi vuoti). La chiusura conversazionale successiva ha poi sovrascritto i campi del POST manuale sullo stesso record — due superfici scrivono la stessa riga",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "3. D11: replica esatta delle POST UI per un micro-feedback e per un tap 'Troppo difficile'; verifica LearningSignal/profilo",
+   "expected": "1 segnale per feedback, dimensioni del profilo aggiornate",
+   "observed": "BUG CONFERMATO: 1 micro-feedback → 2 LearningSignal identici (via /api/micro-feedback + recordSignal); feedbackType client drain_activate ≠ enum engine drain_vs_activate → categorySuccessRates INVARIATO, solo confidence 0.3→0.305 e totalSignals +2; ai-assistant risponde generico. 'Troppo difficile' = 4 segnali per 1 gesto; task.avoidanceCount NON incrementato (5→5). block_reason multiselect → UserMemory value 'anxiety,too_big' e insight generico (enum non matcha)",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "4. Route nudge/insight: esiste una route API?",
+   "expected": "individuare dove si calcolano nudge/insight",
+   "observed": "SÌ, server-side deterministico: GET /api/ai-assistant → 2 insights + 3 triggers (avoidance_pattern×2 + inconsistency sui task seminati); POST action:'nudge' → NudgeMessage SENZA campo taskId (contratto: impossibile aprire il task giusto → D2 lato client confermato a livello di contratto, click-through in leftForUiPass); POST 'proactive' → domanda corretta con 4 opzioni; POST 'task_recommendation' → 200 (endpoint orfano funzionante)",
+   "verdict": "PASS"
+  },
+  {
+   "step": "5. D59: engine recovery vs UI",
+   "expected": "contare le strategie dell'engine",
+   "observed": "CONFERMATO: generateRecoveryAction produce 5 strategie contestuali con micro-step concreti (reduce/reformat/micro_reentry/reduce-tempo/change_task) ma NON è importato da nessun file (dead code); la UI offre solo 2 bottoni hardcoded ('Micro-sessione 3 min'/'Pausa', page.tsx:2884-2885). Bonus: handleRecovery('reduce') registra recovery_success SUBITO al tap (page.tsx:2686)",
+   "verdict": "FAIL"
+  },
+  {
+   "step": "6. L3/uxNotes: automazioni possibili coi pattern esistenti + check shaming",
+   "expected": "analisi",
+   "observed": "Compilato in uxNotes: 6 semi L3-AUTOMAZIONE + audit tono (zero shaming nel walk: aperture descrittive non colpevolizzanti)",
+   "verdict": "PASS"
+  }
+ ],
+ "findings": [
+  {
+   "title": "Re-submit della review manuale re-incrementa avoidanceCount e totalTasksAvoided senza limite (upsert non idempotente)",
+   "severity": "S2",
+   "repro": "1) Utente con task avoidanceCount=4. 2) POST /api/review con body {mood:2, energyEnd:2, taskReviews:[{taskId, status:'avoided'}]}. 3) Ripetere lo stesso POST identico lo stesso giorno. Osservato: avoidanceCount 4→5→6 (+1 a ogni submit), UserPattern.totalTasksAvoided 0→3→6. Il tab Review della UI invita a ri-salvare (bottone sempre attivo), e avoidedToday è calcolato su avoidanceCount>0 di TUTTO lo storico (D54): ogni salvataggio gonfia i contatori che pilotano triage, priorità (avoidanceModifier ×2), nudge e insight",
+   "evidence": "docs/tasks/62-evidenze/J5/step2-d12-resubmit-counts.json",
+   "fileLine": "src/app/api/review/route.ts:118-124",
+   "dossierRef": "D12"
+  },
+  {
+   "title": "Tab Review manuale: payload {completed/avoided} vs API tr.status → 500 con Review già upsertata (scrittura parziale) e sovrascrittura incrociata con la review conversazionale",
+   "severity": "S2",
+   "repro": "1) POST /api/review con il payload esatto della UI (page.tsx:3078-3080): taskReviews:[{taskId, completed:false, avoided:true}] senza campo status. 2) Osservato: HTTP 500 (Prisma: ReviewTask.status NOT NULL, schema.prisma:322) MA la riga Review è già stata upsertata con whatDone/whatBlocked vuoti. 3) La chiusura conversazionale successiva sovrascrive gli stessi campi sullo stesso record (verificato: whatDone 'quasi niente' → ''). Due superfici scrivono la stessa riga senza merge",
+   "evidence": "docs/tasks/62-evidenze/J5/step2-d1-ui-payload-response.json + step2-review-row-after-ui-payload.json",
+   "fileLine": "src/app/api/review/route.ts:49-55",
+   "dossierRef": "D1"
+  },
+  {
+   "title": "Loop di apprendimento micro-feedback inerte: doppio LearningSignal per feedback e feedbackType client che non matchano gli enum dell'engine → nessuna dimensione aggiornata, confidenza gonfiata",
+   "severity": "S2",
+   "repro": "1) Replicare le POST della UI per UN feedback (page.tsx:1723-1762): POST /api/micro-feedback {feedbackType:'drain_activate', response:-2} + POST /api/learning-signal {signalType:'micro_feedback', metadata:{feedbackType:'drain_activate'}} + POST /api/ai-assistant {action:'micro_feedback'}. 2) Osservato: 2 LearningSignal identici creati; categorySuccessRates {} → {} (l'engine gestisce solo 'drain_vs_activate', learning-engine.ts:304); confidence 0.3→0.305 e totalSignals +2 comunque; ai-assistant risponde 'Grazie per il feedback.' generico (gestisce 'drain_vs_activate' con scala 1-5, il client manda -2..+2). Tutti e 4 i feedbackType client (start_experience, drain_activate, block_reason, decomp_preference) sono fuori enum; block_reason multiselect produce String 'anxiety,too_big' che non matcha i casi singoli ('boring'≠'too_boring', 'too_tired'≠'low_energy'). Il toast dice 'Shadow ha imparato' ma nulla di sostanziale si aggiorna",
+   "evidence": "docs/tasks/62-evidenze/J5/step3-d11-drain-signals.json + step3-d11-toohard-signals.json",
+   "fileLine": "src/app/tasks/page.tsx:1660,1723-1740 vs src/lib/engines/learning-engine.ts:291-312",
+   "dossierRef": "D11"
+  },
+  {
+   "title": "Review serale non chiudibile con conferme naturali del piano: in plan_preview il modello risponde 'Ti ascolto.' allo sfinimento senza mai chiamare confirm_plan_preview",
+   "severity": "S3",
+   "repro": "1) Review serale fino a plan_preview (4 entry postponed). 2) Il modello riassume il piano e chiede 'Blocco la review e chiudo?'. 3) Rispondere 'ok, va bene il piano così' — ripetuto 15 volte consecutive. Osservato: risposta SEMPRE 'Ti ascolto.' (lo script post-chiusura di prompts.ts:1436/1450 attivato prematuramente), zero tool eseguiti, thread active, Review e DailyPlan mai scritti: se l'utente abbandona lì perde l'intero intake (mood, whatBlocked, esiti — parente di D45). Sbloccato al primo colpo dalla formula esplicita 'sì, chiudi la review'. Nessun guard server-side dopo N turni no-op in plan_preview",
+   "evidence": "docs/tasks/62-evidenze/J5/step1-planpreview-deadlock-probe.json + step1-resume-turnlog.json + step1-review-walk1-transcript.md",
+   "fileLine": "src/lib/chat/prompts.ts:1436-1450",
+   "dossierRef": "D45"
+  },
+  {
+   "title": "Review.whatBlocked con la stessa voce duplicata 5 volte: mark_what_blocked_asked ri-chiamabile sulla stessa entry senza dedup server-side",
+   "severity": "S3",
+   "repro": "1) Review serale su entry con postponedCount>=3. 2) Il modello ri-chiama mark_what_blocked_asked sulla stessa entry in turni consecutivi (osservato 5 volte su 'mail al capo', contro la regola del prompt 'UNA sola domanda per entry'). 3) Ogni ri-chiamata ri-arma pendingWhatBlockedForTaskId e il messaggio utente successivo viene ri-appeso. Osservato in Review(2026-07-02).whatBlocked: '— Scrivere la mail difficile al capo: Boh... appena lo apro mi sale l'ansia...' ripetuto 5 volte + redditi 1. Il campo alimenta i turni futuri del modello: rumore e conteggi falsati",
+   "evidence": "docs/tasks/62-evidenze/J5/step2-review-row-post-close.json",
+   "fileLine": "src/lib/evening-review/what-blocked-capture.ts:46-53 (nessun dedup) + src/lib/chat/tools.ts:2442",
+   "dossierRef": "D2"
+  },
+  {
+   "title": "Insight 'Pattern di evitamento rilevato' fabbrica la causa del blocco (hardcoded 'il task era troppo ambiguo') e promette una decomposizione che nessuno esegue — mentre l'app HA la causa vera",
+   "severity": "S3",
+   "repro": "1) Utente con task avoidanceCount>2 e adaptiveProfile.avoidanceProfile>3. 2) GET /api/ai-assistant. Osservato: insight con message '\"Scrivere la mail difficile al capo\" è stato evitato 6 volte. La volta scorsa ti sei bloccato perché il task era troppo ambiguo, quindi ora te lo spezzo meglio.' — la frase causale è una costante di codice, FALSA per questo utente (whatBlocked reale: 'ansia... non so da dove partire', già in Review e UserMemory), e action 'decompose_and_suggest' non è collegata a nulla",
+   "evidence": "docs/tasks/62-evidenze/J5/step4-d60-avoidance-insight.json",
+   "fileLine": "src/lib/engines/ai-assistant-engine.ts:206",
+   "dossierRef": "D60"
+  },
+  {
+   "title": "Il nudge non porta alcun taskId: il contratto rende impossibile al client aprire il task giusto ('accetta' apre il primo task non completato dello store)",
+   "severity": "S3",
+   "repro": "1) POST /api/ai-assistant {action:'nudge', nudgeContext:{taskTitle:'Compilare la dichiarazione dei redditi', taskAvoidanceCount:5, ...}} (replica del body client page.tsx:547-566, che infatti non manda taskId). 2) Osservato: NudgeMessage con chiavi id,strategy,intensity,title,message,actionLabel,dismissLabel,contextReason,adaptiveReason,delaySeconds — NESSUN taskId. 3) Il client su accept fa store.tasks.find(t => t.status!=='completed' && t.status!=='abandoned') = primo task dello store, non quello del nudge (page.tsx:1312). Click-through browser lasciato al passaggio UI",
+   "evidence": "docs/tasks/62-evidenze/J5/step4-nudge-response.json",
+   "fileLine": "src/app/tasks/page.tsx:1312 + src/lib/engines/nudge-engine.ts:21-32",
+   "dossierRef": "D2"
+  },
+  {
+   "title": "Recovery: engine con 5 strategie contestuali mai usato (dead code), UI con 2 bottoni generici; e 'recovery_success' registrato al tap prima di qualunque esito",
+   "severity": "S3",
+   "repro": "1) Chiamare generateRecoveryAction (export di execution-engine.ts:156) sul task 'dichiarazione redditi' per i 5 failureType: produce reduce (2 step da 30-60s), reformat (timer 2 min), micro_reentry, reduce-tempo, change_task (con alternativeTaskId). 2) grep: la funzione non è importata da nessun file. 3) La card Recovery della UI offre solo 'Micro-sessione 3 min' e 'Pausa' (page.tsx:2884-2885). 4) handleRecovery('reduce') chiama recordSignal('recovery_success') immediatamente al tap (page.tsx:2686) → recoverySuccessRate gonfiato senza che il recovery sia avvenuto; 'break' non registra nulla (né fail)",
+   "evidence": "docs/tasks/62-evidenze/J5/step5-d59-engine-strategies.json",
+   "fileLine": "src/lib/engines/execution-engine.ts:156 + src/app/tasks/page.tsx:2679-2693,2884-2885",
+   "dossierRef": "D59"
+  },
+  {
+   "title": "Doppia contabilità dell'evitamento incoerente: 'Troppo difficile' nel focus non tocca mai task.avoidanceCount (4 LearningSignal per un gesto), il tab Review lo incrementa a ripetizione",
+   "severity": "S3",
+   "repro": "1) Replicare il tap 'Troppo difficile' (page.tsx:2869): recordSignal('task_too_hard') + recordSignal('task_avoided') + dialog block_reason (→ altre 2 POST). 2) Osservato: 4 LearningSignal creati per UN gesto utente, task.avoidanceCount INVARIATO (5→5). Effetto: gli evitamenti dichiarati durante l'esecuzione non alimentano mai i contatori su cui filtrano triage (avoidanceCount>=1), trigger proattivi (>=3), insight e priorità — mentre l'unico percorso che li incrementa (review manuale) li corrompe per eccesso (D12)",
+   "evidence": "docs/tasks/62-evidenze/J5/step3-d11-toohard-signals.json",
+   "fileLine": "src/app/tasks/page.tsx:2869 + src/app/api/learning-signal/route.ts:53-64",
+   "dossierRef": "D11"
+  },
+  {
+   "title": "Decomposizione approvata dall'utente ma mai salvata al secondo giro: il modello non chiama approve_decomposition dopo un sì esplicito",
+   "severity": "UX",
+   "repro": "1) Nella review, alla seconda proposta di decomposizione (task 'dichiarazione redditi'), rispondere 'sì dai, proviamo a spezzarlo così'. 2) Osservato (turno 11 walk1): zero tool eseguiti; microSteps del task = 0 a fine review nonostante 2 proposte con step concreti. Aggravante di coerenza: al primo giro (turno 8) gli step approvati e salvati DIFFERISCONO da quelli proposti nell'ultimo turno visibile (il modello ha riscritto la lista in corsa). Comportamento LLM non deterministico: 1 occorrenza su 2 approvazioni nel walk",
+   "evidence": "docs/tasks/62-evidenze/J5/step1-review-walk1-transcript.md (turni 7-11) + step2-tasks-final-post-close.json",
+   "fileLine": "src/lib/chat/tools.ts:503",
+   "dossierRef": "D17"
+  }
+ ],
+ "uxNotes": [
+  "TONO (step 6): zero shaming nel walk — aperture descrittive e non confrontative ('La mail al capo è ancora qui. Cosa ti ha fermato l'ultima volta?', 'è qui da un po'. Vediamola.'), nessun giudizio dopo 4 postponed su 4. PASS pieno sul criterio.",
+  "L8 carico conversazionale: 4 candidate → 38 turni senza riuscire a chiudere, chiusa al 40°. Anche scontando il driver ripetitivo dello script, il rito è LUNGO per un procrastinatore a mood/energia 2: le ri-proposte di decomposizione (7 propose per 2 task) e la conferma del piano che non aggancia mai sono i punti dove si perde l'utente.",
+  "L4/L8: il 'rimandiamolo a domani' esplicito dell'utente è stato ignorato 2 volte (turni 9-13: il modello ha risposto ri-proponendo la decomposizione) prima che l'entry venisse chiusa postponed. Per un utente ADHD la richiesta di uscita da un'entry va onorata al primo colpo.",
+  "L7 fiducia: il modello definisce 'leggero' un piano di domani con TUTTI e 4 i task rimandati (doNow×4) per un utente a mood/energia 2 che oggi non ha fatto nulla — il fill ratio default (0.6, shameFrustrationSensitivity 3) non ha tagliato niente: setup-per-fallire il giorno dopo, e domani i 4 postponed saranno di nuovo tutti davanti.",
+  "L7: il toast del micro-feedback dice 'Shadow ha imparato' quando in realtà nessuna dimensione del profilo si è aggiornata (D11): promessa sistematicamente falsa fino al fix degli enum.",
+  "D16-family: al turno 5 il testo utente-visibile era il fallback 'Fatto. Dimmi tu come proseguiamo.' mentre il payload conteneva la proposta di decomposizione con 4 step: se la card tool non li rende (e al reload non li rende di sicuro, D35), l'utente non vede gli step che gli vengono chiesti di approvare ('Ti torna come inizio?' senza contesto).",
+  "L9/L6: l'insight mostra all'utente la categoria interna 'general' ('i task di tipo \"general\" ti bloccano spesso') — gergo di schema esposto; inoltre la frase contiene la promessa 'Te li propongo in forma ridotta o più tardi' senza alcun meccanismo collegato.",
+  "Anti-loop del modello buono: dopo 3 risposte identiche dell'utente ha riconosciuto esplicitamente il loop ('Capisco che siamo in un loop — ricominciamo da qui') offrendo quickReplies: pattern di recupero che meriterebbe di essere sistematico (es. anche in plan_preview, dove invece si è incagliato).",
+  "L3-AUTOMAZIONE: con postponedCount>=3 e decision='decompose_then_do' l'app potrebbe auto-decomporre (o arrivare in review con step già proposti) invece di aspettare il rito serale — il decomposition engine è già in casa e la review già lo fa opportunisticamente.",
+  "L3-AUTOMAZIONE: dopo che whatBlocked cattura 'ansia / non so da dove partire', il giorno dopo la Today potrebbe armare da sola il primo micro-step da 30s del task evitato, senza richiedere di nuovo la stessa informazione (oggi la causa raccolta non pilota NULLA: l'insight la fabbrica pure diversa, D60).",
+  "L3-AUTOMAZIONE: il nudge per task evitati dovrebbe portare taskId e aprire direttamente QUEL task col primo micro-step pronto (oggi il tap apre un task qualsiasi dello store).",
+  "L3-AUTOMAZIONE: 'Troppo difficile' potrebbe applicare da solo la strategia recovery dell'engine (reduce: 2 step da 30-60s già generati da generateRecoveryAction) invece di offrire 2 bottoni generici e registrare un successo mai avvenuto.",
+  "L3-AUTOMAZIONE: se l'utente rimanda tutto e mood/energia <=2, il piano di domani potrebbe auto-ridursi a UN task (fill ratio dinamico su mood della review) invece di riproporre l'intera lista.",
+  "L3-AUTOMAZIONE: guard server-side di chiusura in plan_preview — dopo 2 conferme testuali del piano senza tool call, confermare e chiudere d'ufficio (o esporre una quickReply 'Chiudi la review') invece di pretendere la formula giusta."
+ ],
+ "leftForUiPass": [
+  "D2 click-through nel browser: mostrare un nudge nella Today e verificare che il tap 'accetta' apra il PRIMO task non completato dello store e non quello del nudge (contratto già confermato: NudgeMessage senza taskId, handler page.tsx:1312).",
+  "D59 UI: card Recovery con le sole 2 opzioni hardcoded — verificare resa e tap-flow reale (engine-side già confermato: 5 strategie mai usate).",
+  "Rendering delle proposte di decomposizione in chat: verificare che l'utente VEDA gli step proposti (turno con testo fallback 'Fatto. Dimmi tu come proseguiamo.' + step solo nel payload) e cosa resta dopo reload (D35: payloadJson non reidratato).",
+  "Insight cards e popup proattivo nella Today: dove compaiono le promesse 'te lo spezzo meglio'/'te li propongo in forma ridotta', cosa fa il tap (action enum grezza decompose_and_suggest/reduce_or_reschedule), sovrapposizioni con nudge/micro-feedback (D57).",
+  "Tab Review UI end-to-end: il salvataggio con task avoided reali → 500 → toast 'Errore' (D1 lato utente) e i contatori senza filtro data (D54).",
+  "Today del giorno dopo: come appare il piano post-review del procrastinatore (top3 = visita/pacco/mail capo, doNow×4) e il one-tap col timer (D32)."
+ ],
+ "transcripts": [
+  "docs/tasks/62-evidenze/J5/step1-review-walk1-transcript.md (thread completo cmr2o9p43009kib6swflpzl37: walk 24 turni + resume 14 turni con deadlock 'Ti ascolto.' + sblocco e chiusura — mai troncato)",
+  "docs/tasks/62-evidenze/J5/step1-walk1-turnlog.json (per-turno: messaggi, fase, stato, tool, costi)",
+  "docs/tasks/62-evidenze/J5/step1-resume-turnlog.json",
+  "docs/tasks/62-evidenze/J5/step1-planpreview-deadlock-probe.json"
+ ],
+ "spendUsd": 1.8604
+}

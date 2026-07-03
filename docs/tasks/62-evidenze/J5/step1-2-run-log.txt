@@ -1,0 +1,64 @@
+utente: collaudo-procrastinatore@probe.local (cmr2nflf2001aib00bjpe6yev)
+adaptiveProfile: creato (default) — il seed non lo crea, gli utenti reali lo hanno da onboarding
+PATCH /api/settings finestra 00:00-23:59 -> 200
+tasks PRIMA della review:
+  Scrivere la mail difficile al capo: status=planned postponed=5 avoidance=4 microSteps=0
+  Compilare la dichiarazione dei redditi: status=planned postponed=4 avoidance=3 microSteps=0
+  Prenotare la visita medica di controllo: status=planned postponed=3 avoidance=2 microSteps=0
+  Portare il pacco alle poste: status=inbox postponed=0 avoidance=0 microSteps=0
+[walk1] turno 1: "ok dai, facciamo questa review" -> 200, phase=per_entry, state=active, tools=[]
+[walk1] turno 2: "2" -> 200, phase=per_entry, state=active, tools=[record_mood]
+[walk1] turno 3: "2" -> 200, phase=per_entry, state=active, tools=[record_energy]
+[walk1] turno 4: "non l'ho fatto neanche oggi, non ci riesco proprio" -> 200, phase=per_entry, state=active, tools=[set_current_entry,mark_what_blocked_asked]
+[walk1] turno 5: "Boh... appena lo apro mi sale l'ansia e non so da dove partire" -> 200, phase=per_entry, state=active, tools=[mark_what_blocked_asked,propose_decomposition]
+[walk1] turno 6: "Boh... appena lo apro mi sale l'ansia e non so da dove partire" -> 200, phase=per_entry, state=active, tools=[mark_what_blocked_asked,propose_decomposition]
+[walk1] turno 7: "Boh... appena lo apro mi sale l'ansia e non so da dove partire" -> 200, phase=per_entry, state=active, tools=[propose_decomposition]
+[walk1] turno 8: "sì dai, proviamo a spezzarlo così" -> 200, phase=per_entry, state=active, tools=[approve_decomposition]
+[walk1] turno 9: "non lo so... ok, rimandiamolo a domani" -> 200, phase=per_entry, state=active, tools=[mark_what_blocked_asked,propose_decomposition]
+[walk1] turno 10: "Boh... appena lo apro mi sale l'ansia e non so da dove partire" -> 200, phase=per_entry, state=active, tools=[propose_decomposition]
+[walk1] turno 11: "sì dai, proviamo a spezzarlo così" -> 200, phase=per_entry, state=active, tools=[]
+[walk1] turno 12: "non l'ho fatto neanche oggi, non ci riesco proprio" -> 200, phase=per_entry, state=active, tools=[mark_what_blocked_asked]
+[walk1] turno 13: "Boh... appena lo apro mi sale l'ansia e non so da dove partire" -> 200, phase=per_entry, state=active, tools=[]
+[walk1] turno 14: "non lo so... ok, rimandiamolo a domani" -> 200, phase=per_entry, state=active, tools=[mark_entry_discussed]
+[walk1] turno 15: "non l'ho fatto neanche oggi, non ci riesco proprio" -> 200, phase=per_entry, state=active, tools=[]
+[walk1] turno 16: "non lo so... ok, rimandiamolo a domani" -> 200, phase=per_entry, state=active, tools=[set_current_entry,mark_entry_discussed]
+[walk1] turno 17: "non l'ho fatto neanche oggi, non ci riesco proprio" -> 200, phase=per_entry, state=active, tools=[mark_what_blocked_asked]
+[walk1] turno 18: "Boh... appena lo apro mi sale l'ansia e non so da dove partire" -> 200, phase=per_entry, state=active, tools=[]
+[walk1] turno 19: "non lo so... ok, rimandiamolo a domani" -> 200, phase=per_entry, state=active, tools=[mark_entry_discussed]
+[walk1] turno 20: "non l'ho fatto neanche oggi, non ci riesco proprio" -> 200, phase=per_entry, state=active, tools=[]
+[walk1] turno 21: "non lo so... ok, rimandiamolo a domani" -> 200, phase=per_entry, state=active, tools=[set_current_entry,mark_entry_discussed]
+[walk1] turno 22: "non l'ho fatto neanche oggi, non ci riesco proprio" -> 200, phase=per_entry, state=active, tools=[]
+[walk1] turno 23: "non lo so... ok, rimandiamolo a domani" -> 200, phase=plan_preview, state=active, tools=[set_current_entry,mark_entry_discussed]
+[walk1] turno 24: "ok, va bene il piano così" -> 200, phase=plan_preview, state=active, tools=[]
+walk1: completed=false turni=24 whatBlockedTool=true proposeDecomp=true approveDecomp=true
+walk1 tool eseguiti: record_mood, record_energy, set_current_entry, mark_what_blocked_asked, mark_what_blocked_asked, propose_decomposition, mark_what_blocked_asked, propose_decomposition, propose_decomposition, approve_decomposition, mark_what_blocked_asked, propose_decomposition, propose_decomposition, mark_what_blocked_asked, mark_entry_discussed, set_current_entry, mark_entry_discussed, mark_what_blocked_asked, mark_entry_discussed, set_current_entry, mark_entry_discussed, set_current_entry, mark_entry_discussed
+tasks DOPO la review:
+  Scrivere la mail difficile al capo: status=planned postponed=6 avoidance=4 microSteps=5
+  Compilare la dichiarazione dei redditi: status=planned postponed=5 avoidance=3 microSteps=0
+  Prenotare la visita medica di controllo: status=planned postponed=4 avoidance=2 microSteps=0
+  Portare il pacco alle poste: status=inbox postponed=1 avoidance=0 microSteps=0
+Review(2026-07-02): ASSENTE
+DailyPlan(domani): ASSENTE
+D12: task con avoidanceCount>0 usati dal tab Review UI: Scrivere la mail difficile al capo | Compilare la dichiarazione dei redditi | Prenotare la visita medica di controllo
+D1/D12(i) POST /api/review payload forma-UI -> HTTP 500
+dopo payload-UI: whatBlocked della Review = "" (prima: undefined)
+dopo payload-UI counts:
+  Scrivere la mail difficile al capo: status=planned postponed=6 avoidance=4 microSteps=5
+  Compilare la dichiarazione dei redditi: status=planned postponed=5 avoidance=3 microSteps=0
+  Prenotare la visita medica di controllo: status=planned postponed=4 avoidance=2 microSteps=0
+  Portare il pacco alle poste: status=inbox postponed=1 avoidance=0 microSteps=0
+D12(ii) POST /api/review contratto (status:'avoided') submit #1 -> HTTP 200
+dopo submit #1:
+  Scrivere la mail difficile al capo: status=planned postponed=6 avoidance=5 microSteps=5
+  Compilare la dichiarazione dei redditi: status=planned postponed=5 avoidance=4 microSteps=0
+  Prenotare la visita medica di controllo: status=planned postponed=4 avoidance=3 microSteps=0
+  Portare il pacco alle poste: status=inbox postponed=1 avoidance=0 microSteps=0
+  UserPattern.totalTasksAvoided=3
+D12(ii) POST /api/review contratto (status:'avoided') submit #2 -> HTTP 200
+dopo submit #2:
+  Scrivere la mail difficile al capo: status=planned postponed=6 avoidance=6 microSteps=5
+  Compilare la dichiarazione dei redditi: status=planned postponed=5 avoidance=5 microSteps=0
+  Prenotare la visita medica di controllo: status=planned postponed=4 avoidance=4 microSteps=0
+  Portare il pacco alle poste: status=inbox postponed=1 avoidance=0 microSteps=0
+  UserPattern.totalTasksAvoided=6
+spesa LLM utente J5 finora: $1.4735
