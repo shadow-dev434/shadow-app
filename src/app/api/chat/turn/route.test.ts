@@ -256,13 +256,52 @@ describe('POST /api/chat/turn — allegati vision (Task 54)', () => {
   });
 
   it('PDF valido -> 200, orchestrate riceve il document', async () => {
+    // 'JVBERi0x' = "%PDF-1" in base64 valido (Task 69 I: 'JVBER' troncato ora
+    // e' correttamente respinto dalla validazione sintattica).
     const res = await POST(
-      makeReq({ mode: 'general', userMessage: '', attachments: [{ kind: 'document', mediaType: 'application/pdf', data: 'JVBER' }] }),
+      makeReq({ mode: 'general', userMessage: '', attachments: [{ kind: 'document', mediaType: 'application/pdf', data: 'JVBERi0x' }] }),
     );
     expect(res.status).toBe(200);
     expect(vi.mocked(orchestrate).mock.calls[0][0].attachments?.[0]).toMatchObject({
       kind: 'document',
       mediaType: 'application/pdf',
     });
+  });
+});
+
+describe('POST /api/chat/turn — input rotti -> 400, mai 500 (Task 69 I, S2-K)', () => {
+  it('base64 corrotto (caratteri fuori alfabeto) -> 400 con messaggio parlante', async () => {
+    const res = await POST(
+      makeReq({ mode: 'general', userMessage: 'x', attachments: [{ kind: 'image', mediaType: 'image/png', data: 'not!!valid==' }] }),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/corrotto/i);
+    expect(orchestrate).not.toHaveBeenCalled();
+  });
+
+  it('base64 con lunghezza non multipla di 4 -> 400', async () => {
+    const res = await POST(
+      makeReq({ mode: 'general', userMessage: 'x', attachments: [{ kind: 'image', mediaType: 'image/png', data: 'AAAAA' }] }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('base64 URL-safe (-_) -> 400: il client manda solo alfabeto standard', async () => {
+    const res = await POST(
+      makeReq({ mode: 'general', userMessage: 'x', attachments: [{ kind: 'image', mediaType: 'image/png', data: 'AA-_' }] }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('body non-JSON -> 400 "Richiesta non valida.", non 500', async () => {
+    const req = new Request('http://localhost:3000/api/chat/turn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{broken',
+    }) as unknown as NextRequest;
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('Richiesta non valida.');
+    expect(orchestrate).not.toHaveBeenCalled();
   });
 });

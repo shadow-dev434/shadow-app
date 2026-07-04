@@ -9,6 +9,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getToken } from 'next-auth/jwt';
 import { getAuthSecret } from '@/lib/auth-secret';
+import { isTokenIssuedBeforePasswordChange } from '@/lib/auth-guard';
+import { db } from '@/lib/db';
+
+/**
+ * Task 69 (H, N21): dopo un reset password il vecchio cookie era respinto da
+ * requireSession ma passava ancora qui (nessuna query DB). Stesso check di
+ * auth-guard, applicato DOPO l'allowlist (i non-invitati non costano query).
+ * Utente cancellato o token pre-reset ⇒ 404, coerente con lo stile
+ * privacy-first del guard (la superficie non deve "esistere").
+ */
+async function isStaleSession(token: Record<string, unknown> | null, userId: string): Promise<boolean> {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { passwordChangedAt: true },
+  });
+  if (!user) return true;
+  const iat = token && typeof token.iat === 'number' ? token.iat : null;
+  return isTokenIssuedBeforePasswordChange(iat, user.passwordChangedAt);
+}
 
 export type AdminGuardResult =
   | { error: NextResponse; userId: null; email: null }
@@ -70,6 +89,14 @@ export async function requireAdminSession(req: NextRequest): Promise<AdminGuardR
     };
   }
 
+  if (await isStaleSession(token, userId)) {
+    return {
+      error: NextResponse.json({ error: 'Not found' }, { status: 404 }),
+      userId: null,
+      email: null,
+    };
+  }
+
   return { error: null, userId, email: email as string };
 }
 
@@ -91,6 +118,14 @@ export async function requireBetaSession(req: NextRequest): Promise<AdminGuardRe
   const email = token && typeof token.email === 'string' ? token.email : null;
 
   if (!userId || !isBetaTesterEmail(email)) {
+    return {
+      error: NextResponse.json({ error: 'Not found' }, { status: 404 }),
+      userId: null,
+      email: null,
+    };
+  }
+
+  if (await isStaleSession(token, userId)) {
     return {
       error: NextResponse.json({ error: 'Not found' }, { status: 404 }),
       userId: null,

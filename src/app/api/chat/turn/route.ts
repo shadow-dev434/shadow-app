@@ -58,6 +58,16 @@ function approxBase64Bytes(s: string): number {
   return Math.floor((s.length * 3) / 4);
 }
 
+// Task 69 (I, S2-K): base64 malformato passava intatto fino alla chiamata
+// Anthropic, che esplodeva in un 500 "Errore interno". Validazione sintattica
+// qui → 400 parlante. Alfabeto standard (niente URL-safe: il client manda
+// l'output di FileReader/btoa), padding finale opzionale, length%4===0.
+const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+
+export function isDecodableBase64(s: string): boolean {
+  return s.length % 4 === 0 && BASE64_RE.test(s);
+}
+
 type AttachmentValidation =
   | { attachments: ChatAttachment[]; error?: undefined }
   | { attachments?: undefined; error: string };
@@ -82,6 +92,7 @@ function validateAttachments(raw: unknown): AttachmentValidation {
       data?: unknown;
     };
     if (typeof data !== 'string' || data.length === 0) return { error: 'Allegato vuoto o non leggibile.' };
+    if (!isDecodableBase64(data)) return { error: 'Allegato corrotto o non leggibile: riprova a caricarlo.' };
     const bytes = approxBase64Bytes(data);
     if (bytes > MAX_ITEM_BYTES) return { error: 'Allegato troppo grande: il massimo è 4MB.' };
     total += bytes;
@@ -132,7 +143,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
+    // Task 69 (I, S2-K): body non-JSON finiva nel catch esterno come 500.
+    // Input invalido → 400, mai 500 (pattern di /api/consent).
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Richiesta non valida.' }, { status: 400 });
+    }
     const { threadId, mode, userMessage, relatedTaskId, clientDate, attachments } = body as {
       threadId?: string;
       mode?: string;
