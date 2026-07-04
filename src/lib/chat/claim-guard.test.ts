@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { textClaimsWrite, isWriteToolName } from './claim-guard';
+import { textClaimsWrite, isWriteToolName, honestFallbackMessage } from './claim-guard';
 
 describe('textClaimsWrite', () => {
   it.each([
@@ -45,13 +45,66 @@ describe('textClaimsWrite', () => {
   });
 });
 
+describe('textClaimsWrite — lessico review (Task 69 A, censimento collaudo 68 §A.6)', () => {
+  it.each([
+    // Tutte frasi PRONUNCIATE dal modello nei run del collaudo, con zero tool.
+    'Il pacco alle poste lo segno fatto. A domani.',
+    'Ottimo, la segno fatta.',
+    'Segnato, la segno come fatta.',
+    'Ok, le lampadine le segno come fatte — grazie per dirmelo',
+    'Va bene, li rimando tutti a domani.',
+    'Segnato, pin tolto. Il piano torna com\'era',
+    'Piano bloccato. A domani.',
+    'Chiuso. A domani.',
+    'Già chiuso. A domani.',
+    'Ok, registrato: 4-6 ore disponibili.',
+    // Il raddoppio S1-1 alla lettera (J3): "stato" in mezzo sfuggiva.
+    'È già stato creato nel turno precedente.',
+  ])('claim review → true: "%s"', (text) => {
+    expect(textClaimsWrite(text)).toBe(true);
+  });
+
+  it.each([
+    // Proposte, deontici, prosa legittima della review: MAI scattare.
+    'Vuoi che la segni come fatta?',
+    'Possiamo rimandarla a domani, che dici?',
+    'Il piano va confermato prima di chiudere.',
+    'Se confermi, il piano viene bloccato.',
+    'Chiusa la parentesi, torniamo alla lista.',
+    'Hai registrato dei progressi enormi questa settimana.',
+    'Quando l\'hai chiusa, dimmelo.',
+    // Negazione onesta del retry: NON deve ri-scattare il guard.
+    'Non l\'ho ancora registrata: la chiudo come fatta?',
+  ])('prosa review legittima → false: "%s"', (text) => {
+    expect(textClaimsWrite(text)).toBe(false);
+  });
+});
+
 describe('isWriteToolName', () => {
   it.each(['create_task', 'update_task', 'complete_task', 'archive_task', 'set_task_recurrence', 'stop_task_recurrence', 'set_user_energy'])(
     'write tool: %s',
     (name) => expect(isWriteToolName(name)).toBe(true),
   );
-  it.each(['get_today_tasks', 'offer_body_double', 'offer_strict_mode'])(
-    'NON write (letture/offerte): %s',
+  // Task 69 (A): tool review/morning che soddisfano un claim.
+  it.each(['set_user_mood', 'set_user_time', 'commit_today_plan', 'add_candidate_to_review', 'remove_candidate_from_review', 'mark_entry_discussed', 'update_plan_preview', 'confirm_plan_preview', 'confirm_close_review', 'close_review_burnout', 'approve_decomposition'])(
+    'write tool review (Task 69): %s',
+    (name) => expect(isWriteToolName(name)).toBe(true),
+  );
+  it.each(['get_today_tasks', 'offer_body_double', 'offer_strict_mode', 'set_current_entry', 'propose_decomposition', 'mark_what_blocked_asked'])(
+    'NON write (letture/offerte/navigazione/proposte): %s',
     (name) => expect(isWriteToolName(name)).toBe(false),
   );
+});
+
+describe('honestFallbackMessage (Task 69 A, S1-1)', () => {
+  it('cattura: invita a rimandare il testo, nessun claim di scrittura', () => {
+    const msg = honestFallbackMessage('general');
+    expect(msg).toContain('non risulta salvato');
+    expect(textClaimsWrite(msg)).toBe(false);
+  });
+  it('review: copy dedicato, nessun claim di scrittura', () => {
+    const msg = honestFallbackMessage('evening_review');
+    expect(msg).toContain('non sono riuscito a registrare');
+    expect(textClaimsWrite(msg)).toBe(false);
+  });
 });

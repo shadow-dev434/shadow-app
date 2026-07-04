@@ -1252,11 +1252,15 @@ describe('Task 63 (S1-A): claim-guard su scritture dichiarate senza tool', () =>
     expect(result.assistantMessage).toBe('Vuoi che lo crei io?');
   });
 
-  it('evening_review fuori scope: il claim-guard non scatta', async () => {
+  it('Task 69 (A): evening_review ORA in scope — "Segnato ✓" senza tool → retry, vince il testo pulito', async () => {
+    // Contratto INVERTITO rispetto al 63: il collaudo 68 ha censito 13 claim
+    // falsi dentro la review, dove il guard non arrivava (S2-A).
     vi.mocked(db.chatThread.findFirst).mockResolvedValue(
       makeThread({ id: 't-eve', state: 'active', mode: 'evening_review' }),
     );
-    vi.mocked(callLLM).mockResolvedValueOnce(resp('Segnato ✓ passiamo alla prossima.'));
+    vi.mocked(callLLM)
+      .mockResolvedValueOnce(resp('Segnato ✓ passiamo alla prossima.'))
+      .mockResolvedValueOnce(resp('Non l\'ho ancora registrata: la chiudo come fatta?'));
 
     const result = await orchestrate({
       userId: 'u1',
@@ -1265,7 +1269,47 @@ describe('Task 63 (S1-A): claim-guard su scritture dichiarate senza tool', () =>
       userMessage: 'fatta',
     });
 
-    expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(1);
-    expect(result.assistantMessage).toBe('Segnato ✓ passiamo alla prossima.');
+    expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(2);
+    const retryMessages = vi.mocked(callLLM).mock.calls[1][0].messages;
+    expect(JSON.stringify(retryMessages[retryMessages.length - 1].content)).toContain('guardia di sistema');
+    expect(result.assistantMessage).toContain('la chiudo come fatta?');
+  });
+
+  it('Task 69 (A, S1-1): retry che claima ANCORA senza tool → fallback onesto deterministico, mai il claim falso', async () => {
+    generalThread();
+    vi.mocked(callLLM)
+      .mockResolvedValueOnce(resp('Creato ✓ "Pagare bolletta".'))
+      // L'escape-hatch del collaudo: il retry allucina pre-esistenza.
+      .mockResolvedValueOnce(resp('È già stato creato nel turno precedente, è in lista.'));
+
+    const result = await orchestrate({
+      userId: 'u1',
+      threadId: 't-claim',
+      mode: 'general',
+      userMessage: 'segna pagare la bolletta',
+    });
+
+    expect(vi.mocked(callLLM)).toHaveBeenCalledTimes(2);
+    // Il claim falso NON raggiunge l'utente: sostituito dal testo onesto.
+    expect(result.assistantMessage).not.toContain('già stato creato');
+    expect(result.assistantMessage).toContain('non risulta salvato davvero');
+  });
+
+  it('Task 69 (A): fallback onesto in evening_review usa il copy della review', async () => {
+    vi.mocked(db.chatThread.findFirst).mockResolvedValue(
+      makeThread({ id: 't-eve', state: 'active', mode: 'evening_review' }),
+    );
+    vi.mocked(callLLM)
+      .mockResolvedValueOnce(resp('Il pacco alle poste lo segno fatto. A domani.'))
+      .mockResolvedValueOnce(resp('Piano bloccato. A domani.'));
+
+    const result = await orchestrate({
+      userId: 'u1',
+      threadId: 't-eve',
+      mode: 'evening_review',
+      userMessage: 'ho fatto anche il pacco',
+    });
+
+    expect(result.assistantMessage).toContain('non sono riuscito a registrare');
   });
 });

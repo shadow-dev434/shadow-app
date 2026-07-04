@@ -53,7 +53,7 @@ import {
 } from './at-risk-detection';
 // Task 63 (S1-A): parti pure del claim-guard (pattern + criterio di scrittura),
 // nel modulo dedicato per i test; qui solo il wiring del blocco 7c.
-import { textClaimsWrite, isWriteToolName, CLAIM_GUARD_GUIDANCE } from './claim-guard';
+import { textClaimsWrite, isWriteToolName, CLAIM_GUARD_GUIDANCE, honestFallbackMessage } from './claim-guard';
 import { captureWhatBlocked } from '@/lib/evening-review/what-blocked-capture';
 // Task 40: rolling summary — finestra ancorata al watermark + blocco system
 // cachato. Soglie e helper vivono nel modulo (auto-approvabile), qui solo wiring.
@@ -776,6 +776,85 @@ export async function orchestrate(
       : undefined;
 
   // ── 7. Tool-use loop (multi-iteration with cap) ─────────────────────
+  // Task 69 (A, S2-A): il pass sequenziale evening e' estratto in una closure
+  // condivisa tra il loop 7 e il retry del claim-guard 7c — il retry in
+  // review deve threadare gli stessi pending state (triage/preview/phase/
+  // closeReview/self-correction) del loop, non eseguire alla cieca. Le
+  // variabili mutate vivono nello scope di orchestrate (closure), identiche
+  // al comportamento inline pre-69.
+  const runEveningToolPass = async (
+    toolCalls: typeof currentResponse.toolCalls,
+  ): Promise<{
+    results: Array<{ toolCall: typeof currentResponse.toolCalls[number]; result: ToolExecutionResult }>;
+    // Esito closeReview del pass: l'assegnazione a reviewClosed avviene nei
+    // call-site (il CFA di TS non vede le mutazioni dentro la closure).
+    closedInfo: { reviewId: string; dailyPlanId: string; alreadyClosed: boolean } | null;
+  }> => {
+    let closedInfo: { reviewId: string; dailyPlanId: string; alreadyClosed: boolean } | null = null;
+    const passResults: Array<{
+      toolCall: typeof currentResponse.toolCalls[number];
+      result: ToolExecutionResult;
+    }> = [];
+    // Sequential: chain triage mutations through pendingTriageState.
+    // Multiple tool calls in the same turn (e.g., remove A then add B) must see
+    // each other's effects, so they cannot run in parallel.
+    for (const tc of toolCalls) {
+      const result = await executeTool(tc.name, tc.input, input.userId, {
+        triageState: pendingTriageState ?? undefined,
+        previewState: pendingPreviewState ?? undefined,
+        baseInput: baseInput ?? undefined,
+        currentPhase: pendingPhase ?? currentPhase,
+        threadId: thread.id,
+        userMessage: input.userMessage,
+      });
+      toolsExecuted.push({ name: tc.name, input: tc.input, result: result.data });
+      passResults.push({ toolCall: tc, result });
+      // Task 69 (A): tracking scritture riuscite anche in evening — prima il
+      // claim-guard era cieco a tutta la review (S2-A).
+      if (result.success && isWriteToolName(tc.name)) hadSuccessfulWrite = true;
+      if (result.kind === 'mutator' || result.kind === 'mutatorWithSideEffects') {
+        pendingTriageState = result.newTriageState;
+      }
+      if (result.kind === 'previewMutator') {
+        pendingPreviewState = result.newPreviewState;
+      }
+      if (result.kind === 'phaseMutator') {
+        pendingPhase = result.newPhase;
+      }
+      if (result.kind === 'closeReview') {
+        // Slice 7: closeReview() ha gia' committed Review + DailyPlan +
+        // thread.state='completed' in $transaction separata (vedi
+        // confirm-close-review-handler.ts). Accumuliamo l'esito per gestire
+        // il flush finale: skip thread.update su alreadyClosed, parziale
+        // (lastTurnAt only) altrimenti.
+        closedInfo = {
+          reviewId: result.reviewId,
+          dailyPlanId: result.dailyPlanId,
+          alreadyClosed: result.alreadyClosed,
+        };
+      }
+      // V1.3: detection self-correction guard failure -> set
+      // selfCorrectedInPreviousTurn=true in pendingTriageState. Pattern split
+      // beta: handler V1.2/V1.2.2/V1.2.3 ritornano sideEffect failure con data
+      // strutturato (alreadyClosed | alreadyOpen | previousEntryOpen).
+      // Detection estratta in at-risk-detection.ts (Tech debt #18) come pure
+      // function extractSelfCorrectionTrigger. Log format preservato per
+      // continuita' grep telemetria [V1.3 forced tool_choice].
+      // Counterpart: clear in handler success path (mark/set Path 1) - vedi tools.ts.
+      if (result.kind === 'sideEffect' && pendingTriageState !== null) {
+        const trig = extractSelfCorrectionTrigger(result.data);
+        if (trig !== null) {
+          pendingTriageState = { ...pendingTriageState, selfCorrectedInPreviousTurn: true };
+          console.warn(
+            `[V1.3 forced tool_choice] orchestrator set selfCorrectedInPreviousTurn=true ` +
+            `(trigger: ${trig.trigger} on entryId=${trig.entryId ?? 'unknown'})`,
+          );
+        }
+      }
+    }
+    return { results: passResults, closedInfo };
+  };
+
   let iteration = 0;
   while (
     currentResponse.stopReason === 'tool_use' &&
@@ -790,60 +869,9 @@ export async function orchestrate(
     }> = [];
 
     if (mode === 'evening_review') {
-      // Sequential: chain triage mutations through pendingTriageState.
-      // Multiple tool calls in the same turn (e.g., remove A then add B) must see
-      // each other's effects, so they cannot run in parallel.
-      for (const tc of currentResponse.toolCalls) {
-        const result = await executeTool(tc.name, tc.input, input.userId, {
-          triageState: pendingTriageState ?? undefined,
-          previewState: pendingPreviewState ?? undefined,
-          baseInput: baseInput ?? undefined,
-          currentPhase: pendingPhase ?? currentPhase,
-          threadId: thread.id,
-          userMessage: input.userMessage,
-        });
-        toolsExecuted.push({ name: tc.name, input: tc.input, result: result.data });
-        toolResults.push({ toolCall: tc, result });
-        if (result.kind === 'mutator' || result.kind === 'mutatorWithSideEffects') {
-          pendingTriageState = result.newTriageState;
-        }
-        if (result.kind === 'previewMutator') {
-          pendingPreviewState = result.newPreviewState;
-        }
-        if (result.kind === 'phaseMutator') {
-          pendingPhase = result.newPhase;
-        }
-        if (result.kind === 'closeReview') {
-          // Slice 7: closeReview() ha gia' committed Review + DailyPlan +
-          // thread.state='completed' in $transaction separata (vedi
-          // confirm-close-review-handler.ts). Accumuliamo l'esito per gestire
-          // il flush finale: skip thread.update su alreadyClosed, parziale
-          // (lastTurnAt only) altrimenti.
-          reviewClosed = {
-            reviewId: result.reviewId,
-            dailyPlanId: result.dailyPlanId,
-            alreadyClosed: result.alreadyClosed,
-          };
-        }
-        // V1.3: detection self-correction guard failure -> set
-        // selfCorrectedInPreviousTurn=true in pendingTriageState. Pattern split
-        // beta: handler V1.2/V1.2.2/V1.2.3 ritornano sideEffect failure con data
-        // strutturato (alreadyClosed | alreadyOpen | previousEntryOpen).
-        // Detection estratta in at-risk-detection.ts (Tech debt #18) come pure
-        // function extractSelfCorrectionTrigger. Log format preservato per
-        // continuita' grep telemetria [V1.3 forced tool_choice].
-        // Counterpart: clear in handler success path (mark/set Path 1) - vedi tools.ts.
-        if (result.kind === 'sideEffect' && pendingTriageState !== null) {
-          const trig = extractSelfCorrectionTrigger(result.data);
-          if (trig !== null) {
-            pendingTriageState = { ...pendingTriageState, selfCorrectedInPreviousTurn: true };
-            console.warn(
-              `[V1.3 forced tool_choice] orchestrator set selfCorrectedInPreviousTurn=true ` +
-              `(trigger: ${trig.trigger} on entryId=${trig.entryId ?? 'unknown'})`,
-            );
-          }
-        }
-      }
+      const pass = await runEveningToolPass(currentResponse.toolCalls);
+      toolResults.push(...pass.results);
+      if (pass.closedInfo !== null) reviewClosed = pass.closedInfo;
     } else {
       // Parallel (historical pattern for non-evening_review modes).
       const parallelResults = await Promise.all(
@@ -994,19 +1022,21 @@ export async function orchestrate(
     finalAssistantMessage = 'Mi sono inceppato un attimo, riprova';
   }
 
-  // ── 7c. Claim-guard (Task 63, S1-A) ─────────────────────────────────
+  // ── 7c. Claim-guard (Task 63 S1-A, esteso Task 69 A) ─────────────────
   // Collaudo 62 (J3): in chat lunga il modello fast dichiara "Creato" SENZA
   // chiamare create_task — task persi in silenzio sulla promessa più
   // importante. Se il testo finale claima una scrittura ma nel turno nessun
   // tool di scrittura è riuscito → UN retry con messaggio-guida. Il guidance
   // vive solo in llmMessages (RAM): la persistenza §9 scrive esclusivamente
   // input.userMessage e il finalAssistantMessage finale, quindi il testo
-  // allucinato del primo giro non tocca mai il DB. Scope: mode di cattura
-  // (general/morning_checkin), mai sul cap fallback di §7b (testo sintetico).
+  // allucinato del primo giro non tocca mai il DB. Scope (Task 69 A):
+  // general/morning_checkin/evening_review — il collaudo 68 ha censito 13
+  // claim falsi DENTRO la review ("lo segno fatto", "piano bloccato"), dove
+  // il guard non arrivava. Mai sul cap fallback di §7b (testo sintetico).
   let claimGuardTriggered = false;
   let claimGuardSatisfied = false;
   if (
-    (mode === 'general' || mode === 'morning_checkin') &&
+    (mode === 'general' || mode === 'morning_checkin' || mode === 'evening_review') &&
     !(iteration >= MAX_TOOL_ITERATIONS && currentResponse.stopReason === 'tool_use') &&
     !hadSuccessfulWrite &&
     // Match sul testo con le QR strippate: le label ("Sì, aggiungilo") non
@@ -1044,18 +1074,27 @@ export async function orchestrate(
     totalLatencyMs += retryResponse.latencyMs;
     lastModel = retryResponse.model;
 
-    // Il retry sperato chiama il tool: UNA passata di esecuzione (parallela,
-    // come il ramo non-evening) e una call finale per il testo di conferma.
-    // Niente secondo retry qualunque cosa risponda (cap costi).
+    // Il retry sperato chiama il tool: UNA passata di esecuzione e una call
+    // finale per il testo di conferma. Niente secondo retry qualunque cosa
+    // risponda (cap costi). Task 69 (A): in evening_review la passata usa la
+    // closure sequenziale del loop 7 — stessi opts e stesso threading dei
+    // pending state (un confirm_close_review nel retry chiude davvero).
     if (retryResponse.stopReason === 'tool_use' && retryResponse.toolCalls.length > 0) {
-      const retryResults = await Promise.all(
-        retryResponse.toolCalls.map(async (tc) => {
-          const result = await executeTool(tc.name, tc.input, input.userId);
-          toolsExecuted.push({ name: tc.name, input: tc.input, result: result.data });
-          if (result.success && isWriteToolName(tc.name)) hadSuccessfulWrite = true;
-          return { toolCall: tc, result };
-        }),
-      );
+      let retryResults: Array<{ toolCall: typeof retryResponse.toolCalls[number]; result: ToolExecutionResult }>;
+      if (mode === 'evening_review') {
+        const pass = await runEveningToolPass(retryResponse.toolCalls);
+        retryResults = pass.results;
+        if (pass.closedInfo !== null) reviewClosed = pass.closedInfo;
+      } else {
+        retryResults = await Promise.all(
+          retryResponse.toolCalls.map(async (tc) => {
+            const result = await executeTool(tc.name, tc.input, input.userId);
+            toolsExecuted.push({ name: tc.name, input: tc.input, result: result.data });
+            if (result.success && isWriteToolName(tc.name)) hadSuccessfulWrite = true;
+            return { toolCall: tc, result };
+          }),
+        );
+      }
       llmMessages.push({
         role: 'assistant',
         content: [
@@ -1101,6 +1140,22 @@ export async function orchestrate(
       currentResponse = retryResponse;
     }
     claimGuardSatisfied = hadSuccessfulWrite;
+    // Task 69 (A, S1-1): fallback onesto deterministico — se anche il retry
+    // claima una scrittura senza averla eseguita (l'escape-hatch del 63 era
+    // proprio qui: "è già stato creato prima"), il claim falso NON passa.
+    // Sostituzione con testo fisso: l'utente sa di dover ripetere, la
+    // perdita non è più silenziosa. Persistito in §9 come qualunque
+    // messaggio (è la verità del turno).
+    if (
+      !claimGuardSatisfied &&
+      textClaimsWrite(finalAssistantMessage.replace(QR_REGEX, ' '))
+    ) {
+      console.warn(
+        `[claim-guard] retry still claims without write -> honest fallback: ` +
+        `threadId=${thread.id}, mode=${mode}`,
+      );
+      finalAssistantMessage = honestFallbackMessage(mode);
+    }
     console.warn(
       `[claim-guard] retry outcome: threadId=${thread.id}, ` +
       `writeExecuted=${claimGuardSatisfied}`,
