@@ -19,9 +19,20 @@
  */
 
 import type { LLMTool } from '@/lib/llm/client';
-import { extractMoodEnergyValue } from './mood-energy-parse';
+import {
+  extractMoodEnergyValue,
+  extractMoodEnergyPair,
+  isConfirmationMessage,
+} from './mood-energy-parse';
 
 export type RecordMoodArgs = { value: number };
+
+/**
+ * Task 70 (A/N32): opzioni del cross-check anti-invenzione.
+ * confirmValue = valore del mattino proposto in apertura ("stamattina eri a
+ * 4, confermi?"): una conferma pura senza valori espliciti lo accetta.
+ */
+export type RecordValueValidationOpts = { confirmValue?: number };
 
 export const RECORD_MOOD_TOOL: LLMTool = {
   name: 'record_mood',
@@ -46,13 +57,21 @@ export const RECORD_MOOD_TOOL: LLMTool = {
 
 /**
  * Slice 7 V1.x Bug #1 (B2 backstop): userMessage opzionale. Se fornito, il
- * value DEVE corrispondere al numero/qualitativo espresso dall'utente
- * nell'ultimo messaggio (cross-check anti-invenzione). Assente -> skip del
- * cross-check, backward compat con unit test e caller non-orchestrator.
+ * value DEVE corrispondere a cosa l'utente ha realmente detto (cross-check
+ * anti-invenzione). Assente -> skip del cross-check, backward compat con
+ * unit test e caller non-orchestrator.
+ *
+ * Task 70: tre forme accettate quando userMessage e' presente:
+ * 1. valore singolo esplicito ("4", "bene") -> match esatto;
+ * 2. coppia "mood e energia" in un messaggio unico ("4 e 3") -> record_mood
+ *    deve corrispondere al PRIMO valore;
+ * 3. conferma pura del default del mattino ("confermo", "come stamattina")
+ *    -> accettata solo se value === opts.confirmValue.
  */
 export function validateRecordMoodArgs(
   args: unknown,
   userMessage?: string,
+  opts?: RecordValueValidationOpts,
 ): { ok: true; value: number } | { ok: false; error: string } {
   if (args === null || typeof args !== 'object') {
     return { ok: false, error: 'args deve essere un oggetto' };
@@ -64,12 +83,28 @@ export function validateRecordMoodArgs(
   if (raw < 1 || raw > 5) {
     return { ok: false, error: 'value deve essere tra 1 e 5' };
   }
-  if (userMessage !== undefined && extractMoodEnergyValue(userMessage) !== raw) {
+  if (userMessage !== undefined) {
+    if (extractMoodEnergyValue(userMessage) === raw) {
+      return { ok: true, value: raw };
+    }
+    const pair = extractMoodEnergyPair(userMessage);
+    if (pair !== null && pair.first === raw) {
+      return { ok: true, value: raw };
+    }
+    if (
+      opts?.confirmValue !== undefined &&
+      raw === opts.confirmValue &&
+      isConfirmationMessage(userMessage)
+    ) {
+      return { ok: true, value: raw };
+    }
     return {
       ok: false,
       error:
         `value=${raw} non corrisponde a un numero 1-5 o qualitativo mappabile ` +
-        `nell'ultimo messaggio utente. L'ultimo messaggio era: '${userMessage}'. ` +
+        `nell'ultimo messaggio utente (per una coppia "4 e 3" record_mood prende ` +
+        `il PRIMO valore; una conferma pura vale solo il valore del mattino ` +
+        `proposto). L'ultimo messaggio era: '${userMessage}'. ` +
         `Non chiamare record_mood/record_energy se l'utente non ha risposto con ` +
         `un valore numerico o qualitativo riconoscibile sulla dimensione corrente.`,
     };

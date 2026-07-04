@@ -49,4 +49,32 @@ describe('validateRecordEnergyArgs', () => {
       expect(r.error).toContain('set_user_energy');
     }
   });
+
+  // Task 70 (run69-3): coppia "mood e energia" in un messaggio unico.
+  // record_energy prende il SECONDO valore.
+  it('coppia "4 e 3": value=3 (secondo) -> ok', () => {
+    const r = validateRecordEnergyArgs({ value: 3 }, '4 e 3');
+    expect(r.ok).toBe(true);
+  });
+
+  it('coppia "4 e 3": value=4 (primo) -> reject per record_energy', () => {
+    const r = validateRecordEnergyArgs({ value: 4 }, '4 e 3');
+    expect(r.ok).toBe(false);
+  });
+
+  it('coppia identica "4 e 4": value=4 -> ok (fix loop intake)', () => {
+    const r = validateRecordEnergyArgs({ value: 4 }, '4 e 4');
+    expect(r.ok).toBe(true);
+  });
+
+  // Task 70 (A/N32): conferma pura del default del mattino.
+  it('conferma "come stamattina" con confirmValue=2: value=2 -> ok', () => {
+    const r = validateRecordEnergyArgs({ value: 2 }, 'come stamattina', { confirmValue: 2 });
+    expect(r.ok).toBe(true);
+  });
+
+  it('conferma con value diverso dal confirmValue -> reject', () => {
+    const r = validateRecordEnergyArgs({ value: 3 }, 'come stamattina', { confirmValue: 2 });
+    expect(r.ok).toBe(false);
+  });
 });
