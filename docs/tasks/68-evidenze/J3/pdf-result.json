@@ -1,0 +1,33 @@
+{
+  "status": 200,
+  "elapsed": 6723,
+  "threadId": "cmr68g8nt00wiibe4d6r2sw3r",
+  "tools": [
+    {
+      "name": "create_task",
+      "input": {
+        "title": "Pagare F24",
+        "deadline": "2026-07-30",
+        "urgency": 4,
+        "importance": 5,
+        "category": "admin"
+      },
+      "result": {
+        "id": "cmr68gbgg00woibe4snm307z0",
+        "title": "Pagare F24",
+        "urgency": 4,
+        "importance": 5,
+        "category": "admin"
+      }
+    }
+  ],
+  "assistant": "Aggiunto: pagare F24 entro il 30 luglio. È in inbox, pronto per la review.",
+  "newTasks": [
+    {
+      "id": "cmr68gbgg00woibe4snm307z0",
+      "title": "Pagare F24",
+      "deadline": "2026-07-30",
+      "aiClassified": true
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "threadId": "cmr6922rk01azibe4fehlcbnj",
+  "mode": "morning_checkin",
+  "assistantMessage": "Ok, 3 va bene. Ripartiamo da poco.\n\nHai due cose scadute che non possono aspettare ancora: il modulo ISEE e il rinnovo dell'assicurazione auto. Partirei da queste due oggi — il resto può stare fermo.\n\nTi va?",
+  "toolsExecuted": [
+    {
+      "name": "set_user_mood",
+      "input": {
+        "level": 3
+      },
+      "result": {
+        "level": 3
+      }
+    },
+    {
+      "name": "get_today_tasks",
+      "input": {},
+      "result": [
+        {
+          "id": "cmr67hp0c000zibmkx1t2sqp9",
+          "title": "Inviare il modulo ISEE",
+          "urgency": 5,
+          "importance": 5,
+          "category": "general",
+          "status": "planned",
+          "deadline": "2026-07-02",
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr67hp6m0011ibmke42uwer4",
+          "title": "Rinnovare assicurazione auto",
+          "urgency": 4,
+          "importance": 4,
+          "category": "general",
+          "status": "planned",
+          "deadline": "2026-07-03",
+          "recurring": false,
+          "estimatedMinutes": 25
+        }
+      ]
+    }
+  ],
+  "quickReplies": [
+    {
+      "label": "Sì, parti da questi",
+      "value": "Sì, parti da questi"
+    },
+    {
+      "label": "No, scelgo io",
+      "value": "No, scelgo io"
+    }
+  ],
+  "costUsd": 0.04992525,
+  "tokensIn": 401,
+  "tokensOut": 193,
+  "modelUsed": "claude-sonnet-4-6",
+  "latencyMs": 8264
+}

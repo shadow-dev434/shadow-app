@@ -1,0 +1,222 @@
+{
+  "spendUsd": 0.11376295,
+  "taskCount": 22,
+  "tasks": [
+    {
+      "title": "Chiamare l'idraulico",
+      "status": "inbox",
+      "deadline": null,
+      "aiClassified": true,
+      "category": "general",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Comprare il latte",
+      "status": "inbox",
+      "deadline": null,
+      "aiClassified": true,
+      "category": "household",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Prenotare il treno per Roma",
+      "status": "inbox",
+      "deadline": null,
+      "aiClassified": true,
+      "category": "general",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Mandare il preventivo al cliente",
+      "status": "inbox",
+      "deadline": "2026-07-11",
+      "aiClassified": true,
+      "category": "work",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Andare in palestra",
+      "status": "inbox",
+      "deadline": null,
+      "aiClassified": true,
+      "category": "health",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Riunione condominio",
+      "status": "inbox",
+      "deadline": "2026-07-10",
+      "aiClassified": true,
+      "category": "admin",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Ritirare le analisi del sangue",
+      "status": "inbox",
+      "deadline": null,
+      "aiClassified": true,
+      "category": "health",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Rinnovare la carta d'identità",
+      "status": "inbox",
+      "deadline": "2026-07-18",
+      "aiClassified": true,
+      "category": "admin",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Rispondere alla mail di Marco sul progetto",
+      "status": "inbox",
+      "deadline": "2026-07-05",
+      "aiClassified": true,
+      "category": "work",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Pagare la rata del condominio",
+      "status": "inbox",
+      "deadline": "2026-07-10",
+      "aiClassified": true,
+      "category": "admin",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Portare documenti mutuo in filiale banca",
+      "status": "inbox",
+      "deadline": null,
+      "aiClassified": true,
+      "category": "admin",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Comprare pile stilo per il telecomando",
+      "status": "inbox",
+      "deadline": null,
+      "aiClassified": true,
+      "category": "household",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Oculista lunedì ore 9:30",
+      "status": "inbox",
+      "deadline": "2026-07-06",
+      "aiClassified": true,
+      "category": "health",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Consegnare modulo ISEE al CAF",
+      "status": "inbox",
+      "deadline": "2026-07-08",
+      "aiClassified": true,
+      "category": "admin",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Pagare F24",
+      "status": "inbox",
+      "deadline": "2026-07-30",
+      "aiClassified": true,
+      "category": "admin",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Rinnovare abbonamento mezzi",
+      "status": "planned",
+      "deadline": null,
+      "aiClassified": true,
+      "category": "admin",
+      "autoConfirmed": true
+    },
+    {
+      "title": "Rispondere al messaggio di Luca",
+      "status": "planned",
+      "deadline": null,
+      "aiClassified": true,
+      "category": "general",
+      "autoConfirmed": true
+    },
+    {
+      "title": "Stampare i documenti per la banca",
+      "status": "planned",
+      "deadline": null,
+      "aiClassified": true,
+      "category": "admin",
+      "autoConfirmed": true
+    },
+    {
+      "title": "Buttare gli scatoloni in cantina",
+      "status": "planned",
+      "deadline": null,
+      "aiClassified": true,
+      "category": "household",
+      "autoConfirmed": true
+    },
+    {
+      "title": "Prenotare il controllo dalla dermatologa",
+      "status": "planned",
+      "deadline": null,
+      "aiClassified": true,
+      "category": "health",
+      "autoConfirmed": true
+    },
+    {
+      "title": "🎉 organizzare la festa di Anna & C. — lista invitati (max ~20 pers.) 🎂",
+      "status": "inbox",
+      "deadline": null,
+      "aiClassified": true,
+      "category": "personal",
+      "autoConfirmed": null
+    },
+    {
+      "title": "Pagare bolletta della luce",
+      "status": "inbox",
+      "deadline": "2026-07-06",
+      "aiClassified": true,
+      "category": "admin",
+      "autoConfirmed": null
+    }
+  ],
+  "recurring": [
+    {
+      "title": "Andare in palestra",
+      "frequency": "weekly",
+      "weekdays": "[1]",
+      "active": true
+    }
+  ],
+  "threads": [
+    {
+      "id": "cmr683uua007vibe4hioqk7qi",
+      "mode": "general",
+      "state": "active"
+    },
+    {
+      "id": "cmr68dki400t0ibe415ibde5y",
+      "mode": "general",
+      "state": "active"
+    },
+    {
+      "id": "cmr68iuy000zjibe40yj2nt30",
+      "mode": "general",
+      "state": "active"
+    },
+    {
+      "id": "cmr68mo250127ibe4i0thwxt3",
+      "mode": "general",
+      "state": "active"
+    },
+    {
+      "id": "cmr68mybx012vibe4kmq7rfmv",
+      "mode": "general",
+      "state": "active"
+    },
+    {
+      "id": "cmr68g8nt00wiibe4d6r2sw3r",
+      "mode": "general",
+      "state": "active"
+    }
+  ]
+}

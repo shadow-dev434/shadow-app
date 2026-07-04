@@ -1,0 +1,9 @@
+{
+  "n58Title": "Aggiornare il curriculum",
+  "n58Tools": [
+    "set_user_mood",
+    "set_user_energy"
+  ],
+  "n58Answer": "Aspetta — durante la review non ho il tool per segnare task come completati. Puoi farlo dalla scheda Today o dalla chat normale dopo la review. Lo tieni a mente e lo segni subito dopo?\n\nNel frattempo, partiamo con le 2 candidate. Ti va?",
+  "statoFinale": "planned"
+}

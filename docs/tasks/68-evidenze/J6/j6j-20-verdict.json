@@ -1,0 +1,18 @@
+{
+  "today": "2026-07-04",
+  "commercialista": {
+    "id": "cmr67ibg5005jibmk7z8ypyw8",
+    "deadline": null,
+    "avoidanceCount": 0,
+    "postponedCount": 0,
+    "inDailyPlanOggi": false,
+    "inApiDailyPlan": false,
+    "candidateStatico": false
+  },
+  "curriculum": {
+    "id": "cmr67ibbq005hibmk1aw4o7n5",
+    "avoidanceCount": 1,
+    "candidateStatico": true,
+    "nota": "eventuale ripescaggio dovuto ad avoidanceCount=1 (bump del setup), non alla promessa dopodomani"
+  }
+}

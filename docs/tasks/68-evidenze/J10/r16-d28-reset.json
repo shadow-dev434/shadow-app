@@ -1,0 +1,37 @@
+{
+  "resetShort": {
+    "status": 400,
+    "body": {
+      "error": "Password deve essere almeno 6 caratteri"
+    }
+  },
+  "reset6": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "register7": {
+    "status": 400,
+    "body": {
+      "error": "La password deve essere di almeno 8 caratteri"
+    },
+    "utenteCreato": 0
+  },
+  "passwordChangedAt": "2026-07-04T12:01:02.606Z",
+  "iatCookiePreReset": 1783166457,
+  "sessionePreReset": {
+    "tasks": {
+      "status": 401,
+      "body": {
+        "error": "session_invalid"
+      }
+    },
+    "settings": {
+      "status": 401,
+      "body": {
+        "error": "session_invalid"
+      }
+    }
+  }
+}

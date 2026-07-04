@@ -1,0 +1,22 @@
+{
+  "threadId": "cmr694jkt01j8ibe42pq8wcxy",
+  "mode": "evening_review",
+  "assistantMessage": "E di energia? 1-5.",
+  "toolsExecuted": [
+    {
+      "name": "record_mood",
+      "input": {
+        "value": 3
+      },
+      "result": {
+        "value": 3
+      }
+    }
+  ],
+  "quickReplies": [],
+  "costUsd": 0.0290994,
+  "tokensIn": 290,
+  "tokensOut": 50,
+  "modelUsed": "claude-sonnet-4-6",
+  "latencyMs": 7696
+}

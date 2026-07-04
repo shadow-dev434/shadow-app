@@ -1,0 +1,89 @@
+{
+  "threadId": "cmr68kviz010dibe4asbf390w",
+  "stateDopoGet": "active",
+  "endedAt": null,
+  "triagePrimaDellAbbandono": {
+    "candidateTaskIds": [
+      "cmr67i3wl003xibmk0omoizja",
+      "cmr68kjh70001iba0cibk72wa",
+      "cmr67i48d0041ibmknpxr30u5"
+    ],
+    "addedTaskIds": [],
+    "excludedTaskIds": [],
+    "reasonsByTaskId": {
+      "cmr67i3wl003xibmk0omoizja": "deadline",
+      "cmr68kjh70001iba0cibk72wa": "new",
+      "cmr67i48d0041ibmknpxr30u5": "new"
+    },
+    "computedAt": "2026-07-04T10:45:42.741Z",
+    "clientDate": "2026-07-04",
+    "currentEntryId": null,
+    "outcomes": {
+      "cmr67i3wl003xibmk0omoizja": "kept"
+    },
+    "decomposition": null,
+    "lastTurnWasTextOnly": false,
+    "moodIntake": {
+      "mood": 4,
+      "energyEnd": 3
+    }
+  },
+  "intakeNelContextArchiviato": {
+    "mood": 4,
+    "energyEnd": 3
+  },
+  "outcomesNelContext": {
+    "cmr67i3wl003xibmk0omoizja": "kept"
+  },
+  "reviewToday": null,
+  "reviewTomorrow": null,
+  "planTomorrow": null,
+  "get3Body": {
+    "activeThread": {
+      "threadId": "cmr68klnh0105ibe4xeeuj370",
+      "mode": "general",
+      "messages": [
+        {
+          "id": "cmr68kp0n0107ibe4pltqxvhq",
+          "role": "user",
+          "content": "ciao, giornata piena ma tutto ok",
+          "createdAt": "2026-07-04T10:45:32.712Z"
+        },
+        {
+          "id": "cmr68ktsm0109ibe4mx756pr8",
+          "role": "assistant",
+          "content": "Ciao! Ok, allora partiamo con il check-in del mattino.\n\nCome stai di umore oggi, da 1 a 5?",
+          "createdAt": "2026-07-04T10:45:38.558Z"
+        }
+      ],
+      "hasMore": false
+    },
+    "eveningReview": {
+      "shouldStart": false
+    }
+  },
+  "get4Body": {
+    "activeThread": {
+      "threadId": "cmr68klnh0105ibe4xeeuj370",
+      "mode": "general",
+      "messages": [
+        {
+          "id": "cmr68kp0n0107ibe4pltqxvhq",
+          "role": "user",
+          "content": "ciao, giornata piena ma tutto ok",
+          "createdAt": "2026-07-04T10:45:32.712Z"
+        },
+        {
+          "id": "cmr68ktsm0109ibe4mx756pr8",
+          "role": "assistant",
+          "content": "Ciao! Ok, allora partiamo con il check-in del mattino.\n\nCome stai di umore oggi, da 1 a 5?",
+          "createdAt": "2026-07-04T10:45:38.558Z"
+        }
+      ],
+      "hasMore": false
+    },
+    "eveningReview": {
+      "shouldStart": false
+    }
+  }
+}

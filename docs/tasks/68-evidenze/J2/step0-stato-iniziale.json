@@ -1,0 +1,75 @@
+{
+  "romeNow": "12:31",
+  "today": "2026-07-04",
+  "healthStatus": 200,
+  "userId": "cmr67hj1x0000ibmk8zoqezut",
+  "tasks": [
+    {
+      "id": "cmr67hl1c0007ibmk7m1g83b1",
+      "title": "Preparare la relazione trimestrale",
+      "status": "planned",
+      "microSteps": "3 steps"
+    },
+    {
+      "id": "cmr67hle00009ibmk4sishse6",
+      "title": "Pagare la bolletta della luce",
+      "status": "planned",
+      "microSteps": "0 steps"
+    },
+    {
+      "id": "cmr67hlrd000bibmku2vhad1i",
+      "title": "Chiamare il dentista per appuntamento",
+      "status": "planned",
+      "microSteps": "0 steps"
+    },
+    {
+      "id": "cmr67hly0000dibmk3h3ds0oq",
+      "title": "Riordinare la scrivania",
+      "status": "inbox",
+      "microSteps": "0 steps"
+    },
+    {
+      "id": "cmr67hm2r000fibmkb5xq89wa",
+      "title": "Rispondere alle mail arretrate",
+      "status": "inbox",
+      "microSteps": "0 steps"
+    },
+    {
+      "id": "cmr67hm7i000hibmkzx5xxxic",
+      "title": "Comprare regalo per Marta",
+      "status": "inbox",
+      "microSteps": "0 steps"
+    },
+    {
+      "id": "cmr67hmbp000jibmk8hiulemg",
+      "title": "Fare la spesa settimanale",
+      "status": "completed",
+      "microSteps": "0 steps"
+    }
+  ],
+  "planToday": {
+    "id": "cmr67hmnn000libmkb53d5do7",
+    "userId": "cmr67hj1x0000ibmk8zoqezut",
+    "date": "2026-07-04",
+    "top3Ids": "[\"cmr67hl1c0007ibmk7m1g83b1\",\"cmr67hle00009ibmk4sishse6\",\"cmr67hlrd000bibmku2vhad1i\"]",
+    "doNowIds": "[]",
+    "scheduleIds": "[]",
+    "delegateIds": "[]",
+    "postponeIds": "[]",
+    "energyLevel": 4,
+    "timeAvailable": 360,
+    "currentContext": "any",
+    "slotContextsJson": "{}",
+    "createdAt": "2026-07-04T10:15:10.067Z",
+    "updatedAt": "2026-07-04T10:15:10.067Z",
+    "threadId": null,
+    "pinnedIds": "[]",
+    "originalPlanJson": null
+  },
+  "threads": [],
+  "settings": {
+    "eveningWindowStart": "20:00",
+    "eveningWindowEnd": "23:00"
+  },
+  "reviews": []
+}

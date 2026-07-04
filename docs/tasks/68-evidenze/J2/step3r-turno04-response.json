@@ -1,0 +1,40 @@
+{
+  "userMessage": "Sì, partiamo!",
+  "status": 200,
+  "json": {
+    "threadId": "cmr68de8e00scibe4j2nsg7b8",
+    "mode": "evening_review",
+    "assistantMessage": "Comprare regalo per Marta — scade tra 6 giorni. Hai già un'idea o stai ancora cercando?",
+    "toolsExecuted": [
+      {
+        "name": "record_energy",
+        "input": {
+          "value": 3
+        }
+      },
+      {
+        "name": "record_energy",
+        "input": {
+          "value": 3
+        }
+      },
+      {
+        "name": "set_current_entry",
+        "input": {
+          "entryId": "cmr67hm7i000hibmkzx5xxxic"
+        },
+        "result": {
+          "entryId": "cmr67hm7i000hibmkzx5xxxic",
+          "taskTitle": "Comprare regalo per Marta",
+          "action": "cursor_set"
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.18013725000000003,
+    "tokensIn": 1324,
+    "tokensOut": 213,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 9296
+  }
+}

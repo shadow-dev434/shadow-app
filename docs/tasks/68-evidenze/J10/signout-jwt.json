@@ -1,0 +1,8 @@
+{
+  "pre": 200,
+  "signoutPost": {
+    "status": 200,
+    "azzeraCookie": true
+  },
+  "replayVecchioCookie": 200
+}

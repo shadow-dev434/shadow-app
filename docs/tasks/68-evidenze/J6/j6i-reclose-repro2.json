@@ -1,0 +1,15 @@
+{
+  "status": 200,
+  "json": {
+    "threadId": "cmr69935j01qwibe4kkh35pnw",
+    "mode": "general",
+    "assistantMessage": "Non sono nella review serale adesso — siamo in chat libera. La review si fa solo alla sera, quando l'app te la propone.\n\nSe vuoi rivedere il piano di domani o controllare cosa hai in lista, posso mostrarti i task di oggi. Vuoi vederli?",
+    "toolsExecuted": [],
+    "quickReplies": [],
+    "costUsd": 0.0014130000000000002,
+    "tokensIn": 435,
+    "tokensOut": 73,
+    "modelUsed": "claude-haiku-4-5",
+    "latencyMs": 2330
+  }
+}

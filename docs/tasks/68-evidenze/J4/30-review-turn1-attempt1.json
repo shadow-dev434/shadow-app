@@ -1,0 +1,12 @@
+{
+  "threadId": "cmr694jkt01j8ibe42pq8wcxy",
+  "mode": "evening_review",
+  "assistantMessage": "Bentornato. Come stai stasera? 1-5.",
+  "toolsExecuted": [],
+  "quickReplies": [],
+  "costUsd": 0.013700100000000002,
+  "tokensIn": 679,
+  "tokensOut": 20,
+  "modelUsed": "claude-sonnet-4-6",
+  "latencyMs": 3159
+}

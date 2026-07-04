@@ -1,0 +1,56 @@
+{
+  "preCounts": {
+    "user": 1,
+    "tasks": 2,
+    "threads": 1,
+    "messages": 2,
+    "notifications": 1,
+    "pushDevices": 1,
+    "calendarTokens": 1,
+    "recurring": 1,
+    "signals": 1
+  },
+  "deleteSenzaConferma": {
+    "status": 400,
+    "body": {
+      "error": "confirmation_required"
+    }
+  },
+  "deleteConfermaSbagliata": {
+    "status": 400,
+    "body": {
+      "error": "confirmation_required"
+    }
+  },
+  "delete": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "postCounts": {
+    "user": 0,
+    "tasks": 0,
+    "threads": 0,
+    "messages": 0,
+    "notifications": 0,
+    "pushDevices": 0,
+    "calendarTokens": 0,
+    "recurring": 0,
+    "signals": 0
+  },
+  "sessioneFantasma": {
+    "tasks": {
+      "status": 401,
+      "body": {
+        "error": "session_invalid"
+      }
+    },
+    "settings": {
+      "status": 401,
+      "body": {
+        "error": "session_invalid"
+      }
+    }
+  }
+}

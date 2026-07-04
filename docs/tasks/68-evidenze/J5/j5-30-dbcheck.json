@@ -1,0 +1,80 @@
+{
+  "review": {
+    "id": "cmr69mtzj02agibe4yp1waqlw",
+    "whatBlocked": "— Compilare la dichiarazione dei redditi: non l'ho fatto, rimandiamolo a domani",
+    "mood": 2,
+    "energyEnd": 2,
+    "whatDone": ""
+  },
+  "taskBlockedSignals": [
+    {
+      "id": "cmr67hvid0029ibmkin7s589w",
+      "taskId": "cmr67hun8001zibmkr7eul1rm",
+      "createdAt": "2026-07-03T22:15:21.541Z",
+      "metadata": "{\"reason\":\"non so da dove iniziare\"}"
+    },
+    {
+      "id": "cmr69mxfl02aoibe4kh2t9qyv",
+      "taskId": "cmr67hun8001zibmkr7eul1rm",
+      "createdAt": "2026-07-04T11:15:16.546Z",
+      "metadata": "{\"reason\":\"non l'ho fatto, rimandiamolo a domani\",\"reviewDate\":\"2026-07-04\"}"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "cmr67hv390023ibmkfhtmnlfr",
+      "title": "Scrivere la mail difficile al capo",
+      "status": "planned",
+      "decision": "decompose_then_do",
+      "postponedCount": 6,
+      "microSteps": "[{\"id\":\"step_135aea6a-c3a5-4ec4-a7c1-1ed97dd567ee\",\"text\":\"Apri il documento/file\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_bef20041-b6c8-434e-baa1-175aa35e9a92\",\"text\":\"Scrivi 3 punti chiave come bullet\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_b05c84f9-1c1d-4ed6-9fef-974a1a0acfc3\",\"text\":\"Scegli il punto più facile\",\"done\":false,\"estimatedSeconds\":0},{\"id\":\"step_4c31b613-4e39-4afe-8923-daa73bdfca4b\",\"text\":\"Scrivi 2 frasi su quel punto\",\"done\":false,\"estimatedSeconds\":0}]"
+    },
+    {
+      "id": "cmr67hun8001zibmkr7eul1rm",
+      "title": "Compilare la dichiarazione dei redditi",
+      "status": "planned",
+      "decision": "decompose_then_do",
+      "postponedCount": 5,
+      "microSteps": "[]"
+    },
+    {
+      "id": "cmr67huyz0021ibmk79eed9qv",
+      "title": "Prenotare la visita medica di controllo",
+      "status": "planned",
+      "decision": "do_now",
+      "postponedCount": 4,
+      "microSteps": "[]"
+    },
+    {
+      "id": "cmr67hv8e0025ibmkic0489tz",
+      "title": "Portare il pacco alle poste",
+      "status": "inbox",
+      "decision": "unclassified",
+      "postponedCount": 1,
+      "microSteps": "[]"
+    }
+  ],
+  "planTomorrow": {
+    "id": "cmr69muya02aiibe4849fr2eg",
+    "date": "2026-07-05",
+    "tasks": [
+      {
+        "taskId": "cmr67huyz0021ibmk79eed9qv",
+        "slot": "morning"
+      },
+      {
+        "taskId": "cmr67hv8e0025ibmkic0489tz",
+        "slot": "afternoon"
+      },
+      {
+        "taskId": "cmr67hv390023ibmkfhtmnlfr",
+        "slot": "evening"
+      },
+      {
+        "taskId": "cmr67hun8001zibmkr7eul1rm",
+        "slot": "evening"
+      }
+    ],
+    "top3Ids": "[\"cmr67huyz0021ibmk79eed9qv\",\"cmr67hv8e0025ibmkic0489tz\",\"cmr67hv390023ibmkfhtmnlfr\"]"
+  }
+}

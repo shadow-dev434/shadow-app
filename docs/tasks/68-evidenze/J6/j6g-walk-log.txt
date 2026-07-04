@@ -1,0 +1,97 @@
+# J6g auto-decomposizione 67C — collaudo68-review-g@probe.local cmr67i5jh0048ibmk7trks35g — clientDate=2026-07-04
+task bare: Preparare il trasloco della cantina (cmr67i6lc004fibmk0ud03rgk) | Organizzare la festa di compleanno di Luca (cmr67i6pl004hibmk6ssfyiz0)
+task con step: Sistemare il giardino (cmr67i6u5004jibmk6pulk5c7) steps=[{"text":"Tagliare l'erba","done":false},{"text":"Potare la siepe","done":false}]
+non-candidate N58: Comprare le lampadine per il corridoio (cmr691pfd0001ibl49wtt6tsc)
+  [pregen] proposedStepsByTaskId keys=["cmr67i6u5004jibmk6pulk5c7","cmr67i6pl004hibmk6ssfyiz0","cmr67i6lc004fibmk0ud03rgk"]
+  [pregen] dettaglio={"cmr67i6u5004jibmk6pulk5c7":[{"text":"Apri/prepara quello che serve per \"Sistemare il giardino\""},{"text":"Fai la prima cosa più ovvia e semplice"},{"text":"Fai un secondo piccolo passo"}],"cmr67i6pl004hibmk6ssfyiz0":[{"text":"Apri/prepara quello che serve per \"Organizzare la festa di compleanno di Luca\""},{"text":"Fai la prima cosa più ovvia e semplice"},{"text":"Fai un secondo piccolo passo"}],"cmr67i6lc004fibmk0ud03rgk":[{"text":"Apri/prepara quello che serve per \"Preparare il trasloco della cantina\""},{"text":"Fai la prima cosa più ovvia e semplice"},{"text":"Fai un secondo piccolo passo"}]}
+TURNO 1: "iniziamo la review" -> 200 (7545ms) phase=per_entry state=active mood=- energy=- ws=- tools=[] qr=[] cost=$0.0137
+TURNO 2: "4" -> 200 (8464ms) phase=per_entry state=active mood=4 energy=- ws=- tools=[record_mood] qr=[] cost=$0.0303
+TURNO 3: "3" -> 200 (9101ms) phase=per_entry state=active mood=4 energy=3 ws=- tools=[record_energy] qr=[] cost=$0.0305
+  [entry pregen #1] task=cmr67i6pl004hibmk6ssfyiz0 qr=[] stepsNelMessaggio=false
+TURNO 4: "ok, questa tienila per domani e passa avanti" -> 200 (15261ms) phase=per_entry state=active mood=4 energy=3 ws=sfyiz0/pregen tools=[set_current_entry,mark_entry_discussed,set_current_entry] qr=[] cost=$0.0667
+  [conferma senza approve] tools=[] risposta="Questa è di quelle da spezzare prima di iniziare — l'ho già divisa in 3 passi: apri o prepara quello che serve, fai la prima cosa più ovvia e semplice, poi un secondo piccolo passo. Li salviamo?"
+TURNO 5: "Sì, salvali" -> 200 (7452ms) phase=per_entry state=active mood=4 energy=3 ws=sfyiz0/pregen tools=[] qr=[Sì, salvali | Cambiali | Lascia stare] cost=$0.0160
+TURNO 6: "ok, questa tienila per domani e passa avanti" -> 200 (18756ms) phase=per_entry state=active mood=4 energy=3 ws=d03rgk/pregen tools=[approve_decomposition,mark_entry_discussed,set_current_entry] qr=[] cost=$0.0711
+  [Cambiali] tools=[propose_decomposition] ws.dopo={"taskId":"cmr67i6lc004fibmk0ud03rgk","level":1,"proposedSteps":[{"text":"Apri la cantina e guarda cosa c'è"},{"text":"Separa in tre pile: butta, tieni, dona"},{"text":"Metti in scatola la prima pila"}]} risposta="Ti torna come inizio?"
+TURNO 7: "Cambiali: non mi convincono, rifalli più concreti e più corti" -> 200 (10460ms) phase=per_entry state=active mood=4 energy=3 ws=d03rgk tools=[propose_decomposition] qr=[] cost=$0.0325
+  [conferma senza approve] tools=[] risposta="Ho bisogno di sapere a quali step ti riferisci — non ho ancora proposto una lista concreta per il trasloco della cantina. Dimmi cosa vuoi fare con questa entry: la lavoriamo insieme o la rimandiamo?"
+TURNO 8: "sì, questi vanno bene, salvali" -> 200 (7084ms) phase=per_entry state=active mood=4 energy=3 ws=d03rgk tools=[] qr=[] cost=$0.0161
+TURNO 9: "ok, questa tienila per domani e passa avanti" -> 200 (9481ms) phase=plan_preview state=active mood=4 energy=3 ws=- tools=[mark_entry_discussed] qr=[] cost=$0.0359
+TURNO 10: "perfetto, confermo il piano così" -> 200 (8413ms) phase=closing state=active mood=4 energy=3 ws=- tools=[confirm_plan_preview] qr=[] cost=$0.0330
+TURNO 11: "sì, chiudi pure la review" -> 200 (11974ms) phase=closing state=completed mood=4 energy=3 ws=- tools=[confirm_close_review] qr=[] cost=$0.0230
+
+completed=true non200=0 turniUtente=11 wallClock=117s
+[one-tap] step salvati IDENTICI ai pregenerati
+[N58] status non-candidate dopo review: inbox
+
+## Stato finale
+{
+  "clientDate": "2026-07-04",
+  "tomorrow": "2026-07-05",
+  "threadId": "cmr691s0b019zibe4ydsa3a1p",
+  "completed": true,
+  "non200": 0,
+  "userTurns": 11,
+  "wallSeconds": 117,
+  "pregenerated": {
+    "Sistemare il giardino": [
+      "Apri/prepara quello che serve per \"Sistemare il giardino\"",
+      "Fai la prima cosa più ovvia e semplice",
+      "Fai un secondo piccolo passo"
+    ],
+    "Organizzare la festa di compleanno di Luca": [
+      "Apri/prepara quello che serve per \"Organizzare la festa di compleanno di Luca\"",
+      "Fai la prima cosa più ovvia e semplice",
+      "Fai un secondo piccolo passo"
+    ],
+    "Preparare il trasloco della cantina": [
+      "Apri/prepara quello che serve per \"Preparare il trasloco della cantina\"",
+      "Fai la prima cosa più ovvia e semplice",
+      "Fai un secondo piccolo passo"
+    ]
+  },
+  "firstBareId": "cmr67i6pl004hibmk6ssfyiz0",
+  "secondBareId": "cmr67i6lc004fibmk0ud03rgk",
+  "approveCount": 0,
+  "approvedTaskIds": [],
+  "probes": {
+    "qrOneTapSeen": false,
+    "stepsPresentedInMessage": false,
+    "regeneratedDifferent": null,
+    "n58": "NON INVIATA",
+    "nonCandStatusAfter": "inbox"
+  },
+  "tasksAfter": [
+    {
+      "title": "Preparare il trasloco della cantina",
+      "status": "planned",
+      "microSteps": []
+    },
+    {
+      "title": "Organizzare la festa di compleanno di Luca",
+      "status": "planned",
+      "microSteps": [
+        "Apri/prepara quello che serve per \"Organizzare la festa di compleanno di Luca\"",
+        "Fai la prima cosa più ovvia e semplice",
+        "Fai un secondo piccolo passo"
+      ]
+    },
+    {
+      "title": "Sistemare il giardino",
+      "status": "planned",
+      "microSteps": [
+        "Tagliare l'erba",
+        "Potare la siepe"
+      ]
+    }
+  ],
+  "review": {
+    "id": "cmr6945h101ilibe4su86pc4u",
+    "mood": 4,
+    "energyEnd": 3
+  },
+  "planTomorrow": {
+    "id": "cmr6945ue01ipibe42218cm3b",
+    "top3Ids": "[\"cmr67i6lc004fibmk0ud03rgk\",\"cmr67i6u5004jibmk6pulk5c7\",\"cmr67i6pl004hibmk6ssfyiz0\"]"
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "status": 200,
+  "elapsed": 11364,
+  "threadId": "cmr683uua007vibe4hioqk7qi",
+  "tools": [
+    {
+      "name": "create_task",
+      "input": {
+        "title": "Oculista lunedì ore 9:30",
+        "deadline": "2026-07-06",
+        "urgency": 4,
+        "importance": 4,
+        "category": "health",
+        "description": "Appuntamento oculista lunedì 6 luglio ore 9:30"
+      },
+      "result": {
+        "id": "cmr68fqmc00vyibe4pejktav2",
+        "title": "Oculista lunedì ore 9:30",
+        "urgency": 4,
+        "importance": 4,
+        "category": "health"
+      }
+    },
+    {
+      "name": "create_task",
+      "input": {
+        "title": "Consegnare modulo ISEE al CAF",
+        "deadline": "2026-07-08",
+        "urgency": 4,
+        "importance": 4,
+        "category": "admin",
+        "description": "Consegnare il modulo ISEE al CAF entro mercoledì 8 luglio"
+      },
+      "result": {
+        "id": "cmr68fqqu00w0ibe4qxtqozs6",
+        "title": "Consegnare modulo ISEE al CAF",
+        "urgency": 4,
+        "importance": 4,
+        "category": "admin"
+      }
+    }
+  ],
+  "assistant": "Ho aggiunto 2 impegni: oculista lunedì 6 luglio alle 9:30 e consegnare modulo ISEE al CAF entro mercoledì 8 luglio. Dimmi se cambio qualcosa.",
+  "newTasks": [
+    {
+      "id": "cmr68fqmc00vyibe4pejktav2",
+      "title": "Oculista lunedì ore 9:30",
+      "deadline": "2026-07-06",
+      "aiClassified": true,
+      "description": "Appuntamento oculista lunedì 6 luglio ore 9:30",
+      "category": "health"
+    },
+    {
+      "id": "cmr68fqqu00w0ibe4qxtqozs6",
+      "title": "Consegnare modulo ISEE al CAF",
+      "deadline": "2026-07-08",
+      "aiClassified": true,
+      "description": "Consegnare il modulo ISEE al CAF entro mercoledì 8 luglio",
+      "category": "admin"
+    }
+  ]
+}

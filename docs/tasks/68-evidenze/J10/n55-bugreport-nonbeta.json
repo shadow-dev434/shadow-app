@@ -1,0 +1,16 @@
+{
+  "post": {
+    "status": 200,
+    "body": {
+      "report": {
+        "id": "cmr687bvm00idibe4h2hqh2qq",
+        "status": "new",
+        "createdAt": "2026-07-04T10:35:09.155Z"
+      }
+    }
+  },
+  "rigaDb": {
+    "userId": "cmr67iyb800b8ibmkw4hecymk",
+    "severityUser": "blocking"
+  }
+}

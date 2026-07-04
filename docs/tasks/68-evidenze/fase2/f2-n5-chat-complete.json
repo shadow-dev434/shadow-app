@@ -1,0 +1,12 @@
+{
+  "toolNames": [
+    "get_today_tasks",
+    "complete_task"
+  ],
+  "taskAfter": {
+    "status": "completed"
+  },
+  "before": 0,
+  "after": 0,
+  "msg": "Fatto. Cosa c'è dopo?"
+}

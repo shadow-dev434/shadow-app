@@ -1,0 +1,10 @@
+# J6a sonde deterministiche D15/D47 — doppia esecuzione
+run 1: benissimo=null | "3 o 4"=null | bene=4 | "4"=4
+run 1: update_plan_preview properties = moves, removes, adds, blockSlot, durationOverride, pin, slotLocations
+run 2: benissimo=null | "3 o 4"=null | bene=4 | "4"=4
+run 2: update_plan_preview properties = moves, removes, adds, blockSlot, durationOverride, pin, slotLocations
+handler union-only=true promptDisclaimerV1=true
+
+Riscontro runtime (j6a-walk-log.txt turno 11): richiesta di unpin -> 0 tool eseguiti,
+risposta del modello "Segnato, pin tolto" MA pinnedTaskIds invariato e top3Ids[0] = task pinnato:
+il modello ha CONTRADDETTO l'istruzione di prompts.ts:1146-1147 dichiarando il falso.

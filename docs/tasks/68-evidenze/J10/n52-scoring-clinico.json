@@ -1,0 +1,60 @@
+{
+  "pulse": {
+    "post1": 200,
+    "post2": {
+      "status": 200,
+      "body": {
+        "feedback": null,
+        "duplicate": true
+      }
+    },
+    "righeDb": 1
+  },
+  "asrs": {
+    "atteso": {
+      "totale": 36,
+      "inattention": 21,
+      "hyper": 15,
+      "partA": 4,
+      "screen": 1
+    },
+    "server": {
+      "totale": 36,
+      "subscales": {
+        "inattention": 21,
+        "hyperactivityImpulsivity": 15,
+        "partAPositiveCount": 4,
+        "partAScreenPositive": 1
+      },
+      "completedAt": "2026-07-04T10:35:16.189Z"
+    }
+  },
+  "adexi": {
+    "atteso": {
+      "totale": 44,
+      "wm": 28,
+      "inh": 16
+    },
+    "server": {
+      "totale": 44,
+      "subscales": {
+        "workingMemory": 28,
+        "inhibition": 16
+      }
+    }
+  },
+  "sus": {
+    "atteso": 80,
+    "server": 80
+  },
+  "pgic": {
+    "atteso": 2,
+    "server": 2
+  },
+  "itemFuoriScala": {
+    "status": 400,
+    "body": {
+      "error": "invalid score for item a1"
+    }
+  }
+}

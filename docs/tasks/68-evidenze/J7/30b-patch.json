@@ -1,0 +1,23 @@
+{
+  "pausa": {
+    "recurring": {
+      "id": "cmr69fyvr01zcibe40ovf2b8k",
+      "active": false
+    }
+  },
+  "riattiva": {
+    "recurring": {
+      "id": "cmr69fyvr01zcibe40ovf2b8k",
+      "active": true
+    }
+  },
+  "badPatch": {
+    "s": 400,
+    "b": {
+      "error": "active (boolean) obbligatorio"
+    }
+  },
+  "notMine": {
+    "s": 404
+  }
+}

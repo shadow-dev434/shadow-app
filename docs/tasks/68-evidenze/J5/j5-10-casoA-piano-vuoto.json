@@ -1,0 +1,35 @@
+{
+  "status": 200,
+  "body": {
+    "plan": {
+      "id": "cmr67hvcu0027ibmkjwhbj9wd",
+      "userId": "cmr67htkl001sibmkskap7nn6",
+      "date": "2026-07-04",
+      "top3Ids": [],
+      "doNowIds": [],
+      "scheduleIds": [],
+      "delegateIds": [],
+      "postponeIds": [],
+      "energyLevel": 3,
+      "timeAvailable": 480,
+      "currentContext": "any",
+      "slotContextsJson": "{}",
+      "createdAt": "2026-07-04T10:15:21.342Z",
+      "updatedAt": "2026-07-04T10:15:21.342Z",
+      "threadId": null,
+      "pinnedIds": "[]",
+      "originalPlanJson": null,
+      "tasks": []
+    },
+    "breakdown": {
+      "top3": [],
+      "doNow": [],
+      "schedule": [],
+      "delegate": [],
+      "postpone": []
+    },
+    "slots": null,
+    "source": "engine",
+    "recovery": {}
+  }
+}

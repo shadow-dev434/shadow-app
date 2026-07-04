@@ -1,0 +1,30 @@
+{
+  "userTurns": 7,
+  "wallSecs": 70,
+  "toolsAll": [
+    "record_mood",
+    "record_energy",
+    "create_task",
+    "confirm_plan_preview",
+    "confirm_close_review"
+  ],
+  "finalThreadState": "completed",
+  "review": {
+    "id": "cmr68ohum014ribe4yd48nh49",
+    "date": "2026-07-04",
+    "mood": 3,
+    "energyEnd": 3,
+    "whatDone": "",
+    "whatAvoided": "",
+    "whatBlocked": ""
+  },
+  "dailyPlanTomorrow": {
+    "id": "cmr68oigu014tibe4pqgs61yx",
+    "date": "2026-07-05",
+    "top3Ids": "[]",
+    "doNowIds": "[]",
+    "originalPlanJson": "{\"version\":1,\"capturedAt\":\"2026-07-04T10:48:29.827Z\",\"preview\":{\"morning\":[],\"afternoon\":[],\"evening\":[],\"cut\":[],\"fillEstimate\":{\"used\":\"0h\",\"capacity\":\"9.6h\",\"state\":\"low\",\"percentage\":0},\"appointmentAware\":false,\"warnings\":[]},\"pinnedIds\":[]}"
+  },
+  "curriculumTask": "cmr68nacc0001ib74dh04ihkl",
+  "spendUser": 0.2788971
+}

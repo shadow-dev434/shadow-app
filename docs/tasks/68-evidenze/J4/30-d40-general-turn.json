@@ -1,0 +1,29 @@
+{
+  "threadId": "cmr6953u001k8ibe4ihftrfp5",
+  "mode": "general",
+  "assistantMessage": "Fatto. Ha una scadenza o è quando capita?",
+  "toolsExecuted": [
+    {
+      "name": "create_task",
+      "input": {
+        "title": "Ritirare il pacco al fermopoint",
+        "urgency": 3,
+        "importance": 3,
+        "category": "personal"
+      },
+      "result": {
+        "id": "cmr69578701kiibe4mpcwaaq8",
+        "title": "Ritirare il pacco al fermopoint",
+        "urgency": 3,
+        "importance": 3,
+        "category": "personal"
+      }
+    }
+  ],
+  "quickReplies": [],
+  "costUsd": 0.0029769999999999996,
+  "tokensIn": 1051,
+  "tokensOut": 140,
+  "modelUsed": "claude-haiku-4-5",
+  "latencyMs": 3658
+}

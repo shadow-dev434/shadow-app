@@ -1,0 +1,41 @@
+{
+  "insights": [
+    {
+      "id": "8324e5a2-5eb2-4e74-a1d1-44722cc76112",
+      "type": "suggestion",
+      "title": "Pattern di evitamento rilevato",
+      "message": "\"Scrivere la mail difficile al capo\" è stato evitato 4 volte. La volta scorsa ti sei bloccato perché il task era troppo ambiguo, quindi ora te lo spezzo meglio.",
+      "confidence": 0.44999999999999996,
+      "basedOn": [
+        "avoidanceCount",
+        "avoidanceProfile",
+        "commonFailureReasons"
+      ],
+      "actionable": true,
+      "action": "decompose_and_suggest"
+    }
+  ],
+  "triggers": [
+    {
+      "type": "avoidance_pattern",
+      "taskId": "cmr67hun8001zibmkr7eul1rm",
+      "category": "general",
+      "evidence": "Task \"Compilare la dichiarazione dei redditi\" evitato 3 volte",
+      "priority": "high"
+    },
+    {
+      "type": "avoidance_pattern",
+      "taskId": "cmr67hv390023ibmkfhtmnlfr",
+      "category": "general",
+      "evidence": "Task \"Scrivere la mail difficile al capo\" evitato 4 volte",
+      "priority": "high"
+    },
+    {
+      "type": "inconsistency",
+      "taskId": "cmr67huyz0021ibmk79eed9qv",
+      "category": "health",
+      "evidence": "Task importante (4/5) ma evitato 2 volte",
+      "priority": "high"
+    }
+  ]
+}

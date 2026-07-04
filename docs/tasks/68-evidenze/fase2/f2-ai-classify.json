@@ -1,0 +1,15 @@
+{
+  "importance": 5,
+  "urgency": 5,
+  "resistance": 2,
+  "size": 1,
+  "delegable": true,
+  "context": "any",
+  "category": "admin",
+  "quadrant": "do_now",
+  "priorityScore": 24,
+  "decision": "do_now",
+  "reason": "Priorità alta, eseguibile ora (fit=1.00).",
+  "confidence": 0.95,
+  "profileFactors": []
+}

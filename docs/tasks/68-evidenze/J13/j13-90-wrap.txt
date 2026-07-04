@@ -1,0 +1,2 @@
+llmSpend(collaudo68-sommerso) = 1.29023805
+settings eveningWindow = {"eveningWindowStart":"20:00","eveningWindowEnd":"23:00"} (atteso: default ripristinato)

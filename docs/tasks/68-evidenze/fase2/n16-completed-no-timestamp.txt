@@ -1,0 +1,5 @@
+N16 repro
+PATCH status='completed' (nessun completedAt)
+HTTP: 200
+DB status: completed
+DB completedAt: null

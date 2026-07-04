@@ -1,0 +1,22 @@
+{
+  "threadId": "cmr694jkt01j8ibe42pq8wcxy",
+  "mode": "evening_review",
+  "assistantMessage": "Stasera ho 2 candidate da attraversare con te — ti va?",
+  "toolsExecuted": [
+    {
+      "name": "record_energy",
+      "input": {
+        "value": 3
+      },
+      "result": {
+        "value": 3
+      }
+    }
+  ],
+  "quickReplies": [],
+  "costUsd": 0.029170799999999997,
+  "tokensIn": 280,
+  "tokensOut": 75,
+  "modelUsed": "claude-sonnet-4-6",
+  "latencyMs": 4722
+}

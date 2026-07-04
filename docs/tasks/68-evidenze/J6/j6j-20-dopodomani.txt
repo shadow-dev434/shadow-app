@@ -1,0 +1,44 @@
+# J6j passo 2 — dopodomani=OGGI (2026-07-04) — collaudo68-review-j@probe.local
+Review cmr6968t601msibe4qxxv8uys: 2026-07-01 -> 2026-06-29
+Review cmr69cl1r01wwibe4j7340tgu: 2026-07-04 -> 2026-07-02
+DailyPlan cmr693wk801i3ibe4hegarglw: 2026-07-01 -> 2026-06-29
+DailyPlan cmr69clb801wyibe4jyqse5ue: 2026-07-05 -> 2026-07-03
+DailyPlan cmr696a5h01mwibe43ftztkmi: 2026-07-02 -> 2026-06-30
+ChatThread x2 e Task x6: -2gg
+
+## (a) DailyPlan(oggi=2026-07-04): ASSENTE
+
+## (b) GET /api/daily-plan -> 200
+{"plan":null}
+(b) commercialista nel payload daily-plan: false; curriculum: false
+
+## (c) selectCandidates(oggi):
+  - Consegnare il progetto al cliente (reason=deadline)
+  - Aggiornare il curriculum (reason=carryover)
+(c) commercialista candidate=false; curriculum candidate=true (curriculum solo via avoidance=1 del setup)
+
+## (d) apertura review: HTTP 200 msg="Come stai stasera? 1-5."
+(d) candidateTaskIds review di stasera: ["Consegnare il progetto al cliente","Aggiornare il curriculum"]
+(d) commercialista ripescato=false; curriculum ripescato=true
+(d) D46 CONFERMATA dinamicamente: il task rinviato "a dopodomani" NON rientra tra le candidate del giorno promesso
+(d) thread sonda cmr69f8ke01yyibe4ihscg113 archiviato
+
+## Verdetto
+{
+  "today": "2026-07-04",
+  "commercialista": {
+    "id": "cmr67ibg5005jibmk7z8ypyw8",
+    "deadline": null,
+    "avoidanceCount": 0,
+    "postponedCount": 0,
+    "inDailyPlanOggi": false,
+    "inApiDailyPlan": false,
+    "candidateStatico": false
+  },
+  "curriculum": {
+    "id": "cmr67ibbq005hibmk1aw4o7n5",
+    "avoidanceCount": 1,
+    "candidateStatico": true,
+    "nota": "eventuale ripescaggio dovuto ad avoidanceCount=1 (bump del setup), non alla promessa dopodomani"
+  }
+}

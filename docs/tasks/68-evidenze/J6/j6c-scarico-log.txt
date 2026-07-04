@@ -1,0 +1,106 @@
+# J6c scarico emotivo — collaudo68-review-c@probe.local cmr67hzk70032ibmkwlfgn2ms — clientDate=2026-07-04
+TURNO 1: "iniziamo" -> 200 (6008ms) phase=per_entry state=active tools=[-] cost=$0.0136
+  assistant: Come stai stasera? 1-5.
+TURNO 2: "3" -> 200 (7640ms) phase=per_entry state=active tools=[record_mood] cost=$0.1558
+  assistant: E di energia? 1-5.
+TURNO 3: "3" -> 200 (7923ms) phase=per_entry state=active tools=[record_energy] cost=$0.1553
+  assistant: Stasera ho 2 candidate da attraversare con te, l'altra resta nell'inbox per ora — ti va?
+TURNO 4: "aspetta, prima di andare avanti... che giornata orrenda oggi. Ho litigato col capo e mi sento un fallimento totale" -> 200 (5251ms) phase=per_entry state=active tools=[-] cost=$0.0144
+  assistant: Oggi è stata pesante, lo sento. La review può aspettare un momento — vuoi parlarne un po' o preferisci andare avanti?
+TURNO 5: "scusa, avevo solo bisogno di sfogarmi: giornata pesantissima col capo, mi sento un fallimento. Comunque la review la voglio fare, andiamo avanti" -> 200 (12022ms) phase=per_entry state=active tools=[record_emotional_offload,set_current_entry] cost=$0.1676
+  assistant: Consegnare il progetto al cliente — scade domani. Come siamo messi?
+TURNO 6: "grazie, mi ha fatto bene dirlo. Ah, una cosa: "Aggiornare il curriculum" l'ho gia' fatto ieri, puoi segnarlo come completato? Poi andiamo avanti con la review" -> 200 (14272ms) phase=per_entry state=active tools=[add_candidate_to_review,mark_entry_discussed] cost=$0.0435
+  assistant: Curriculum segnato come fatto. Ora: consegnare il progetto al cliente — scade domani. Come siamo messi?
+TURNO 7: "ok, questa tienila per domani e passa avanti" -> 200 (11150ms) phase=per_entry state=active tools=[mark_entry_discussed,set_current_entry] cost=$0.0471
+  assistant: Chiamare il commercialista — dimmi.
+TURNO 8: "ok, questa tienila per domani e passa avanti" -> 200 (9584ms) phase=plan_preview state=active tools=[mark_entry_discussed] cost=$0.0338
+  assistant: Abbiamo finito il giro. Domani in lista: consegnare il progetto al cliente e chiamare il commercialista, entrambi di sera. Ti torna come piano?
+TURNO 9: "perfetto, confermo il piano cosi" -> 200 (11343ms) phase=closing state=active tools=[confirm_plan_preview] cost=$0.2730
+  assistant: Piano bloccato. Mood 3, energy 3, 2 task selezionati per domani. Blocco la review e chiudo?
+TURNO 10: "si, chiudi pure la review" -> 200 (11834ms) phase=closing state=completed tools=[confirm_close_review] cost=$0.0229
+  assistant: Chiuso. A domani.
+
+## Fatti DB
+{
+  "clientDate": "2026-07-04",
+  "threadId": "cmr6856ym00chibe42c8yzk91",
+  "non200": 0,
+  "completed": true,
+  "threadStateFinale": "completed",
+  "sfogoTurn": 5,
+  "sfogoRetryUsed": true,
+  "offloadToolTurn": 5,
+  "threadStateAfterSfogo": "active",
+  "burnoutFired": false,
+  "offloadSignals": [
+    {
+      "id": "cmr685v0800dpibe47up1nql6",
+      "signalType": "emotional_offload",
+      "taskId": null,
+      "value": 1,
+      "metadata": "{}",
+      "processed": false,
+      "processedAt": null,
+      "createdAt": "2026-07-04T10:34:00.632Z"
+    }
+  ],
+  "allSignals": [
+    {
+      "type": "emotional_offload",
+      "task": null,
+      "processed": false,
+      "processedAt": null
+    }
+  ],
+  "n58": {
+    "turn": 6,
+    "tools": [
+      "add_candidate_to_review",
+      "mark_entry_discussed"
+    ],
+    "assistantMsg": "Curriculum segnato come fatto. Ora: consegnare il progetto al cliente — scade domani. Come siamo messi?",
+    "curriculumWasCandidate": false,
+    "curriculumStatusAfter": "completed",
+    "curriculumCompletedAt": "2026-07-04T10:34:17.989Z",
+    "curriculumInAdded": true,
+    "curriculumOutcome": "completed"
+  },
+  "candidates": [
+    {
+      "id": "cmr67i0l00039ibmknleepkyc",
+      "title": "Consegnare il progetto al cliente",
+      "reason": "deadline"
+    },
+    {
+      "id": "cmr67i0yj003dibmk8tluajve",
+      "title": "Chiamare il commercialista",
+      "reason": "new"
+    }
+  ],
+  "outcomes": {
+    "Aggiornare il curriculum": "completed",
+    "Consegnare il progetto al cliente": "kept",
+    "Chiamare il commercialista": "kept"
+  },
+  "moodIntake": {
+    "mood": 3,
+    "energyEnd": 3
+  },
+  "review": {
+    "id": "cmr6877cr00hvibe4wfb946mu",
+    "mood": 3,
+    "energyEnd": 3,
+    "whatDone": ""
+  },
+  "dailyPlanTomorrow": {
+    "id": "cmr68781a00hzibe4dr8lyewx",
+    "top3Ids": "[\"cmr67i0l00039ibmknleepkyc\",\"cmr67i0yj003dibmk8tluajve\"]"
+  },
+  "misure": {
+    "turniUtente": 10,
+    "wallSeconds": 101,
+    "totalAssistantLatencyMs": 55583,
+    "assistantChars": 702
+  },
+  "llmSpendUsd": 0.92701095
+}

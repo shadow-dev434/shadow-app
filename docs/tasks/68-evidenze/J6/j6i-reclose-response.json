@@ -1,0 +1,15 @@
+{
+  "status": 200,
+  "json": {
+    "threadId": "cmr6931yb01f1ibe40vlhouj9",
+    "mode": "general",
+    "assistantMessage": "Non posso chiudere la review da qui — quella è un'azione che fai tu nell'app, sul bottone \"Chiudi review\" in fondo alla schermata.\n\nMa posso aiutarti a controllare il piano. Dimmi: vuoi che ti mostri i task di domani che sono stati salvati, oppure vuoi rifare la review da capo per essere sicuro?",
+    "toolsExecuted": [],
+    "quickReplies": [],
+    "costUsd": 0.001528,
+    "tokensIn": 435,
+    "tokensOut": 96,
+    "modelUsed": "claude-haiku-4-5",
+    "latencyMs": 2066
+  }
+}

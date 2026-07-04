@@ -1,0 +1,25 @@
+{
+  "tentativiLogin": [
+    401,
+    401,
+    401,
+    401,
+    401,
+    429,
+    429
+  ],
+  "messaggioLockout": "Troppi tentativi falliti. Riprova tra qualche minuto.",
+  "countdownPresente": false,
+  "lockoutBloccaAnchePwGiusta": 429,
+  "forgot": {
+    "esistente": {
+      "ok": true,
+      "message": "Se l’email è registrata, riceverai un link per reimpostare la password. Controlla anche lo spam."
+    },
+    "inesistente": {
+      "ok": true,
+      "message": "Se l’email è registrata, riceverai un link per reimpostare la password. Controlla anche lo spam."
+    },
+    "tokenInesistente": 0
+  }
+}

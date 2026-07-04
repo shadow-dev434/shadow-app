@@ -1,0 +1,41 @@
+{
+  "userMessage": "Le mail non le ho toccate, tienile per domani.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr68de8e00scibe4j2nsg7b8",
+    "mode": "evening_review",
+    "assistantMessage": "Mail rimandate. Riordinare la scrivania — dimmi.",
+    "toolsExecuted": [
+      {
+        "name": "mark_entry_discussed",
+        "input": {
+          "entryId": "cmr67hm2r000fibmkb5xq89wa",
+          "outcome": "postponed"
+        },
+        "result": {
+          "entryId": "cmr67hm2r000fibmkb5xq89wa",
+          "taskTitle": "Rispondere alle mail arretrate",
+          "outcome": "postponed",
+          "action": "marked_discussed"
+        }
+      },
+      {
+        "name": "set_current_entry",
+        "input": {
+          "entryId": "cmr67hly0000dibmk3h3ds0oq"
+        },
+        "result": {
+          "entryId": "cmr67hly0000dibmk3h3ds0oq",
+          "taskTitle": "Riordinare la scrivania",
+          "action": "cursor_set"
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.04630005,
+    "tokensIn": 1559,
+    "tokensOut": 168,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 9277
+  }
+}

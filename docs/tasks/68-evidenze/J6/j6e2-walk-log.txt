@@ -1,0 +1,14 @@
+# J6e parte 2 — pausa/abbandono realistici — collaudo68-review-e@probe.local — 2026-07-04T10:49:12.245Z
+review=cmr68kviz010dibe4asbf390w state=active intake={"mood":4,"energyEnd":3} general=cmr68klnh0105ibe4xeeuj370
+
+## B' — pausa 12min: GET deve restituire il review e metterlo paused
+[N1/D35] GET review: 10 messaggi, chiavi=["content","createdAt","id","role"]; assistant con payloadJson in DB=4
+
+## C' — resume: paused → active con flag firstTurnAfterResume
+resume turn: phase=per_entry tools=[set_current_entry,mark_entry_discussed] risposta="Pile segnate come fatte. Resta una sola candidate aperta: chiamare il commercialista. La affrontiamo?"
+
+## E' — abbandono: finestra chiusa, entrambi i thread a ieri
+[D45] GET3: activeThread=null eveningReview={"shouldStart":false}; review state=archived endedAt=2026-07-04T10:49:36.921Z
+[D45] GET4 (il giorno dopo, mount): activeThread=null eveningReview={"shouldStart":false}; general state=archived
+[D45] Review(2026-07-04)=ASSENTE Review(2026-07-05)=ASSENTE DailyPlan(2026-07-05)=ASSENTE
+[D45] contextJson archiviato: intake={"mood":4,"energyEnd":3} outcomes={"cmr67i3wl003xibmk0omoizja":"kept","cmr68kjh70001iba0cibk72wa":"completed"}

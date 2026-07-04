@@ -1,0 +1,41 @@
+{
+  "plan": {
+    "id": "cmr67hmnn000libmkb53d5do7",
+    "userId": "cmr67hj1x0000ibmk8zoqezut",
+    "date": "2026-07-04",
+    "top3Ids": "[\"cmr67hle00009ibmk4sishse6\",\"cmr67hl1c0007ibmk7m1g83b1\",\"cmr67hm2r000fibmkb5xq89wa\"]",
+    "doNowIds": "[\"cmr67hle00009ibmk4sishse6\",\"cmr67hl1c0007ibmk7m1g83b1\",\"cmr67hm2r000fibmkb5xq89wa\"]",
+    "scheduleIds": "[]",
+    "delegateIds": "[]",
+    "postponeIds": "[]",
+    "energyLevel": 4,
+    "timeAvailable": 300,
+    "currentContext": "any",
+    "slotContextsJson": "{}",
+    "createdAt": "2026-07-04T10:15:10.067Z",
+    "updatedAt": "2026-07-04T10:33:22.940Z",
+    "threadId": null,
+    "pinnedIds": "[]",
+    "originalPlanJson": null
+  },
+  "planTasks": [
+    {
+      "id": "cmr6852i000cbibe4g4blue3s",
+      "dailyPlanId": "cmr67hmnn000libmkb53d5do7",
+      "taskId": "cmr67hle00009ibmk4sishse6",
+      "slot": "today"
+    },
+    {
+      "id": "cmr6852i000ccibe4uaiomeaj",
+      "dailyPlanId": "cmr67hmnn000libmkb53d5do7",
+      "taskId": "cmr67hl1c0007ibmk7m1g83b1",
+      "slot": "today"
+    },
+    {
+      "id": "cmr6852i000cdibe46dbu295q",
+      "dailyPlanId": "cmr67hmnn000libmkb53d5do7",
+      "taskId": "cmr67hm2r000fibmkb5xq89wa",
+      "slot": "today"
+    }
+  ]
+}

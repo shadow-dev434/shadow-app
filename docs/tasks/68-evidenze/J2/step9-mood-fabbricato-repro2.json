@@ -1,0 +1,36 @@
+{
+  "turns": [
+    {
+      "turn": 1,
+      "userMessage": "Ciao Shadow, la giornata è finita: facciamo la review?",
+      "status": 200,
+      "tools": [],
+      "assistant": "Come stai stasera? 1-5.",
+      "costUsd": 0.0135321
+    },
+    {
+      "turn": 2,
+      "userMessage": "Questa tienila per domani.",
+      "status": 200,
+      "tools": [
+        {
+          "name": "remove_candidate_from_review",
+          "input": {
+            "taskId": "cmr68r2kz000aibts7io4ejcn"
+          }
+        }
+      ],
+      "assistant": "Tolta. Prima però — come stai stasera? 1-5.",
+      "costUsd": 0.0296976
+    },
+    {
+      "turn": 3,
+      "userMessage": "Passiamo oltre, dai.",
+      "status": 200,
+      "tools": [],
+      "assistant": "Ok. Di energia come stai? 1-5.",
+      "costUsd": 0.013882050000000002
+    }
+  ],
+  "fabricated": null
+}

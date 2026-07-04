@@ -1,0 +1,24 @@
+{
+  "steps": [
+    {
+      "id": "d84abc3f-6e52-45e3-b505-c77cd165d2be",
+      "text": "Apri/prepara quello che serve per \"sistemare le cose\"",
+      "done": false,
+      "estimatedSeconds": 30
+    },
+    {
+      "id": "eaa578a2-f34e-43b4-88a3-95c689537516",
+      "text": "Fai la prima cosa più ovvia e semplice",
+      "done": false,
+      "estimatedSeconds": 120
+    },
+    {
+      "id": "0ace5a5f-2c17-43ee-9be8-2cad50100860",
+      "text": "Fai un secondo piccolo passo",
+      "done": false,
+      "estimatedSeconds": 120
+    }
+  ],
+  "raw": "[fallback]",
+  "source": "fallback"
+}

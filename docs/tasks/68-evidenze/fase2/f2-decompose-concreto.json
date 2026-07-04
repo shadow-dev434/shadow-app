@@ -1,0 +1,24 @@
+{
+  "steps": [
+    {
+      "id": "c268d292-5858-45d5-afbb-661f4bfaec7c",
+      "text": "Vai nello spazio da pulire",
+      "done": false,
+      "estimatedSeconds": 15
+    },
+    {
+      "id": "d040d226-9bb2-427b-abd2-d6501f83750f",
+      "text": "Prendi 3 cose fuori posto e mettile a posto",
+      "done": false,
+      "estimatedSeconds": 120
+    },
+    {
+      "id": "70724386-0fdd-471b-a570-0b6253fc3605",
+      "text": "Pulisci una superficie piccola",
+      "done": false,
+      "estimatedSeconds": 120
+    }
+  ],
+  "raw": "[fallback]",
+  "source": "fallback"
+}

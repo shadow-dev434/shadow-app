@@ -1,0 +1,4 @@
+N56 repro
+POST /api/review taskReviews[status=avoided]
+HTTP: 200
+avoidanceCount before=0 after=1 (+1)

@@ -1,0 +1,78 @@
+# J6g RUN 3 — collaudo68-review-g@probe.local — clientDate=2026-07-04
+bare=["cmr67i6lc004fibmk0ud03rgk","cmr67i6pl004hibmk6ssfyiz0"] giardino=cmr67i6u5004jibmk6pulk5c7
+  [pregen] keys=["cmr67i6pl004hibmk6ssfyiz0","cmr67i6lc004fibmk0ud03rgk"]
+TURNO 1: "iniziamo la review" -> 200 (7801ms) phase=per_entry state=active ws=- presented=false tools=[] qr=[]
+TURNO 2: "4" -> 200 (10912ms) phase=per_entry state=active ws=- presented=false tools=[record_mood] qr=[]
+TURNO 3: "3" -> 200 (9466ms) phase=per_entry state=active ws=- presented=false tools=[record_energy] qr=[]
+  [apertura pregen SENZA presentazione] task=cmr67i6pl004hibmk6ssfyiz0 msg="Giardino rimandato a domani. Prossima: organizzare la festa di compleanno di Luca — dimmi."
+TURNO 4: "ok, questa tienila per domani e passa avanti" -> 200 (17468ms) phase=per_entry state=active ws=sfyiz0/pregen presented=false tools=[set_current_entry,mark_entry_discussed,set_current_entry] qr=[]
+  [elicit] presentazioneOttenuta=true qr=["Sì, salvali","Cambiali","Lascia stare"] msg="Questa è di quelle da spezzare prima di iniziare — l'ho già divisa in 3 passi: apri/prepara quello che serve, fai la prima cosa più ovvia e semplice, poi un secondo piccolo passo. Li salviamo?"
+TURNO 5: "vai, dimmi pure" -> 200 (6840ms) phase=per_entry state=active ws=sfyiz0/pregen presented=true tools=[] qr=[Sì, salvali | Cambiali | Lascia stare]
+  [approve] cmr67i6pl004hibmk6ssfyiz0 steps=["Apri/prepara quello che serve per \"Organizzare la festa di compleanno di Luca\"","Fai la prima cosa più ovvia e semplice","Fai un secondo piccolo passo"]
+  [one-tap] tools=[approve_decomposition] msg="Salvati. La teniamo in lista o la rimandiamo?"
+TURNO 6: "Sì, salvali" -> 200 (12295ms) phase=per_entry state=active ws=- presented=false tools=[approve_decomposition] qr=[]
+TURNO 7: "ok, questa tienila per domani e passa avanti" -> 200 (7648ms) phase=per_entry state=active ws=- presented=false tools=[] qr=[]
+  [apertura pregen SENZA presentazione] task=cmr67i6lc004fibmk0ud03rgk msg="Preparare il trasloco della cantina — dimmi."
+TURNO 8: "ok, questa tienila per domani e passa avanti" -> 200 (11615ms) phase=per_entry state=active ws=d03rgk/pregen presented=false tools=[mark_entry_discussed,set_current_entry] qr=[]
+  [elicit] presentazioneOttenuta=true qr=["Sì, salvali","Cambiali","Lascia stare"] msg="Fatto. Dimmi tu come proseguiamo."
+TURNO 9: "vai, dimmi pure" -> 200 (11007ms) phase=per_entry state=active ws=d03rgk/pregen presented=true tools=[set_mood] qr=[Sì, salvali | Cambiali | Lascia stare]
+TURNO 10: "Cambiali: troppo generici, rifalli più concreti e più corti" -> 200 (6002ms) phase=per_entry state=active ws=d03rgk/pregen presented=true tools=[] qr=[]
+TURNO 11: "ok, questa tienila per domani e passa avanti" -> 200 (10133ms) phase=plan_preview state=active ws=- presented=false tools=[mark_entry_discussed] qr=[]
+TURNO 12: "perfetto, confermo il piano così" -> 200 (11103ms) phase=closing state=active ws=- presented=false tools=[confirm_plan_preview] qr=[]
+TURNO 13: "sì, chiudi pure la review" -> 200 (12328ms) phase=closing state=completed ws=- presented=false tools=[confirm_close_review] qr=[]
+
+completed=true non200=0 turni=13 wall=139s
+
+## Stato finale
+{
+  "run": 3,
+  "clientDate": "2026-07-04",
+  "threadId": "cmr69hl9k021libe4crcqdgpj",
+  "completed": true,
+  "userTurns": 13,
+  "wallSeconds": 139,
+  "oneTap": {
+    "taskId": "cmr67i6pl004hibmk6ssfyiz0",
+    "salvaliSent": true,
+    "approved": true
+  },
+  "cambiali": {
+    "taskId": "cmr67i6lc004fibmk0ud03rgk",
+    "sent": true,
+    "regenProposed": false,
+    "regenSteps": [],
+    "confirmAttempts": 0,
+    "approved": false,
+    "amnesia2": null
+  },
+  "delayedPresentationCount": 2,
+  "approvesSeen": {
+    "cmr67i6pl004hibmk6ssfyiz0": [
+      "Apri/prepara quello che serve per \"Organizzare la festa di compleanno di Luca\"",
+      "Fai la prima cosa più ovvia e semplice",
+      "Fai un secondo piccolo passo"
+    ]
+  },
+  "tasksAfter": [
+    {
+      "title": "Preparare il trasloco della cantina",
+      "microSteps": []
+    },
+    {
+      "title": "Organizzare la festa di compleanno di Luca",
+      "microSteps": [
+        "Apri/prepara quello che serve per \"Organizzare la festa di compleanno di Luca\"",
+        "Fai la prima cosa più ovvia e semplice",
+        "Fai un secondo piccolo passo"
+      ]
+    },
+    {
+      "title": "Sistemare il giardino",
+      "microSteps": [
+        "Tagliare l'erba",
+        "Potare la siepe",
+        "Raccogliere le foglie"
+      ]
+    }
+  ]
+}

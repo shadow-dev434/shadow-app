@@ -1,0 +1,11 @@
+{
+  "postQuickReplies": [],
+  "dbAssistantWithPayload": 2,
+  "getLastMessageKeys": [
+    "id",
+    "role",
+    "content",
+    "createdAt"
+  ],
+  "getBodySample": "{\"activeThread\":{\"threadId\":\"cmr68klnh0105ibe4xeeuj370\",\"mode\":\"general\",\"messages\":[{\"id\":\"cmr68kp0n0107ibe4pltqxvhq\",\"role\":\"user\",\"content\":\"ciao, giornata piena ma tutto ok\",\"createdAt\":\"2026-07-04T10:45:32.712Z\"},{\"id\":\"cmr68ktsm0109ibe4mx756pr8\",\"role\":\"assistant\",\"content\":\"Ciao! Ok, allora partiamo con il check-in del mattino.\\n\\nCome stai di umore oggi, da 1 a 5?\",\"createdAt\":\"2026-07-04T10:45:38.558Z\"}],\"hasMore\":false},\"eveningReview\":{\"shouldStart\":false}}"
+}

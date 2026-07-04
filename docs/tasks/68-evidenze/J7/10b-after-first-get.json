@@ -1,0 +1,57 @@
+{
+  "status": 200,
+  "created": [
+    {
+      "id": "cmr69ej4u01yuibe4po1rta4c",
+      "title": "Prendere le medicine",
+      "status": "inbox",
+      "source": "recurring",
+      "recurringTemplateId": "cmr67ioo0009libmk9j0t42ef",
+      "occurrenceDate": "2026-07-04",
+      "completedAt": null,
+      "createdAt": "2026-07-04T11:08:44.766Z"
+    },
+    {
+      "id": "cmr69ejhc01ywibe4kwka2chf",
+      "title": "Palestra",
+      "status": "inbox",
+      "source": "recurring",
+      "recurringTemplateId": "cmr67iosw009nibmkzssz0axn",
+      "occurrenceDate": "2026-07-03",
+      "completedAt": null,
+      "createdAt": "2026-07-04T11:08:45.216Z"
+    }
+  ],
+  "all": [
+    {
+      "id": "cmr67iox5009pibmkc0949qtv",
+      "title": "Prendere le medicine",
+      "status": "completed",
+      "source": "recurring",
+      "recurringTemplateId": "cmr67ioo0009libmk9j0t42ef",
+      "occurrenceDate": "2026-06-24",
+      "completedAt": "2026-06-23T22:00:00.000Z",
+      "createdAt": "2026-06-23T22:00:00.000Z"
+    },
+    {
+      "id": "cmr69ej4u01yuibe4po1rta4c",
+      "title": "Prendere le medicine",
+      "status": "inbox",
+      "source": "recurring",
+      "recurringTemplateId": "cmr67ioo0009libmk9j0t42ef",
+      "occurrenceDate": "2026-07-04",
+      "completedAt": null,
+      "createdAt": "2026-07-04T11:08:44.766Z"
+    },
+    {
+      "id": "cmr69ejhc01ywibe4kwka2chf",
+      "title": "Palestra",
+      "status": "inbox",
+      "source": "recurring",
+      "recurringTemplateId": "cmr67iosw009nibmkzssz0axn",
+      "occurrenceDate": "2026-07-03",
+      "completedAt": null,
+      "createdAt": "2026-07-04T11:08:45.216Z"
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "turns": [
+    {
+      "turn": 1,
+      "userMessage": "Pianifichiamo oggi! Ho il report mensile e la revisione auto: fissiamo il piano della giornata.",
+      "status": 200,
+      "tools": [],
+      "assistant": "Ok, partiamo. Prima mi serve capire quanto tempo hai oggi.",
+      "quickReplies": [
+        {
+          "label": "<2h",
+          "value": "<2h"
+        },
+        {
+          "label": "2-4h",
+          "value": "2-4h"
+        },
+        {
+          "label": "4-6h",
+          "value": "4-6h"
+        },
+        {
+          "label": ">6h",
+          "value": ">6h"
+        }
+      ],
+      "costUsd": 0.00127
+    },
+    {
+      "turn": 2,
+      "userMessage": "Sì, perfetto, confermo: fissa il piano così per oggi.",
+      "status": 200,
+      "tools": [],
+      "assistant": "Ho bisogno di sapere quanto tempo hai disponibile oggi prima di fissare il piano.\n\nQuanto tempo puoi dedicare a questi task (approssimativamente)?",
+      "quickReplies": [
+        {
+          "label": "Meno di 2h",
+          "value": "Meno di 2h"
+        },
+        {
+          "label": "2-4 ore",
+          "value": "2-4 ore"
+        },
+        {
+          "label": "4-6 ore",
+          "value": "4-6 ore"
+        },
+        {
+          "label": "Più di 6 ore",
+          "value": "Più di 6 ore"
+        }
+      ],
+      "costUsd": 0.0015882500000000003
+    },
+    {
+      "turn": 3,
+      "userMessage": "Ok, quindi il piano di oggi è salvato?",
+      "status": 200,
+      "tools": [],
+      "assistant": "No, il piano non è ancora salvato. Per crearlo mi serve prima sapere quanto tempo hai disponibile oggi.\n\nQuanto tempo hai a disposizione? (es. 2-4 ore, 4-6 ore, più di 6 ore, oppure un numero preciso)",
+      "quickReplies": [
+        {
+          "label": "<2 ore",
+          "value": "<2 ore"
+        },
+        {
+          "label": "2-4 ore",
+          "value": "2-4 ore"
+        },
+        {
+          "label": "4-6 ore",
+          "value": "4-6 ore"
+        },
+        {
+          "label": ">6 ore",
+          "value": ">6 ore"
+        }
+      ],
+      "costUsd": 0.0012390500000000002
+    }
+  ],
+  "commitSeen": false,
+  "claimSeen": null,
+  "honestAdmission": true,
+  "dailyPlanInDb": null
+}

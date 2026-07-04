@@ -1,0 +1,17 @@
+{
+  "status": 200,
+  "body": {
+    "insightMessage": "Grazie. Userò questa informazione per aiutarti meglio.",
+    "profileUpdates": {}
+  },
+  "profileBefore": {
+    "updatedAt": "2026-07-04T11:19:31.546Z",
+    "shameFrustrationSensitivity": 3
+  },
+  "profileAfter": {
+    "updatedAt": "2026-07-04T11:19:31.546Z",
+    "shameFrustrationSensitivity": 3
+  },
+  "memBefore": 0,
+  "memAfter": 1
+}

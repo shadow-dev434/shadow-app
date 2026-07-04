@@ -1,0 +1,291 @@
+{
+  "skyBefore": {
+    "status": 200,
+    "lit": 1,
+    "body": {
+      "state": {
+        "rawLitStars": 1,
+        "litStars": 1,
+        "totalStars": 96,
+        "skyFull": false,
+        "completedCount": 0,
+        "currentIndex": 0,
+        "freshStarGlobalIndex": 0,
+        "freshStarLocalIndex": 0,
+        "constellations": [
+          {
+            "id": "lucciola",
+            "name": "La Lucciola",
+            "index": 0,
+            "totalStars": 4,
+            "litStars": 1,
+            "complete": false,
+            "reveal": "glow"
+          },
+          {
+            "id": "ponte",
+            "name": "Il Ponte",
+            "index": 1,
+            "totalStars": 5,
+            "litStars": 0,
+            "complete": false
+          },
+          {
+            "id": "barca",
+            "name": "La Barca",
+            "index": 2,
+            "totalStars": 6,
+            "litStars": 0,
+            "complete": false
+          },
+          {
+            "id": "albero",
+            "name": "L'Albero",
+            "index": 3,
+            "totalStars": 7,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "foliage"
+          },
+          {
+            "id": "gufo",
+            "name": "Il Gufo",
+            "index": 4,
+            "totalStars": 7,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "eyes"
+          },
+          {
+            "id": "chiave",
+            "name": "La Chiave",
+            "index": 5,
+            "totalStars": 8,
+            "litStars": 0,
+            "complete": false
+          },
+          {
+            "id": "casa",
+            "name": "La Casa",
+            "index": 6,
+            "totalStars": 8,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "window"
+          },
+          {
+            "id": "fiume",
+            "name": "Il Fiume",
+            "index": 7,
+            "totalStars": 9,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "flow"
+          },
+          {
+            "id": "vela",
+            "name": "La Vela",
+            "index": 8,
+            "totalStars": 9,
+            "litStars": 0,
+            "complete": false
+          },
+          {
+            "id": "montagna",
+            "name": "La Montagna",
+            "index": 9,
+            "totalStars": 10,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "snow"
+          },
+          {
+            "id": "fenice",
+            "name": "La Fenice",
+            "index": 10,
+            "totalStars": 11,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "fire"
+          },
+          {
+            "id": "corona",
+            "name": "La Corona",
+            "index": 11,
+            "totalStars": 12,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "aurora"
+          }
+        ]
+      }
+    }
+  },
+  "patchStatus": 200,
+  "patchBody": {
+    "task": {
+      "id": "cmr69ej4u01yuibe4po1rta4c",
+      "title": "Prendere le medicine",
+      "description": "",
+      "importance": 3,
+      "urgency": 3,
+      "deadline": null,
+      "resistance": 3,
+      "size": 3,
+      "delegable": false,
+      "category": "health",
+      "context": "any",
+      "avoidanceCount": 0,
+      "lastAvoidedAt": null,
+      "quadrant": "unclassified",
+      "priorityScore": 0,
+      "decision": "unclassified",
+      "decisionReason": "",
+      "status": "completed",
+      "microSteps": "[]",
+      "microStepsRaw": "",
+      "currentStepIdx": 0,
+      "executionMode": "none",
+      "sessionFormat": "standard",
+      "sessionDuration": 25,
+      "completedAt": "2026-07-04T11:08:47.332Z",
+      "createdAt": "2026-07-04T11:08:44.766Z",
+      "updatedAt": "2026-07-04T11:08:48.958Z",
+      "userId": "cmr67inti009eibmkfzdqmupz",
+      "delegatedToId": null,
+      "delegationNote": "",
+      "delegationStatus": "",
+      "reminderAt": null,
+      "reminderSent": false,
+      "calendarEventId": "",
+      "aiClassified": true,
+      "aiClassificationData": "{\"via\":\"recurring\",\"templateId\":\"cmr67ioo0009libmk9j0t42ef\",\"urgency\":3,\"importance\":3,\"category\":\"health\"}",
+      "postponedCount": 0,
+      "source": "recurring",
+      "recurringTemplateId": "cmr67ioo0009libmk9j0t42ef",
+      "occurrenceDate": "2026-07-04"
+    }
+  },
+  "skyAfter": {
+    "status": 200,
+    "lit": 2,
+    "body": {
+      "state": {
+        "rawLitStars": 2,
+        "litStars": 2,
+        "totalStars": 96,
+        "skyFull": false,
+        "completedCount": 0,
+        "currentIndex": 0,
+        "freshStarGlobalIndex": 1,
+        "freshStarLocalIndex": 1,
+        "constellations": [
+          {
+            "id": "lucciola",
+            "name": "La Lucciola",
+            "index": 0,
+            "totalStars": 4,
+            "litStars": 2,
+            "complete": false,
+            "reveal": "glow"
+          },
+          {
+            "id": "ponte",
+            "name": "Il Ponte",
+            "index": 1,
+            "totalStars": 5,
+            "litStars": 0,
+            "complete": false
+          },
+          {
+            "id": "barca",
+            "name": "La Barca",
+            "index": 2,
+            "totalStars": 6,
+            "litStars": 0,
+            "complete": false
+          },
+          {
+            "id": "albero",
+            "name": "L'Albero",
+            "index": 3,
+            "totalStars": 7,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "foliage"
+          },
+          {
+            "id": "gufo",
+            "name": "Il Gufo",
+            "index": 4,
+            "totalStars": 7,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "eyes"
+          },
+          {
+            "id": "chiave",
+            "name": "La Chiave",
+            "index": 5,
+            "totalStars": 8,
+            "litStars": 0,
+            "complete": false
+          },
+          {
+            "id": "casa",
+            "name": "La Casa",
+            "index": 6,
+            "totalStars": 8,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "window"
+          },
+          {
+            "id": "fiume",
+            "name": "Il Fiume",
+            "index": 7,
+            "totalStars": 9,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "flow"
+          },
+          {
+            "id": "vela",
+            "name": "La Vela",
+            "index": 8,
+            "totalStars": 9,
+            "litStars": 0,
+            "complete": false
+          },
+          {
+            "id": "montagna",
+            "name": "La Montagna",
+            "index": 9,
+            "totalStars": 10,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "snow"
+          },
+          {
+            "id": "fenice",
+            "name": "La Fenice",
+            "index": 10,
+            "totalStars": 11,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "fire"
+          },
+          {
+            "id": "corona",
+            "name": "La Corona",
+            "index": 11,
+            "totalStars": 12,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "aurora"
+          }
+        ]
+      }
+    }
+  }
+}

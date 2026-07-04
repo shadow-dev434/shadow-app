@@ -1,0 +1,47 @@
+{
+  "userMessage": "La scrivania può aspettare, tienila per domani se ci sta.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr68de8e00scibe4j2nsg7b8",
+    "mode": "evening_review",
+    "assistantMessage": "Scrivania rimandata. Chiamare il dentista per appuntamento — dimmi.",
+    "toolsExecuted": [
+      {
+        "name": "record_energy",
+        "input": {
+          "value": 3
+        }
+      },
+      {
+        "name": "mark_entry_discussed",
+        "input": {
+          "entryId": "cmr67hly0000dibmk3h3ds0oq",
+          "outcome": "postponed"
+        },
+        "result": {
+          "entryId": "cmr67hly0000dibmk3h3ds0oq",
+          "taskTitle": "Riordinare la scrivania",
+          "outcome": "postponed",
+          "action": "marked_discussed"
+        }
+      },
+      {
+        "name": "set_current_entry",
+        "input": {
+          "entryId": "cmr67hlrd000bibmku2vhad1i"
+        },
+        "result": {
+          "entryId": "cmr67hlrd000bibmku2vhad1i",
+          "taskTitle": "Chiamare il dentista per appuntamento",
+          "action": "cursor_set"
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.0650706,
+    "tokensIn": 2157,
+    "tokensOut": 239,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 11646
+  }
+}

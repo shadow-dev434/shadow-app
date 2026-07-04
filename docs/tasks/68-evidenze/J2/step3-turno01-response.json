@@ -1,0 +1,16 @@
+{
+  "userMessage": "Ciao Shadow, la giornata è finita: facciamo la review?",
+  "status": 200,
+  "json": {
+    "threadId": "cmr687s3u00jlibe4xgfte1m8",
+    "mode": "evening_review",
+    "assistantMessage": "Come stai stasera? 1-5.",
+    "toolsExecuted": [],
+    "quickReplies": [],
+    "costUsd": 0.014003100000000001,
+    "tokensIn": 805,
+    "tokensOut": 15,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 2049
+  }
+}

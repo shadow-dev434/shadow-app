@@ -1,0 +1,53 @@
+{
+  "userMessage": "Il regalo per Marta lo prendo nel weekend, tienilo per domani.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr68de8e00scibe4j2nsg7b8",
+    "mode": "evening_review",
+    "assistantMessage": "Marta rimandata. Rispondere alle mail arretrate — dimmi.",
+    "toolsExecuted": [
+      {
+        "name": "record_energy",
+        "input": {
+          "value": 3
+        }
+      },
+      {
+        "name": "record_energy",
+        "input": {
+          "value": 3
+        }
+      },
+      {
+        "name": "mark_entry_discussed",
+        "input": {
+          "entryId": "cmr67hm7i000hibmkzx5xxxic",
+          "outcome": "postponed"
+        },
+        "result": {
+          "entryId": "cmr67hm7i000hibmkzx5xxxic",
+          "taskTitle": "Comprare regalo per Marta",
+          "outcome": "postponed",
+          "action": "marked_discussed"
+        }
+      },
+      {
+        "name": "set_current_entry",
+        "input": {
+          "entryId": "cmr67hm2r000fibmkb5xq89wa"
+        },
+        "result": {
+          "entryId": "cmr67hm2r000fibmkb5xq89wa",
+          "taskTitle": "Rispondere alle mail arretrate",
+          "action": "cursor_set"
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.07624710000000001,
+    "tokensIn": 2848,
+    "tokensOut": 317,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 14484
+  }
+}

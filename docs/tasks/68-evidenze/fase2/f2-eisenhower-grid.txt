@@ -1,0 +1,12 @@
+imp urg -> quadrant / decision
+3   3   -> eliminate / postpone (score=12.0)
+3   4   -> delegate / postpone (score=14.0)
+3   5   -> delegate / postpone (score=16.0)
+4   3   -> schedule / do_now (score=17.0)
+4   4   -> do_now / do_now (score=19.0)
+4   5   -> do_now / do_now (score=21.0)
+5   3   -> schedule / do_now (score=20.0)
+5   4   -> do_now / do_now (score=22.0)
+5   5   -> do_now / do_now (score=24.0)
+
+bordi: (3,4)=delegate (4,3)=schedule (4,4)=do_now (3,3)=eliminate (5,5)=do_now

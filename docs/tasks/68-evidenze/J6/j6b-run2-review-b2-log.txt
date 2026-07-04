@@ -1,0 +1,56 @@
+# J6b run2-review-b2 — collaudo68-review-b2@probe.local cmr684d8x0002ibz4jbr7vgxp — clientDate=2026-07-04 withN58=false
+  candidateTaskIds=["cmr684ekc000aibz4fn3y9xmg","cmr684ezw000eibz43r6b284d","cmr684eun000cibz42nwdann3"] paccoWasCandidate=undefined
+TURNO 1: "iniziamo" -> 200 state=active tools=[-]
+  assistant: Come stai stasera? 1-5.
+TURNO 2: "non ce la faccio piu', sono distrutto, oggi niente" -> 200 state=active tools=[record_emotional_offload]
+  assistant: Sento che oggi è stata pesante. Lasciamo perdere la review per stasera. Vuoi parlarne un attimo o preferisci chiudere?
+TURNO 3: "davvero, sono esausto, stasera non riesco a fare niente, chiudiamo qui" -> 200 state=archived tools=[record_emotional_offload,close_review_burnout]
+  assistant: Ok, chiudiamo qui. Riposati, ci risentiamo domani.
+
+## Fatti DB
+{
+  "label": "run2-review-b2",
+  "userId": "cmr684d8x0002ibz4jbr7vgxp",
+  "threadId": "cmr684gbf009ribe4cqr4euwy",
+  "userTurns": 3,
+  "wallSeconds": 29,
+  "burnoutToolTurn": 3,
+  "toolsPerTurn": [
+    [],
+    [
+      "record_emotional_offload"
+    ],
+    [
+      "record_emotional_offload",
+      "close_review_burnout"
+    ]
+  ],
+  "threadState": "archived",
+  "reviewRow": {
+    "id": "cmr684zbt00byibe4g1716k6k",
+    "mood": 3,
+    "energyEnd": 3,
+    "whatDone": "",
+    "whatBlocked": "",
+    "threadId": "cmr684gbf009ribe4cqr4euwy"
+  },
+  "planTomorrow": false,
+  "signals": [
+    {
+      "signalType": "emotional_offload",
+      "taskId": null,
+      "metadata": "{}"
+    },
+    {
+      "signalType": "emotional_offload",
+      "taskId": null,
+      "metadata": "{}"
+    }
+  ],
+  "assistantMessages": [
+    "Come stai stasera? 1-5.",
+    "Sento che oggi è stata pesante. Lasciamo perdere la review per stasera. Vuoi parlarne un attimo o preferisci chiudere?",
+    "Ok, chiudiamo qui. Riposati, ci risentiamo domani."
+  ],
+  "non200": 0
+}

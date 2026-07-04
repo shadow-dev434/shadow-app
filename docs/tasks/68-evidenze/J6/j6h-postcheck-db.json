@@ -1,0 +1,67 @@
+{
+  "today": "2026-07-04",
+  "tomorrow": "2026-07-05",
+  "tasks": [
+    {
+      "id": "cmr67i868004tibmk9730iatq",
+      "title": "Aggiornare il curriculum",
+      "status": "planned",
+      "completedAt": null,
+      "postponedCount": 1
+    },
+    {
+      "id": "cmr67i801004ribmkj4hllnkn",
+      "title": "Consegnare il progetto al cliente",
+      "status": "planned",
+      "completedAt": null,
+      "postponedCount": 1
+    },
+    {
+      "id": "cmr67i8bk004vibmk8vbdrysi",
+      "title": "Chiamare il commercialista",
+      "status": "planned",
+      "completedAt": null,
+      "postponedCount": 1
+    },
+    {
+      "id": "cmr691ouu0001ibyw82qov7ug",
+      "title": "Comprare le lampadine",
+      "status": "completed",
+      "completedAt": "2026-07-04T10:59:19.618Z",
+      "postponedCount": 0
+    }
+  ],
+  "review": {
+    "id": "cmr693zj201i7ibe4n2kn6z0h",
+    "userId": "cmr67i72s004kibmktv4af82x",
+    "date": "2026-07-04",
+    "whatDone": "",
+    "whatAvoided": "",
+    "whatBlocked": "",
+    "restartFrom": "",
+    "mood": 4,
+    "energyEnd": 3,
+    "createdAt": "2026-07-04T11:00:32.798Z",
+    "updatedAt": "2026-07-04T11:00:32.798Z",
+    "threadId": "cmr691qys019tibe4umb8x6mj"
+  },
+  "plan": {
+    "id": "cmr693zw101i9ibe4khvco8ri",
+    "userId": "cmr67i72s004kibmktv4af82x",
+    "date": "2026-07-05",
+    "top3Ids": "[\"cmr67i801004ribmkj4hllnkn\",\"cmr67i8bk004vibmk8vbdrysi\"]",
+    "doNowIds": "[\"cmr67i801004ribmkj4hllnkn\",\"cmr67i8bk004vibmk8vbdrysi\"]",
+    "scheduleIds": "[]",
+    "delegateIds": "[]",
+    "postponeIds": "[]",
+    "energyLevel": 3,
+    "timeAvailable": 480,
+    "currentContext": "any",
+    "slotContextsJson": "{}",
+    "createdAt": "2026-07-04T11:00:33.265Z",
+    "updatedAt": "2026-07-04T11:00:33.265Z",
+    "threadId": "cmr691qys019tibe4umb8x6mj",
+    "pinnedIds": "[]",
+    "originalPlanJson": "{\"version\":1,\"capturedAt\":\"2026-07-04T11:00:32.640Z\",\"preview\":{\"morning\":[],\"afternoon\":[],\"evening\":[{\"taskId\":\"cmr67i801004ribmkj4hllnkn\",\"title\":\"Consegnare il progetto al cliente\",\"size\":3,\"durationLabel\":\"short\",\"durationMinutes\":25,\"energyHint\":null,\"pinned\":false,\"allocatedSlot\":\"evening\"},{\"taskId\":\"cmr67i8bk004vibmk8vbdrysi\",\"title\":\"Chiamare il commercialista\",\"size\":3,\"durationLabel\":\"short\",\"durationMinutes\":25,\"energyHint\":null,\"pinned\":false,\"allocatedSlot\":\"evening\"}],\"cut\":[],\"fillEstimate\":{\"used\":\"0.8h\",\"capacity\":\"9.6h\",\"state\":\"low\",\"percentage\":8.680555555555555},\"appointmentAware\":false,\"warnings\":[]},\"pinnedIds\":[]}"
+  }
+}

@@ -1,0 +1,209 @@
+{
+  "dbOpenCount": 20,
+  "dbTitles": [
+    "Stampare i documenti per la banca",
+    "Rinnovare abbonamento mezzi",
+    "Rispondere al messaggio di Luca",
+    "Prenotare il controllo dalla dermatologa",
+    "Buttare gli scatoloni in cantina",
+    "Mandare il preventivo al cliente",
+    "Rispondere alla mail di Marco sul progetto",
+    "Pagare la rata del condominio",
+    "Consegnare modulo ISEE al CAF",
+    "Pagare F24",
+    "Riunione condominio",
+    "Oculista lunedì ore 9:30",
+    "Chiamare l'idraulico",
+    "Comprare il latte",
+    "Prenotare il treno per Roma",
+    "Andare in palestra",
+    "Ritirare le analisi del sangue",
+    "Portare documenti mutuo in filiale banca",
+    "Comprare pile stilo per il telecomando",
+    "Rinnovare la carta d'identità"
+  ],
+  "toolCount": 15,
+  "oltre15": [
+    "Andare in palestra",
+    "Ritirare le analisi del sangue",
+    "Portare documenti mutuo in filiale banca",
+    "Comprare pile stilo per il telecomando",
+    "Rinnovare la carta d'identità"
+  ],
+  "mentioned": [],
+  "assistant": "Hai 15 task in totale. Divisi così:\n\n**In piano (6):**\n- Stampare i documenti per la banca\n- Rinnovare abbonamento mezzi\n- Rispondere al messaggio di Luca\n- Prenotare il controllo dalla dermatologa\n- Buttare gli scatoloni in cantina\n\n**In inbox (9) — da classificare:**\n- Mandare il preventivo al cliente (scadenza domani 5 lug)\n- Rispondere alla mail di Marco sul progetto (scadenza domani 5 lug)\n- Pagare la rata del condominio (scadenza 10 lug)\n- Consegnare modulo ISEE al CAF (scadenza 8 lug)\n- Pagare F24 (scadenza 30 lug)\n- Riunione condominio (scadenza 10 lug)\n- Oculista lunedì ore 9:30 (scadenza 6 lug)\n- Chiamare l'idraulico\n- Comprare il latte\n- Prenotare il treno per Roma\n\nCosa vuoi fare adesso?",
+  "tools": [
+    {
+      "name": "get_today_tasks",
+      "result": [
+        {
+          "id": "cmr68hc4200y2ibe4avb7s8fa",
+          "title": "Stampare i documenti per la banca",
+          "urgency": 3,
+          "importance": 4,
+          "category": "admin",
+          "status": "planned",
+          "deadline": null,
+          "recurring": false,
+          "estimatedMinutes": 6
+        },
+        {
+          "id": "cmr68hc0800xyibe4smwf3d81",
+          "title": "Rinnovare abbonamento mezzi",
+          "urgency": 3,
+          "importance": 4,
+          "category": "admin",
+          "status": "planned",
+          "deadline": null,
+          "recurring": false,
+          "estimatedMinutes": 13
+        },
+        {
+          "id": "cmr68hc0900y0ibe41t6nrjao",
+          "title": "Rispondere al messaggio di Luca",
+          "urgency": 2,
+          "importance": 3,
+          "category": "general",
+          "status": "planned",
+          "deadline": null,
+          "recurring": false,
+          "estimatedMinutes": 6
+        },
+        {
+          "id": "cmr68hcfa00y6ibe4v4t5yln8",
+          "title": "Prenotare il controllo dalla dermatologa",
+          "urgency": 3,
+          "importance": 4,
+          "category": "health",
+          "status": "planned",
+          "deadline": null,
+          "recurring": false,
+          "estimatedMinutes": 6
+        },
+        {
+          "id": "cmr68hcf900y4ibe4rotp5gzu",
+          "title": "Buttare gli scatoloni in cantina",
+          "urgency": 1,
+          "importance": 2,
+          "category": "household",
+          "status": "planned",
+          "deadline": null,
+          "recurring": false,
+          "estimatedMinutes": 13
+        },
+        {
+          "id": "cmr684hfx009vibe4c03vn0qc",
+          "title": "Mandare il preventivo al cliente",
+          "urgency": 4,
+          "importance": 4,
+          "category": "work",
+          "status": "inbox",
+          "deadline": "2026-07-11",
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr687dao00ihibe4o2ia3bvo",
+          "title": "Rispondere alla mail di Marco sul progetto",
+          "urgency": 4,
+          "importance": 3,
+          "category": "work",
+          "status": "inbox",
+          "deadline": "2026-07-05",
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr688lct00lxibe4zucjye8a",
+          "title": "Pagare la rata del condominio",
+          "urgency": 4,
+          "importance": 4,
+          "category": "admin",
+          "status": "inbox",
+          "deadline": "2026-07-10",
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr68fqqu00w0ibe4qxtqozs6",
+          "title": "Consegnare modulo ISEE al CAF",
+          "urgency": 4,
+          "importance": 4,
+          "category": "admin",
+          "status": "inbox",
+          "deadline": "2026-07-08",
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr68gbgg00woibe4snm307z0",
+          "title": "Pagare F24",
+          "urgency": 4,
+          "importance": 5,
+          "category": "admin",
+          "status": "inbox",
+          "deadline": "2026-07-30",
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr686oby00fpibe4z84qyfn4",
+          "title": "Riunione condominio",
+          "urgency": 4,
+          "importance": 3,
+          "category": "admin",
+          "status": "inbox",
+          "deadline": "2026-07-10",
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr68fqmc00vyibe4pejktav2",
+          "title": "Oculista lunedì ore 9:30",
+          "urgency": 4,
+          "importance": 4,
+          "category": "health",
+          "status": "inbox",
+          "deadline": "2026-07-06",
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr6849r6009dibe4cyayfvlr",
+          "title": "Chiamare l'idraulico",
+          "urgency": 3,
+          "importance": 3,
+          "category": "general",
+          "status": "inbox",
+          "deadline": null,
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr6849s4009fibe4nweht0mi",
+          "title": "Comprare il latte",
+          "urgency": 3,
+          "importance": 2,
+          "category": "household",
+          "status": "inbox",
+          "deadline": null,
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr6849wc009hibe4jmp5641s",
+          "title": "Prenotare il treno per Roma",
+          "urgency": 3,
+          "importance": 3,
+          "category": "general",
+          "status": "inbox",
+          "deadline": null,
+          "recurring": false,
+          "estimatedMinutes": 25
+        }
+      ]
+    }
+  ],
+  "status": 200,
+  "threadId": "cmr68iuy000zjibe40yj2nt30"
+}

@@ -1,0 +1,14 @@
+{
+  "json": {
+    "status": 200,
+    "emailNelBody": "collaudo68-nonbeta@probe.local",
+    "chiaviTopLevel": 33
+  },
+  "csv": {
+    "status": 200,
+    "contentType": "text/csv; charset=utf-8",
+    "primeRighe": [
+      "id,title,description,importance,urgency,resistance,size,category,context,quadrant,decision,status,priorityScore,avoidanceCount,deadline,completedAt,createdAt"
+    ]
+  }
+}

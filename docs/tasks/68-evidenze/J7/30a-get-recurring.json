@@ -1,0 +1,31 @@
+{
+  "recurring": [
+    {
+      "id": "cmr67ioo0009libmk9j0t42ef",
+      "title": "Prendere le medicine",
+      "description": "tutti i giorni",
+      "active": true,
+      "frequency": "daily",
+      "endDate": null,
+      "createdAt": "2026-07-04T10:15:59.329Z"
+    },
+    {
+      "id": "cmr69fyvr01zcibe40ovf2b8k",
+      "title": "Buttare la spazzatura",
+      "description": "ogni giovedì",
+      "active": true,
+      "frequency": "weekly",
+      "endDate": null,
+      "createdAt": "2026-07-04T11:09:51.831Z"
+    },
+    {
+      "id": "cmr67iosw009nibmkzssz0axn",
+      "title": "Palestra",
+      "description": "ogni lunedì, mercoledì e venerdì",
+      "active": false,
+      "frequency": "weekly",
+      "endDate": null,
+      "createdAt": "2026-07-04T10:15:59.504Z"
+    }
+  ]
+}

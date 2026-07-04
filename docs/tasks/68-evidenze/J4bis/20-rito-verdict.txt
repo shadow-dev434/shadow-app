@@ -1,0 +1,4 @@
+overdueCount=1 (soglia RIENTRO=2) -> riga RIENTRO attesa: false
+turno1 riconosce il ritorno: false
+turno2 chiede energia (rito completo): true
+turno2 tools: ["set_user_mood"]

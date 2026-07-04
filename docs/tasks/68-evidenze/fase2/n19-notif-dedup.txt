@@ -1,0 +1,6 @@
+evening-signal → 200 {"shouldStart":true}
+POST notifications (evil) → 200; prompt-rows=1
+[PULITO]    cron → {"candidates":59,"sent":0,"skipped":55,"failed":4}
+[SABOTATO]  cron → {"candidates":60,"sent":0,"skipped":57,"failed":3}; prompt-rows prima=1 dopo=1
+
+VERDETTO: N19 parziale: skipped clean=55 sab=57, failed clean=4 sab=3. Meccanica a-codice comunque presente (type non validato + dedup per type).

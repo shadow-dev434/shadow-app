@@ -1,0 +1,49 @@
+[
+  {
+    "label": "emoji-fresh",
+    "threadId": "cmr68mo250127ibe4i0thwxt3",
+    "turns": [
+      {
+        "msg": "🎉 organizzare la festa di Anna & C. — lista invitati (max ~20 pers.) 🎂",
+        "status": 200,
+        "tools": [],
+        "newTasks": [],
+        "assistant": "Ok, capito: festa da organizzare, invitati da definire.\n\nPrima di creare il task, una domanda: quando è la festa?"
+      },
+      {
+        "msg": "sì, crea il task così com'è, con le emoji",
+        "status": 200,
+        "tools": [
+          "create_task"
+        ],
+        "newTasks": [
+          {
+            "title": "🎉 organizzare la festa di Anna & C. — lista invitati (max ~20 pers.) 🎂",
+            "deadline": null
+          }
+        ],
+        "assistant": "Task creato. Quando è la festa? Così ti metto la scadenza."
+      }
+    ]
+  },
+  {
+    "label": "bolletta-fresh",
+    "threadId": "cmr68mybx012vibe4kmq7rfmv",
+    "turns": [
+      {
+        "msg": "la bolletta della luce scade dopodomani, segnamela",
+        "status": 200,
+        "tools": [
+          "create_task"
+        ],
+        "newTasks": [
+          {
+            "title": "Pagare bolletta della luce",
+            "deadline": "2026-07-06"
+          }
+        ],
+        "assistant": "Fatto. Scadenza lunedì 6 luglio, urgenza massima."
+      }
+    ]
+  }
+]

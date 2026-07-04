@@ -1,0 +1,18 @@
+{
+  "id": "cmr69fyvr01zcibe40ovf2b8k",
+  "userId": "cmr67inti009eibmkfzdqmupz",
+  "title": "Buttare la spazzatura",
+  "description": "",
+  "category": "household",
+  "urgency": 4,
+  "importance": 3,
+  "size": 3,
+  "frequency": "weekly",
+  "weekdays": "[4]",
+  "monthDay": null,
+  "active": true,
+  "startDate": "2026-07-04",
+  "endDate": null,
+  "createdAt": "2026-07-04T11:09:51.831Z",
+  "updatedAt": "2026-07-04T11:09:51.831Z"
+}

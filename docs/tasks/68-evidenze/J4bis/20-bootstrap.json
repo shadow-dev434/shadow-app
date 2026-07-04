@@ -1,0 +1,37 @@
+{
+  "status": 200,
+  "body": {
+    "triggered": true,
+    "threadId": "cmr69fzip01zeibe44p5vmt2r",
+    "mode": "morning_checkin",
+    "assistantMessage": "Buongiorno! Come stai di umore oggi, da 1 a 5?",
+    "toolsExecuted": [],
+    "quickReplies": [
+      {
+        "label": "1 - giù",
+        "value": "1 - giù"
+      },
+      {
+        "label": "2",
+        "value": "2"
+      },
+      {
+        "label": "3",
+        "value": "3"
+      },
+      {
+        "label": "4",
+        "value": "4"
+      },
+      {
+        "label": "5 - alla grande",
+        "value": "5 - alla grande"
+      }
+    ],
+    "costUsd": 0.03948825,
+    "tokensIn": 414,
+    "tokensOut": 56,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 3312
+  }
+}

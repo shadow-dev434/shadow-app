@@ -1,0 +1,42 @@
+{
+  "tasks": [
+    {
+      "id": "cmr67hp0c000zibmkx1t2sqp9",
+      "title": "Inviare il modulo ISEE",
+      "status": "planned",
+      "deadline": "2026-07-01T22:00:00.000Z"
+    },
+    {
+      "id": "cmr67hp6m0011ibmke42uwer4",
+      "title": "Rinnovare assicurazione auto",
+      "status": "planned",
+      "deadline": "2026-07-02T22:00:00.000Z"
+    },
+    {
+      "id": "cmr69578701kiibe4mpcwaaq8",
+      "title": "Ritirare il pacco al fermopoint",
+      "status": "inbox",
+      "deadline": null
+    }
+  ],
+  "plans": [
+    {
+      "id": "cmr67hqef0017ibmkjcbrpowx",
+      "date": "2026-06-30",
+      "top3Ids": "[\"cmr67hp0c000zibmkx1t2sqp9\",\"cmr67hp6m0011ibmke42uwer4\"]"
+    },
+    {
+      "id": "cmr692qmp01dribe412uphdy7",
+      "date": "2026-07-04",
+      "top3Ids": "[\"cmr67hp0c000zibmkx1t2sqp9\",\"cmr67hp6m0011ibmke42uwer4\"]"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "cmr67hqnc0019ibmkjiheszdc",
+      "date": "2026-06-29",
+      "mood": 3,
+      "energyEnd": 3
+    }
+  ]
+}

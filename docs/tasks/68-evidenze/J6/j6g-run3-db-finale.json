@@ -1,0 +1,52 @@
+{
+  "run": 3,
+  "clientDate": "2026-07-04",
+  "threadId": "cmr69hl9k021libe4crcqdgpj",
+  "completed": true,
+  "userTurns": 13,
+  "wallSeconds": 139,
+  "oneTap": {
+    "taskId": "cmr67i6pl004hibmk6ssfyiz0",
+    "salvaliSent": true,
+    "approved": true
+  },
+  "cambiali": {
+    "taskId": "cmr67i6lc004fibmk0ud03rgk",
+    "sent": true,
+    "regenProposed": false,
+    "regenSteps": [],
+    "confirmAttempts": 0,
+    "approved": false,
+    "amnesia2": null
+  },
+  "delayedPresentationCount": 2,
+  "approvesSeen": {
+    "cmr67i6pl004hibmk6ssfyiz0": [
+      "Apri/prepara quello che serve per \"Organizzare la festa di compleanno di Luca\"",
+      "Fai la prima cosa più ovvia e semplice",
+      "Fai un secondo piccolo passo"
+    ]
+  },
+  "tasksAfter": [
+    {
+      "title": "Preparare il trasloco della cantina",
+      "microSteps": []
+    },
+    {
+      "title": "Organizzare la festa di compleanno di Luca",
+      "microSteps": [
+        "Apri/prepara quello che serve per \"Organizzare la festa di compleanno di Luca\"",
+        "Fai la prima cosa più ovvia e semplice",
+        "Fai un secondo piccolo passo"
+      ]
+    },
+    {
+      "title": "Sistemare il giardino",
+      "microSteps": [
+        "Tagliare l'erba",
+        "Potare la siepe",
+        "Raccogliere le foglie"
+      ]
+    }
+  ]
+}

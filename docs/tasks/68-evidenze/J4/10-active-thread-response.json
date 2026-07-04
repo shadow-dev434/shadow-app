@@ -1,0 +1,11 @@
+{
+  "clientTime": "12:57",
+  "clientDate": "2026-07-04",
+  "status": 200,
+  "body": {
+    "activeThread": null,
+    "eveningReview": {
+      "shouldStart": false
+    }
+  }
+}

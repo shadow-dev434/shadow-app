@@ -1,0 +1,81 @@
+{
+  "threadId": "cmr69fzip01zeibe44p5vmt2r",
+  "mode": "morning_checkin",
+  "assistantMessage": "Con 2 di energia e 2 ore, ti propongo una cosa sola: \"Disdire l'abbonamento in palestra\" — è già scaduta da un po', meglio chiuderla. Sono ~25 minuti, fattibile anche così.\n\nIl dentista lo lasciamo a dopo. Partiamo dalla palestra?",
+  "toolsExecuted": [
+    {
+      "name": "set_user_mood",
+      "input": {
+        "level": 2
+      },
+      "result": {
+        "level": 2
+      }
+    },
+    {
+      "name": "set_user_energy",
+      "input": {
+        "level": 2
+      },
+      "result": {
+        "level": 2
+      }
+    },
+    {
+      "name": "set_user_time",
+      "input": {
+        "minutes": 120
+      },
+      "result": {
+        "minutes": 120
+      }
+    },
+    {
+      "name": "get_today_tasks",
+      "input": {},
+      "result": [
+        {
+          "id": "cmr67hs6t001hibmkbbwajw5u",
+          "title": "Disdire l'abbonamento in palestra",
+          "urgency": 4,
+          "importance": 4,
+          "category": "general",
+          "status": "planned",
+          "deadline": "2026-06-22",
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr67hsb0001jibmkzy4sime4",
+          "title": "Prenotare il controllo dal dentista",
+          "urgency": 3,
+          "importance": 3,
+          "category": "general",
+          "status": "planned",
+          "deadline": null,
+          "recurring": false,
+          "estimatedMinutes": 25
+        }
+      ]
+    }
+  ],
+  "quickReplies": [
+    {
+      "label": "sì, partiamo",
+      "value": "sì, partiamo"
+    },
+    {
+      "label": "dopo",
+      "value": "dopo"
+    },
+    {
+      "label": "solo dentista",
+      "value": "solo dentista"
+    }
+  ],
+  "costUsd": 0.02003205,
+  "tokensIn": 1012,
+  "tokensOut": 292,
+  "modelUsed": "claude-sonnet-4-6",
+  "latencyMs": 10211
+}

@@ -1,0 +1,23 @@
+{
+  "userMessage": "Il regalo per Marta lo prendo nel weekend, tienilo per domani.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr68de8e00scibe4j2nsg7b8",
+    "mode": "evening_review",
+    "assistantMessage": "Sembra che tu stia ripetendo il messaggio sul regalo di Marta — l'ho già segnato come rimandato. Siamo ora sulle mail arretrate: hai voglia di guardarle o le spostiamo?",
+    "toolsExecuted": [
+      {
+        "name": "record_energy",
+        "input": {
+          "value": 3
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.028481700000000006,
+    "tokensIn": 227,
+    "tokensOut": 112,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 6207
+  }
+}

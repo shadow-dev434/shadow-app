@@ -1,0 +1,83 @@
+# J6k repro n.2 shame day — collaudo68-shameday2@probe.local cmr694wby0000ib3cuayietr5 — clientDate=2026-07-04
+  [candidate] ids=["cmr694z4m000kib3cgsrzsgld"] (inboxCand=cmr694z4m000kib3cgsrzsgld)
+TURNO 1: "iniziamo la review" -> 200 (5235ms) phase=per_entry state=active tools=[]
+TURNO 2: "2" -> 200 (8124ms) phase=per_entry state=active tools=[record_mood]
+TURNO 3: "2" -> 200 (8856ms) phase=per_entry state=active tools=[record_energy]
+  [DELEGA] tools=[set_user_mood,set_user_energy] risposta="Però quelli nell'inbox-fuori-triage non posso spostarli io direttamente — li vedi tu domani sera nella prossima review e li gestiamo insieme. Per stasera, hai solo "Comprare il pane" come candidate: la teniamo, la rimandiamo o la togliamo?"
+TURNO 4: "giornata disastrosa, non ho fatto niente di quello che avevamo pianificato ieri. Non ho la testa per rivederli" -> 200 (11389ms) phase=per_entry state=active tools=[set_user_mood,set_user_energy]
+  [N58] tools=[set_current_entry,mark_entry_discussed,add_candidate_to_review,set_current_entry,mark_entry_discussed] risposta="Fatto. Bollo auto segnato come completato, pane rimandato a domani. Chiudiamo qui?"
+TURNO 5: "ah aspetta, una cosa: "Pagare il bollo auto" in realtà l'ho pagato oggi pomeriggio, quello è fatto. Il resto v" -> 200 (28736ms) phase=plan_preview state=active tools=[set_current_entry,mark_entry_discussed,add_candidate_to_review,set_current_entry,mark_entry_discussed]
+TURNO 6: "ok, confermo il piano così" -> 200 (8588ms) phase=plan_preview state=active tools=[]
+TURNO 7: "confermo, chiudiamo" -> 200 (6413ms) phase=plan_preview state=active tools=[]
+TURNO 8: "confermo, chiudiamo" -> 200 (14950ms) phase=plan_preview state=completed tools=[confirm_plan_preview,confirm_close_review]
+
+pianoDomani=1 voci [Comprare il pane] carryoverDeiCinque=0
+N58 bollo statusFinale=completed (candidate era NO)
+
+## Stato finale
+{
+  "run": 2,
+  "clientDate": "2026-07-04",
+  "tomorrow": "2026-07-05",
+  "threadId": "cmr6950tk01k0ibe4swpinw2n",
+  "completed": true,
+  "userTurns": 8,
+  "wallSeconds": 96,
+  "candidates": [
+    "Comprare il pane"
+  ],
+  "pianoDomani": {
+    "voci": 1,
+    "top3": [
+      "Comprare il pane"
+    ],
+    "doNow": [
+      "Comprare il pane"
+    ]
+  },
+  "carryoverDeiCinque": 0,
+  "delega": "tools=[set_user_mood,set_user_energy] risposta=\"Però quelli nell'inbox-fuori-triage non posso spostarli io direttamente — li vedi tu domani sera nella prossima review e li gestiamo insieme. Per stasera, hai solo \"Comprare il pane\" come candidate: la teniamo, la rimandiamo o la togliamo?\"",
+  "n58": {
+    "probe": "tools=[set_current_entry,mark_entry_discussed,add_candidate_to_review,set_current_entry,mark_entry_discussed] risposta=\"Fatto. Bollo auto segnato come completato, pane rimandato a domani. Chiudiamo qui?\"",
+    "bolloStatus": "completed",
+    "bolloEraCandidate": false
+  },
+  "review": {
+    "mood": 2,
+    "energyEnd": 2,
+    "whatDone": "",
+    "whatBlocked": ""
+  },
+  "taskStates": [
+    {
+      "title": "Finire la presentazione per lunedì",
+      "status": "planned",
+      "postponedCount": 0
+    },
+    {
+      "title": "Chiamare l'idraulico",
+      "status": "planned",
+      "postponedCount": 0
+    },
+    {
+      "title": "Portare le scarpe dal calzolaio",
+      "status": "planned",
+      "postponedCount": 0
+    },
+    {
+      "title": "Rispondere alla PEC dell'agenzia",
+      "status": "planned",
+      "postponedCount": 0
+    },
+    {
+      "title": "Comprare il pane",
+      "status": "inbox",
+      "postponedCount": 1
+    },
+    {
+      "title": "Pagare il bollo auto",
+      "status": "completed",
+      "postponedCount": 0
+    }
+  ]
+}

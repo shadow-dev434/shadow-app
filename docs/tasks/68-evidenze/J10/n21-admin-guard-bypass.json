@@ -1,0 +1,39 @@
+{
+  "iatCookiePreReset": 1783166467,
+  "passwordChangedAt": "2026-07-04T12:01:14.265Z",
+  "preReset": {
+    "admin": 200,
+    "tasks": 200
+  },
+  "postReset": {
+    "requireSession_tasks": {
+      "status": 401,
+      "body": {
+        "error": "session_invalid"
+      }
+    },
+    "adminGuard_bugReports": {
+      "status": 200
+    },
+    "adminGuard_summary": {
+      "status": 200
+    },
+    "betaGuard_assessmentPatch": {
+      "status": 200,
+      "body": {
+        "response": {
+          "instrument": "asrs",
+          "wave": "pre",
+          "totalScore": 1,
+          "completedAt": null,
+          "answered": 1,
+          "totalItems": 18
+        }
+      }
+    }
+  },
+  "verdetto": {
+    "n21AdminBypass": true,
+    "n21AssessmentBypass": true
+  }
+}

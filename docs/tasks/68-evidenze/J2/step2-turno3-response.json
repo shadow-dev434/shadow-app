@@ -1,0 +1,125 @@
+{
+  "userMessage": "Sì, confermo il piano così com'è. Partirei subito con la prima cosa.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr683kbj007pibe4ckjdj8xv",
+    "mode": "morning_checkin",
+    "assistantMessage": "Ok, ho tutto. Il piano che ti propongo:\n\n1. Pagare la bolletta della luce (scade domani)\n2. Preparare la relazione trimestrale\n3. Rispondere alle mail arretrate\n\nDentista, scrivania e regalo per Marta li lasciamo fuori per oggi.\n\nPartiamo?",
+    "toolsExecuted": [
+      {
+        "name": "set_user_mood",
+        "input": {
+          "level": 4
+        },
+        "result": {
+          "level": 4
+        }
+      },
+      {
+        "name": "set_user_energy",
+        "input": {
+          "level": 4
+        },
+        "result": {
+          "level": 4
+        }
+      },
+      {
+        "name": "set_user_time",
+        "input": {
+          "minutes": 300
+        },
+        "result": {
+          "minutes": 300
+        }
+      },
+      {
+        "name": "get_today_tasks",
+        "input": {},
+        "result": [
+          {
+            "id": "cmr67hl1c0007ibmk7m1g83b1",
+            "title": "Preparare la relazione trimestrale",
+            "urgency": 4,
+            "importance": 5,
+            "category": "general",
+            "status": "planned",
+            "deadline": null,
+            "recurring": false,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr67hle00009ibmk4sishse6",
+            "title": "Pagare la bolletta della luce",
+            "urgency": 5,
+            "importance": 4,
+            "category": "general",
+            "status": "planned",
+            "deadline": "2026-07-05",
+            "recurring": false,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr67hlrd000bibmku2vhad1i",
+            "title": "Chiamare il dentista per appuntamento",
+            "urgency": 3,
+            "importance": 3,
+            "category": "health",
+            "status": "planned",
+            "deadline": null,
+            "recurring": false,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr67hm2r000fibmkb5xq89wa",
+            "title": "Rispondere alle mail arretrate",
+            "urgency": 3,
+            "importance": 3,
+            "category": "general",
+            "status": "inbox",
+            "deadline": null,
+            "recurring": false,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr67hly0000dibmk3h3ds0oq",
+            "title": "Riordinare la scrivania",
+            "urgency": 2,
+            "importance": 2,
+            "category": "general",
+            "status": "inbox",
+            "deadline": null,
+            "recurring": false,
+            "estimatedMinutes": 25
+          },
+          {
+            "id": "cmr67hm7i000hibmkzx5xxxic",
+            "title": "Comprare regalo per Marta",
+            "urgency": 2,
+            "importance": 3,
+            "category": "general",
+            "status": "inbox",
+            "deadline": "2026-07-10",
+            "recurring": false,
+            "estimatedMinutes": 25
+          }
+        ]
+      }
+    ],
+    "quickReplies": [
+      {
+        "label": "sì, partiamo",
+        "value": "sì, partiamo"
+      },
+      {
+        "label": "cambiamo qualcosa",
+        "value": "cambiamo qualcosa"
+      }
+    ],
+    "costUsd": 0.01764195,
+    "tokensIn": 1129,
+    "tokensOut": 283,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 9099
+  }
+}

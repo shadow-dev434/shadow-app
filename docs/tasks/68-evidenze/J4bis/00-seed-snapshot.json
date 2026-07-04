@@ -1,0 +1,55 @@
+{
+  "userId": "cmr67hr4n001aibmkxwssloew",
+  "threads": [
+    {
+      "id": "cmr67hsgj001libmkb0o2ybye",
+      "mode": "general",
+      "state": "active",
+      "startedAt": "2026-06-18T22:00:00.000Z",
+      "lastTurnAt": "2026-06-18T22:00:00.000Z",
+      "endedAt": null
+    }
+  ],
+  "tasks": [
+    {
+      "id": "cmr67hs6t001hibmkbbwajw5u",
+      "title": "Disdire l'abbonamento in palestra",
+      "status": "planned",
+      "deadline": "2026-06-21T22:00:00.000Z",
+      "createdAt": "2026-06-18T22:00:00.000Z"
+    },
+    {
+      "id": "cmr67hsb0001jibmkzy4sime4",
+      "title": "Prenotare il controllo dal dentista",
+      "status": "planned",
+      "deadline": null,
+      "createdAt": "2026-06-18T22:00:00.000Z"
+    }
+  ],
+  "plans": [
+    {
+      "id": "cmr67ht57001pibmkal23dqxg",
+      "date": "2026-06-19",
+      "top3Ids": "[\"cmr67hs6t001hibmkbbwajw5u\",\"cmr67hsb0001jibmkzy4sime4\"]"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "cmr67htae001ribmkbrcyz2ep",
+      "date": "2026-06-18",
+      "mood": 2
+    }
+  ],
+  "settings": {
+    "notificationsEnabled": true,
+    "eveningWindowStart": "20:00",
+    "eveningWindowEnd": "23:00"
+  },
+  "notifications": [],
+  "streaks": [],
+  "pattern": {
+    "streakDays": 0,
+    "lastActiveDate": "",
+    "totalTasksCompleted": 0
+  }
+}

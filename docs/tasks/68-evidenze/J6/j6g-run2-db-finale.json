@@ -1,0 +1,62 @@
+{
+  "run": 2,
+  "clientDate": "2026-07-04",
+  "tomorrow": "2026-07-05",
+  "threadId": "cmr69b29b01tmibe48a7kx0bo",
+  "completed": true,
+  "non200": 0,
+  "userTurns": 10,
+  "wallSeconds": 113,
+  "pregenerated": {
+    "Organizzare la festa di compleanno di Luca": [
+      "Apri/prepara quello che serve per \"Organizzare la festa di compleanno di Luca\"",
+      "Fai la prima cosa più ovvia e semplice",
+      "Fai un secondo piccolo passo"
+    ],
+    "Preparare il trasloco della cantina": [
+      "Apri/prepara quello che serve per \"Preparare il trasloco della cantina\"",
+      "Fai la prima cosa più ovvia e semplice",
+      "Fai un secondo piccolo passo"
+    ]
+  },
+  "firstBareId": null,
+  "secondBareId": null,
+  "approvedByTaskId": {},
+  "regenSteps": [],
+  "probes": {
+    "qrAtPresentation": null,
+    "stepsInPresentationMsg": null,
+    "amnesiaObserved": null,
+    "confirmRegenAttempts": 0,
+    "n58": "tools=[] risposta=\"Segnato, la segno come fatta.\n\nIl piano resta: mattina il trasloco della cantina, sera il giardino e la festa di Luca. Ti torna?\"",
+    "nonCandStatusAfter": "inbox",
+    "giardinoUntouched": true
+  },
+  "tasksAfter": [
+    {
+      "title": "Preparare il trasloco della cantina",
+      "microSteps": []
+    },
+    {
+      "title": "Organizzare la festa di compleanno di Luca",
+      "microSteps": []
+    },
+    {
+      "title": "Sistemare il giardino",
+      "microSteps": [
+        "Tagliare l'erba",
+        "Potare la siepe",
+        "Raccogliere le foglie"
+      ]
+    }
+  ],
+  "review": {
+    "id": "cmr69dd0r01yjibe46qwwzns6",
+    "mood": 4,
+    "energyEnd": 3
+  },
+  "planTomorrow": {
+    "id": "cmr69dd9w01ylibe40icv2lri",
+    "top3Ids": "[\"cmr67i6lc004fibmk0ud03rgk\",\"cmr67i6u5004jibmk6pulk5c7\",\"cmr67i6pl004hibmk6ssfyiz0\"]"
+  }
+}

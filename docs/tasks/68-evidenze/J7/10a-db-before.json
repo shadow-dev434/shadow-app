@@ -1,0 +1,52 @@
+{
+  "templates": [
+    {
+      "id": "cmr67ioo0009libmk9j0t42ef",
+      "userId": "cmr67inti009eibmkfzdqmupz",
+      "title": "Prendere le medicine",
+      "description": "",
+      "category": "health",
+      "urgency": 3,
+      "importance": 3,
+      "size": 3,
+      "frequency": "daily",
+      "weekdays": "[]",
+      "monthDay": null,
+      "active": true,
+      "startDate": "2026-06-20",
+      "endDate": null,
+      "createdAt": "2026-07-04T10:15:59.329Z",
+      "updatedAt": "2026-07-04T10:15:59.329Z"
+    },
+    {
+      "id": "cmr67iosw009nibmkzssz0axn",
+      "userId": "cmr67inti009eibmkfzdqmupz",
+      "title": "Palestra",
+      "description": "",
+      "category": "general",
+      "urgency": 3,
+      "importance": 3,
+      "size": 3,
+      "frequency": "weekly",
+      "weekdays": "[1,3,5]",
+      "monthDay": null,
+      "active": true,
+      "startDate": "2026-06-20",
+      "endDate": null,
+      "createdAt": "2026-07-04T10:15:59.504Z",
+      "updatedAt": "2026-07-04T10:15:59.504Z"
+    }
+  ],
+  "instances": [
+    {
+      "id": "cmr67iox5009pibmkc0949qtv",
+      "title": "Prendere le medicine",
+      "status": "completed",
+      "source": "recurring",
+      "recurringTemplateId": "cmr67ioo0009libmk9j0t42ef",
+      "occurrenceDate": "2026-06-24",
+      "completedAt": "2026-06-23T22:00:00.000Z",
+      "createdAt": "2026-06-23T22:00:00.000Z"
+    }
+  ]
+}

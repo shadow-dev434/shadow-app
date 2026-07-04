@@ -1,0 +1,53 @@
+{
+  "submit": {
+    "status": 200,
+    "body": {
+      "report": {
+        "id": "cmr6875ck00hpibe4jpusu3tv",
+        "status": "new",
+        "createdAt": "2026-07-04T10:35:00.692Z"
+      }
+    }
+  },
+  "adminTrova": {
+    "status": 200,
+    "trovato": true
+  },
+  "triaged": {
+    "status": 200
+  },
+  "fixed1": {
+    "status": 200,
+    "report": {
+      "id": "cmr6875ck00hpibe4jpusu3tv",
+      "userId": "cmr67iw2n00awibmkdhc6rmo2",
+      "area": "chat",
+      "description": "COLLAUDO68 J10: dopo la review il piano di domani non mostra il terzo task confermato.",
+      "expected": "Il piano mostra i 3 task confermati.",
+      "severityUser": "annoying",
+      "reproducibility": "sometimes",
+      "context": "{\"route\":\"/\",\"view\":\"chat\",\"collaudo\":\"J10-R15\"}",
+      "appVersion": "collaudo-68",
+      "status": "fixed",
+      "priority": "P2",
+      "adminNotes": "Collaudo68 J10: triage.",
+      "resolvedAt": "2026-07-04T10:35:04.348Z",
+      "createdAt": "2026-07-04T10:35:00.692Z",
+      "updatedAt": "2026-07-04T10:35:04.351Z"
+    }
+  },
+  "notification": [
+    {
+      "id": "cmr6878hf00i1ibe408g6pngj",
+      "type": "bug_fixed",
+      "title": "Segnalazione risolta 🎉",
+      "body": "«COLLAUDO68 J10: dopo la review il piano di domani non mostra il terzo …» è stata sistemata. Grazie!",
+      "createdAt": "2026-07-04T10:35:04.756Z"
+    }
+  ],
+  "fixed2": {
+    "status": 200,
+    "resolvedAtInvariato": true,
+    "notificheTotali": 1
+  }
+}

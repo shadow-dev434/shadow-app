@@ -1,0 +1,66 @@
+{
+  "run": 2,
+  "clientDate": "2026-07-04",
+  "tomorrow": "2026-07-05",
+  "threadId": "cmr6950tk01k0ibe4swpinw2n",
+  "completed": true,
+  "userTurns": 8,
+  "wallSeconds": 96,
+  "candidates": [
+    "Comprare il pane"
+  ],
+  "pianoDomani": {
+    "voci": 1,
+    "top3": [
+      "Comprare il pane"
+    ],
+    "doNow": [
+      "Comprare il pane"
+    ]
+  },
+  "carryoverDeiCinque": 0,
+  "delega": "tools=[set_user_mood,set_user_energy] risposta=\"Però quelli nell'inbox-fuori-triage non posso spostarli io direttamente — li vedi tu domani sera nella prossima review e li gestiamo insieme. Per stasera, hai solo \"Comprare il pane\" come candidate: la teniamo, la rimandiamo o la togliamo?\"",
+  "n58": {
+    "probe": "tools=[set_current_entry,mark_entry_discussed,add_candidate_to_review,set_current_entry,mark_entry_discussed] risposta=\"Fatto. Bollo auto segnato come completato, pane rimandato a domani. Chiudiamo qui?\"",
+    "bolloStatus": "completed",
+    "bolloEraCandidate": false
+  },
+  "review": {
+    "mood": 2,
+    "energyEnd": 2,
+    "whatDone": "",
+    "whatBlocked": ""
+  },
+  "taskStates": [
+    {
+      "title": "Finire la presentazione per lunedì",
+      "status": "planned",
+      "postponedCount": 0
+    },
+    {
+      "title": "Chiamare l'idraulico",
+      "status": "planned",
+      "postponedCount": 0
+    },
+    {
+      "title": "Portare le scarpe dal calzolaio",
+      "status": "planned",
+      "postponedCount": 0
+    },
+    {
+      "title": "Rispondere alla PEC dell'agenzia",
+      "status": "planned",
+      "postponedCount": 0
+    },
+    {
+      "title": "Comprare il pane",
+      "status": "inbox",
+      "postponedCount": 1
+    },
+    {
+      "title": "Pagare il bollo auto",
+      "status": "completed",
+      "postponedCount": 0
+    }
+  ]
+}

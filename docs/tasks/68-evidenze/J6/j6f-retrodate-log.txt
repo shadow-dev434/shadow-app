@@ -1,0 +1,5 @@
+# J6f retrodate "domani" — collaudo68-review-f@probe.local — today=2026-07-04
+retrodatato: thread cmr68n5vy0135ibe4f26fak92 -1d, Review -> 2026-07-03, DailyPlan -> 2026-07-04
+GET active-thread: 200 {"activeThread":null,"eveningReview":{"shouldStart":true}}
+eveningReview.shouldStart il giorno dopo = true (true = NUOVA review del nuovo giorno, comportamento legittimo; la review CHIUSA non e' riproposta perche' Review(ieri) esiste e il thread e' terminale)
+GET /api/daily-plan: 200 {"plan":{"id":"cmr68oigu014tibe4pqgs61yx","userId":"cmr67i4it0042ibmkg8ni2p7t","date":"2026-07-04","top3Ids":[],"doNowIds":[],"scheduleIds":[],"delegateIds":[],"postponeIds":[],"energyLevel":3,"timeAvailable":480,"currentContext":"any","slotContextsJson":"{}","createdAt":"2026-07-04T10:48:30.846Z","

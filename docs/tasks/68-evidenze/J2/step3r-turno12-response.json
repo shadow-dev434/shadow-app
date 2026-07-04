@@ -1,0 +1,41 @@
+{
+  "userMessage": "No, il dentista non l'ho chiamato: lo studio era già chiuso. Rimandiamolo a domani.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr68de8e00scibe4j2nsg7b8",
+    "mode": "evening_review",
+    "assistantMessage": "Dentista rimandato. Preparare la relazione trimestrale — dimmi.",
+    "toolsExecuted": [
+      {
+        "name": "mark_entry_discussed",
+        "input": {
+          "entryId": "cmr67hlrd000bibmku2vhad1i",
+          "outcome": "postponed"
+        },
+        "result": {
+          "entryId": "cmr67hlrd000bibmku2vhad1i",
+          "taskTitle": "Chiamare il dentista per appuntamento",
+          "outcome": "postponed",
+          "action": "marked_discussed"
+        }
+      },
+      {
+        "name": "set_current_entry",
+        "input": {
+          "entryId": "cmr67hl1c0007ibmk7m1g83b1"
+        },
+        "result": {
+          "entryId": "cmr67hl1c0007ibmk7m1g83b1",
+          "taskTitle": "Preparare la relazione trimestrale",
+          "action": "cursor_set"
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.0522615,
+    "tokensIn": 1706,
+    "tokensOut": 187,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 6367
+  }
+}

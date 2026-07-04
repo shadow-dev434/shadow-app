@@ -1,0 +1,23 @@
+voci label "Oggi": 2
+[
+  {
+    "id": "cmr6953u001k8ibe4ihftrfp5",
+    "mode": "general",
+    "state": "active",
+    "label": "Oggi",
+    "isActive": true,
+    "startedAt": "2026-07-04T11:01:25.032Z",
+    "lastTurnAt": "2026-07-04T11:01:31.673Z",
+    "messageCount": 2
+  },
+  {
+    "id": "cmr694jkt01j8ibe42pq8wcxy",
+    "mode": "evening_review",
+    "state": "active",
+    "label": "Oggi",
+    "isActive": true,
+    "startedAt": "2026-07-04T11:00:58.782Z",
+    "lastTurnAt": "2026-07-04T11:01:22.364Z",
+    "messageCount": 6
+  }
+]

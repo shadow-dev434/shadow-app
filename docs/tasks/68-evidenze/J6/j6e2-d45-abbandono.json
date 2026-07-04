@@ -1,0 +1,57 @@
+{
+  "threadId": "cmr68kviz010dibe4asbf390w",
+  "stateFinale": "archived",
+  "endedAt": "2026-07-04T10:49:36.921Z",
+  "intakeArchiviato": {
+    "mood": 4,
+    "energyEnd": 3
+  },
+  "outcomesArchiviati": {
+    "cmr67i3wl003xibmk0omoizja": "kept",
+    "cmr68kjh70001iba0cibk72wa": "completed"
+  },
+  "triagePrimaDellAbbandono": {
+    "candidateTaskIds": [
+      "cmr67i3wl003xibmk0omoizja",
+      "cmr68kjh70001iba0cibk72wa",
+      "cmr67i48d0041ibmknpxr30u5"
+    ],
+    "addedTaskIds": [],
+    "excludedTaskIds": [],
+    "reasonsByTaskId": {
+      "cmr67i3wl003xibmk0omoizja": "deadline",
+      "cmr68kjh70001iba0cibk72wa": "new",
+      "cmr67i48d0041ibmknpxr30u5": "new"
+    },
+    "computedAt": "2026-07-04T10:45:42.741Z",
+    "clientDate": "2026-07-04",
+    "currentEntryId": null,
+    "outcomes": {
+      "cmr67i3wl003xibmk0omoizja": "kept",
+      "cmr68kjh70001iba0cibk72wa": "completed"
+    },
+    "decomposition": null,
+    "lastTurnWasTextOnly": false,
+    "moodIntake": {
+      "mood": 4,
+      "energyEnd": 3
+    },
+    "firstTurnAfterResume": false
+  },
+  "reviewToday": null,
+  "reviewTomorrow": null,
+  "planTomorrow": null,
+  "get3": {
+    "activeThread": null,
+    "eveningReview": {
+      "shouldStart": false
+    }
+  },
+  "get4": {
+    "activeThread": null,
+    "eveningReview": {
+      "shouldStart": false
+    }
+  },
+  "generalStateFinale": "archived"
+}

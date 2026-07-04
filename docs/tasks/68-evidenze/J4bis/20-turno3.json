@@ -1,0 +1,48 @@
+{
+  "threadId": "cmr69fzip01zeibe44p5vmt2r",
+  "mode": "morning_checkin",
+  "assistantMessage": "Giornata pesante. Quanto tempo hai oggi?",
+  "toolsExecuted": [
+    {
+      "name": "set_user_mood",
+      "input": {
+        "level": 2
+      },
+      "result": {
+        "level": 2
+      }
+    },
+    {
+      "name": "set_user_energy",
+      "input": {
+        "level": 2
+      },
+      "result": {
+        "level": 2
+      }
+    }
+  ],
+  "quickReplies": [
+    {
+      "label": "meno di 2h",
+      "value": "meno di 2h"
+    },
+    {
+      "label": "2-4h",
+      "value": "2-4h"
+    },
+    {
+      "label": "4-6h",
+      "value": "4-6h"
+    },
+    {
+      "label": "più di 6h",
+      "value": "più di 6h"
+    }
+  ],
+  "costUsd": 0.009074100000000002,
+  "tokensIn": 213,
+  "tokensOut": 140,
+  "modelUsed": "claude-sonnet-4-6",
+  "latencyMs": 4913
+}

@@ -1,0 +1,220 @@
+{
+  "clientDate": "2026-07-04",
+  "tomorrow": "2026-07-05",
+  "threadId": "cmr69ohrb02b2ibe404fkuvnj",
+  "completed": true,
+  "non200": 0,
+  "userTurns": 20,
+  "wallSeconds": 249,
+  "candidateCount": 12,
+  "candidates": [
+    "Organizzare l'armadio invernale",
+    "Comprare la stampante nuova",
+    "Controllare le scadenze dell'assicurazione",
+    "Mandare gli auguri a zia Pina",
+    "Scrivere la recensione del B&B",
+    "Pulire i filtri del condizionatore",
+    "Prendere appuntamento in banca",
+    "Scaricare i giustificativi per il commercialista",
+    "Restituire il libro in biblioteca",
+    "Fare il backup del computer",
+    "Sistemare i cavi della scrivania",
+    "Scongelare il freezer"
+  ],
+  "planVoci": 15,
+  "planDetail": {
+    "top3Ids": 3,
+    "doNowIds": 12,
+    "scheduleIds": 0,
+    "delegateIds": 0,
+    "postponeIds": 0
+  },
+  "batchingMentions": 0,
+  "overCapMentioned": 1,
+  "overCapCount": 43,
+  "neverMentionedCount": 43,
+  "neverMentioned": [
+    {
+      "title": "Rispondere alla mail di Franca",
+      "status": "inbox"
+    },
+    {
+      "title": "Comprare il detersivo",
+      "status": "inbox"
+    },
+    {
+      "title": "Cercare un idraulico",
+      "status": "inbox"
+    },
+    {
+      "title": "Stampare i documenti per la banca",
+      "status": "inbox"
+    },
+    {
+      "title": "Disdire Netflix",
+      "status": "inbox"
+    },
+    {
+      "title": "Aggiornare il telefono",
+      "status": "inbox"
+    },
+    {
+      "title": "Portare i vestiti in lavanderia",
+      "status": "inbox"
+    },
+    {
+      "title": "Scrivere a Marco per il weekend",
+      "status": "inbox"
+    },
+    {
+      "title": "Controllare l'estratto conto",
+      "status": "inbox"
+    },
+    {
+      "title": "Prenotare il taglio di capelli",
+      "status": "inbox"
+    },
+    {
+      "title": "Cambiare la lampadina del bagno",
+      "status": "inbox"
+    },
+    {
+      "title": "Ordinare le lenti a contatto",
+      "status": "inbox"
+    },
+    {
+      "title": "Iscriversi al corso di nuoto",
+      "status": "inbox"
+    },
+    {
+      "title": "Pagare la retta della palestra",
+      "status": "inbox"
+    },
+    {
+      "title": "Sistemare le foto delle vacanze",
+      "status": "inbox"
+    },
+    {
+      "title": "Buttare le scatole in cantina",
+      "status": "inbox"
+    },
+    {
+      "title": "Comprare il regalo per la mamma",
+      "status": "inbox"
+    },
+    {
+      "title": "Rinnovare la carta d'identità",
+      "status": "inbox"
+    },
+    {
+      "title": "Chiedere il rimborso ad Amazon",
+      "status": "inbox"
+    },
+    {
+      "title": "Leggere il contratto nuovo",
+      "status": "inbox"
+    },
+    {
+      "title": "Fissare il colloquio con la maestra",
+      "status": "inbox"
+    },
+    {
+      "title": "Riparare la bici",
+      "status": "inbox"
+    },
+    {
+      "title": "Portare l'auto dal gommista",
+      "status": "inbox"
+    },
+    {
+      "title": "Chiamare il veterinario",
+      "status": "inbox"
+    },
+    {
+      "title": "Aggiornare il CV su LinkedIn",
+      "status": "inbox"
+    },
+    {
+      "title": "Svuotare la casella PEC",
+      "status": "inbox"
+    },
+    {
+      "title": "Comprare le pile per il telecomando",
+      "status": "inbox"
+    },
+    {
+      "title": "Registrarsi al portale INPS",
+      "status": "inbox"
+    },
+    {
+      "title": "Consegnare il report al cliente",
+      "status": "planned"
+    },
+    {
+      "title": "Preparare la riunione di giovedì",
+      "status": "planned"
+    },
+    {
+      "title": "Pagare le tasse universitarie",
+      "status": "planned"
+    },
+    {
+      "title": "Compilare il 730",
+      "status": "planned"
+    },
+    {
+      "title": "Rispondere al condominio",
+      "status": "planned"
+    },
+    {
+      "title": "Finire il documento di progetto",
+      "status": "planned"
+    },
+    {
+      "title": "Chiamare il medico per la ricetta",
+      "status": "planned"
+    },
+    {
+      "title": "Rinnovare l'abbonamento dei mezzi",
+      "status": "planned"
+    },
+    {
+      "title": "Sistemare la perdita del lavandino",
+      "status": "planned"
+    },
+    {
+      "title": "Scrivere il verbale della riunione",
+      "status": "planned"
+    },
+    {
+      "title": "Preparare le slide del corso",
+      "status": "planned"
+    },
+    {
+      "title": "Ordinare i farmaci",
+      "status": "planned"
+    },
+    {
+      "title": "Mandare la disdetta della palestra",
+      "status": "planned"
+    },
+    {
+      "title": "Fare il bonifico dell'affitto",
+      "status": "planned"
+    },
+    {
+      "title": "Completare l'iscrizione al torneo",
+      "status": "planned"
+    }
+  ],
+  "statusAfter": {
+    "inbox": 40,
+    "planned": 15
+  },
+  "review": {
+    "mood": 3,
+    "energyEnd": 2,
+    "whatDone": "",
+    "whatBlocked": ""
+  }
+}

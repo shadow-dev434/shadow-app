@@ -1,0 +1,812 @@
+{
+  "summary": "Fase 3+4 collaudo 68: audit UX/carico (tap-budget, automazioni, conversazionale, lingua) + coerenza/architettura",
+  "agentCount": 4,
+  "logs": [
+    "Fase 3+4: tap-budget-automazioni, conversazionale-lingua, coerenza-architettura, giornata-muta"
+  ],
+  "result": {
+    "blocchi": {
+      "tap-budget-automazioni": {
+        "area": "Fase 3 (§9.1 tap-budget misurata + §9.2 registro automazioni con formula valore + top 5 pre-rilascio)",
+        "output": "# Fase 3 — Audit UX e carico: Tabella tap-budget (A) + Registro automazioni (B)\n\n> Sintesi dagli artefatti Fase 1/2 del collaudo 68 (journal browser J1/J8/J11, walkthrough\n> parziale fase3, workflow-raw J2/J6a/J13, fase1-consolidato) + letture di codice mirate.\n> Nessun nuovo test dinamico pesante. Numeri **misurati**, non stimati, dove esiste evidenza;\n> dove il flusso non è stato esercitato in browser, il conteggio è **derivato dal codice**\n> (marcato *[da codice]*) — mai a naso.\n\n---\n\n## (A) TABELLA TAP-BUDGET MISURATA — §9.1 (L1)\n\nConvenzione: un \"tap/interazione\" = un'azione fisica dell'utente (click, invio testo, tocco QR,\nswitch). L'attesa LLM non conta come tap ma è annotata dove pesa. \"Da codice\" = derivato dai\npercorsi in `src/app/tasks/page.tsx` / `DayScheduleCard` / `SettingsView` (non esercitato in\nbrowser in Fase 1). Il confronto col 62 usa la tabella `62-report-collaudo.md:237-253`.\n\n| # | Azione core | Tap 68 (misurati/derivati) | Target | Esito 68 | 62 | Δ vs 62 |\n|---|-------------|----------------------------|--------|----------|-----|---------|\n| 1 | **Catturare un task — chat** | **1** (testo + Invia); 3 task in 1 turno; 0 domande bloccanti pre-creazione (J1 p.9) | ≤2 | ✅ | 1 ✅ | = |\n| 2 | **Catturare un task — inbox quick** | **1** (testo + Invio); auto-classificato in bg (64A7/R8), badge AI solo se `autoConfirmed`. Resta però il bottone \"Classifica\" sui non auto-confermati (N35) | ≤2 | ✅ (migliorato) | 1 ⚠️ \"resta da Classificare\" | **↑ migliorato** (auto-classify ora chiude il giro) |\n| 3 | **Iniziare il 1º task del piano (one-tap Today)** | **1** — 1 tap \"Inizia\" → timer che SCORRE da solo (J8: 49:59→47:06 senza tap ulteriori, R3) | **1** (Task 61/63) | ✅ | **2** ❌ (D32 \"Sblocca e inizia\") | **↑ RISOLTO** (il blocker L1 #1 del 62 è chiuso) |\n| 4 | **Completare un task (3 step)** | **~4** (3 step tap + \"Ho finito\"/complete); in body doubling \"Ho finito\" chiude tutto in **1** tap ma auto-completa gli step non fatti (J11 bug) | ≤2 | ⚠️ | ~4 ⚠️ | = (nessun micro-complete a 1 tap; body-double lo fa ma sbagliando) |\n| 5 | **Fare la review serale** | **solo conversazione** — 13 turni felici (J6a) / 8 turni walk leggero. Nessun tap UI oltre i turni; QR mood/energy **assenti** in review (digitazione forzata) | conversazione | ⚠️ | ✅ (8 turni felice) | **↓ peggiorato in attrito**: rito più lungo (13 vs 8) + intake mood senza QR + D15 \"benissimo\" brucia 5 turni |\n| 6 | **Attivare strict** | **1** (poi timer parte da solo, R3). Da chat: QR \"Attiva strict\" (1 tap, gergo N37) | 1 | ✅ | 1 ⚠️ (poi D32) | **↑ migliorato** (niente più tap extra post-attivazione) |\n| 7 | **Avviare body doubling** | **2** (scelta durata 25/50/90 + \"Inizia con Shadow\") dai 3 ingressi (J11) | ≤3 | ✅ | 2-3 ✅ | = |\n| 8 | **Correggere una classificazione** | **≥3** *[da codice]* — apre dialog priorità (Conferma/Modifica), \"Modifica\" → form con **slider** import./urgenza + salva (`page.tsx:1451-1490`, Slider import.:18) | ≤2 | ⚠️ | ⚠️ \"form manuale con slider\" | = (ancora form a slider, non 1-tap) |\n| 9 | **Rimandare a domani** | via chat/review (0 tap UI, 1 frase). **MA** in review su non-candidate il rinvio non lascia traccia (N58/D46): l'utente \"rimanda\" ma il DB non registra nulla | — | ⚠️ | ✅ | **↓ peggiorato in affidabilità** (la parola non produce l'effetto) |\n| 10 | **Creare una ricorrenza** | **~2** (testo \"ogni lunedì palestra\" + QR conferma). \"basta palestra\" per fermarla = 2 turni (conferma superflua con 1 solo template, J7) | ≤2 | ✅ | 2 ✅ | = (creazione); ⚠️ stop chiede 1 turno di troppo |\n| 11 | **Vedere i progressi (Cielo)** | **1** tab (`?view=sky`); empty-state con CTA deep-link \"✦ Creane uno in chat\" (walkthrough). Ma il completamento di un ricorrente non porta MAI al Cielo | ≤1 | ✅ | 1 ⚠️ (\"0/4 senza spiegazione\") | **↑ migliorato** (CTA + spiegazione presenti); resta il ponte celebrativo mancante |\n| 12 | **Cambiare finestra serale (da UI)** | **≥5** *[da codice]* — nav → tab \"Impost.\" (1) → scroll a \"Giornata e promemoria\" → 2 campi `type=time` start/end (2) → **\"Salva\" manuale** (1) [+ raggiungere /tasks se si è in chat] (`DayScheduleCard` 3568-3669) | ≤3 | ⚠️ | **❌ impossibile da UI** (D67) | **↑ RISOLTO ma pesante** (ora esiste, ma dietro Salva manuale N34) |\n| 13 | **Disattivare le email** | **≥3** *[da codice]* — stessa card: nav → tab Impost. (1) → Switch \"Email promemoria serale\" (1) → **\"Salva\"** (1). Lo switch NON auto-salva (N34) | ≤3 | ✅ (al limite) | **❌ impossibile da UI** (D67) | **↑ RISOLTO** (esisteva solo via API prima) |\n| 14 | **Esportare i dati** | **≥2** *[da codice]* — nav → tab Impost. (1) → \"Esporta JSON\" (1) → download (`page.tsx:3959-3970`). **Ma solo se beta** (N22): per il non-beta il diritto GDPR è raggiungibile solo via `/api/export` a mano — **0 superficie UI** | ≤2 | ⚠️ (beta) / ❌ (non-beta) | ⚠️ (card beta-only) | = (card ancora beta-only, D66/N22 non risolto) |\n| 15 | **Ottenere un piano se ieri NON ho fatto la review** | **1** (QR/tap \"Pianifica con Shadow\" nell'empty-state Today → morning check-in) ma poi **3 domande obbligate** (umore/energia/tempo) prima del piano. Rientro con ≥2 scaduti: piano precompilato in ~3 turni (J4); con <2 scaduti o gap solo: rito completo 5 turni (J4bis/N-rientro) | 1 + conversazione | ⚠️ | non in tabella 62 | nuovo |\n| 16 | **Durata review — caso NORMALE (J6a)** | **13 turni utente**, **137s (2m17s)** wall-clock di sola latenza server/LLM (stima reale con lettura+digitazione ~4-5 min). Intake mood/energy da solo può bruciare **5 turni** (D15 \"benissimo\"). Walk leggero alternativo: 8 turni/91s | conversazione snella | ⚠️ | ~8 turni felice (62) | **↓ peggiorato**: rito più lungo, intake fragile |\n| 17 | **Durata review — SOTTO CARICO (J13)** | **20 turni utente**, **249s (~4.2 min)** wall-clock di sola macchina (stima reale ~8-10 min). Il piano risultante ha **12 voci** (non ≤5) e viene detto \"equilibrato\" con energy=2 | ≤ normale | ❌ | non misurato (62) | nuovo |\n\n### Lettura sintetica della tabella A\n- **Vittorie chiare vs 62**: #3 one-tap (era il blocker L1 #1), #6 strict senza tap extra, #12/#13\n  finestra serale + email ora esistono da UI, #11 Cielo con CTA e spiegazione, #2 quick-capture\n  auto-classificata. La lente L1 è **migliorata** sui percorsi ad alta frequenza (iniziare/attivare).\n- **Regressioni/attrito nuovo**: #5/#16 la **review è più lunga e più fragile** del 62 (intake\n  mood senza QR, D15, N32 doppio rito); #9 rimandare \"a parole\" spesso non produce effetto\n  (N58/D46/claim-guard cieco in review); #17 sotto carico la review **riempie invece di ridurre**\n  (12 voci) — è il tap-budget \"conversazionale\" a esplodere, non i tap UI.\n- **Ancora aperti dal 62**: #4 completamento a >2 tap; #8 correzione classificazione a form-slider;\n  #14 export beta-only (N22).\n- **Nota metodo**: #8, #12, #13, #14 non sono stati esercitati in browser in Fase 1 (Settings coperto\n  solo in walkthrough parziale) → conteggi derivati dal codice, da confermare in un mini-walk UI se\n  Antonio vuole il numero certificato. Tutti gli altri sono misurati.\n\n---\n\n## (B) REGISTRO AUTOMAZIONI — §9.2 (L3)\n\n**Formula valore** = `frequenza d'uso (volte/sett, utente tipo) × attrito eliminato (tap+decisioni, da tab. A) / effort (S=1, M=2, L=3)`.\nFrequenze stimate dai journey per l'utente tipo (uso quotidiano). Attrito = tap/decisioni/turni\nrisparmiati. Il registro parte dai **34 semi residui del 62** (`62-evidenze/**/L3-AUTOMAZIONE`,\nestratti voce per voce) + i nuovi emersi in Fase 1/2. Ordinato per valore decrescente.\n\nLegenda freq: OGNI-SESSIONE (~14/sett), GIORNALIERA (~7/sett), SETTIMANALE (~2-3/sett), RARA (~0.3/sett).\n\n| # | Passo manuale rilevato (journey) | Proposta di automazione | Freq (v/sett) | Attrito eliminato | Effort | Valore |\n|---|----------------------------------|-------------------------|:---:|-------------------|:---:|:---:|\n| A1 | Review serale: **carryover dei falliti di ieri impossibile** — la review è cieca al DailyPlan di ieri; l'utente \"rimanda tutto\" e il DB non registra nulla (J6k/J13 S1; seme 62 #19/#35) | Se DailyPlan(ieri) ha voci non fatte, includerle come candidate del triage con un ramo dedicato; se mood/energy ≤2 → auto-ridurre il piano a 1 task (fill-ratio dinamico) invece di ricalcare l'overload | 7 | 5 decisioni + rito shame evitato | M | **17.5** |\n| A2 | Review sotto carico: **pianifica le 12 catture più recenti ed esclude il backlog urgente** (J13 S1); i planned importanti senza deadline non rientrano mai in triage (seme 62 #19) | `pickReason`/`compareForOrdering`: aggiungere un ramo per i planned importanti (importance≥4) mai evitati, con priorità sopra le catture \"new\" del giorno; batching a lotti quando candidate>12 | 7 | 12 voci di rumore → piano vero; churn evitato | M | **17.5** |\n| A3 | **Quick-capture non classificata finché non premi \"Classifica\"** su ciascuna (N35; seme 62 #17) | Auto-classifica batch in background sull'inbox non classificata (stessa pipeline Haiku già usata da 64A7), badge AI; il bottone \"Classifica\" resta solo come override | 14 | 1 tap × N task/giorno | S | **14** |\n| A4 | **Timer one-tap** — RISOLTO in 68 (R3) ma il seme resta a monito | *(chiuso)* — verificare che regga on-device | — | — | — | **(fatto)** |\n| A5 | Morning check-in: **3 domande obbligate (umore/energia/tempo) prima di qualunque valore**, anche con lista vuota (J1 p.8; semi 62 #20/#3) | Comprimere i 3 gate in una card a scelta rapida unica, skippabile con default quando l'utente chiede azione immediata (\"dammi una cosa da fare\" cortocircuita); pre-rispondere \"hai già fatto X?\" incrociando `completedAt` | 7 | 2-3 turni/giorno | M | **10.5** |\n| A6 | **Doppio rito mood/energy mattina E sera** (N32), mai riusato il dato del mattino (J2/J6a) | La review propone il valore del mattino come default (\"stamattina eri a 4, confermi?\"), 1 QR invece di 2 turni digitati; mood/energy come QR chips anche in review (oggi assenti) | 7 | 2 turni + digitazione/giorno | S | **14** |\n| A7 | **Revoca consenso** si affida al solo rimbalzo di navigazione (seme 62 #33) — già RISOLTO da 63 (R6: 403 consent_required server-side) | *(chiuso — R6 CONFERMATA)* | — | — | — | **(fatto)** |\n| A8 | **Invalidazione sessioni al reset/delete** (seme 62 #25) — RISOLTA da 66D (R16) MA le guard admin/beta NON leggono `passwordChangedAt` (N21 S2, bypass) | Estendere `requireAdminSession`/`requireBetaSession` con lo stesso check `passwordChangedAt` di `requireSession` (`admin-guard.ts:53-102`) | 0.3 | bug sicurezza pre-rilascio | S | **(sicurezza, fuori formula — pre-rilascio)** |\n| A9 | **Task completati via chat/body-double/triage NON emettono `task_completed`** → `whatDone` vuoto, calibrazione sottostimata (N5, J11; seme implicito) | Emettere `task_completed` su ogni completamento (chat `complete_task`, triage `outcome:completed`, body doubling summary) e processarlo (`processSignal`) | 14 | learning loop + review whatDone popolati | M | **7** (valore reale più alto: sblocca l'adattività promessa) |\n| A10 | **Segnali server-side restano `processed=false` per sempre** → profilo non li incorpora MAI (N6, J6c) | Un job/`after()` che processa i LearningSignal server-side (oggi solo `/api/learning-signal` li chiude, mai raggiunto dai server-side) | 7 | promessa \"più lo usi più si adatta\" | M | **7** |\n| A11 | **Nudge per task evitato apre un task qualsiasi**, non quello giusto (seme 62 #21) — ora ha taskId (64A6): **verificare che apra DAVVERO quel task** col micro-step pronto | Il nudge/insight porta al task giusto + primo micro-step da 30s pre-armato dal `whatBlocked` catturato (oggi la causa non pilota nulla, D60) | 3 | 1 tap + ricerca task | S | **6** |\n| A12 | **Recovery card: 2 opzioni hardcoded** (\"Micro-sessione\", \"Pausa\") vs 5 strategie engine (D59; seme 62 #2) | \"Troppo difficile\" applica da solo la strategia `reduce` dell'engine (2 step 30-60s già generati) invece di 2 bottoni generici + successo mai avvenuto | 3 | 1 decisione + step pronti | S | **6** |\n| A13 | **Card Ricorrenti in Settings rimbalza in chat senza deep-link** (N49; seme 62 #36) | CTA `/?draft=` che precompila l'input chat (come già fa il Cielo, SkyView:187) + tool `list_recurrences` | 2 | navigazione + memoria (\"cosa scrivo?\") | S | **~5** |\n| A14 | **Review interrotta oltre finestra persa in silenzio**; intake mood/energy solo nel contextJson archiviato (D45, J6e; seme 62 #6) | All'archiviazione lazy, materializzare una Review parziale (i dati ci sono) o accodare un prompt di ripresa | 2 | dati salvati vs buttati | M | **~2.5** |\n| A15 | **Chiusura burnout non lascia piano né follow-up** → Today vuota il giorno dopo (seme 62 #14) | Al mattino post-burnout, check-in di recupero con piano leggero auto-proposto invece di \"parti da zero\" | 1 | rientro morbido post-crollo | M | **~2** |\n| A16 | **Chiusura d'ufficio plan_preview** (seme 62 #16) — RISOLTA da 67B, ma il claim-guard NON copre `confirm_plan_preview`/review: il modello dichiara \"Piano bloccato\" senza tool per 2 turni (J13/J5/J6k) | Estendere il claim-guard ai tool di review/plan (`WRITE_TOOL_NAMES` + pattern \"bloccato/segno/rimando\") | 7 | fiducia + turni sprecati | S | **7** (valore reale alto: colpisce ogni review) |\n| A17 | **Auto-decomposizione al triage** (seme 62 #11) — RISOLTA da 67C ma gli step sono **fotocopia generica** e dopo \"Cambiali\" si perdono (J6g) | Migliorare la qualità pregen (l'LLM in 1 turno produce step concreti); persistere gli step rigenerati dopo \"Cambiali\" | 3 | step inutilizzabili → usabili | M | **~4.5** |\n| A18 | **Ricorrente non completata ieri si DUPLICA** invece di carryover (D25, J7; seme 62 #9) | Auto-archiviazione/rollover con etichetta \"di ieri\" a fine giornata invece di creare un doppione | 7 | doppioni evitati | S | **~7** |\n| A19 | **Export GDPR self-service per TUTTI** (non solo beta) (N22/D66; seme 62 #15) | Rendere la card Export visibile a ogni utente (rimuovere il gate `isBetaTester`), non solo API | 0.3 | diritto art.20 accessibile | S | **(pre-rilascio legale, fuori formula)** |\n| A20 | **Slot review**: \"sposta X al pomeriggio\" funziona ma va detto (seme 62 #27) | Con `slotContextsJson` + UserPattern proporre da soli gli slot giusti, chiedere solo conferma | 2 | 1 override/sera | M | **~2** |\n| A21 | **QR \"Attiva strict\" durata fissa 25min** anche se il task ha sessionDuration diverso (seme 62 #28) | Derivare la durata dal task del piano | 3 | 1 correzione | S | **~3** |\n| A22 | **DayScheduleCard \"Salva\" manuale** (N34; nuovo) invece di autosave | Autosave onBlur/onChange debounced (pattern già usato altrove nell'app) | 2 | 1 tap \"Salva\"/modifica | S | **~2** |\n| A23 | **Empty-state Today \"Costruiamone uno insieme\" chiede invece di generare** (N36; nuovo) | Offrire il one-tap \"Genera piano\" lì, o generare un piano di default dai task in inbox | 3 | 1 turno di conversazione | S | **~4.5** |\n| A24 | **Bootstrap notturno (h<5) muto**; check-in perso (seme 62 #7) | Schedulare il check-in per `wakeTime` (già nei Settings) invece di perdere il trigger | 1 | check-in non perso | M | **~1.5** |\n| A25 | **Monitor/alert su fallimenti Resend** (seme 62 #31) — RISOLTO da 66C (R15: Notification `evening_email_failed` + summary admin) | *(chiuso — R15 CONFERMATA)* | — | — | — | **(fatto)** |\n| A26 | **Attivazione beta tester richiede edit env + redeploy + re-login** (seme 62 #26) | Leggere il flag da DB (`User.isBetaTester`) così l'invito è istantaneo | 0.1 | operativo Antonio | S | **(ops, fuori formula)** |\n| A27 | **Cron email serale senza backoff di inattività**: 15 email identiche in 15 giorni di drop-off (N61, J4bis S) | Rarefazione/stop dopo N giorni di inattività, con copy di rientro non colpevolizzante | 7* | motore di churn per ADHD in shame-spiral | S | **7** (*7 email/utente inattivo/sett) |\n| A28 | **Triage admin senza bulk né filtri priorità** (seme 62 #24) | Endpoint bulk + filtri priorità per il triage admin | 0.3 | costo lineare per Antonio | M | **(ops)** |\n\n*(I semi 62 già chiusi da 63-67 sono elencati per completezza — A4/A7/A25 — e non contano nella top 5.)*\n\n---\n\n## TOP 5 AUTOMAZIONI DA FARE PRIMA DEL RILASCIO (motivate dalla formula)\n\nSelezione per **valore × criticità pre-rilascio**, con priorità ai due S1 e ai difetti che\navvelenano il core loop quotidiano o rompono la promessa \"l'app riduce il carico\".\n\n1. **A1 — Carryover dei falliti di ieri in review (valore 17.5, M).** È uno dei due **S1**: oggi\n   il carryover è *strutturalmente impossibile* (review cieca al DailyPlan di ieri). L'utente ADHD\n   con memoria prospettica debole \"rimanda tutto\" e il DB non registra nulla → i task falliti\n   svaniscono. Colpisce OGNI serata di review. Pre-rilascio.\n\n2. **A2 — Selezione candidate: includere il backlog urgente, escludere il rumore (valore 17.5, M).**\n   L'altro **S1**: sotto carico la review pianifica le catture più banali del giorno ed esclude\n   bonifico affitto / riunione / 730. Per un'app il cui pitch è \"ridurre il carico\" è il fallimento\n   più diretto del promise. Pre-rilascio.\n\n3. **A16 — Claim-guard esteso a review/plan (valore 7, S, effort minimo).** Il modello dichiara\n   \"Piano bloccato / lo segno fatto / li rimando tutti a domani\" **senza eseguire alcun tool**,\n   in review, per 1-2 turni (J13, J5, J6k, J6b, N58). Rompe la fiducia (L7) su ogni review e\n   perde dati. Effort S, impatto ogni-sessione → rapporto valore/effort altissimo. Pre-rilascio.\n\n4. **A3 + A6 — Auto-classify batch + riuso mood mattutino (valore 14 ciascuna, S).** Le due\n   automazioni giornaliere a più alto valore/effort: eliminano il tap \"Classifica\" ripetuto e il\n   doppio rito mood/energy (N32). Entrambe S, entrambe colpiscono l'utente tutti i giorni.\n   Pre-rilascio (quick-win ad alto ritorno).\n\n5. **A9 + A10 — Emettere e processare `task_completed`/segnali server-side (valore 7, M).**\n   Sblocca la promessa cardine del tour \"più lo usi più si adatta\" (N5/N6/N7): oggi completare via\n   chat/body-double/triage non alimenta il learning loop e i segnali restano `processed=false` per\n   sempre. Non è un bug visibile in 1 giorno, ma è ciò che rende l'app \"viva\" vs \"un timer con chat\".\n   Pre-rilascio se si vuole onorare il pitch adattivo; altrimenti primo post-rilascio.\n\n**Menzioni d'onore pre-rilascio non-formula** (legale/sicurezza, obbligatorie a prescindere dal\nvalore d'uso): **A8** (bypass sessioni pre-reset su guard admin/beta, N21 — sicurezza) e **A19**\n(export GDPR per tutti, N22 — diritto art.20). **A27** (backoff email inattività) è S ad alto\nimpatto retention e va valutata insieme.\n\n---\n\n## Note di metodo e limiti (per il report)\n- **Metriche di prodotto §11.10 confermate**: tempo-al-primo-valore ~30 interazioni / ~2 turni chat\n  (~45s attese LLM) da register a prima cattura (J1); durata review normale **13 turni / 2m17s**\n  (J6a), sotto carico **20 turni / ~4.2 min** (J13); carico giornaliero obbligatorio = check-in\n  (3 domande) + mood/energy ×2 (N32) + review — la misura diretta di \"l'app aggiunge carico\".\n- **N62 (giornata muta / zero input conversazionale)** non risulta eseguita come artefatto dedicato\n  in Fase 1/2 (nessun `N62` nei consolidati): il valore erogato a zero chat resta **NON MISURATO** →\n  da dichiarare nel report come copertura tagliata, non chiuso in silenzio. Il registro sopra lo\n  approssima via A3/A22/A23 (i punti dove l'app costringe a conversare).\n- **Tap #8/#12/#13/#14** derivati dal codice (Settings non esercitato a fondo in browser); tutti gli\n  altri della tabella A sono misurati dai journal J1/J8/J11 e dai turni J2/J6a/J13.",
+        "findings": [
+          {
+            "titolo": "Review sotto carico esclude il backlog urgente e pianifica le catture banali (pickReason senza ramo per i planned importanti)",
+            "tipo": "U",
+            "severita": "S1",
+            "nota": "J13. src/lib/evening-review/triage.ts:111-139. Candidate = le 12 inbox più recenti; 15 planned urgenti (bonifico affitto, 730) mai in triage né in piano. Fondamento del deliverable A2/top-2.",
+            "piste_dossier": [
+              "cap 12 candidate",
+              "D46-analogo"
+            ]
+          },
+          {
+            "titolo": "Carryover dei falliti di ieri strutturalmente impossibile: la review è cieca al DailyPlan di ieri",
+            "tipo": "B",
+            "severita": "S1",
+            "nota": "J6k. src/lib/evening-review/triage.ts (selezione esclude i planned del piano di ieri) + tools.ts toolset ristretto. Shame-day: 5 falliti, nessun tool sul carryover, piano domani chiude 0-1 voce. Fondamento A1/top-1.",
+            "piste_dossier": [
+              "shame-day",
+              "carryover L3"
+            ]
+          },
+          {
+            "titolo": "Claim-guard non copre la review/plan: il modello dichiara Piano bloccato / lo segno fatto / li rimando senza eseguire tool",
+            "tipo": "B",
+            "severita": "S2",
+            "nota": "J13/J5/J6k/J6b/N58. src/lib/chat/claim-guard.ts:44-52 (WRITE_TOOL_NAMES non copre confirm_plan_preview né azioni review). Effort S, impatto ogni-review. Fondamento A16/top-3.",
+            "piste_dossier": [
+              "N4",
+              "N58",
+              "D16"
+            ]
+          },
+          {
+            "titolo": "Quick-capture resta non classificata finché non premi Classifica su ciascuna",
+            "tipo": "U",
+            "severita": "UX",
+            "nota": "N35. src/app/tasks/page.tsx:2448. Auto-classify batch in bg eliminerebbe 1 tap × N task/giorno. Seme 62 #17. Fondamento A3/top-4.",
+            "piste_dossier": [
+              "N35"
+            ]
+          },
+          {
+            "titolo": "Doppio rito mood/energy mattina e sera senza riuso del dato del mattino",
+            "tipo": "U",
+            "severita": "UX",
+            "nota": "N32. src/lib/chat/prompts.ts. 2 turni/giorno sprecati; QR mood/energy assenti in review. Seme 62 #32. Fondamento A6/top-4.",
+            "piste_dossier": [
+              "N32"
+            ]
+          },
+          {
+            "titolo": "Completamenti via chat/body-double/triage non emettono task_completed e i segnali server-side restano processed=false per sempre",
+            "tipo": "B",
+            "severita": "S3",
+            "nota": "N5/N6/N7. src/lib/chat/tools.ts:1352,1935; api/learning-signal/route.ts:88-122. Rompe la promessa adattiva del tour. Fondamento A9/A10/top-5.",
+            "piste_dossier": [
+              "N5",
+              "N6",
+              "N7"
+            ]
+          },
+          {
+            "titolo": "Cambiare finestra serale / disattivare email ora possibili da UI ma dietro Salva manuale (regressione risolta dal 62, con attrito residuo)",
+            "tipo": "U",
+            "severita": "UX",
+            "nota": "N34. DayScheduleCard src/app/tasks/page.tsx:3568-3669. Finestra: >=5 tap; email: >=3 tap; switch non auto-salva. Nel 62 era impossibile (D67). Base tabella A #12/#13.",
+            "piste_dossier": [
+              "N34"
+            ]
+          },
+          {
+            "titolo": "Export GDPR raggiungibile da tutti via API ma card UI beta-only",
+            "tipo": "C",
+            "severita": "S3",
+            "nota": "N22/D66. src/app/tasks/page.tsx:3956-3957. Diritto art.20 senza superficie per il non-beta. Base tabella A #14 + A19 pre-rilascio.",
+            "piste_dossier": [
+              "N22",
+              "D66"
+            ]
+          },
+          {
+            "titolo": "One-tap Today RISOLTO: 1 tap Inizia e il timer scorre da solo (blocker L1 #1 del 62 chiuso)",
+            "tipo": "U",
+            "severita": "UX",
+            "nota": "R3 CONFERMATA (J8). Era D32 (2 tap) nel 62. Miglioramento chiave della scorecard L1. Base tabella A #3.",
+            "piste_dossier": [
+              "R3"
+            ]
+          }
+        ]
+      },
+      "conversazionale-lingua": {
+        "area": "Fase 3/4 — Audit conversazionale (§9.3), Inventario lingua (§9.4/L6/L9), Inventario fiducia (§9.6/L7)",
+        "output": "# Collaudo 68 — Fase 3/4: Audit conversazionale, Inventario lingua, Inventario fiducia\n\n> Sintesi analitica dagli artefatti Fase 1-2 (trascrizioni J*, walkthrough-parziale, consolidato) + letture di codice mirate su `main @ 56e0f83`. Solo analisi, nessun fix. Ogni voce cita evidenza (path) e/o `file:riga`.\n\n---\n\n## (A) AUDIT CONVERSAZIONALE (§9.3, L8)\n\n### A.0 — Sintesi\nL'audit su 30+ trascrizioni LLM reali conferma che il carico conversazionale è dominato da **quattro classi di problemi**: (1) domande ripetute per obiettivo già raggiunto, (2) intake mood/energy duplicato mattina+sera, (3) una FAMIGLIA pervasiva di **claim-senza-tool** (il modello dichiara un'azione — \"creato\", \"registrato\", \"lo segno fatto\", \"pin tolto\", \"piano bloccato\" — senza eseguire il tool), (4) **leak di meccanica interna e gergo** rivolti all'utente. La meccanica difende bene i dati nella maggior parte dei casi (dedup, validator), ma il COSTO è tutto sulla fiducia e sul carico cognitivo dell'utente ADHD.\n\n### A.1 — Domande per obiettivo (target ≤1 per cattura)\n- **PRE-creazione: sostanzialmente rispettato** nei percorsi felici (0-1 domanda, solo g2=2). Ev: `J3/trascrizione-catture-completa.md`, consolidato L8.\n- **POST-cattura: violato in modo sistematico.** In mode general durante 16 catture consecutive il modello chiude quasi ogni conferma con la STESSA domanda \"Quanto tempo hai oggi disponibile?\" (≥8 volte), mai risposta e mai adattata: l'utente sta CATTURANDO, non pianificando. Ev: `J3/trascrizione-catture-completa.md`.\n- **Intake mood degradato a 5 turni (D15):** \"benissimo\" → `record_mood(5)` rifiutato dal validator (mappa senza \"benissimo\", `mood-energy-parse.ts:28-39`); il modello passa a chiedere l'energia come se avesse registrato, poi ritenta `record_mood(5)` per 3 turni mentre l'utente risponde \"4\". Mood salvato solo al 5° turno. Ev: `J6/j6a-trascrizione-review-felice.md` turni 2-5.\n- **Rito review 0-candidate lungo:** 6-7 turni utente per chiudere una serata SENZA task. Ev: `J6/j6f-walk-log.txt`.\n\n### A.2 — Ripetizioni (mood/energy 2x/giorno N32, intake duplicato)\n- **N32 CONFERMATA (2 journey indipendenti).** Mattina: `set_user_mood`/`set_user_energy`/`set_user_time` con QR 1-5 tappabili. Sera: \"Come stai stasera? 1-5\" + \"E di energia? 1-5\" da capo, **nessun riuso** del dato del mattino, nemmeno come default (\"stamattina eri a 4: confermi?\"). Ev diretta: `J6/j6a-trascrizione-morning-n32.md` (set_user_mood(4)+set_user_energy(3) alle 10:34) vs `J6/j6a-trascrizione-review-felice.md` (sera: da capo). Conferma incrociata `J2/trascrizione-morning-checkin.md` vs `trascrizione-evening-review-retry.md`.\n- **Aggravante: TERZA ri-registrazione spuria.** Al turno 6 della review j6a il modello richiama `set_user_mood(4)`/`set_user_energy(4)` sovrascrivendo i valori del mattino con quelli serali (`j6a-trascrizione-review-felice.md` turno 6, payload set_user_mood/set_user_energy). I tool del morning (`set_user_*`) sono nel toolset review → gating per fase non li filtra.\n- **`record_energy` ri-eseguito a raffica** con lo stesso valore per tutto il walk (8+ volte tentativo 1, 4 volte retry). Idempotente (nessun danno dati), ma rumore. Ev: `J2/trascrizione-evening-review.md`, `step3r-evening-summary.json`.\n- **`record_emotional_offload` chiamato 2 volte** nello stesso thread → LearningSignal duplicato (3 run su 3 con offload). Ev: `J6/j6b-run2-review-b2-trascrizione.md`.\n- **Messaggio di apertura triage duplicato identico** (turni 3 e 5 di j6a: \"Stasera ho 3 candidate da attraversare con te, l'altra resta nell'inbox per ora — ti va?\" ripetuto verbatim). Ev: `J6/j6a-trascrizione-review-felice.md`.\n\n### A.3 — Lunghezza risposte\n- Prevalentemente asciutte (out=15-50 token) nei turni di rito/chiusura: OK per L8.\n- **Eccezioni sotto stress:** turno morning con out=300 token (pianificazione con lista completa dei task), e turno review carico con lista di 5 task su 3 fasce in un unico blocco (`J6/j6j-trascrizione-review-trimming.md` turno finale). Accettabile ma denso per un utente ADHD.\n- Fallback robotici brevi ma gergali (vedi A.5).\n\n### A.4 — Gergo esposto all'utente\nInventario dei termini interni filtrati nel parlato del modello (L8/L9, famiglia N37/N38):\n- **\"candidate\"** — esposto all'apertura di OGNI review (\"Stasera ho 3 candidate da attraversare con te\"). Ricorrente in j6a, j6h, j6j, j6f, j4bis, j6k. In un caso con concordanza rotta: \"1 candidate ... l'altra\". Ev: tutte le trascrizioni J6 + `J4bis/30-trascrizione-review-reentry-15gg.md:24`.\n- **\"kept\"/\"postponed\"** — enum EN interni esposti: \"la teniamo (kept) o la rimandiamo a domani (postponed)?\". Ev: `J6/j6g-run3-trascrizione-review-autodecomp.md`.\n- **\"cursore\"** ed \"entry\" — \"Noto che ho ancora il cursore su 'Rinnovare il passaporto' aperto\". Ev: `J6/j6j-trascrizione-review-trimming.md` turno 70 (11:06:26).\n- **\"Piano bloccato\" / \"Blocco la review?\"** — lessico ambiguo: \"bloccato\" altrove nell'app significa task bloccato/impedito (`whatBlocked`/`task_blocked`), qui significa \"confermato/congelato\". Collisione L9. Presente in 3 trascrizioni su 3 (j6a, j6h, j6j). Ev: `J6/j6h-trascrizione-*`.\n- **\"inbox-fuori-triage\" / \"le altre 5 restano nell'inbox\"** (mentre sono `planned`) — gergo + disinformazione di stato. Ev: `J6/j6k-trascrizione-shame-day.md`.\n- **\"tool\"** — \"Non ho chiamato nessun tool in questo turno\" / \"durante la review non ho il tool per segnare task come completati\" (3 occorrenze). Gergo di implementazione. Ev: `J3/trascrizione-catture-completa.md`, `J6/j6e3-trascrizione-n58.md`.\n- **QR \"Attiva strict\"** — anglicismo nella quick reply proattiva (N37). Ev: `J2/step2-3-morning-summary.json`, `J4/20-turno3.json`.\n- **\"executive function\"** — tagline gergale EN (welcome, email, reset — vedi B.4).\n\n### A.5 — Leak di meccanica interna all'utente\n- **D15 / \"il sistema richiede\":** \"Ok, il sistema richiede che tu mi dia il numero direttamente. Come stai stasera? 1-5.\" — detto quando l'utente il numero l'aveva GIÀ dato 2 volte. Espone il vincolo interno del validator. Ev: `J6/j6a-trascrizione-review-felice.md` (10:35:13).\n- **\"Non ho chiamato nessun tool in questo turno\"** (fallback claim-guard, `orchestrator.ts:1138-1140`) — 3 occorrenze. Ev: `J3/trascrizione-catture-completa.md`.\n- **Fallback 8b robotico:** \"Mi sono perso un attimo — puoi ripetere?\" e \"Fatto. Dimmi tu come proseguiamo.\" (quest'ultimo dopo un create RIUSCITO: la conferma non nomina né task né scadenza). Ev: `J3/trascrizione-catture-completa.md`.\n\n### A.6 — Promesse del modello vs mantenute: LA FAMIGLIA claim-senza-tool (D16/D17/N4/N58)\nÈ il finding conversazionale più grave e più diffuso. **Il modello dichiara un'azione compiuta con `toolsExecuted=[]` (o toolset che non contiene il tool), lasciando lo stato reale invariato.** Il claim-guard (`claim-guard.ts:44-52`) copre solo create/complete/update/archive in mode general|morning, NON copre review/plan/commit né il lessico al presente (\"lo segno fatto\", \"registrato\", \"pin tolto\"). Censimento per superficie:\n\n| Superficie | Claim falso pronunciato | Tool eseguiti | Stato reale | Evidenza |\n|---|---|---|---|---|\n| general (cattura) | \"Creato il task.\" / \"Creato senza scadenza.\" (5 catture su 16) | `[]` | 0 righe DB, task persi | `J3/trascrizione-catture-completa.md` |\n| general (cattura) | \"È già stato creato nel turno precedente\" (raddoppio alla contestazione, falso) | `[]` | 0 righe DB | `J3/trascrizione-catture-completa.md` |\n| general (D17) | \"Aggiungo il task. Quando…?\" / \"Creo adesso i task che ti mancano\" / \"Ok, creo il task Pagare la bolletta\" | `[]` | task mai creati | consolidato D17 (5 occorrenze) |\n| general (N4) | \"Ok, registrato: 4-6 ore disponibili\" + \"Ho solo registrato il tempo disponibile\" | `[]` | nulla persistito (`set_user_time` vincolato al morning) | `J2/trascrizione-n4bis-general-pianifica.md` (2 occorrenze) |\n| review burnout (N58) | \"Il pacco alle poste lo segno fatto. A domani.\" | `[close_review_burnout]` soltanto | task resta `inbox` | `J6/j6b-run1-review-b-trascrizione.md` |\n| review 0-cand (N58) | \"lo segno come completato… Fatto.\" / \"Ottimo, la segno fatta.\" | `[]` (o create dedup'd) | task resta `planned` | `J6/j6f-trascrizione-zero-candidate.md`, `j6f-repro-run2-trascrizione.md` |\n| review autodecomp (N58) | \"Segnato, la segno come fatta.\" | `[]` | task resta `inbox` | `J6/j6g-run2-walk-log.txt` |\n| review trimming (N58) | \"Ok, le lampadine le segno come fatte — grazie per dirmelo\" | `[set_current_entry]` soltanto | task resta `inbox` | `J6/j6j-trascrizione-review-trimming.md` |\n| review shame-day (carryover) | \"…li rimando tutti a domani\" (1/2 run) | `[mark su lampadine]` soltanto | nessun task spostato, piano vuoto | `J6/j6k-trascrizione-shame-day.md` |\n| plan preview (D47) | \"Segnato, pin tolto. Il piano torna com'era\" | `[]` | `pinnedFinal` invariato, task resta pinnato | `J6/j6a-trascrizione-review-felice.md` (10:36:28) |\n| plan preview / closing | \"Piano bloccato. A domani.\" / \"Già chiuso. A domani.\" (2 turni) | `[]`, phase invariata | piano NON confermato, chiusura reale al turno dopo | `J13/j13-trascrizione-review-carico.md`, `J6/j6f-trascrizione-zero-candidate.md`, `J5/j5-20-turnlog.json` |\n| review closing (shame) | \"Chiuso. A domani.\" | `[]` | review resta aperta, confirm al turno dopo | `J6/j6k-trascrizione-shame-day.md` |\n\n**Nota N58 (task non-candidate \"ho già fatto X\"):** comportamento NON deterministico e a due failure mode. Nei run dove il modello gestisce bene usa `add_candidate_to_review + mark_entry_discussed(completed)` e il task risulta `completed` in DB (j6c, j6d, j6h, j6k). Nei run peggiori FABBRICA la conferma senza tool (j6b, j6f, j6g, j6j) o IGNORA il dato in silenzio saltando alla voce dopo (j6a: nessun riconoscimento, nemmeno un \"lo segno dopo la review\"). Per un utente ADHD (memoria prospettica debole) equivale a perdere il task: crede di averlo comunicato, l'app non ne tiene traccia.\n\n**commit_today_plan e claim-guard (N4 statica):** confermato a codice che `commit_today_plan` NON è in WRITE_TOOL_NAMES del claim-guard (`claim-guard.ts:44-52`; `tools.ts:591-597` lo vincola a morning|planning). La superficie \"review/plan/closing\" è interamente scoperta dal guard → tutti i claim di tabella sopra sono strutturalmente possibili.\n\n### A.7 — Tono delle chiusure d'ufficio 67B (fermezza vs rispetto)\nMateriale su 3 trascrizioni complete (j6h happy + 2 avversi). **Giudizio: PROMOSSO con riserva.**\n- Fermezza adeguata, zero shaming, messaggi brevi. Ev: `J6/j6h-trascrizione-chiusura-ufficio.md`.\n- **N2 SMENTITA (positivo):** al 3° turno con richiesta di modifica (\"sposta il progetto a domani e togli il curriculum\"), la chiusura forzata NON scavalca la volontà: il modello esegue `update_plan_preview` con moves+removes PRIMA di confermare. 2/2 run. Ev: `J6/j6h-trascrizione-avverso-j6h-avverso.md` (11:04:32-38).\n- **Contraddizione di copy (finding L7):** la chiusura d'ufficio contraddice la promessa testuale appena fatta. Sequenza j6h: turno \"Ok, restiamo così per stasera. Se vuoi chiudere più tardi, dimmelo.\" → turno DOPO (stesso streak) \"Chiuso. A domani.\" con `confirm_close_review`. Il testo del modello in closing non è consapevole che il turno successivo sarà forzato (`at-risk-detection.ts:159` CONFIRM_STREAK_THRESHOLD=2 + `orchestrator.ts:643-670`). Ev: `J6/j6h-trascrizione-chiusura-ufficio.md` (11:00:25 vs 11:00:38).\n- Lessico \"Piano bloccato/Blocco la review\" ambiguo (vedi A.4).\n\n---\n\n## (B) INVENTARIO LINGUA (§9.4, L6/L9)\n\n### B.1 — i18n: stato di fatto\n`messages/{it,en}.json` **NON esiste** (verificato: nessuna dir `messages/`). L'app è **solo-italiano by-fact**, in contrasto con la regola 7 di CLAUDE.md (testi bilingui it/en dal piano v3 W4). Da annotare come stato di fatto, non testabile EN runtime.\n\n### B.2 — Enum EN raw rivolti all'utente (CONFERMATI)\n| Enum/valore | Dove | Riferimento |\n|---|---|---|\n| categoria card chat: **\"personal\" / \"admin\" / \"work\"** (raw) | Card \"Task creato\" in chat: `{result.category}` reso senza mappa i18n | `ChatView.tsx:1172-1175` (N38) — walkthrough conferma \"personal\"/\"admin\" visibili |\n| **role: \"worker\"** (raw) | Settings → \"Ruolo: worker\" (`{profile.role}`); il valore è stored raw da `constants.ts:20` `{ value: 'worker', label: 'Lavoratore' }` — la UI onboarding usa la label ma Settings mostra il value | `tasks/page.tsx:3913` + `features/onboarding/constants.ts:20` (N38 conf. da walkthrough) |\n| **sessionFormat: \"standard\"/\"pomodoro\"/\"micro\"/\"marathon\"** (raw) | TaskDetail Badge `{selectedTask.sessionFormat}` | `tasks/page.tsx:3281` + type `shadow.ts:51` |\n| Titoli tour **step 4-5 in EN** | \"Focus / **Execution Session**\" (step 4); step 5 \"Strict Mode\" parzialmente EN | `shadow.ts:251,258` (walkthrough L9 conferma) |\n| QR **\"Attiva strict\"** | quick reply proattiva post-commit | prompts.ts + `J2/step2-3-morning-summary.json` (N37) |\n| tagline **\"executive function\"** | vedi B.4 |\n\nNota: le categorie hanno una mappa parziale (`ChatView.tsx:1141` `category:'categoria'` e \"Generale\" localizzato in inbox) ma la card chat rende il valore raw quando la categoria è personal/admin/work.\n\n### B.3 — Apostrofi al posto delle accentate (N46) — quantificato\nGrep mirato su testi utente. Occorrenze confermate (apostrofo ASCII invece di lettera accentata):\n- **`src/app/privacy/page.tsx`**: 7+ righe — \"e'\" (righe 12, 18, 40), \"perche'\" (18, 40), \"poiche'\" (40), \"puo'\" (40), \"cosi'\" (82), \"finche'\" (90), \"gia'\" (101), \"diritti/portabile\" ecc.\n- **`src/app/terms/page.tsx`**: 10+ righe — \"e'\" (12, 16, 18, 19, 25, 43, 49, 55), \"Cos'e'/non e'\" (16), \"ne'\" (19, 43, 49), \"finalita'\" (19), \"puo'/disponibilita'/continuita'\" (25), \"cosi' com'e'\" (55).\n- **`src/lib/api/fetch.ts:59`**: toast utente \"Qualcosa **e'** andato storto (${res.status}). Riprova tra poco.\" (+ commenti \"gia'\", \"piu'\" righe 6,20,21,33 — commenti, non testo utente).\n- **Settings**: \"finche' non lo riconcedi\" (copy consenso, walkthrough riga 48).\n- **Trascrizioni chat**: gli apostrofi compaiono anche nel parlato dell'utente simulato (\"piu'\", \"gia'\") ma è input di test, non copy dell'app.\n\nSuperficie totale N46: **privacy + terms (pagine pubbliche legali, alta visibilità pre-rilascio) + toast di errore generico fetch.ts**. Per due pagine legali GDPR l'apostrofo-per-accentata è particolarmente inopportuno.\n\n### B.4 — \"executive function\" (gergo EN) — inventario completo\nPresente in **8 punti**, incluse le email transazionali:\n- `layout.tsx:31,51` (meta keywords + og description \"External executive function per adulti ADHD\")\n- `reset-password-form.tsx:61` e `tasks/page.tsx:1137` (sottotitolo \"il tuo executive function esterno\")\n- `bug-fixed-email.ts:62,70`, `evening-email.ts:67,75`, `password-reset.ts:140,147` (footer email)\nTutte con la stessa formula \"Shadow — il tuo executive function esterno\". Gergo EN che un utente non-tecnico italiano non decodifica (L7/L9).\n\n### B.5 — Errori API in lingua mista (N46 lato API)\n- `/api/consent`: 400 \"Invalid JSON\" (EN); `/api/onboarding`: \"Failed to read onboarding state\" (EN); `auth-guard.ts:65`: 401 \"Unauthorized\" (EN). Convivono coi 400 italiani parlanti di `/api/chat/turn`. Ev: `J9/j9-10-api-errors.md` (P1). I codici-macchina `consent_required`/`session_invalid` sono legittimi; i messaggi destinati all'utente no.\n\n### B.6 — CONSENT_VERSION \"0.2-draft\" visibile all'utente (N45/D53)\nConfermato: `api/consent/route.ts:19` `CONSENT_VERSION='0.2-draft'` + `ConsentView.tsx:24` `CONSENT_COPY_VERSION='0.2-draft'` → il footer del consenso mostra \"bozza 0.2-draft\" all'utente (walkthrough riga 11). In un collaudo **pre-rilascio** un consenso legale marcato \"bozza/draft\" è un candidato S1/S2.\n\n---\n\n## (C) INVENTARIO FIDUCIA (§9.6, L7): promessa testuale vs realtà\n\n### C.1 — Guida cap. 8 descrive la sezione \"Review\" RIMOSSA (N40) — CONFERMATA\nLa guida (`GuidaShadow/testi-guida-onboarding.md`) dedica un intero **Capitolo 8 \"Review: insegni a Shadow chi sei\"** (righe 96-104) a una schermata che non esiste più nell'app (rimossa dal Task 63):\n- \"La sezione 'Review' è il recap della tua giornata. In alto i contatori: Completati, Evitati, In corso.\"\n- \"Racconti tre cose: cosa hai fatto, cosa hai evitato, cosa ti ha bloccato. E segni il tuo umore.\"\n- \"Poi premi **'Salva e aggiorna il modello'**.\" (bottone inesistente)\n- Screenshot referenziato `13-review-oggi`.\n**Aggravante:** la guida ci costruisce sopra una distinzione esplicita (cap. 4 para 3: \"Non confonderla con la sezione 'Review' in basso… La sezione Review è il recap di oggi, lo vedi più avanti\") → non è un residuo dimenticato, è un pezzo di guida che INSEGNA una superficie fantasma. Un utente che cerca la sezione Review e i contatori non li trova: drift GUIDA→app, genera supporto manuale. **Peso: ALTO** (è un intero capitolo, non una frase).\n\n### C.2 — Uscita strict: 4 step reali vs 3 della guida (N42) — CONFERMATA, con TERZA versione discordante\n- **Codice (`shadow.ts:348-374`): 4 step** — (1) \"Vuoi davvero uscire?\" confirmation, (2) \"**Aspetta 15 secondi**\" countdown, (3) \"Perché vuoi uscire?\" motivation, (4) \"Conferma digitando VOGLIO USCIRE\" typing.\n- **Guida cap. 7 (righe 90-93): 3 step** — omette del tutto il countdown 15s come passo distinto: \"Prima ti chiede 'Vuoi davvero uscire?'. Poi 'Perché vuoi uscire?'… Infine devi digitare 'VOGLIO USCIRE'.\"\n- **Tour in-app (`shadow.ts:260`): descrizione ANCORA diversa** — \"digitare una frase, aspettare 15 secondi e **dare 3 conferme**\".\nTre descrizioni non allineate della stessa friction. La guida sottostima l'attrito (3 vs 4); il tour lo descrive in modo vago (\"3 conferme\" non mappa sui 4 step). Drift bidirezionale. **Peso: MEDIO** (attrito intenzionale mal descritto abbassa la fiducia proprio nella feature-firma).\n\n### C.3 — Pausa body doubling: la UI dichiara il timer che continua (N43) — CONFERMATA, drift della GUIDA\n- **App (`BodyDoubleView`): onesta** — \"In pausa — il timer continua\" (walkthrough riga 27). Non c'è inganno in-app.\n- **Guida cap. 6 para 4 (riga 83): fuorviante** — \"C'è anche 'Pausa' quando ti serve.\" Presenta la Pausa come una pausa vera, senza dire che il timer non si ferma. Drift GUIDA→app: l'utente si aspetta di poter fermare il timer, l'app glielo dice solo dopo aver premuto. **Peso: BASSO-MEDIO** (l'app corregge l'aspettativa in-context, ma la guida crea la falsa aspettativa a monte).\n\n### C.4 — onboarding-concept \"zero attrito\" vs 6+12 step reali (N41) — CONFERMATA\n- **onboarding-concept.md riga 26:** \"Zero attrito d'ingresso. «Salta» sempre in alto a destra. L'onboarding non chiede di configurare niente: si chiude con una sola azione minima.\"\n- **Realtà app:** tour 6 step con \"Salta\" **solo allo step 0/1** (`TourView.tsx:129-137`, walkthrough riga 10) + onboarding **12 domande TUTTE obbligatorie** (walkthrough riga 13). Non è \"zero attrito\" né \"Salta sempre\": sono 18 schermate prima del primo valore. Il concept è un documento di design, non copy in-app, ma stabilisce una promessa disattesa dal prodotto. **Peso: MEDIO.**\n\n### C.5 — /account-deletion: \"accesso con Google\" inesistente + card Export beta-only (N22) — CONFERMATA\n- **`account-deletion/page.tsx:36`:** \"Account e credenziali: email, nome, password… e gli accessi collegati, **incluso l'accesso con Google**.\" → il login è **solo CredentialsProvider** (CLAUDE.md; nessun Google login esiste; GOOGLE_CLIENT_* serve solo all'OAuth integrazioni Calendar). Testo che promette/cita una feature inesistente.\n- **`account-deletion/page.tsx:66`:** \"Esportare i tuoi dati: nella sezione **'Esporta dati'** tocca 'Esporta JSON'.\" → ma la card \"Esporta dati\" in Impostazioni è renderizzata **solo se `session.user.isBetaTester`** (`tasks/page.tsx:3956-3957`). Un utente NON-beta legge le istruzioni per una card che non vedrà mai. Al rilascio agli utenti veri (tutti non-beta) il diritto GDPR di export (art. 20) è esercitabile solo chiamando `/api/export` a mano (N22, `/api/export` risponde 200 json+csv al nonbeta: `J10/n22-export-nonbeta.json`). **Peso: ALTO** (istruzione GDPR che non porta a nulla per l'utente medio + riferimento a login Google inesistente in una pagina legale).\n\n### C.6 — CONSENT_VERSION \"0.2-draft\" (N45/D53) — vedi B.6\nPromessa implicita di un consenso \"definitivo\" tradita dalla marca \"bozza\" mostrata all'utente. **Peso: ALTO in un collaudo pre-rilascio** (candidato S1/S2 come da §1 spec).\n\n### C.7 — \"registrato automaticamente\" (Sentry) e tagline \"executive function\"\n- La promessa observability \"registrato automaticamente\" vale **solo se DSN configurato**; senza DSN l'observability è no-op (spec §3.5). Da annotare come promessa condizionata.\n- tagline \"executive function esterno\" — vedi B.4, drift di comprensibilità (L7 gergo).\n\n### C.8 — Sintesi peso fiducia\n| Finding | Direzione drift | Peso |\n|---|---|---|\n| C.1 Cap 8 Review fantasma (N40) | guida → app | ALTO |\n| C.5 account-deletion Google+Export (N22) | app/copy → realtà | ALTO |\n| C.6 consent 0.2-draft (N45) | copy → realtà | ALTO (pre-rilascio) |\n| C.2 strict 4 vs 3 step (N42) | bidirezionale (guida+tour) | MEDIO |\n| C.4 onboarding \"zero attrito\" (N41) | concept → app | MEDIO |\n| C.3 pausa body doubling (N43) | guida → app | BASSO-MEDIO |\n| C.7 executive function / Sentry | copy → comprensibilità | BASSO |\n\n**Raccomandazione trasversale (per il triage Task 69+):** i drift di fiducia di peso ALTO (C.1/C.5/C.6) sono tutti pre-rilascio-bloccanti perché toccano copy LEGALE (consenso, cancellazione, privacy) o istruzioni GDPR non azionabili. La famiglia claim-senza-tool (A.6) è il rischio di fiducia n.1 lato conversazione: estendere il claim-guard a review/plan/commit e al lessico al presente (\"lo segno\", \"registrato\", \"pin tolto\", \"piano bloccato\") è l'intervento a più alto valore.",
+        "findings": [
+          {
+            "titolo": "Famiglia claim-senza-tool pervasiva: il modello dichiara azioni ('creato'/'registrato'/'lo segno fatto'/'pin tolto'/'piano bloccato') con toolsExecuted=[] o toolset che non ha il tool, stato reale invariato; claim-guard non copre review/plan/commit né il lessico al presente",
+            "tipo": "B",
+            "severita": "S1",
+            "nota": "claim-guard.ts:44-52 (WRITE_TOOL_NAMES); tools.ts:591-597 (commit vincolato a morning|planning); orchestrator.ts:1009 (guard solo general/morning). Ev: J2/trascrizione-n4bis-general-pianifica.md, J3/trascrizione-catture-completa.md, J6/j6a-trascrizione-review-felice.md, j6b-run1-review-b-trascrizione.md, j6f-trascrizione-zero-candidate.md, j6j-trascrizione-review-trimming.md, J13/j13-trascrizione-review-carico.md",
+            "piste_dossier": [
+              "D16",
+              "D17",
+              "N4",
+              "N58",
+              "D47"
+            ]
+          },
+          {
+            "titolo": "N58: 'ho già fatto X' su task non-candidate in review — comportamento non deterministico a due failure mode (fabbrica conferma senza tool oppure ignora in silenzio); dato perso, task resta inbox/planned",
+            "tipo": "U",
+            "severita": "S2",
+            "nota": "tools.ts:174-180 (TASK_MANAGEMENT_TOOLS esclusi da evening_review by design), manca coda post-review e claim-guard di review. Ev: J6/j6a,j6b,j6f,j6g,j6j",
+            "piste_dossier": [
+              "N58"
+            ]
+          },
+          {
+            "titolo": "N32: doppio rito mood/energy mattina+sera senza riuso del dato, + terza ri-registrazione spuria set_user_mood/energy durante il triage review",
+            "tipo": "U",
+            "severita": "UX",
+            "nota": "prompt evening intake + set_user_* nel toolset review (gating per fase non li filtra). Ev: J6/j6a-trascrizione-morning-n32.md vs j6a-trascrizione-review-felice.md (turno 6)",
+            "piste_dossier": [
+              "N32"
+            ]
+          },
+          {
+            "titolo": "Gergo interno e enum EN esposti in conversazione: 'candidate','kept','postponed','cursore','tool','Piano bloccato/Blocco la review' (collisione con task_blocked)",
+            "tipo": "U",
+            "severita": "UX",
+            "nota": "prompts.ts (EVENING_REVIEW_PROMPT non vieta l'esposizione degli enum). Ev: J6/j6g-run3, j6h-trascrizione-chiusura-ufficio.md, j6j-trascrizione-review-trimming.md, J4bis/30-trascrizione-review-reentry-15gg.md",
+            "piste_dossier": [
+              "N37",
+              "N38"
+            ]
+          },
+          {
+            "titolo": "D15: intake mood degrada a 5 turni + leak 'il sistema richiede che tu mi dia il numero' quando l'utente l'aveva già dato; 'benissimo' rifiutato dal validator",
+            "tipo": "U",
+            "severita": "S2",
+            "nota": "mood-energy-parse.ts:28-39 (mappa senza 'benissimo'). Ev: J6/j6a-trascrizione-review-felice.md turni 2-5",
+            "piste_dossier": [
+              "D15"
+            ]
+          },
+          {
+            "titolo": "CONSENT_VERSION '0.2-draft' mostrato all'utente nel footer del consenso (copy legale marcato 'bozza' in pre-rilascio)",
+            "tipo": "C",
+            "severita": "S2",
+            "nota": "api/consent/route.ts:19 + ConsentView.tsx:24. Ev: walkthrough-parziale.md riga 11",
+            "piste_dossier": [
+              "N45",
+              "D53"
+            ]
+          },
+          {
+            "titolo": "account-deletion cita 'accesso con Google' inesistente (login solo CredentialsProvider) e istruzioni per card 'Esporta dati' che i non-beta non hanno; diritto GDPR export senza UI per gli utenti veri",
+            "tipo": "B",
+            "severita": "S2",
+            "nota": "account-deletion/page.tsx:36,66 + tasks/page.tsx:3956-3957 (Export beta-only) + /api/export raggiungibile. Ev: J10/n22-export-nonbeta.json",
+            "piste_dossier": [
+              "N22",
+              "D66"
+            ]
+          },
+          {
+            "titolo": "Guida cap. 8 descrive per intero la sezione 'Review' (contatori + 'Salva e aggiorna il modello') rimossa dal Task 63; drift guida-vs-app con distinzione esplicita in cap. 4",
+            "tipo": "M",
+            "severita": "S3",
+            "nota": "GuidaShadow/testi-guida-onboarding.md righe 96-104 e 62",
+            "piste_dossier": [
+              "N40"
+            ]
+          },
+          {
+            "titolo": "Uscita strict: 4 step reali (incl. countdown 15s) vs 3 della guida cap.7 e descrizione ancora diversa nel tour ('3 conferme')",
+            "tipo": "M",
+            "severita": "S3",
+            "nota": "shadow.ts:348-374 (4 step) vs guida righe 90-93 (3) vs tour shadow.ts:260",
+            "piste_dossier": [
+              "N42"
+            ]
+          },
+          {
+            "titolo": "Guida cap. 6 presenta 'Pausa' del body doubling come pausa vera; l'app dichiara 'il timer continua'",
+            "tipo": "M",
+            "severita": "UX",
+            "nota": "guida riga 83 vs BodyDoubleView 'In pausa — il timer continua' (walkthrough riga 27)",
+            "piste_dossier": [
+              "N43"
+            ]
+          },
+          {
+            "titolo": "onboarding-concept promette 'zero attrito, Salta sempre' vs realtà 6 step tour (Salta solo step 0) + 12 domande onboarding obbligatorie",
+            "tipo": "M",
+            "severita": "UX",
+            "nota": "onboarding-concept.md riga 26 vs TourView.tsx:129-137 + walkthrough righe 10,13",
+            "piste_dossier": [
+              "N41"
+            ]
+          },
+          {
+            "titolo": "Apostrofi al posto delle accentate (finche'/e'/perche'/puo') nelle pagine legali privacy+terms e nel toast errore fetch.ts:59",
+            "tipo": "C",
+            "severita": "UX",
+            "nota": "privacy/page.tsx (7+ righe), terms/page.tsx (10+ righe), lib/api/fetch.ts:59",
+            "piste_dossier": [
+              "N46"
+            ]
+          },
+          {
+            "titolo": "Enum EN raw rivolti all'utente: categoria card chat (personal/admin/work) ChatView.tsx:1174, role 'worker' Settings tasks/page.tsx:3913, sessionFormat TaskDetail :3281, titoli tour step 4-5 EN",
+            "tipo": "C",
+            "severita": "UX",
+            "nota": "ChatView.tsx:1172-1175; tasks/page.tsx:3913,3281; shadow.ts:251,258; onboarding/constants.ts:20",
+            "piste_dossier": [
+              "N38",
+              "N37"
+            ]
+          },
+          {
+            "titolo": "Tagline gergale EN 'executive function esterno' in 8 punti incluse le email transazionali (bug-fixed, evening, password-reset)",
+            "tipo": "C",
+            "severita": "UX",
+            "nota": "layout.tsx:31,51; reset-password-form.tsx:61; tasks/page.tsx:1137; bug-fixed-email.ts:62,70; evening-email.ts:67,75; password-reset.ts:140,147",
+            "piste_dossier": []
+          },
+          {
+            "titolo": "Chiusura d'ufficio 67B contraddice la promessa testuale appena fatta ('restiamo così... dimmelo' -> turno dopo 'Chiuso. A domani.'); tono comunque non colpevolizzante e N2 smentita",
+            "tipo": "U",
+            "severita": "UX",
+            "nota": "at-risk-detection.ts:159 + orchestrator.ts:643-670; il closing non è consapevole del forzamento al turno dopo. Ev: J6/j6h-trascrizione-chiusura-ufficio.md",
+            "piste_dossier": [
+              "N2"
+            ]
+          },
+          {
+            "titolo": "i18n assente: messages/{it,en}.json non esiste, app solo-italiano by-fact contro la regola 7 di CLAUDE.md",
+            "tipo": "M",
+            "severita": "UX",
+            "nota": "verificato: nessuna dir messages/",
+            "piste_dossier": []
+          },
+          {
+            "titolo": "Errori API in lingua mista EN: 'Invalid JSON', 'Unauthorized', 'Failed to read onboarding state' accanto ai 400 italiani",
+            "tipo": "C",
+            "severita": "UX",
+            "nota": "consent/route.ts:31, auth-guard.ts:65, onboarding/route.ts:44. Ev: J9/j9-10-api-errors.md (P1)",
+            "piste_dossier": [
+              "N46"
+            ]
+          }
+        ],
+        "piste_esito": [
+          {
+            "pista": "D16 (fallback 'Fatto.' con tool falliti / claim senza esecuzione)",
+            "esito": "CONFERMATA",
+            "nota": "Confermata come famiglia claim-senza-tool trasversale a general e review; il fallback 8b 'Fatto. Dimmi tu come proseguiamo.' osservato anche dopo create riuscito senza nominare il task. Ev: J3/trascrizione-catture-completa.md"
+          },
+          {
+            "pista": "D17 (adds promessi mai eseguiti)",
+            "esito": "CONFERMATA",
+            "nota": "5 occorrenze in general: 'Aggiungo il task', 'Creo adesso i task che ti mancano', 'Ok, creo il task Pagare la bolletta' — 0 tool, 0 righe DB. Ev: J3/trascrizione-catture-completa.md, retry-r1-results.json"
+          },
+          {
+            "pista": "N4 (claim-guard non copre 'registrato'/commit_today_plan)",
+            "esito": "CONFERMATA",
+            "nota": "Statica: commit_today_plan e lessico review fuori da WRITE_TOOL_NAMES (claim-guard.ts:44-52). Dinamica: 'Ok, registrato: 4-6 ore' + 'Ho solo registrato il tempo' con tools=[] in general (2 occ.). Ev: J2/trascrizione-n4bis-general-pianifica.md"
+          },
+          {
+            "pista": "N58 ('ho già fatto X' su non-candidate in review)",
+            "esito": "CONFERMATA",
+            "nota": "Non deterministica a due failure mode: fabbrica conferma senza tool (j6b/j6f/j6g/j6j) oppure ignora in silenzio (j6a). Nei run buoni gestito con add_candidate+mark_entry_discussed(completed). Dato spesso perso, task resta inbox/planned."
+          },
+          {
+            "pista": "N32 (mood/energy 2x/giorno)",
+            "esito": "CONFERMATA",
+            "nota": "Mattina QR 1-5 tappabili, sera da capo senza riuso, + terza ri-registrazione spuria set_user_mood/energy al turno 6 review. Ev: J6/j6a-trascrizione-morning-n32.md vs j6a-trascrizione-review-felice.md"
+          },
+          {
+            "pista": "D47 (unpin impossibile, modello dichiara 'pin tolto' falso)",
+            "esito": "CONFERMATA",
+            "nota": "'Segnato, pin tolto. Il piano torna com'era' con toolsExecuted=[]; pinnedFinal invariato. Schema tool solo additivo (update-plan-preview-tool.ts:143). Ev: J6/j6a-trascrizione-review-felice.md 10:36:28"
+          },
+          {
+            "pista": "D15 (benissimo/3 o 4 rifiutati + leak meccanica)",
+            "esito": "CONFERMATA",
+            "nota": "'benissimo'->record_mood(5) rifiutato, degrado 5 turni, leak 'il sistema richiede che tu mi dia il numero'. Ev: J6/j6a-trascrizione-review-felice.md turni 2-5"
+          },
+          {
+            "pista": "N37 (QR 'Attiva strict' anglicismo)",
+            "esito": "CONFERMATA",
+            "nota": "quick reply proattiva post-commit. Ev: J2/step2-3-morning-summary.json, J4/20-turno3.json"
+          },
+          {
+            "pista": "N38 (enum EN raw: categoria card chat, role worker, sessionFormat, tour step 4-5)",
+            "esito": "CONFERMATA",
+            "nota": "ChatView.tsx:1174 (personal/admin/work), tasks/page.tsx:3913 (role worker), :3281 (sessionFormat), shadow.ts:251/258 (tour EN). Walkthrough conferma 'personal'/'admin'/'worker' visibili"
+          },
+          {
+            "pista": "N46 (apostrofi per accentate + errori API in lingua mista)",
+            "esito": "CONFERMATA",
+            "nota": "privacy/terms (17+ righe totali) + fetch.ts:59 toast; errori EN 'Invalid JSON'/'Unauthorized'/'Failed to read onboarding state'. Ev: grep + J9/j9-10-api-errors.md"
+          },
+          {
+            "pista": "N45/D53 (CONSENT_VERSION 0.2-draft visibile)",
+            "esito": "CONFERMATA",
+            "nota": "api/consent/route.ts:19 + ConsentView.tsx:24 = '0.2-draft' mostrato nel footer consenso. Walkthrough riga 11"
+          },
+          {
+            "pista": "N40 (guida cap.8 descrive sezione Review rimossa)",
+            "esito": "CONFERMATA",
+            "nota": "Cap.8 intero (righe 96-104) + distinzione esplicita cap.4 riga 62; bottone 'Salva e aggiorna il modello' e contatori inesistenti. GuidaShadow/testi-guida-onboarding.md"
+          },
+          {
+            "pista": "N42 (uscita strict 4 step vs 3 guida)",
+            "esito": "CONFERMATA",
+            "nota": "shadow.ts:348-374 = 4 step (incl. countdown 15s) vs guida cap.7 righe 90-93 = 3; tour shadow.ts:260 = '3 conferme' (terza versione)"
+          },
+          {
+            "pista": "N43 (pausa body doubling non ferma il timer, drift guida)",
+            "esito": "CONFERMATA",
+            "nota": "App onesta 'In pausa — il timer continua'; guida cap.6 riga 83 la presenta come pausa vera senza avviso. Drift GUIDA->app"
+          },
+          {
+            "pista": "N41 (onboarding-concept 'zero attrito' vs 6+12 step)",
+            "esito": "CONFERMATA",
+            "nota": "concept riga 26 'Salta sempre, una sola azione' vs tour 6 step (Salta solo step 0, TourView.tsx:129-137) + 12 domande obbligatorie"
+          },
+          {
+            "pista": "N22/D66 (export GDPR non-beta solo via API + account-deletion cita Google inesistente)",
+            "esito": "CONFERMATA",
+            "nota": "card Export beta-only (tasks/page.tsx:3956-3957), /api/export 200 al nonbeta (J10/n22-export-nonbeta.json); account-deletion/page.tsx:36 cita 'accesso con Google' (login solo Credentials), :66 istruisce sulla card Export assente"
+          },
+          {
+            "pista": "N2 (chiusura d'ufficio 67B scavalca la volontà utente)",
+            "esito": "SMENTITA",
+            "nota": "2/2 run: al 3° turno con richiesta di modifica il modello esegue update_plan_preview (moves+removes) PRIMA di confermare. Ev: J6/j6h-trascrizione-avverso-j6h-avverso.md"
+          },
+          {
+            "pista": "i18n EN (messages/{it,en}.json)",
+            "esito": "CONFERMATA",
+            "nota": "Assente: app solo-italiano by-fact, contro regola 7 CLAUDE.md. Stato di fatto, non un bug testabile EN runtime"
+          }
+        ]
+      },
+      "coerenza-architettura": {
+        "area": "Fase 4 — Coerenza e architettura dell'esperienza (mappa superfici→core loop, §10)",
+        "output": "# Fase 4 — Coerenza e architettura dell'esperienza\n\nMappa di OGNI superficie/feature sul core loop dei 4 passi (**cattura → organizza → review/piano → esegui**). Per ognuna che non ci sta: **RIMUOVI / COLLEGA / UNIFICA**, con effort S/M/L e impatto sull'uso quotidiano. Tutte le affermazioni sono verificate a codice su `main @ 56e0f83` (file:riga citati). Metodo: censimento di `src/app/api/**/route.ts` (34 gruppi route), `src/app/**/page.tsx`, `src/lib/engines/*`, `src/features/*` + grep dei caller.\n\n---\n\n## 0. Mappa completa superficie → passo del core loop\n\n| Superficie / Feature | Passo | Sta nel loop? | Verdetto |\n|---|---|---|---|\n| Chat `/` (ChatView + bootstrap/hydrate/share) | cattura + review + piano | ✅ è il loop | tieni |\n| `/chat` (ChatView nudo) | — | ❌ doppione inferiore | **RIMUOVI** |\n| Inbox (vista tasks) + auto-classify | organizza | ✅ | tieni |\n| Today (piano a fasce, one-tap) | piano + esegui | ✅ | tieni |\n| Review serale conversazionale | review/piano | ✅ core | tieni |\n| Tab `focus` (FocusView: strict/execution) | esegui | ✅ | tieni |\n| `/focus` (FocusPageClient → BodyDoubleView) | esegui (body doubling MAX) | ✅ ma **nome collide** | **UNIFICA nome** |\n| Cielo `/sky` (SkyView, countLitStars) | ricompensa | ⚠️ collegato a metà | **COLLEGA** |\n| Settings → card Ricorrenti | organizza | ⚠️ rimbalza in chat senza link | **COLLEGA** |\n| Insight proattivo (ai-assistant) | esegui | ✅ apre il task giusto | tieni |\n| Nudge (ai-assistant) | esegui | ✅ apre il task giusto | tieni |\n| BetaCheckinCard → `/beta/assessment` | fuori loop (strumento clinico) | ⚠️ solo banner | annota (fuori scope v3/beta) |\n| `admin/*` | fuori loop (ops) | ⚠️ nessun link UI | annota (voluto) |\n| `POST /api/review` (legacy) | — | ❌ orfano, muta DB | **RIMUOVI** |\n| `/api/streaks` + tabella `Streak` | — | ❌ orfano + display stantio | **RIMUOVI** |\n| `/api/patterns` + `UserPattern` | — | ❌ orfano + stantio | **RIMUOVI** |\n| `/api/memory` (decay/synthesize) | — | ❌ dormiente | **RIMUOVI/COLLEGA** |\n| `/api/contacts` + `/[id]` | — | ❌ orfano | **RIMUOVI** |\n| `push-subscription` + `PushDevice` | — | ❌ orfano by-design (v3 W5) | tieni (v3) |\n| `calendar` POST/PUT | — | ❌ orfano by-design (v3 W8) | tieni (v3) |\n| `prioritizeTaskAdaptive` / `selectTaskForNow` / `adaptiveDetectExecutionMode` | organizza (mai chiamato) | ❌ dead code | **RIMUOVI** |\n| micro-feedback `decomp_preference` | apprendimento (mai triggerato) | ❌ config morta | **RIMUOVI/COLLEGA** |\n| `next-intl` (dep) | i18n (mai usato) | ❌ dep morta | **RIMUOVI** |\n| stati Task `active`/`abandoned` | — | ❌ senza produttori | annota (audit stato) |\n| Navigazione `?view=` chat↔tasks | trasversale | ⚠️ full reload | **COLLEGA** (latenza) |\n\n---\n\n## 1. DOPPIONI (verificati)\n\n### D-1 · `/` vs `/chat` — stessa ChatView, ma `/chat` è un doppione **inferiore** {N31}\n- `src/app/chat/page.tsx` (10 righe): rende `<ChatView />` **nudo**, senza alcuna logica di bootstrap.\n- `src/app/page.tsx:1-40+`: rende `ChatView` **dentro** l'idratazione della sessione (B5, `:22-30`), il ripristino `userId` per WebView cold-start, e il round-trip **share target** (67A, `:32-40`).\n- Conseguenza: un utente che finisce su `/chat` (link diretto, bookmark, share) **non** ha né l'idratazione della sessione né lo stash share → cade nei bug B5/67A che `/` è stato costruito per evitare.\n- **RIMUOVI** `/chat` (o redirect 308 → `/`). Effort **S**. Impatto: elimina una porta d'ingresso rotta e un secondo URL da mantenere. **Pre-rilascio** (superficie web pubblica raggiungibile via URL).\n\n### D-2 · tab **Focus** vs rotta **`/focus`** — stesso nome, esperienze opposte {L9}\n- Tab in-app `focus`: `src/app/tasks/page.tsx:970` rende `<FocusView />` = strict/execution/timer.\n- Rotta `/focus`: `src/app/focus/FocusPageClient.tsx:9` rende `<BodyDoubleView />` = body doubling con avatar 3D (MAX-tier).\n- Due esperienze completamente diverse portano lo stesso nome \"Focus\". Deep-link `?view=focus` (`page.tsx:450`) apre la prima; `/focus?taskId=` apre la seconda. Collisione di nome e di modello mentale.\n- **UNIFICA il naming** (es. \"Concentrazione\"/strict vs \"Con Shadow\"/body doubling), NON il codice. Effort **S** (rinomina copy + label). Impatto: rimuove ambiguità in due delle superfici d'esecuzione. **Pre-rilascio** (è confusione di primo impatto, L6/L9).\n\n### D-3 · Doppia contabilità streak: `Streak` vs `UserPattern`, **entrambe stantie** {N18}\n- Scritture su `Streak`: **solo** `src/app/api/streaks/route.ts:86` (upsert). Nessun caller UI in `features/store/components` (grep vuoto).\n- Scritture su `UserPattern`: `register/route.ts:46` (crea riga vuota), poi solo `streaks/route.ts:120` e `review/route.ts:176` — **entrambe route orfane** (v. §2).\n- Il Cielo, l'unica superficie di ricompensa live, legge `countLitStars` (`src/app/api/sky/route.ts:16`), **non** la tabella Streak.\n- Quindi due strutture di streak esistono, nessun flusso corrente le aggiorna, nessuna vista live le legge. Sono **dati fantasma a rischio di regressione** (una futura vista che le leggesse mostrerebbe 0/stantio).\n- **RIMUOVI** entrambe le route + valuta drop tabelle (migration = decide Antonio). Effort **M** (schema). Impatto quotidiano nullo (già morte); il valore è ridurre superficie e rischio. **Post-rilascio**.\n\n### D-4 · Logica profilo-da-onboarding duplicata inline {N33}\n- L'inizializzazione dell'`AdaptiveProfile` dalle risposte onboarding è duplicata inline invece di usare `initializeProfileFromOnboarding` (helper mai chiamato — drift confermato in §8.10 della spec). Doppia fonte di verità sulla mappatura risposte→profilo.\n- **UNIFICA** su un'unica funzione. Effort **M**. Impatto: correttezza del profilo (che pilota nudge/insight/fill-ratio). **Post-rilascio** (non user-facing diretto, ma sorgente di drift).\n\n---\n\n## 2. ORFANI / MORTI (ognuno verificato con grep dei caller)\n\nTutti verificati: nessun caller in `src/features`, `src/store`, `src/components`, `src/app/tasks`.\n\n### O-1 · `POST /api/review` legacy — **muta il DB** senza caller {N56}\n- `src/app/api/review/route.ts:15` (POST) — a `:148` fa `avoidanceCount: { increment: 1 }` e a `:176` aggiorna `UserPattern`.\n- Grep caller: nessuno (`fetch('/api/review'` = 0 match nel client).\n- Route morta ma **con effetti collaterali reali** se mai chiamata: raro, ma è debito che il 63 aveva già annotato e mai rimosso.\n- **RIMUOVI**. Effort **S**. **Post-rilascio** (o pre, è banale e toglie una route scrivente esposta).\n\n### O-2 · `/api/streaks`, `/api/patterns`, `/api/memory`, `/api/contacts`(+`/[id]`) — nessun caller UI\n- grep `api/streaks` / `api/patterns` / `api/memory` / `api/contacts` in `features src/store components`: **0 match**.\n- `/api/memory`: memory-engine decay/synthesize dormienti (`UserMemory` mai fatto decadere/sintetizzare nei flussi correnti — coerente con N6, i segnali server-side restano `processed=false`).\n- **RIMUOVI** le route senza caller (memory: valutare se COLLEGARE a un job di consolidamento invece di rimuovere — la funzionalità è promessa dal tour \"più lo usi più si adatta\"). Effort **S** ciascuna (memory **M**). **Post-rilascio**.\n\n### O-3 · Dead code negli engine: `prioritizeTaskAdaptive` / `selectTaskForNow` / `adaptiveDetectExecutionMode` {N7}\n- `priority-engine.ts:380`, `execution-engine.ts:99`, `execution-engine.ts:359`: **export senza alcun caller** (grep = 0 fuori dal file di definizione).\n- Impatto di prodotto: il piano engine **ignora il profilo appreso**. La promessa del tour \"più lo usi più si adatta\" resta mantenuta solo da nudge/insight/fill-ratio (§8.7). Non è solo pulizia: è una feature promessa e non collegata.\n- **RIMUOVI** il dead code **oppure COLLEGA** `prioritizeTaskAdaptive` all'allocazione del piano (scelta di prodotto). Effort: rimozione **S**; collegamento **L**. **Post-rilascio** (il collegamento è un miglioramento, non un blocco).\n\n### O-4 · micro-feedback `decomp_preference` configurato ma **mai triggerato**\n- `src/app/tasks/page.tsx:1952` definisce il config `decomp_preference`.\n- `showMicroFeedbackNow(...)` è chiamato solo con `drain_activate` (`:3047`), `start_experience` (`:3156`,`:3174`), `block_reason` (`:3354`). **Mai** con `decomp_preference`.\n- Il micro-feedback \"Vuoi che la prossima volta lo spezzi di più?\" non appare mai → nessun segnale sulla preferenza di decomposizione viene mai raccolto.\n- **RIMUOVI il config** oppure **COLLEGA** un trigger (dopo una decomposizione/completamento di task decomposto). Effort **S**. **Post-rilascio**.\n\n### O-5 · `next-intl` installato e inusato\n- `package.json:78`: `\"next-intl\": \"^4.3.4\"`. Grep `next-intl` in `src`: **0 match**. `messages/` **non esiste** (verificato). L'app è solo-italiano by-fact (coerente con §1 della spec, regola 7 CLAUDE.md non ancora onorata a runtime).\n- **RIMUOVI** la dipendenza finché la i18n non è reale (v3 W4). Effort **S**. **Post-rilascio**.\n\n### O-6 · Stati Task `active`/`abandoned` senza produttori {N17}\n- Presenti nell'enum ma nessun flusso li scrive (da confermare in sweep §8.4). Rischio: viste che li gestiscono per codice morto.\n- **Annota** (audit matrice stati). Effort verifica **S**. **Post-rilascio**.\n\n### O-7 · `push-subscription`/`PushDevice`, `calendar` POST/PUT — orfani **by-design** (v3)\n- Nessun caller UI (grep `api/calendar` in features/tasks = NONE). Sono superfici v3 (push web W5, calendar W8), **fuori scope**: qui vanno solo verificate come \"non rompono/confondono\". Nessuna azione pre-rilascio se non raggiungibili dall'UtI attuale. **Tieni (v3)**.\n\n---\n\n## 3. MAL COLLEGATI (verificati)\n\n### M-1 · Cielo: CTA c'è ma il **completamento di un ricorrente non porta MAI al Cielo**\n- Alla chiusura di un task ricorrente: `src/app/tasks/page.tsx:3050-3053` mostra **solo un toast** (\"⭐ Una stella si è accesa nel Cielo\") — nessuna navigazione a `/sky`, nessun deep-link tappabile nel toast.\n- Il Cielo ha la CTA in uscita (`/?draft=` da SkyView) ma **non un ponte in entrata dal momento celebrativo**. L'utente ADHD che ha appena guadagnato una stella non la vede accendersi: il rinforzo positivo (il punto stesso del Cielo) è disaccoppiato dall'azione che lo genera.\n- **COLLEGA**: rendere il toast un'azione tappabile → `pushView('sky', ...)`, o auto-mostrare il Cielo al primo ricorrente completato del giorno. Effort **S**. Impatto: **alto** su soddisfazione/retention (è l'unico loop di ricompensa dell'app). **Pre-rilascio** (top-5 candidato).\n\n### M-2 · card Ricorrenti (Settings) → chat **senza deep-link** {N49}\n- `src/app/tasks/page.tsx:3748` (descrizione) e `:3754` (empty-state): testo puro \"Si creano e si modificano in chat\" / \"Chiedi in chat, ad esempio: 'Meditazione ogni giorno'.\" — **nessun link**.\n- Contrasto diretto: il Cielo ha `SkyView.tsx:186` con `/?draft=` che precompila l'input chat. L'utente ADHD deve navigare a mano in chat e ricordarsi cosa scrivere (L2/L3).\n- **COLLEGA**: bottone → `/?draft=<template>` come già fa il Cielo. Effort **S**. Impatto: medio (superficie di gestione ricorrenti). **Pre-rilascio** (quick-win coerente con M-1).\n\n### M-3 · insight/nudge con taskId — **aprono DAVVERO il task giusto** ✅ (verifica positiva)\n- Nudge: `src/app/tasks/page.tsx:1580-1590` → apre `nudge.taskId` con fallback al primo aperto solo se chiuso/eliminato, poi `pushView('focus', nudgeTask.id)` + `recordSignal('task_started', ...)`. **Round-trip corretto** (64 A6/D2).\n- Insight: gli insight sono salvati (`:773-775`) e serviti; l'apertura del task condivide lo stesso meccanismo taskId.\n- **Nessuna azione**: qui il collegamento è corretto. (Da tenere: se un insight NON avesse handler di apertura andrebbe collegato, ma il nudge — il caso a più alto volume — è verificato ok.)\n\n### M-4 · `/beta/assessment` e `admin/*` fuori da ogni navigazione\n- `/beta/assessment`: raggiungibile solo via `BetaCheckinCard.tsx:218` (`router.push`), nessuna voce di menu.\n- `admin/*`: nessun link UI (verificato).\n- **Annota**: per gli strumenti clinici beta e l'admin è probabilmente **voluto** (gate ADMIN_EMAILS, superfici non per l'utente finale). Nessuna azione se non documentarlo. **Post-rilascio**.\n\n---\n\n## 4. NAVIGAZIONE — chat↔tasks resta **full reload** {N28b}\n\n- `?view=` esiste (66A, `page.tsx:450` `URL_VIEWS`) e gestisce la navigazione **interna** alla vista tasks (inbox/today/focus/sky/settings) senza reload.\n- Ma il giro **chat → tasks** e **tasks → chat** passa per `window.location.href` = **full page reload**:\n  - `src/app/tasks/page.tsx:2166`: `onClick={() => window.location.href = '/'}` (tasks → chat).\n  - `src/app/tasks/page.tsx:2709`: `window.location.href = '/?plan=today'` (empty-state → chat).\n- **Stima latenza percepita** del giro chat→today→chat: ogni hop è un full reload di Next.js che ri-monta `HomePage` → ri-idrata la sessione (`page.tsx:22-30`) → ri-esegue `useSession()` → ri-fetch bootstrap. Su WebView mobile a freddo (il target reale, B5) sono **~1–2.5s per hop**, quindi **~3–5s per il giro completo** chat→today→chat, contro <200ms atteso per una SPA. Per un utente ADHD ogni reload è un momento di dispersione dell'attenzione (perde il thread, vede lo splash/spinner).\n- **COLLEGA**: unificare `/` e la vista tasks sotto un unico router client (già `/` importa `TasksApp`, quindi il rendering è co-locato: manca solo evitare il reload passando a `pushView`/router client invece di `window.location.href`). Effort **M** (co-locazione già presente, serve solo la transizione client). Impatto: **alto** (è il giro più frequente dell'app, ogni sessione, L1/L10). **Pre-rilascio** (candidato top-5).\n\n---\n\n## 5. Raccomandazioni ordinate per (impatto / effort)\n\n### PRIMA del rilascio\n\n| # | Azione | Tipo | Effort | Impatto quotidiano |\n|---|---|---|---|---|\n| 1 | **Ponte Cielo**: completamento ricorrente → naviga/mostra il Cielo (M-1) | COLLEGA | S | Alto — unico loop di ricompensa, ogni giorno |\n| 2 | **chat↔tasks senza reload** (N28b/M-4 nav) | COLLEGA | M | Alto — giro più frequente, ~3-5s→<200ms |\n| 3 | **RIMUOVI `/chat`** o redirect a `/` (D-1) | RIMUOVI | S | Medio — porta d'ingresso rotta (no B5/share) |\n| 4 | **Rinomina Focus tab vs /focus** (D-2) | UNIFICA | S | Medio — confusione L6/L9 al primo impatto |\n| 5 | **Deep-link card Ricorrenti** → `/?draft=` (M-2) | COLLEGA | S | Medio — allinea a pattern Cielo esistente |\n\n### POST rilascio (pulizia, riduzione superficie/rischio)\n\n| # | Azione | Tipo | Effort |\n|---|---|---|---|\n| 6 | RIMUOVI `POST /api/review` legacy scrivente (O-1) | RIMUOVI | S |\n| 7 | RIMUOVI route orfane `streaks`/`patterns`/`contacts` (O-2) | RIMUOVI | S×3 |\n| 8 | RIMUOVI `Streak`/`UserPattern` tabelle+route stantie (D-3) — migration, decide Antonio | RIMUOVI | M |\n| 9 | RIMUOVI dead code engine `prioritizeTaskAdaptive`/`selectTaskForNow`/`adaptiveDetectExecutionMode` **oppure** COLLEGA al piano (O-3) | RIMUOVI/COLLEGA | S / L |\n| 10 | RIMUOVI `next-intl` (O-5) | RIMUOVI | S |\n| 11 | RIMUOVI/COLLEGA micro-feedback `decomp_preference` (O-4) | RIMUOVI/COLLEGA | S |\n| 12 | COLLEGA `/api/memory` a un job di consolidamento o RIMUOVI (O-2) | COLLEGA/RIMUOVI | M |\n| 13 | UNIFICA logica profilo-onboarding su `initializeProfileFromOnboarding` (D-4) | UNIFICA | M |\n| 14 | Audit stati `active`/`abandoned` senza produttori (O-6) | annota | S |\n\n**Nota di metodo**: le voci \"COLLEGA\" (1, 2, 5, 9-memory) migliorano l'uso quotidiano; le \"RIMUOVI\" riducono la superficie e il rischio di regressioni future (dati/route morte che una vista futura potrebbe leggere/chiamare). Le due mosse a più alta leva su retention/soddisfazione sono **#1 (ponte Cielo)** e **#2 (nav senza reload)**: la prima chiude l'unico anello di ricompensa dell'app, la seconda toglie l'attrito dal giro più frequente — entrambe centrali per un utente ADHD.",
+        "findings": [
+          {
+            "titolo": "/chat è un doppione inferiore di / (ChatView nudo senza bootstrap/hydrate/share)",
+            "tipo": "C",
+            "severita": "S3",
+            "nota": "src/app/chat/page.tsx rende <ChatView/> nudo; src/app/page.tsx la avvolge in idratazione sessione (B5, :22-30), ripristino userId WebView e round-trip share (67A, :32-40). Chi arriva su /chat cade nei bug che / evita. RIMUOVI/redirect. Effort S. Pre-rilascio.",
+            "piste_dossier": [
+              "N31"
+            ]
+          },
+          {
+            "titolo": "tab Focus vs rotta /focus: stesso nome, esperienze opposte (strict/execution vs body doubling MAX)",
+            "tipo": "C",
+            "severita": "UX",
+            "nota": "page.tsx:970 FocusView (strict); focus/FocusPageClient.tsx:9 BodyDoubleView (avatar 3D). Collisione naming L6/L9. UNIFICA il nome (copy), non il codice. Effort S. Pre-rilascio.",
+            "piste_dossier": [
+              "N28",
+              "L9"
+            ]
+          },
+          {
+            "titolo": "Doppia contabilità streak Streak vs UserPattern, entrambe stantie: nessun flusso live le scrive né le legge",
+            "tipo": "M",
+            "severita": "S3",
+            "nota": "Streak scritto solo in streaks/route.ts:86 (orfano); UserPattern aggiornato solo in streaks/route.ts:120 e review/route.ts:176 (orfani) + register:46 crea riga vuota. Il Cielo legge countLitStars (sky/route.ts:16), non Streak. RIMUOVI route+valuta drop tabelle (migration=Antonio). Effort M. Post-rilascio.",
+            "piste_dossier": [
+              "N18"
+            ]
+          },
+          {
+            "titolo": "POST /api/review legacy muta il DB (avoidanceCount++) senza alcun caller UI",
+            "tipo": "M",
+            "severita": "S3",
+            "nota": "review/route.ts:148 increment avoidanceCount, :176 update UserPattern; grep fetch('/api/review' = 0. Route morta con effetti collaterali reali se chiamata. RIMUOVI. Effort S.",
+            "piste_dossier": [
+              "N56"
+            ]
+          },
+          {
+            "titolo": "Route orfane senza caller UI: /api/streaks, /api/patterns, /api/memory, /api/contacts(+[id])",
+            "tipo": "M",
+            "severita": "S3",
+            "nota": "grep in features/store/components = 0 match per tutte. memory-engine decay/synthesize dormienti. RIMUOVI (memory: valutare COLLEGA a job consolidamento, è promessa dal tour). Effort S ciascuna, memory M.",
+            "piste_dossier": []
+          },
+          {
+            "titolo": "Dead code engine: prioritizeTaskAdaptive/selectTaskForNow/adaptiveDetectExecutionMode senza caller; il piano ignora il profilo appreso",
+            "tipo": "M",
+            "severita": "S3",
+            "nota": "priority-engine.ts:380, execution-engine.ts:99, :359 — 0 caller. Conseguenza di prodotto: il piano engine ignora il profilo appreso, promessa del tour 'più lo usi più si adatta' non collegata. RIMUOVI (S) o COLLEGA all'allocazione piano (L).",
+            "piste_dossier": [
+              "N7"
+            ]
+          },
+          {
+            "titolo": "micro-feedback decomp_preference configurato ma mai triggerato",
+            "tipo": "M",
+            "severita": "UX",
+            "nota": "page.tsx:1952 definisce il config; showMicroFeedbackNow chiamato solo con drain_activate/start_experience/block_reason (:3047,:3156,:3174,:3354), mai decomp_preference. Segnale mai raccolto. RIMUOVI config o COLLEGA un trigger. Effort S.",
+            "piste_dossier": []
+          },
+          {
+            "titolo": "next-intl installato e inusato (0 match in src, messages/ inesistente)",
+            "tipo": "M",
+            "severita": "S3",
+            "nota": "package.json:78 next-intl ^4.3.4; app solo-italiano by-fact. RIMUOVI dep finché i18n non è reale (v3 W4). Effort S.",
+            "piste_dossier": []
+          },
+          {
+            "titolo": "Cielo: completamento di un ricorrente non porta MAI al Cielo (solo toast, nessuna navigazione/deep-link)",
+            "tipo": "U",
+            "severita": "UX",
+            "nota": "page.tsx:3050-3053 solo toast '⭐ Una stella si è accesa'; nessun pushView('sky'). Il rinforzo positivo è disaccoppiato dall'azione. COLLEGA (toast tappabile o auto-Cielo). Effort S. Impatto ALTO retention (unico loop ricompensa). Pre-rilascio top-5.",
+            "piste_dossier": [
+              "64A3"
+            ]
+          },
+          {
+            "titolo": "card Ricorrenti (Settings) rimbalza in chat senza deep-link",
+            "tipo": "U",
+            "severita": "UX",
+            "nota": "page.tsx:3748/:3754 testo puro 'Si creano in chat' senza link; il Cielo invece ha /?draft= (SkyView.tsx:186). COLLEGA bottone→/?draft=. Effort S. Pre-rilascio (quick-win).",
+            "piste_dossier": [
+              "N49"
+            ]
+          },
+          {
+            "titolo": "Navigazione chat↔tasks resta full reload (window.location.href), ~3-5s per giro chat→today→chat su WebView",
+            "tipo": "U",
+            "severita": "S2",
+            "nota": "page.tsx:2166 e :2709 usano window.location.href → full reload che ri-idrata sessione+bootstrap. / importa già TasksApp co-locato: serve solo pushView/router client. COLLEGA. Effort M. Impatto ALTO (giro più frequente, L1/L10). Pre-rilascio top-5.",
+            "piste_dossier": [
+              "N28b"
+            ]
+          },
+          {
+            "titolo": "insight/nudge con taskId aprono DAVVERO il task giusto (verifica positiva)",
+            "tipo": "C",
+            "severita": "UX",
+            "nota": "page.tsx:1580-1590 nudge apre nudge.taskId con fallback corretto poi pushView('focus') + task_started. Round-trip 64 A6/D2 corretto. Nessuna azione.",
+            "piste_dossier": [
+              "64A6"
+            ]
+          }
+        ],
+        "piste_esito": [
+          {
+            "pista": "N31 (/ vs /chat doppione)",
+            "esito": "CONFERMATA",
+            "nota": "src/app/chat/page.tsx rende ChatView nudo (10 righe); src/app/page.tsx la avvolge in idratazione sessione B5 (:22-30) + ripristino userId WebView + round-trip share 67A (:32-40). /chat è un doppione funzionalmente inferiore raggiungibile via URL."
+          },
+          {
+            "pista": "tab Focus vs /focus (stesso nome, esperienze diverse)",
+            "esito": "CONFERMATA",
+            "nota": "page.tsx:970 rende FocusView (strict/execution); focus/FocusPageClient.tsx:9 rende BodyDoubleView (body doubling avatar 3D MAX). Stesso nome 'Focus', esperienze opposte."
+          },
+          {
+            "pista": "N18 doppia contabilità streak (Streak vs UserPattern, entrambe stantie)",
+            "esito": "CONFERMATA",
+            "nota": "Streak scritto solo in streaks/route.ts:86 (orfano, 0 caller UI); UserPattern aggiornato solo in streaks/route.ts:120 e review/route.ts:176 (orfani) + register:46 riga vuota. Il Cielo live legge countLitStars (sky/route.ts:16), non Streak. Entrambe strutturalmente stantie."
+          },
+          {
+            "pista": "N33 logica profilo-da-onboarding duplicata inline",
+            "esito": "CONFERMATA",
+            "nota": "Inizializzazione AdaptiveProfile duplicata inline invece di initializeProfileFromOnboarding (helper mai chiamato, drift §8.10). Doppia fonte di verità. UNIFICA. Verifica statica; delta profilo atteso vs generato demandato allo sweep §8.10."
+          },
+          {
+            "pista": "N56 POST /api/review legacy senza caller (incrementa avoidanceCount)",
+            "esito": "CONFERMATA",
+            "nota": "review/route.ts:15 POST, :148 avoidanceCount:{increment:1}, :176 update UserPattern. grep fetch('/api/review' nel client = 0. Route morta con effetti collaterali reali."
+          },
+          {
+            "pista": "/api/streaks /api/patterns /api/memory /api/contacts(+[id]) senza caller UI",
+            "esito": "CONFERMATA",
+            "nota": "grep 'api/streaks|api/patterns|api/memory|api/contacts' in src/features src/store src/components = 0 match per tutte. Orfane."
+          },
+          {
+            "pista": "push-subscription/PushDevice + calendar POST/PUT orfani by-design",
+            "esito": "CONFERMATA",
+            "nota": "grep api/calendar in features/tasks = NONE; push-subscription 0 caller. Orfani by-design v3 (W5/W8), fuori scope: solo 'non devono confondere'. Nessuna azione pre-rilascio."
+          },
+          {
+            "pista": "N7 prioritizeTaskAdaptive/selectTaskForNow/adaptiveDetectExecutionMode dead code",
+            "esito": "CONFERMATA",
+            "nota": "priority-engine.ts:380, execution-engine.ts:99, :359 — 0 caller (grep escluso il file di def). Il piano engine ignora il profilo appreso; promessa tour 'più lo usi più si adatta' non collegata via questi."
+          },
+          {
+            "pista": "micro-feedback decomp_preference senza trigger",
+            "esito": "CONFERMATA",
+            "nota": "page.tsx:1952 config definito; showMicroFeedbackNow chiamato solo con drain_activate/start_experience/block_reason (:3047,:3156,:3174,:3354). decomp_preference mai innescato."
+          },
+          {
+            "pista": "next-intl installato e inusato",
+            "esito": "CONFERMATA",
+            "nota": "package.json:78 next-intl ^4.3.4; grep next-intl in src = 0; messages/ inesistente. App solo-italiano by-fact."
+          },
+          {
+            "pista": "stati active/abandoned senza produttori (N17)",
+            "esito": "NON TESTATA",
+            "nota": "Owner primario = sweep §8.4 (matrice stati). A codice presenti nell'enum; verifica produttori demandata allo sweep. Segnalato per chiusura in §8.4."
+          },
+          {
+            "pista": "memory-engine decay/synthesize dormienti",
+            "esito": "CONFERMATA",
+            "nota": "/api/memory senza caller; coerente con N6 (segnali server-side processed=false, UserMemory mai fatto decadere/sintetizzare nei flussi correnti). Dormiente."
+          },
+          {
+            "pista": "Cielo: completamento ricorrente non porta al Cielo (nessun ponte oltre il toast)",
+            "esito": "CONFERMATA",
+            "nota": "page.tsx:3050-3053 solo toast, nessun pushView('sky'). Nessun ponte celebrativo dall'azione alla ricompensa."
+          },
+          {
+            "pista": "N49 card Ricorrenti Settings→chat senza deep-link",
+            "esito": "CONFERMATA",
+            "nota": "page.tsx:3748/:3754 testo puro senza link; il Cielo ha /?draft= (SkyView.tsx:186). Asimmetria confermata."
+          },
+          {
+            "pista": "insight/nudge con taskId aprono davvero il task giusto (64A6)",
+            "esito": "CONFERMATA",
+            "nota": "page.tsx:1580-1590: nudge apre nudge.taskId con fallback al primo aperto solo se chiuso/eliminato, poi pushView('focus') + recordSignal task_started. Round-trip corretto."
+          },
+          {
+            "pista": "/beta/assessment fuori da ogni navigazione (solo banner)",
+            "esito": "CONFERMATA",
+            "nota": "BetaCheckinCard.tsx:218 router.push('/beta/assessment'); nessuna voce di menu. Probabilmente voluto (strumento clinico beta)."
+          },
+          {
+            "pista": "admin/beta senza link UI",
+            "esito": "CONFERMATA",
+            "nota": "Nessun link UI ad admin/* (grep). Verosimilmente voluto (gate ADMIN_EMAILS). Da documentare, non azione."
+          },
+          {
+            "pista": "N28b navigazione chat↔tasks full reload nonostante ?view= (66A)",
+            "esito": "CONFERMATA",
+            "nota": "page.tsx:2166 e :2709 usano window.location.href per chat↔tasks (?view= copre solo la nav interna tasks). Full reload ri-idrata sessione+bootstrap; stima ~1-2.5s/hop su WebView freddo → ~3-5s giro chat→today→chat. / importa già TasksApp co-locato: la transizione client è fattibile (effort M)."
+          }
+        ]
+      },
+      "giornata-muta": {
+        "area": "Fase 3 — Audit UX §9.7 \"La giornata muta\" (N62) + §9.5 Economia dell'attenzione (L10)",
+        "findings": [
+          {
+            "titolo": "N26 — Completamento task: micro-feedback popup + toast celebrativo insieme (il coordinatore 66B non media il toast)",
+            "tipo": "U",
+            "severita": "UX",
+            "nota": "page.tsx:3044-3056. Alla chiusura di un task partono NELLO STESSO tick: showMicroFeedbackNow('drain_activate') a +500ms (passa dal coordinatore 66B) E toast('Completato!' oppure '⭐ Una stella…'). Il coordinatore 66B (page.tsx:490-507, 724, 805) media SOLO nudge↔proattivo↔micro-feedback tra loro; il toast() è una superficie separata (top-screen) che lo bypassa. Quindi ogni completamento = 2 celebrazioni simultanee. Promessa 66B 'una alla volta a confini naturali' rispettata tra i popup, VIOLATA includendo il toast. Verificato a codice su main 56e0f83.",
+            "piste_dossier": [
+              "N26"
+            ]
+          },
+          {
+            "titolo": "N62 — Giornata muta: cattura via POST /api/tasks NON auto-classifica (default importance/urgency 3, category 'general', inbox) — la classificazione 64A7 vive solo nel quick-capture UI",
+            "tipo": "B",
+            "severita": "S3",
+            "nota": "api/tasks/route.ts POST (righe ~56-108): crea il task con importance/urgency 3, category 'general', status 'inbox', SENZA chiamare ai-classify. L'auto-classificazione Eisenhower (64A7) è client-side in page.tsx:2312-2328 (handleCreate → classifyTaskAI → applyClassification). Conseguenza per la 'giornata muta' via API pura: il task resta grezzo/non prioritizzato e i punteggi engine partono dai default. Via inbox UI invece funziona (auto-confirm silenzioso sopra soglia). Da distinguere: la giornata muta UI-based eroga classificazione; quella API-only no.",
+            "piste_dossier": [
+              "N62",
+              "L3"
+            ]
+          },
+          {
+            "titolo": "N62/N5 — Completamento via PATCH /api/tasks/[id] status=completed NON emette alcun LearningSignal server-side: la giornata muta non alimenta l'apprendimento",
+            "tipo": "B",
+            "severita": "S2",
+            "nota": "api/tasks/[id]/route.ts PATCH (whitelist righe ~55-70): scrive status/completedAt ma NON crea LearningSignal. Il segnale 'task_completed' è emesso SOLO client-side in page.tsx:3044 (recordSignal → POST /api/learning-signal). Chi completa via API pura, via body doubling (J11: 0 signal confermato) o via triage chat non genera task_completed → whatDone vuoto in review, calibrazione sottostimata. La giornata muta eroga esecuzione ma zero apprendimento. Convergente con N5 (CONFERMATA J11).",
+            "piste_dossier": [
+              "N62",
+              "N5",
+              "N6"
+            ]
+          },
+          {
+            "titolo": "N62 — La giornata muta OTTIENE un piano senza chat: POST /api/daily-plan defaulta energy=3/timeAvailable=480, engine deterministico, zero input conversazionale",
+            "tipo": "C",
+            "severita": "UX",
+            "nota": "api/daily-plan/route.ts:74-97 — energy=body.energy??3, timeAvailable=??480, currentContext=??'any'; l'engine prioritizeTask+buildDailyPlan gira sui task non-terminali senza richiedere mood. VALORE EROGATO a zero chat: cattura (inbox), classificazione (via UI), piano (engine), one-tap Today→timer (R3 CONFERMATA J8), completamento. COSA RESTA VUOTO: mood (solo dal check-in chat), energy reale (default 3 → punteggi engine tarati su un valore inventato, cfr N15b/D55), review serale (SOLO conversazionale, nessun piano di domani senza review), apprendimento (N5/N6). La giornata muta è VIVIBILE ma cieca: l'app non sa come sta l'utente e non impara.",
+            "piste_dossier": [
+              "N62",
+              "N7",
+              "N15b"
+            ]
+          },
+          {
+            "titolo": "N62 — Nessun piano di domani senza review conversazionale: il DailyPlan(domani) nasce SOLO da close-review; la giornata muta rompe la continuità notturna",
+            "tipo": "C",
+            "severita": "S3",
+            "nota": "close-review.ts:119-125 è l'unico produttore del piano di domani a fasce (con slot review). Un utente che non apre mai la review serale conversazionale non ha 'il piano già pronto quando si sveglia' (promessa core J2/L7): può solo rigenerare a mano con POST /api/daily-plan (engine, energy=3 default) dal Today il mattino dopo. Punto di coercizione conversazionale forte: il momento di maggior valore promesso (review→piano di domani) è inaccessibile a zero chat.",
+            "piste_dossier": [
+              "N62",
+              "L3",
+              "L7"
+            ]
+          },
+          {
+            "titolo": "L10 — Interruzioni DURANTE strict/body doubling: target ZERO ARCHITETTURALMENTE RAGGIUNTO per i popup in-app (nudge/insight/micro-feedback), NON per email/notifiche OS",
+            "tipo": "C",
+            "severita": "UX",
+            "nota": "page.tsx:726 (proattivo saltato se currentView==='focus'||focusModeActive), :793 (nudge SOLO se currentView==='today'), :805 (una-alla-volta). Durante strict/body doubling la view non è 'today' → nudge e proattivo non partono. Il coordinatore 66B regge. RESIDUO: il cron email serale (30 19 UTC) e le Notification non conoscono lo stato strict/body-double dell'utente → un'email/notifica di review può arrivare mentre l'utente è in strict (vettore OS, non in-app). N61 (CONFERMATA J4bis) aggrava: 15 email in 15 giorni senza backoff. Target 'momento di lavoro sacro' rispettato in-app, non a livello notifiche.",
+            "piste_dossier": [
+              "N14",
+              "N61",
+              "R14"
+            ]
+          },
+          {
+            "titolo": "L10 — Budget nudge 3/giorno ora persistito in localStorage (fix reale) ma resta per-device: su 2 dispositivi il cap raddoppia; rollover a mezzanotte per-client (localDayKey ora locale)",
+            "tipo": "U",
+            "severita": "S3",
+            "nota": "page.tsx:514-544 — NUDGE_BUDGET_KEY in localStorage con day=localDayKey() (data locale del browser). Fix 66B reale: sopravvive al refresh (prima si azzerava). MA il budget è client-side e per-device: due dispositivi = fino a 6 nudge/giorno; il rollover usa l'ora locale del device (coerente per l'utente, ma non condiviso). R14 CONFERMATA lato engine (3/giorno + 15min). Basso impatto: pochi utenti multi-device, ma il cap non è una garanzia server.",
+            "piste_dossier": [
+              "N14",
+              "R14"
+            ]
+          },
+          {
+            "titolo": "L10 — Banner install PWA solo su /tasks (hideHeaderNav): la home è la chat, molti utenti non lo vedranno mai",
+            "tipo": "U",
+            "severita": "S3",
+            "nota": "page.tsx:935 (showInstallBanner && !hideHeaderNav) — il banner beforeinstallprompt (:701-709) è renderizzato nell'header di /tasks, mai nella chat che è la landing/home. N29. Basso attrito ma alto costo-opportunità retention (l'installazione PWA è la leva #1 per il ritorno ADHD). Confine naturale sbagliato: appare dove l'utente lavora, non dove atterra.",
+            "piste_dossier": [
+              "N29"
+            ]
+          },
+          {
+            "titolo": "L10 — Toast benvenuto post-onboarding sovrapposto al primo messaggio del check-in e persistente >3min (J1 confermato in browser)",
+            "tipo": "U",
+            "severita": "S3",
+            "nota": "J1 journal righe 34-36: toast 'Benvenuto in Shadow! … Inizia aggiungendo un task' (N47) sovrapposto al primo turno del morning check-in e ancora visibile dopo 3+ minuti. Due superfici in competizione nel minuto zero (il momento di massima fragilità attentiva). Il toast non passa dal coordinatore 66B. Convergente con N47 (spinge alla vista tasks contro il chat-first).",
+            "piste_dossier": [
+              "N47"
+            ]
+          },
+          {
+            "titolo": "L10 — Rumore console pre-consenso: ChatView polla active-thread/bootstrap prima del consenso → 6+ warn 403 ripetuti (spreco rete + rumore)",
+            "tipo": "U",
+            "severita": "UX",
+            "nota": "J1 journal righe 24-25 + walkthrough-parziale.md:11. Non è un popup visibile ma è un'interruzione di sistema (richieste inutili gated a 403 in loop) nel flusso di consenso. Rilevante per L10 come 'economia' complessiva (rete/CPU) e come segnale di un client che non rispetta i gate.",
+            "piste_dossier": [
+              "L10"
+            ]
+          },
+          {
+            "titolo": "L10 — Doppia voce 'Oggi' in sidebar durante la review (general + evening_review entrambi isActive): non un popup ma coesistenza ambigua di superfici (D40 CONFERMATA 2x)",
+            "tipo": "C",
+            "severita": "S3",
+            "nota": "api/chat/threads/route.ts:76-77 — label 'Oggi' e isActive calcolati senza distinguere il mode. Durante la review, una cattura al volo crea un thread general 'Oggi' accanto alla review 'Oggi': l'utente ADHD che vuole tornare alla review deve indovinare tra due voci identiche (L2/L6). Coesistenza di superfici mal gestita.",
+            "piste_dossier": [
+              "D40"
+            ]
+          }
+        ],
+        "piste_esito": [
+          {
+            "pista": "N62",
+            "esito": "CONFERMATA",
+            "nota": "La giornata muta è vivibile ma parziale: cattura+classificazione (via UI)+piano(engine)+one-tap+completamento funzionano a zero chat; restano VUOTI mood (solo check-in chat), energy reale (default 3), review serale e piano-di-domani (solo conversazionali), apprendimento (PATCH complete non emette signal). Cattura via POST /api/tasks pura NON auto-classifica. Dettaglio ai finding N62."
+          },
+          {
+            "pista": "N26",
+            "esito": "CONFERMATA",
+            "nota": "page.tsx:3044-3056: micro-feedback (+500ms, mediato dal coordinatore) + toast (bypassa il coordinatore) allo stesso completamento = 2 celebrazioni simultanee. Il 66B media solo nudge/proattivo/micro-feedback tra loro, non i toast."
+          },
+          {
+            "pista": "N14",
+            "esito": "CONFERMATA",
+            "nota": "page.tsx:514-544 — budget nudge persistito in localStorage per-day/per-device: cap 3/giorno reale sul singolo device (fix 66B), ma raddoppia su 2 dispositivi e il rollover usa la data locale del client. R14 regge lato engine."
+          },
+          {
+            "pista": "N29",
+            "esito": "CONFERMATA",
+            "nota": "page.tsx:935 — banner install gated a !hideHeaderNav = solo /tasks, mai nella chat (home). Molti utenti non lo vedranno."
+          },
+          {
+            "pista": "N61",
+            "esito": "CONFERMATA",
+            "nota": "(già chiusa da J4bis) cron email serale senza backoff inattività: 15 email in 15gg. Rilevante qui perché è l'unico vettore d'interruzione che può cadere DURANTE strict/body-double (non conosce lo stato di lavoro dell'utente)."
+          },
+          {
+            "pista": "N47",
+            "esito": "CONFERMATA",
+            "nota": "J1: toast 'Inizia aggiungendo un task' post-onboarding sovrapposto al check-in e persistente >3min; spinge alla vista tasks contro il chat-first."
+          },
+          {
+            "pista": "D40",
+            "esito": "CONFERMATA",
+            "nota": "Due voci 'Oggi' isActive in sidebar durante la review (general+evening_review): coesistenza di superfici ambigua, non mediata."
+          },
+          {
+            "pista": "interruzioni durante strict/body doubling (target ZERO)",
+            "esito": "CONFERMATA",
+            "nota": "IN-APP raggiunto: page.tsx:726/793/805 sopprimono proattivo+nudge quando la view non è 'today'. RESIDUO OS: email/Notification serali non conoscono lo stato strict/body-double → possono arrivare durante il lavoro. Il momento è sacro dentro l'app, non fuori."
+          }
+        ],
+        "output": "## §9.7 — La giornata muta (N62) + §9.5 — Economia dell'attenzione (L10)\n\n*Analista Fase 3. Sintesi da: fase1-consolidato.md, J1/J2/J7/J8/J11 journal + trascrizioni, walkthrough-parziale.md, e verifica diretta del codice su `main @ 56e0f83`. Nessun test dinamico nuovo: sono bastati gli artefatti + la lettura del codice sui punti di coercizione e sulle superfici di interruzione.*\n\n---\n\n## (A) LA GIORNATA MUTA — un giorno intero senza scrivere in chat\n\n**Domanda:** quanto valore eroga Shadow a zero input conversazionale, e dove l'app *costringe* a conversare?\n\n### Il percorso muto, passo per passo (cosa funziona)\n\n| Passo | Superficie muta | Esito | Evidenza |\n|---|---|---|---|\n| **Cattura** | Inbox quick-capture UI (`handleCreate`, `page.tsx:2301-2337`) | ✅ Task creato **+ auto-classificato** (64A7): sopra soglia auto-confirm silenzioso (toast+badge), sotto soglia dialog. R8 CONFERMATA (J3). | J3/R8; `page.tsx:2312-2328` |\n| **Cattura (API pura)** | `POST /api/tasks` | ⚠️ **NON classifica**: importance/urgency 3, category `general`, `inbox`. La classificazione vive solo nel quick-capture UI, non nella route. | `api/tasks/route.ts` POST |\n| **Piano** | `POST /api/daily-plan` (engine) | ✅ Piano generato **senza mood**: `energy=body.energy??3`, `timeAvailable??480`. Engine deterministico su task non-terminali. | `daily-plan/route.ts:74-97` |\n| **Partenza** | Today → one-tap \"Inizia\" | ✅ **1 tap → timer che scorre da solo** (R3 CONFERMATA in browser: 49:59→47:06 senza tap). | J8 journal §Esiti |\n| **Completamento** | Detail/execution → complete, o `PATCH /api/tasks/[id]` | ✅ Task chiuso in DB. ⚠️ **Zero LearningSignal** server-side (v. sotto). | `[id]/route.ts` PATCH; J11 |\n\n**Verdetto:** la giornata muta è **vivibile**. Un utente può catturare, farsi organizzare, partire in one-tap e completare senza digitare una parola in chat — *purché* usi la UI (inbox + Today), non l'API cruda. Il core loop dei 4 passi ha una spina dorsale muta.\n\n### I punti di coercizione conversazionale (cosa si perde, e quanto vale)\n\nOgni riga è un punto dove l'app **costringe a conversare** o **degrada** a zero chat. Per ognuno: cosa potrebbe erogare l'app a zero input.\n\n| # | Dato/momento perso a zero chat | Perché è coercitivo | Cosa può fare l'app da sola (proposta) | Impatto |\n|---|---|---|---|---|\n| **C1** | **Mood** | Registrato SOLO dal morning check-in chat e dalla review (`set_user_mood`/`record_mood`). Nessuna superficie non-conversazionale. | Un widget mood 1-5 (5 QR) nel Today o come sticky opzionale: 1 tap, zero chat. Già esiste la scala nei QR del check-in — riusarla fuori dalla chat. | **Alto** (il mood pilota tono nudge/insight) |\n| **C2** | **Energy reale** | Idem C1. In muta, `daily-plan` defaulta `energy=3`. | Slider/QR energy nel Today (già presente lato store come `store.energy` ma resettato a 3 al refresh — N15b/D55). Persisterlo e chiederlo con 1 tap. | **Alto** (i punteggi engine cambiano in silenzio col default 3) |\n| **C3** | **Review serale** | È **SOLO conversazionale**. Non esiste una review \"a bottoni\". | Una review a checklist: le candidate come card kept/postponed con toggle, mood 1-5 in QR, \"conferma piano\" in 1 tap. La meccanica (triage→plan→close) è già server-side; manca la superficie non-chat. | **Alto** (è il momento di massimo valore promesso) |\n| **C4** | **Piano di domani** | Nasce **SOLO** da `close-review.ts:119-125`. Senza review conversazionale, \"ti svegli e il piano c'è già\" (promessa J2/L7) **non si verifica**: al mattino resta solo `POST /api/daily-plan` (engine, energy=3). | Se la review non è stata fatta, generare comunque un piano-di-domani serale automatico (engine + carryover dei planned) al passaggio della finestra serale, invece di lasciare il vuoto. | **Alto** (rompe la continuità notturna, il cuore del prodotto) |\n| **C5** | **Apprendimento** | `PATCH /api/tasks/[id] status=completed` **NON emette LearningSignal**: il segnale `task_completed` è client-side (`page.tsx:3044`). Completare via API, via body doubling (J11: **0 signal**) o via triage chat → `whatDone` vuoto, calibrazione sottostimata (N5 CONFERMATA). | Emettere `task_completed` server-side nel PATCH quando `status→completed` (fonte unica, indipendente dal client). | **Alto** (la promessa \"più lo usi più si adatta\" è tradita per il chat-first e il muto) |\n| **C6** | **Prioritizzazione (API pura)** | `POST /api/tasks` non classifica. | Chiamare l'euristica Eisenhower (già deterministica, `ai-classify` ha un fallback euristico a confidence 0.3) inline nella route, o almeno calcolare quadrant/priorityScore. | Medio |\n\n**Risposta secca alla domanda §9.7:** a zero input conversazionale l'app eroga **il 60-70% del valore operativo** (cattura organizzata + piano + partenza + completamento) ma **perde tutto il suo \"cervello adattivo\"**: non sa come sta l'utente (C1/C2), non chiude il cerchio notturno (C3/C4) e **non impara** (C5). La giornata muta è un buon task-manager; smette di essere *Shadow*. Il registro automazioni (§9.2) dovrebbe pescare da qui le C1→C5 come \"superfici non-conversazionali per i dati oggi solo-chat\".\n\n---\n\n## (B) ECONOMIA DELL'ATTENZIONE (§9.5 / L10)\n\n### Il coordinatore 66B — cosa media davvero\n\n`page.tsx:490-507` (`showMicroFeedbackNow`) + le guardie a `:724` e `:805` implementano la promessa 66B \"una alla volta, a confini naturali\". **Regge, ma con un buco:**\n\n- **Media** (mutua esclusione reale): nudge ↔ popup proattivo ↔ micro-feedback. Chi trova occupato viene **soppresso, non accodato** (`:502`, `:503`, `:805`).\n- **NON media**: i `toast()`. Il toast è una superficie separata (top-screen) che **bypassa il coordinatore**.\n\n### N26 — lo stress test del completamento (CONFERMATA a codice)\n\n`page.tsx:3044-3056`, alla chiusura di un task partono **nello stesso tick**:\n1. `showMicroFeedbackNow('drain_activate', ...)` a +500ms → popup micro-feedback (mediato dal coordinatore);\n2. `toast({title:'Completato!'})` oppure `'⭐ Una stella si è accesa nel Cielo'` → **toast immediato, non mediato**.\n\nRisultato: **ogni completamento = due celebrazioni simultanee** (popup + toast). La promessa \"una alla volta\" è rispettata *tra i popup*, **violata** includendo il toast. Fix: instradare anche il toast celebrativo nel coordinatore, o sopprimerlo quando il micro-feedback lo copre.\n\n### Matrice interruzioni — coesistenza e mutua esclusione\n\n| Superficie | Trigger | Passa dal coordinatore 66B? | Soppressa durante focus/strict? | Budget | Note |\n|---|---|---|---|---|---|\n| **Micro-feedback** (popup) | Completamento (+500ms), start, block-reason | ✅ (sfratta il nudge, cede al proattivo) | ✅ (`:726`/`:805`, view≠today) | — | `page.tsx:3047,3156,3174,3354` |\n| **Nudge** (popup) | Su Today, top3 task, +10s | ✅ (passivo, sfrattabile) | ✅ (`:793` SOLO se view==='today') | **3/giorno** persistito localStorage, **per-device** (N14) | `:800-838`; engine R14 CONFERMATA |\n| **Popup proattivo** (chatbot) | Trigger deterministici su today/inbox + foreground | ✅ (interattivo, ha priorità) | ✅ (`:726` view==='focus'/focusModeActive) | 1/sessione (`proactiveShownThisSessionRef`) + cooldown 15min client + 30min/tipo server | `:724-768` |\n| **Toast** | Completamento, install, errori, azioni task | ❌ **bypassa il coordinatore** | ❌ (nessuna guardia) | nessuno | **N26**: si somma al micro-feedback |\n| **Banner install PWA** | `beforeinstallprompt` | ❌ | — | dismissibile | **N29**: solo `/tasks` (`:935 !hideHeaderNav`), **mai nella chat=home** |\n| **Banner review / share** | Segnale serale / share target | ❌ (banner, non popup) | — | in-memory per giorno | N3 (avvio review fallito sopprime il banner per il resto del giorno) |\n| **BetaCheckin** | Beta gate | ❌ | — | — | `ChatView.tsx:871`; solo beta |\n| **Toast benvenuto** (J1) | Post-onboarding | ❌ | — | persistente | **N47**: sovrapposto al check-in, visibile >3min (J1) |\n| **Email/Notification serale** | Cron `30 19 * * *` UTC | ❌ (fuori app) | ❌ **non conosce lo stato strict/body-double** | dedup per-giorno, **nessun backoff inattività (N61)** | vettore OS |\n\n### Riga dedicata: interruzioni DURANTE strict / body doubling (target ZERO)\n\n**In-app: target RAGGIUNTO.** Durante una sessione strict o body doubling la `currentView` è `focus` (o una execution view a schermo intero) e `focusModeActive=true`. Le guardie `page.tsx:726` (proattivo) e `page.tsx:793` (nudge, che parte SOLO su `today`) impediscono qualunque popup. Il micro-feedback interno al body doubling è parte dell'esperienza (companion check-in), non un'interruzione esterna. **Il momento di lavoro è sacro dentro l'app.**\n\n**Residuo OS: target NON garantito.** Il cron email serale (`30 19 UTC`) e le `Notification` **non conoscono** lo stato di lavoro dell'utente: un'email/notifica \"È la tua finestra serale\" può arrivare mentre l'utente è in strict o in body doubling. Aggravato da **N61** (CONFERMATA J4bis): 15 email identiche in 15 giorni senza backoff di inattività — un motore di churn per un ADHD in shame-spiral, e potenzialmente una notifica proprio durante una sessione di focus. **Proposta:** il cron dovrebbe (a) saltare gli utenti con una StrictModeSession/body-double attiva; (b) rarefarsi dopo N giorni di inattività.\n\n### Budget nudge multi-tab / mezzanotte (N14)\n\n`page.tsx:514-544`: il budget è persistito in `localStorage` con `day=localDayKey()` (data **locale del browser**). Fix 66B **reale** (prima si azzerava a ogni refresh). Limiti residui: (a) **per-device** → su 2 dispositivi il cap 3/giorno diventa 6; (b) il rollover a mezzanotte è per-client (coerente per il singolo device, non condiviso). Impatto basso (pochi multi-device), ma il cap **non è una garanzia server**.\n\n---\n\n## Sintesi per il report §11.10 (b — interruzioni)\n\n- **Interruzioni in una giornata tipo (J2, muta o no):** i popup sono governati bene (coordinatore 66B + guardie focus). Il **max simultanee osservato = 2** e accade al **completamento** (toast + micro-feedback, N26) — l'unico punto dove la promessa \"una alla volta\" si rompe, ed è ricorrente (ogni-completamento).\n- **Durante strict/body-double:** ZERO popup in-app (target rispettato); rischio residuo = email/notifiche OS che ignorano lo stato di lavoro (N61 + assenza di guardia focus nel cron).\n- **Superfici non mediate da riparare (ordine di leva):** N26 (toast su completamento, **ogni-sessione**) > cron-vs-focus/N61 (**giornaliera**, retention) > N47 (toast benvenuto, **primo giorno**) > N29 (install banner solo /tasks, **retention**) > N14 (budget per-device, **rara**).\n- **Giornata muta (N62):** vivibile per il core loop, ma coercitiva su mood/energy/review/piano-di-domani/apprendimento (C1→C5). Le 5 automazioni \"superficie non-conversazionale per dati oggi solo-chat\" sono candidate forti per il registro §9.2."
+      }
+    },
+    "senzaRisultato": []
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Analisi"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "tap-budget-automazioni",
+      "phaseIndex": 1,
+      "phaseTitle": "Analisi",
+      "agentId": "a8947605471c73986",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1783165687437,
+      "queuedAt": 1783165687409,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Fase 3 (§9.1 tap-budget misurata + §9.2 registro automazion…",
+      "promptPreview": "Sei un agente ANALISTA della FASE 3/4 del COLLAUDO 68 dell'app Shadow (repo C:\\shadow-app). NON esegui nuovi test dinamici pesanti: SINTETIZZI dagli artefatti già prodotti + leggi il codice dove serve.\nFONTI (leggile):\n- Spec: docs/tasks/68-collaudo-finale-pre-rilascio.md (§4 lente ADHD L1-L10, §9 audit, §10 coerenza, §12 dossier).\n- Findings già consolidati: docs/tasks/68-evidenze/fase1-consolida…",
+      "lastProgressAt": 1783166019137,
+      "tokens": 148568,
+      "toolCalls": 23,
+      "durationMs": 331700,
+      "resultPreview": "{\"area\":\"Fase 3 (§9.1 tap-budget misurata + §9.2 registro automazioni con formula valore + top 5 pre-rilascio)\",\"output\":\"# Fase 3 — Audit UX e carico: Tabella tap-budget (A) + Registro automazioni (B)\\n\\n> Sintesi dagli artefatti Fase 1/2 del collaudo 68 (journal browser J1/J8/J11, walkthrough\\n> parziale fase3, workflow-raw J2/J6a/J13, fase1-consolidato) + letture di codice mirate.\\n> Nessun nuo…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "conversazionale-lingua",
+      "phaseIndex": 1,
+      "phaseTitle": "Analisi",
+      "agentId": "af3eeca9c0ca41291",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1783165687443,
+      "queuedAt": 1783165687409,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Fase 3/4 — Audit conversazionale (§9.3), Inventario lingua …",
+      "promptPreview": "Sei un agente ANALISTA della FASE 3/4 del COLLAUDO 68 dell'app Shadow (repo C:\\shadow-app). NON esegui nuovi test dinamici pesanti: SINTETIZZI dagli artefatti già prodotti + leggi il codice dove serve.\nFONTI (leggile):\n- Spec: docs/tasks/68-collaudo-finale-pre-rilascio.md (§4 lente ADHD L1-L10, §9 audit, §10 coerenza, §12 dossier).\n- Findings già consolidati: docs/tasks/68-evidenze/fase1-consolida…",
+      "lastProgressAt": 1783166115111,
+      "tokens": 152682,
+      "toolCalls": 29,
+      "durationMs": 427668,
+      "resultPreview": "{\"area\":\"Fase 3/4 — Audit conversazionale (§9.3), Inventario lingua (§9.4/L6/L9), Inventario fiducia (§9.6/L7)\",\"output\":\"# Collaudo 68 — Fase 3/4: Audit conversazionale, Inventario lingua, Inventario fiducia\\n\\n> Sintesi analitica dagli artefatti Fase 1-2 (trascrizioni J*, walkthrough-parziale, consolidato) + letture di codice mirate su `main @ 56e0f83`. Solo analisi, nessun fix. Ogni voce cita e…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "coerenza-architettura",
+      "phaseIndex": 1,
+      "phaseTitle": "Analisi",
+      "agentId": "ad3b960705ebad5a2",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1783165687447,
+      "queuedAt": 1783165687409,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Fase 4 — Coerenza e architettura dell'esperienza (mappa sup…",
+      "promptPreview": "Sei un agente ANALISTA della FASE 3/4 del COLLAUDO 68 dell'app Shadow (repo C:\\shadow-app). NON esegui nuovi test dinamici pesanti: SINTETIZZI dagli artefatti già prodotti + leggi il codice dove serve.\nFONTI (leggile):\n- Spec: docs/tasks/68-collaudo-finale-pre-rilascio.md (§4 lente ADHD L1-L10, §9 audit, §10 coerenza, §12 dossier).\n- Findings già consolidati: docs/tasks/68-evidenze/fase1-consolida…",
+      "lastProgressAt": 1783165994183,
+      "tokens": 123529,
+      "toolCalls": 21,
+      "durationMs": 306736,
+      "resultPreview": "{\"area\":\"Fase 4 — Coerenza e architettura dell'esperienza (mappa superfici→core loop, §10)\",\"output\":\"# Fase 4 — Coerenza e architettura dell'esperienza\\n\\nMappa di OGNI superficie/feature sul core loop dei 4 passi (**cattura → organizza → review/piano → esegui**). Per ognuna che non ci sta: **RIMUOVI / COLLEGA / UNIFICA**, con effort S/M/L e impatto sull'uso quotidiano. Tutte le affermazioni sono…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "giornata-muta",
+      "phaseIndex": 1,
+      "phaseTitle": "Analisi",
+      "agentId": "a582d3f050237662b",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1783165687453,
+      "queuedAt": 1783165687410,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Fase 3 — Audit UX §9.7 \"La giornata muta\" (N62) + §9.5 Econ…",
+      "promptPreview": "Sei un agente ANALISTA della FASE 3/4 del COLLAUDO 68 dell'app Shadow (repo C:\\shadow-app). NON esegui nuovi test dinamici pesanti: SINTETIZZI dagli artefatti già prodotti + leggi il codice dove serve.\nFONTI (leggile):\n- Spec: docs/tasks/68-collaudo-finale-pre-rilascio.md (§4 lente ADHD L1-L10, §9 audit, §10 coerenza, §12 dossier).\n- Findings già consolidati: docs/tasks/68-evidenze/fase1-consolida…",
+      "lastProgressAt": 1783165981452,
+      "tokens": 145184,
+      "toolCalls": 25,
+      "durationMs": 293999,
+      "resultPreview": "{\"area\":\"Fase 3 — Audit UX §9.7 \\\"La giornata muta\\\" (N62) + §9.5 Economia dell'attenzione (L10)\",\"findings\":[{\"titolo\":\"N26 — Completamento task: micro-feedback popup + toast celebrativo insieme (il coordinatore 66B non media il toast)\",\"tipo\":\"U\",\"severita\":\"UX\",\"nota\":\"page.tsx:3044-3056. Alla chiusura di un task partono NELLO STESSO tick: showMicroFeedbackNow('drain_activate') a +500ms (passa …"
+    }
+  ],
+  "totalTokens": 569963,
+  "totalToolCalls": 98
+}

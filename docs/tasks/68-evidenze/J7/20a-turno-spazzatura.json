@@ -1,0 +1,48 @@
+{
+  "status": 200,
+  "json": {
+    "threadId": "cmr69fryy01z6ibe4d0rv9cbx",
+    "mode": "general",
+    "assistantMessage": "Fatto. Ogni giovedì il task ricompare automaticamente — non devi ricrearlo.",
+    "toolsExecuted": [
+      {
+        "name": "create_task",
+        "input": {
+          "title": "Buttare la spazzatura",
+          "urgency": 4,
+          "importance": 3,
+          "category": "household"
+        },
+        "result": {
+          "id": "cmr69fwbl01zaibe48j3i9lx4",
+          "title": "Buttare la spazzatura",
+          "urgency": 4,
+          "importance": 3,
+          "category": "household"
+        }
+      },
+      {
+        "name": "set_task_recurrence",
+        "input": {
+          "taskId": "cmr69fwbl01zaibe48j3i9lx4",
+          "frequency": "weekly",
+          "weekdays": [
+            4
+          ]
+        },
+        "result": {
+          "templateId": "cmr69fyvr01zcibe40ovf2b8k",
+          "recurrence": "ogni giovedì",
+          "updated": false,
+          "note": "Ricorrenza impostata: ogni giovedì. Conferma all'utente in una frase che il task tornerà da solo ogni giovedì, senza doverlo ricreare."
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.012159499999999998,
+    "tokensIn": 1906,
+    "tokensOut": 273,
+    "modelUsed": "claude-haiku-4-5",
+    "latencyMs": 4607
+  }
+}

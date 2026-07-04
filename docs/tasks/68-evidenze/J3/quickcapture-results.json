@@ -1,0 +1,123 @@
+{
+  "created": [
+    {
+      "title": "Stampare i documenti per la banca",
+      "status": 201,
+      "ms": 886,
+      "taskId": "cmr68hc4200y2ibe4avb7s8fa"
+    },
+    {
+      "title": "Buttare gli scatoloni in cantina",
+      "status": 201,
+      "ms": 1492,
+      "taskId": "cmr68hcf900y4ibe4rotp5gzu"
+    },
+    {
+      "title": "Prenotare il controllo dalla dermatologa",
+      "status": 201,
+      "ms": 1520,
+      "taskId": "cmr68hcfa00y6ibe4v4t5yln8"
+    },
+    {
+      "title": "Rinnovare abbonamento mezzi",
+      "status": 201,
+      "ms": 927,
+      "taskId": "cmr68hc0800xyibe4smwf3d81"
+    },
+    {
+      "title": "Rispondere al messaggio di Luca",
+      "status": 201,
+      "ms": 992,
+      "taskId": "cmr68hc0900y0ibe41t6nrjao"
+    }
+  ],
+  "chain": [
+    {
+      "title": "Stampare i documenti per la banca",
+      "taskId": "cmr68hc4200y2ibe4avb7s8fa",
+      "confidence": 0.75,
+      "autoConfirmed": true,
+      "wouldShowDialog": false,
+      "patchStatus": 200
+    },
+    {
+      "title": "Buttare gli scatoloni in cantina",
+      "taskId": "cmr68hcf900y4ibe4rotp5gzu",
+      "confidence": 0.75,
+      "autoConfirmed": true,
+      "wouldShowDialog": false,
+      "patchStatus": 200
+    },
+    {
+      "title": "Prenotare il controllo dalla dermatologa",
+      "taskId": "cmr68hcfa00y6ibe4v4t5yln8",
+      "confidence": 0.75,
+      "autoConfirmed": true,
+      "wouldShowDialog": false,
+      "patchStatus": 200
+    },
+    {
+      "title": "Rinnovare abbonamento mezzi",
+      "taskId": "cmr68hc0800xyibe4smwf3d81",
+      "confidence": 0.75,
+      "autoConfirmed": true,
+      "wouldShowDialog": false,
+      "patchStatus": 200
+    },
+    {
+      "title": "Rispondere al messaggio di Luca",
+      "taskId": "cmr68hc0900y0ibe41t6nrjao",
+      "confidence": 0.65,
+      "autoConfirmed": true,
+      "wouldShowDialog": false,
+      "patchStatus": 200
+    }
+  ],
+  "verify": [
+    {
+      "title": "Prenotare il controllo dalla dermatologa",
+      "status": "planned",
+      "aiClassified": true,
+      "autoConfirmed": true,
+      "cat": "health",
+      "u": 3,
+      "i": 4
+    },
+    {
+      "title": "Stampare i documenti per la banca",
+      "status": "planned",
+      "aiClassified": true,
+      "autoConfirmed": true,
+      "cat": "admin",
+      "u": 3,
+      "i": 4
+    },
+    {
+      "title": "Rinnovare abbonamento mezzi",
+      "status": "planned",
+      "aiClassified": true,
+      "autoConfirmed": true,
+      "cat": "admin",
+      "u": 3,
+      "i": 4
+    },
+    {
+      "title": "Buttare gli scatoloni in cantina",
+      "status": "planned",
+      "aiClassified": true,
+      "autoConfirmed": true,
+      "cat": "household",
+      "u": 1,
+      "i": 2
+    },
+    {
+      "title": "Rispondere al messaggio di Luca",
+      "status": "planned",
+      "aiClassified": true,
+      "autoConfirmed": true,
+      "cat": "general",
+      "u": 2,
+      "i": 3
+    }
+  ]
+}

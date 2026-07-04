@@ -1,0 +1,206 @@
+{
+  "calls": [
+    {
+      "call": "POST learning-signal task_started",
+      "status": 200
+    },
+    {
+      "call": "PATCH cmr67hl1c0007ibmk7m1g83b1 step 1",
+      "status": 200,
+      "body": {
+        "task": {
+          "id": "cmr67hl1c0007ibmk7m1g83b1",
+          "title": "Preparare la relazione trimestrale",
+          "description": "",
+          "importance": 5,
+          "urgency": 4,
+          "deadline": null,
+          "resistance": 3,
+          "size": 3,
+          "delegable": false,
+          "category": "general",
+          "context": "any",
+          "avoidanceCount": 0,
+          "lastAvoidedAt": null,
+          "quadrant": "do_now",
+          "priorityScore": 8.2,
+          "decision": "do_now",
+          "decisionReason": "",
+          "status": "planned",
+          "microSteps": "[{\"text\":\"Aprire il template\",\"done\":true},{\"text\":\"Compilare i dati Q2\",\"done\":false},{\"text\":\"Rileggere e inviare\",\"done\":false}]",
+          "microStepsRaw": "",
+          "currentStepIdx": 1,
+          "executionMode": "none",
+          "sessionFormat": "standard",
+          "sessionDuration": 45,
+          "completedAt": null,
+          "createdAt": "2026-07-04T10:15:07.968Z",
+          "updatedAt": "2026-07-04T10:34:25.411Z",
+          "userId": "cmr67hj1x0000ibmk8zoqezut",
+          "delegatedToId": null,
+          "delegationNote": "",
+          "delegationStatus": "",
+          "reminderAt": null,
+          "reminderSent": false,
+          "calendarEventId": "",
+          "aiClassified": true,
+          "aiClassificationData": "{}",
+          "postponedCount": 0,
+          "source": "manual",
+          "recurringTemplateId": null,
+          "occurrenceDate": null
+        }
+      }
+    },
+    {
+      "call": "PATCH cmr67hle00009ibmk4sishse6 complete",
+      "status": 200,
+      "body": {
+        "task": {
+          "id": "cmr67hle00009ibmk4sishse6",
+          "title": "Pagare la bolletta della luce",
+          "description": "",
+          "importance": 4,
+          "urgency": 5,
+          "deadline": "2026-07-04T22:00:00.000Z",
+          "resistance": 3,
+          "size": 3,
+          "delegable": false,
+          "category": "general",
+          "context": "any",
+          "avoidanceCount": 0,
+          "lastAvoidedAt": null,
+          "quadrant": "do_now",
+          "priorityScore": 7.9,
+          "decision": "do_now",
+          "decisionReason": "",
+          "status": "completed",
+          "microSteps": "[]",
+          "microStepsRaw": "",
+          "currentStepIdx": 0,
+          "executionMode": "none",
+          "sessionFormat": "standard",
+          "sessionDuration": 25,
+          "completedAt": "2026-07-04T10:34:25.797Z",
+          "createdAt": "2026-07-04T10:15:08.424Z",
+          "updatedAt": "2026-07-04T10:34:27.258Z",
+          "userId": "cmr67hj1x0000ibmk8zoqezut",
+          "delegatedToId": null,
+          "delegationNote": "",
+          "delegationStatus": "",
+          "reminderAt": null,
+          "reminderSent": false,
+          "calendarEventId": "",
+          "aiClassified": true,
+          "aiClassificationData": "{}",
+          "postponedCount": 0,
+          "source": "manual",
+          "recurringTemplateId": null,
+          "occurrenceDate": null
+        }
+      }
+    },
+    {
+      "call": "POST learning-signal task_completed",
+      "status": 200
+    }
+  ],
+  "tasksAfter": [
+    {
+      "id": "cmr67hl1c0007ibmk7m1g83b1",
+      "title": "Preparare la relazione trimestrale",
+      "status": "planned",
+      "completedAt": null,
+      "microSteps": "[{\"text\":\"Aprire il template\",\"done\":true},{\"text\":\"Compilare i dati Q2\",\"done\":false},{\"text\":\"Rileggere e inviare\",\"done\":false}]",
+      "currentStepIdx": 1
+    },
+    {
+      "id": "cmr67hle00009ibmk4sishse6",
+      "title": "Pagare la bolletta della luce",
+      "status": "completed",
+      "completedAt": "2026-07-04T10:34:25.797Z",
+      "microSteps": "[]",
+      "currentStepIdx": 0
+    }
+  ],
+  "learningSignals": [
+    {
+      "signalType": "mood_declared",
+      "taskId": null,
+      "processed": false,
+      "createdAt": "2026-07-04T10:32:32.980Z"
+    },
+    {
+      "signalType": "energy_declared",
+      "taskId": null,
+      "processed": false,
+      "createdAt": "2026-07-04T10:32:32.981Z"
+    },
+    {
+      "signalType": "energy_declared",
+      "taskId": null,
+      "processed": false,
+      "createdAt": "2026-07-04T10:32:42.741Z"
+    },
+    {
+      "signalType": "mood_declared",
+      "taskId": null,
+      "processed": false,
+      "createdAt": "2026-07-04T10:32:42.741Z"
+    },
+    {
+      "signalType": "time_declared",
+      "taskId": null,
+      "processed": false,
+      "createdAt": "2026-07-04T10:32:45.071Z"
+    },
+    {
+      "signalType": "mood_declared",
+      "taskId": null,
+      "processed": false,
+      "createdAt": "2026-07-04T10:33:01.355Z"
+    },
+    {
+      "signalType": "energy_declared",
+      "taskId": null,
+      "processed": false,
+      "createdAt": "2026-07-04T10:33:01.355Z"
+    },
+    {
+      "signalType": "time_declared",
+      "taskId": null,
+      "processed": false,
+      "createdAt": "2026-07-04T10:33:01.355Z"
+    },
+    {
+      "signalType": "energy_declared",
+      "taskId": null,
+      "processed": false,
+      "createdAt": "2026-07-04T10:33:15.890Z"
+    },
+    {
+      "signalType": "mood_declared",
+      "taskId": null,
+      "processed": false,
+      "createdAt": "2026-07-04T10:33:15.890Z"
+    },
+    {
+      "signalType": "time_declared",
+      "taskId": null,
+      "processed": false,
+      "createdAt": "2026-07-04T10:33:15.891Z"
+    },
+    {
+      "signalType": "task_started",
+      "taskId": "cmr67hl1c0007ibmk7m1g83b1",
+      "processed": false,
+      "createdAt": "2026-07-04T10:34:23.433Z"
+    },
+    {
+      "signalType": "task_completed",
+      "taskId": "cmr67hle00009ibmk4sishse6",
+      "processed": false,
+      "createdAt": "2026-07-04T10:34:28.265Z"
+    }
+  ]
+}

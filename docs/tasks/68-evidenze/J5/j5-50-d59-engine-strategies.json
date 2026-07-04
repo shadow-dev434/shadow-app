@@ -1,0 +1,102 @@
+[
+  {
+    "failureType": "too_hard",
+    "action": {
+      "type": "reduce",
+      "description": "Il task è troppo difficile ora. Riduciamo l'ambizione.",
+      "newDuration": 3,
+      "newFormat": "micro",
+      "newSteps": [
+        {
+          "id": "0f815696-291f-4d90-8d50-ec0db2f4accb",
+          "text": "Solo apri il file/strumento per \"Compilare la dichiarazione dei redditi\"",
+          "done": false,
+          "estimatedSeconds": 30
+        },
+        {
+          "id": "3b895fd7-c12d-4e00-b871-c9013fc615d6",
+          "text": "Guarda per 1 minuto, non devi fare nulla",
+          "done": false,
+          "estimatedSeconds": 60
+        }
+      ]
+    }
+  },
+  {
+    "failureType": "avoided",
+    "action": {
+      "type": "reformat",
+      "description": "Hai evitato questo task. Cambiamo formato per ridurre la barriera.",
+      "newDuration": 5,
+      "newFormat": "micro",
+      "newSteps": [
+        {
+          "id": "3079746b-28ad-44df-b3b0-cd21bb674ac9",
+          "text": "Imposta un timer di 2 minuti per \"Compilare la dichiarazione dei redditi\"",
+          "done": false,
+          "estimatedSeconds": 30
+        },
+        {
+          "id": "b51e027f-57ef-436a-8fec-9425a113b780",
+          "text": "Fai solo la prima cosa che viene in mente",
+          "done": false,
+          "estimatedSeconds": 120
+        }
+      ]
+    }
+  },
+  {
+    "failureType": "distracted",
+    "action": {
+      "type": "micro_reentry",
+      "description": "Distrazione. Rientro rapido con un micro-step.",
+      "newDuration": 5,
+      "newFormat": "micro",
+      "newSteps": [
+        {
+          "id": "9634a157-7c35-46b4-8b37-ccf450a68407",
+          "text": "Chiudi tutto tranne quello che serve per questo task",
+          "done": false,
+          "estimatedSeconds": 30
+        },
+        {
+          "id": "8e440cb1-7ee7-49e0-9a47-f1ea5ba9eb83",
+          "text": "Riprendi esattamente da dove hai lasciato",
+          "done": false,
+          "estimatedSeconds": 120
+        }
+      ]
+    }
+  },
+  {
+    "failureType": "ran_out_of_time",
+    "action": {
+      "type": "reduce",
+      "description": "Tempo scaduto. Segna dove sei e continua dopo.",
+      "newDuration": 0,
+      "newSteps": [
+        {
+          "id": "8c19d220-f37c-4265-8a00-cfdf1fdd4aa8",
+          "text": "Scrivi in 1 frase dove sei arrivato",
+          "done": false,
+          "estimatedSeconds": 60
+        },
+        {
+          "id": "827733db-e7af-4631-9272-75ba89a17200",
+          "text": "Segna il prossimo step come \"da fare dopo\"",
+          "done": false,
+          "estimatedSeconds": 30
+        }
+      ]
+    }
+  },
+  {
+    "failureType": "stuck",
+    "action": {
+      "type": "change_task",
+      "description": "Sei bloccato. Cambiamo task — qualcosa di facile per riprendere momentum.",
+      "newDuration": 10,
+      "newFormat": "micro"
+    }
+  }
+]

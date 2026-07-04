@@ -1,0 +1,5 @@
+D30 repro (adaptive-profile — owner half1, testato qui per copertura)
+(a) POST 65 campi arbitrari fuori whitelist: HTTP 201; bogusField* nel profilo restituito: false
+(b) POST executiveLoad='pippo' (Float col via stringa): HTTP 500 body={"error":"Failed to create profile"}
+(c) GET dopo: HTTP 200
+Meccanica: POST/PATCH usano whitelist jsonFields+directFields → campi non elencati DROPPATI silenziosamente. Nessuna validazione di TIPO/RANGE sui campi whitelisted.

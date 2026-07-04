@@ -1,0 +1,83 @@
+{
+  "clientDate": "2026-07-04",
+  "threadId": "cmr6856ym00chibe42c8yzk91",
+  "non200": 0,
+  "completed": true,
+  "threadStateFinale": "completed",
+  "sfogoTurn": 5,
+  "sfogoRetryUsed": true,
+  "offloadToolTurn": 5,
+  "threadStateAfterSfogo": "active",
+  "burnoutFired": false,
+  "offloadSignals": [
+    {
+      "id": "cmr685v0800dpibe47up1nql6",
+      "signalType": "emotional_offload",
+      "taskId": null,
+      "value": 1,
+      "metadata": "{}",
+      "processed": false,
+      "processedAt": null,
+      "createdAt": "2026-07-04T10:34:00.632Z"
+    }
+  ],
+  "allSignals": [
+    {
+      "type": "emotional_offload",
+      "task": null,
+      "processed": false,
+      "processedAt": null
+    }
+  ],
+  "n58": {
+    "turn": 6,
+    "tools": [
+      "add_candidate_to_review",
+      "mark_entry_discussed"
+    ],
+    "assistantMsg": "Curriculum segnato come fatto. Ora: consegnare il progetto al cliente — scade domani. Come siamo messi?",
+    "curriculumWasCandidate": false,
+    "curriculumStatusAfter": "completed",
+    "curriculumCompletedAt": "2026-07-04T10:34:17.989Z",
+    "curriculumInAdded": true,
+    "curriculumOutcome": "completed"
+  },
+  "candidates": [
+    {
+      "id": "cmr67i0l00039ibmknleepkyc",
+      "title": "Consegnare il progetto al cliente",
+      "reason": "deadline"
+    },
+    {
+      "id": "cmr67i0yj003dibmk8tluajve",
+      "title": "Chiamare il commercialista",
+      "reason": "new"
+    }
+  ],
+  "outcomes": {
+    "Aggiornare il curriculum": "completed",
+    "Consegnare il progetto al cliente": "kept",
+    "Chiamare il commercialista": "kept"
+  },
+  "moodIntake": {
+    "mood": 3,
+    "energyEnd": 3
+  },
+  "review": {
+    "id": "cmr6877cr00hvibe4wfb946mu",
+    "mood": 3,
+    "energyEnd": 3,
+    "whatDone": ""
+  },
+  "dailyPlanTomorrow": {
+    "id": "cmr68781a00hzibe4dr8lyewx",
+    "top3Ids": "[\"cmr67i0l00039ibmknleepkyc\",\"cmr67i0yj003dibmk8tluajve\"]"
+  },
+  "misure": {
+    "turniUtente": 10,
+    "wallSeconds": 101,
+    "totalAssistantLatencyMs": 55583,
+    "assistantChars": 702
+  },
+  "llmSpendUsd": 0.92701095
+}

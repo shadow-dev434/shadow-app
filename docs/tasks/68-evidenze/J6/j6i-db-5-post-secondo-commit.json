@@ -1,0 +1,45 @@
+{
+  "at": "2026-07-04T11:03:23.879Z",
+  "reviews": [
+    {
+      "id": "cmr692kpt01d3ibe4r1ugegaz",
+      "mood": 5,
+      "energyEnd": 2,
+      "threadId": "cmr6936oc01fbibe455fg7nxy"
+    }
+  ],
+  "plans": [
+    {
+      "id": "cmr692lan01d5ibe4zvspn7l3",
+      "top3Ids": "[\"cmr67i9ko0053ibmkbohkv986\",\"cmr67i9uk0057ibmkzckr2bg7\"]",
+      "doNowIds": "[\"cmr67i9ko0053ibmkbohkv986\",\"cmr67i9uk0057ibmkzckr2bg7\"]",
+      "threadId": "cmr6936oc01fbibe455fg7nxy"
+    }
+  ],
+  "overwritten": {
+    "reviewIdInvariato": true,
+    "reviewMood": {
+      "prima": 4,
+      "dopo": 5
+    },
+    "reviewEnergy": {
+      "prima": 3,
+      "dopo": 2
+    },
+    "reviewThreadId": {
+      "prima": "cmr690slq018dibe4vwqsaf49",
+      "dopo": "cmr6936oc01fbibe455fg7nxy"
+    },
+    "planIdInvariato": true,
+    "planTop3": {
+      "prima": "[\"cmr67i9ko0053ibmkbohkv986\",\"cmr67i9uk0057ibmkzckr2bg7\"]",
+      "dopo": "[\"cmr67i9ko0053ibmkbohkv986\",\"cmr67i9uk0057ibmkzckr2bg7\"]"
+    },
+    "planThreadId": {
+      "prima": "cmr690slq018dibe4vwqsaf49",
+      "dopo": "cmr6936oc01fbibe455fg7nxy"
+    }
+  },
+  "commitMessage": "Chiuso. A domani.",
+  "commitTools": "confirm_close_review"
+}

@@ -1,0 +1,922 @@
+{
+  "summary": "Fase 2 collaudo 68: sweep funzionale residuo (contratti API, cron, engine, apprendimento, observability)",
+  "agentCount": 4,
+  "logs": [
+    "Fase 2 sweep: api-contract-half1, api-contract-half2, cron-middleware-status, engine-learning-observability"
+  ],
+  "result": {
+    "blocchi": {
+      "api-contract-half1": {
+        "area": "Contratto API — METÀ 1 (spec §8.1): 27 route, tutti i metodi esportati (401 senza cookie + happy 2xx + input invalido 4xx/mai-500)",
+        "esiti": [
+          {
+            "id": "contract-27-route-401",
+            "esito": "PASS",
+            "dettaglio": "Tutte le 27 route (account, adaptive-profile, ai-assistant, ai-classify, beta/assessment, beta/bug-report, beta/feedback, beta/feedback/status, body-double/chat, body-double/checkin, calendar, calendar/oauth, calendar/oauth/callback, chat/active-thread, chat/bootstrap, chat/evening-signal, chat/threads, chat/threads/[id], chat/turn, consent, contacts, contacts/[id], daily-plan, decompose, export, health, learning-signal) restituiscono 401 senza cookie sui metodi protetti. health è pubblica (200). calendar/oauth e /callback fanno redirect 307 al login (top-level nav) invece di 401 — coerente col design.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/api-contract-half1.md (103 asserzioni)"
+          },
+          {
+            "id": "contract-happy-2xx",
+            "esito": "PASS",
+            "dettaglio": "Happy path 2xx confermato per tutti i metodi con input validi. beta/assessment PATCH (asrs/pre)→200 con scoring server-side (totalScore=36); beta/feedback (daily_pulse)→200 idempotente; beta/feedback/status con clientDate+clientTime→200. calendar/oauth→404 pulito by-design (GOOGLE_CLIENT_ID assente in dev, D23).",
+            "evidenza": "docs/tasks/68-evidenze/fase2/api-contract-half1-summary.md"
+          },
+          {
+            "id": "contract-invalid-4xx",
+            "esito": "FAIL",
+            "dettaglio": "Due route restituiscono 500 su input client-controllabili invece di 4xx: GET memory/learning-signal (?limit=abc) e POST daily-plan (energy/timeAvailable non numerici). Le altre validano correttamente con 400.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n50b-daily-plan-500.txt"
+          },
+          {
+            "id": "N19-notif-dedup",
+            "esito": "PASS",
+            "dettaglio": "Pista CONFERMATA (finding aperto): POST /api/notifications con type='evening_review_prompt' sopprime il cron serale. Repro deterministico verde.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n19-notif-dedup.txt"
+          },
+          {
+            "id": "N50b-500-untracked",
+            "esito": "PASS",
+            "dettaglio": "Pista CONFERMATA (finding aperto): GET memory + learning-signal danno 500 non tracciato su limit non numerico.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n50b-daily-plan-500.txt"
+          },
+          {
+            "id": "N60-oauth-csrf",
+            "esito": "PASS",
+            "dettaglio": "Pista CONFERMATA a codice (finding aperto): nessun parametro state anti-CSRF su OAuth Google calendar.",
+            "evidenza": "src/app/api/calendar/oauth/route.ts:31-38 + callback/route.ts:7-27"
+          }
+        ],
+        "findings": [
+          {
+            "titolo": "POST /api/notifications con type libero sopprime il promemoria serale del cron (N19)",
+            "tipo": "B",
+            "severita": "S2",
+            "file_riga": "src/app/api/notifications/route.ts:61 + src/app/api/cron/evening-review/route.ts:75-84",
+            "repro": "1) utente opt-in email dentro la finestra serale (candidato, GET /api/chat/evening-signal → shouldStart:true). 2) POST /api/notifications {type:'evening_review_prompt', title, body} con la sessione del client → 200, riga scritta in DB. 3) gira il cron GET /api/cron/evening-review (Bearer CRON_SECRET): il dedup (già-sollecitato-oggi, riga 75-79) trova la riga fabbricata dal client PRIMA del send email (riga 84) → skipped++, l'email serale reale NON viene inviata quel giorno. Repro verde: skipped 54→55 (+1), failed 4→3 (-1) tra cron pulito e cron sabotato = l'utente candidato è deviato dal ramo email al ramo dedup.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n19-notif-dedup.txt",
+            "piste_dossier": [
+              "N19"
+            ]
+          },
+          {
+            "titolo": "GET /api/memory e GET /api/learning-signal: 500 non tracciato su ?limit non numerico (N50b)",
+            "tipo": "B",
+            "severita": "S2",
+            "file_riga": "src/app/api/memory/route.ts:12-33 + src/app/api/learning-signal/route.ts:16-28",
+            "repro": "GET /api/memory?limit=abc (o /api/learning-signal?limit=abc) con sessione valida → HTTP 500 con corpo VUOTO. Causa: limit=Math.min(100,Math.max(1,Number('abc'))) resta NaN, take:NaN fa throw a Prisma; il ramo GET non ha try/catch → l'errore NON passa da captureApiError (invisibile a Sentry/telemetria).",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n50b-daily-plan-500.txt",
+            "piste_dossier": [
+              "N50b"
+            ]
+          },
+          {
+            "titolo": "POST /api/daily-plan: 500 su energy/timeAvailable non numerici",
+            "tipo": "B",
+            "severita": "S3",
+            "file_riga": "src/app/api/daily-plan/route.ts:74-83",
+            "repro": "POST /api/daily-plan {energy:'notanumber'} oppure {timeAvailable:'abc'} con sessione valida → HTTP 500 {\"error\":\"Failed to generate daily plan\"}. energy=body.energy??3 non fa coercizione/validazione del tipo, l'engine esplode sul valore stringa. È dentro try/catch (tracciato via captureApiError) ma dovrebbe essere un 400. Nota: energy:99 (fuori range 1-5) non crasha → 200 (nessuna validazione di range, innocuo).",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n50b-daily-plan-500.txt",
+            "piste_dossier": []
+          },
+          {
+            "titolo": "calendar/oauth/callback senza parametro state anti-CSRF (N60)",
+            "tipo": "B",
+            "severita": "S2",
+            "file_riga": "src/app/api/calendar/oauth/route.ts:31-38 + src/app/api/calendar/oauth/callback/route.ts:7-27",
+            "repro": "Verifica a codice (superficie orfana in dev, GOOGLE_CLIENT_ID assente). L'URL di autorizzazione Google (oauth/route.ts) NON include un parametro state; il callback (callback/route.ts) non genera né valida alcun nonce state — l'unica difesa è requireSession. Un attaccante che induce la vittima loggata a colpire .../callback?code=<codice_attaccante> collega il calendar dell'attaccante all'account della vittima (CSRF su OAuth).",
+            "evidenza": "src/app/api/calendar/oauth/route.ts:31-38 (nessun state) + callback/route.ts:7-27 (nessuna validazione state)",
+            "piste_dossier": [
+              "N60"
+            ]
+          }
+        ],
+        "piste_esito": [
+          {
+            "pista": "N19 — POST /api/notifications con type libero può sopprimere il dedup del cron serale",
+            "esito": "CONFERMATA",
+            "nota": "Repro deterministico verde (f2-n19-notif-dedup.ts): il client scrive type='evening_review_prompt' (type non validato a route.ts:61) e il dedup del cron (route.ts:75-79, prima del send) devia l'utente candidato da failed→skipped (email mai tentata). Con dominio reale sarebbe sent:1→sent:0. La riga fabbricata è anche visibile all'utente (evening_review_prompt NON è in INTERNAL_NOTIFICATION_TYPES)."
+          },
+          {
+            "pista": "N50b — GET memory/learning-signal senza try/catch → 500 non tracciato",
+            "esito": "CONFERMATA",
+            "nota": "Entrambe le GET danno 500 corpo vuoto su ?limit=abc (NaN→take:NaN→Prisma throw). Il ramo GET non ha try/catch né captureApiError: 500 fuori telemetria. La POST di entrambe è invece protetta."
+          },
+          {
+            "pista": "N60 — calendar/oauth/callback senza state anti-CSRF",
+            "esito": "CONFERMATA",
+            "nota": "A codice: oauth/route.ts non emette state, callback/route.ts non lo valida (solo requireSession). CSRF su OAuth possibile. Non riproducibile dinamicamente in dev (integrazione Google non configurata) ma il codice è attivo."
+          }
+        ],
+        "note": "BLOCCO contratto API METÀ 1 completato. 27 route testate, 103 asserzioni. Script nuovi in scripts/e2e/collaudo-68/: f2-00-env-check.ts (prereq §3.1-4 tutti presenti, +RESEND/ELEVENLABS/SENTRY tutti presenti → nessun degrado dichiarato), f2-api-contract-half1.ts, f2-n19-notif-dedup.ts. Evidenze in docs/tasks/68-evidenze/fase2/: api-contract-half1.md (matrice), api-contract-half1-summary.md (triage), n19-notif-dedup.txt, n50b-daily-plan-500.txt, f2-contact-created.json. Utenti effimeri collaudo68-f2*/collaudo68-n19 tutti ripuliti (verificato: 0 leftover). Finestra serale ripristinata (finally). Spesa LLM trascurabile (<$0.10: pochi turni Haiku + 2 body-double; righe AiUsage in gran parte cancellate col cascade degli effimeri). NB per i triager: 5 dei fail grezzi del sweep erano aspettative-test errate, NON bug (id strumento asrs non ASRS, kind daily_pulse non pulse, feedback/status richiede clientDate+clientTime, beta/assessment GET non beta-gated by-design, calendar/oauth 404 by-design). I 3 finding-bug reali (N19, N50b, daily-plan 500) + N60 a codice sono elencati sopra. Nessun altro endpoint della METÀ 1 restituisce 500 su input invalido."
+      },
+      "api-contract-half2": {
+        "area": "Contratto API — METÀ 2 (spec §8.1): 27 route (memory, micro-feedback, notifications, onboarding[+complete/reset], patterns, profile, push-subscription, recurring[+id], review, settings, sky, streaks, strict-mode, tasks[+id], voice/speak, admin/beta/bug-reports, admin/beta/summary, auth/{forgot-password,login,register,reset-password})",
+        "esiti": [
+          {
+            "id": "contratto-401-happy-invalid",
+            "esito": "PASS",
+            "dettaglio": "99/99 assertion meccaniche verdi. Per ogni route+metodo: (a) senza cookie → 401 (route protette) / 404 (admin, by-design 'non deve esistere') / open (auth/*); (b) happy path 2xx con utente effimero collaudo68-api2; (c) input invalidi → 4xx pulito, con 2 eccezioni (streaks, adaptive-profile) che restituiscono 500. Guard: requireSession→401 Unauthorized/403 consent_required/401 session_invalid; requireAdminSession→404; auth/* pubbliche.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/api-contract-half2.md (matrice completa 27 route)"
+          },
+          {
+            "id": "N24-strict-status-libero",
+            "esito": "FAIL",
+            "dettaglio": "PATCH /api/strict-mode con status stringa libera ('pippo') → HTTP 200, DB.status='pippo' persistito, GET filtra su {active_soft,active_strict,pending_exit} → session=null. La sessione diventa un fantasma invisibile a tutte le viste ma ancora non-terminale in DB.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n24-strict-status-libero.txt"
+          },
+          {
+            "id": "N16-completed-no-timestamp",
+            "esito": "FAIL",
+            "dettaglio": "PATCH /api/tasks/[id] status='completed' senza completedAt → HTTP 200, DB status='completed' completedAt=null. Il task risulta completato ma senza timestamp: sfugge a viste/calibrazione che filtrano su completedAt.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n16-completed-no-timestamp.txt"
+          },
+          {
+            "id": "N55-bugreport-nonbeta",
+            "esito": "FAIL",
+            "dettaglio": "POST /api/beta/bug-report da utente NON beta (loggato+consenso) → HTTP 200, report creato; con severity='blocking' invia sendBetaAlert agli admin. La route usa requireSession (bug-report/route.ts:58), NON requireBetaSession: nessun gate beta. J10 non ha chiuso questa pista.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n55-bugreport-nonbeta.txt"
+          },
+          {
+            "id": "N56-review-legacy",
+            "esito": "FAIL",
+            "dettaglio": "POST /api/review (legacy) esiste, risponde 200 e incrementa Task.avoidanceCount (+1) + scrive lastAvoidedAt via updatePatternsFromReview, senza caller UI (la review serale usa i tool LLM, non questo endpoint). Endpoint scrivente vivo e non referenziato dal client.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n56-review-legacy.txt"
+          },
+          {
+            "id": "D28-password-validator-drift",
+            "esito": "FAIL",
+            "dettaglio": "register/route.ts:19 impone password ≥8; reset-password/route.ts:19-20 accetta ≥6. Verificato: register('abc123',6char)→400; reset-password('abc123',6char)→supera il length-check, fallisce solo sul token. Un utente può reimpostare a 6 char ciò che il register rifiuta a <8.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/d28-password-validator-drift.txt"
+          },
+          {
+            "id": "N25-streaks-500",
+            "esito": "FAIL",
+            "dettaglio": "POST /api/streaks con tasksCompleted='abc' → HTTP 500 (body pulito {error:'Errore nel salvataggio streak'}, nessun leak). NaN NON persistito (Prisma rifiuta stringa su colonna Int). Ma è un 500 su input invalido invece del 4xx richiesto da §8.1c: manca la validazione numerica prima dell'upsert.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n25-streaks-nonnumeric.txt"
+          },
+          {
+            "id": "D30-adaptive-profile",
+            "esito": "FAIL",
+            "dettaglio": "adaptive-profile (owner half1, testato per copertura §8.11): campi arbitrari fuori whitelist NON accettati (droppati in silenzio, HTTP 201). Ma nessuna validazione di TIPO: POST executiveLoad='pippo' su colonna Float → HTTP 500. Stessa classe di N25.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/d30-adaptive-profile.txt"
+          },
+          {
+            "id": "N19-notifications-type-libero",
+            "esito": "WARN",
+            "dettaglio": "POST /api/notifications accetta type libero (route:61 type||'system'): un utente può creare una notifica con type='evening_email_failed' (tipo interno). Viene nascosta dalla propria GET (filtro INTERNAL_NOTIFICATION_TYPES) ma finisce nel conteggio failed7d della summary admin. Impatto reale limitato (owner primario N19 = other half); nessun bypass di dedup cron osservato a questo livello.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/api-contract-half2.md"
+          },
+          {
+            "id": "N50b-get-senza-trycatch",
+            "esito": "WARN",
+            "dettaglio": "GET /api/memory e GET /api/sky non hanno try/catch: un errore DB/engine produce un 500 NON catturato da captureApiError → invisibile a Sentry. (adaptive-profile GET stessa forma, fuori blocco).",
+            "evidenza": "docs/tasks/68-evidenze/fase2/api-contract-half2.md"
+          }
+        ],
+        "findings": [
+          {
+            "titolo": "PATCH strict-mode accetta status stringa libera → sessione fantasma invisibile ma non-terminale",
+            "tipo": "B",
+            "severita": "S2",
+            "file_riga": "src/app/api/strict-mode/route.ts:155 (PATCH: if(status) updateData.status=status, nessuna validazione) + :14 (GET filtra status noti)",
+            "repro": "POST /api/strict-mode {mode:'strict'} → prendi session.id; PATCH /api/strict-mode {sessionId, status:'pippo'} → HTTP 200; DB.status='pippo'; GET /api/strict-mode → {session:null}. La sessione resta con status fuori dominio: nessuna vista la mostra, ma non è 'exited'.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n24-strict-status-libero.txt",
+            "piste_dossier": [
+              "N24"
+            ]
+          },
+          {
+            "titolo": "PATCH bug-report/POST bug-report: nessun gate beta — non-beta può creare report e triggerare alert admin",
+            "tipo": "B",
+            "severita": "S2",
+            "file_riga": "src/app/api/beta/bug-report/route.ts:57-59 (requireSession invece di requireBetaSession); :105-118 sendBetaAlert su severity=blocking",
+            "repro": "Utente consentito NON in BETA_TESTERS: POST /api/beta/bug-report {area:'chat',description:'x',severityUser:'blocking',reproducibility:'always'} → HTTP 200, BugReport creato, sendBetaAlert inviata agli admin. Nessun controllo allowlist.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n55-bugreport-nonbeta.txt",
+            "piste_dossier": [
+              "N55"
+            ]
+          },
+          {
+            "titolo": "PATCH tasks/[id] status='completed' senza completedAt → task completato senza timestamp",
+            "tipo": "B",
+            "severita": "S3",
+            "file_riga": "src/app/api/tasks/[id]/route.ts:53-70 (valida status nel dominio ma non impone completedAt quando status→completed)",
+            "repro": "POST /api/tasks {title:'x'} → id; PATCH /api/tasks/[id] {status:'completed'} → HTTP 200; DB status='completed' completedAt=null.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n16-completed-no-timestamp.txt",
+            "piste_dossier": [
+              "N16"
+            ]
+          },
+          {
+            "titolo": "Validatori password disallineati: register min 8, reset-password min 6",
+            "tipo": "B",
+            "severita": "S3",
+            "file_riga": "src/app/api/auth/register/route.ts:19 (len<8→400) vs src/app/api/auth/reset-password/route.ts:19-20 (len<6→400)",
+            "repro": "POST /api/auth/register {email,password:'abc123'} → 400 'almeno 8'; POST /api/auth/reset-password {token,password:'abc123'} → passa il length-check (fallisce solo sul token invalido). Password di 6 char reimpostabile ma non registrabile.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/d28-password-validator-drift.txt",
+            "piste_dossier": [
+              "D28"
+            ]
+          },
+          {
+            "titolo": "500 su input invalido (manca validazione di tipo): streaks e adaptive-profile",
+            "tipo": "C",
+            "severita": "S3",
+            "file_riga": "src/app/api/streaks/route.ts:78-84 (tasksCompleted/tasksPlanned non validati); src/app/api/adaptive-profile/route.ts:70-74/132-136 (directFields senza type-check)",
+            "repro": "POST /api/streaks {date:'2026-01-15',tasksCompleted:'abc',tasksPlanned:5} → HTTP 500 (body pulito, Prisma rifiuta stringa su Int). POST /api/adaptive-profile {executiveLoad:'pippo'} → HTTP 500. Atteso 4xx (§8.1c 'input invalidi → 4xx MAI 500'). Nessun leak di stack ma status errato.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n25-streaks-nonnumeric.txt; docs/tasks/68-evidenze/fase2/d30-adaptive-profile.txt",
+            "piste_dossier": [
+              "N25",
+              "D30"
+            ]
+          },
+          {
+            "titolo": "Endpoint legacy POST /api/review vivo e scrivente senza caller UI",
+            "tipo": "M",
+            "severita": "UX",
+            "file_riga": "src/app/api/review/route.ts:15-93 + updatePatternsFromReview:126-192 (incrementa avoidanceCount/lastAvoidedAt)",
+            "repro": "POST /api/review {whatDone:'x',taskReviews:[{taskId,status:'avoided'}]} → HTTP 200, Task.avoidanceCount +1, lastAvoidedAt scritto, Review+ReviewTask upsertati. La review serale conversazionale usa i tool LLM, non questo endpoint: superficie legacy raggiungibile e mutante senza consumatori client.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/n56-review-legacy.txt",
+            "piste_dossier": [
+              "N56"
+            ]
+          },
+          {
+            "titolo": "POST notifications accetta type interno → conteggiato nella summary admin email-failed",
+            "tipo": "B",
+            "severita": "S3",
+            "file_riga": "src/app/api/notifications/route.ts:61 (type||'system', nessuna allowlist); admin/beta/summary/route.ts:73-83 (conta type=EVENING_EMAIL_FAILED_TYPE)",
+            "repro": "POST /api/notifications {title:'x',body:'y',type:'evening_email_failed'} → HTTP 200; la GET dell'utente la nasconde (filtro INTERNAL) ma finisce nel failed7d/failedUsers della summary admin. Un utente può inquinare la telemetria admin dei fallimenti email.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/api-contract-half2.md",
+            "piste_dossier": [
+              "N19"
+            ]
+          },
+          {
+            "titolo": "GET memory/sky senza try/catch: 500 non tracciato da Sentry",
+            "tipo": "C",
+            "severita": "S3",
+            "file_riga": "src/app/api/memory/route.ts:12-34 (nessun try/catch); src/app/api/sky/route.ts:12-20 (nessun try/catch)",
+            "repro": "Statico + dinamico: entrambe le GET non avvolgono la logica in try/catch né chiamano captureApiError. Un errore DB (memory) o dell'engine countLitStars/computeSkyState (sky) produce un 500 Next default, invisibile all'observability. Tutte le altre route del blocco hanno captureApiError.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/api-contract-half2.md",
+            "piste_dossier": [
+              "N50b"
+            ]
+          }
+        ],
+        "piste_esito": [
+          {
+            "pista": "N24 — PATCH strict-mode status stringa libera persistito + sessione invisibile alla GET",
+            "esito": "CONFERMATA",
+            "nota": "status='pippo' → HTTP 200, DB.status='pippo', GET session=null (fantasma non-terminale)"
+          },
+          {
+            "pista": "N25 — POST streaks non-numerici → NaN persistito",
+            "esito": "SMENTITA",
+            "nota": "NaN NON persistito: Prisma rifiuta la stringa su colonna Int → HTTP 500 (body pulito). Riclassificata: bug diverso = 500 su input invalido invece di 4xx (§8.1c). Finding riportato."
+          },
+          {
+            "pista": "N16 — PATCH tasks/[id] completed senza completedAt",
+            "esito": "CONFERMATA",
+            "nota": "status='completed' completedAt=null persistito, HTTP 200"
+          },
+          {
+            "pista": "N55 — POST bug-report utente non-beta passa e genera alert admin",
+            "esito": "CONFERMATA",
+            "nota": "requireSession (non requireBetaSession): non-beta consentito → 200 + sendBetaAlert su blocking. J10 non l'ha chiusa."
+          },
+          {
+            "pista": "N56 — POST review legacy esiste, risponde, incrementa avoidanceCount senza caller UI",
+            "esito": "CONFERMATA",
+            "nota": "HTTP 200, avoidanceCount +1, lastAvoidedAt scritto; nessun consumatore client (review serale usa tool LLM)"
+          },
+          {
+            "pista": "D28 — register rifiuta <8, reset-password accetta ≥6",
+            "esito": "CONFERMATA",
+            "nota": "register 'abc123'→400; reset-password 'abc123'→supera length-check (fallisce solo sul token). Validatori disallineati."
+          },
+          {
+            "pista": "D30 — POST/PATCH adaptive-profile con campi arbitrari senza validazione accetta tutto",
+            "esito": "SMENTITA",
+            "nota": "owner=half1; testato per copertura: campi fuori whitelist DROPPATI in silenzio (non accettati). Ma nessuna validazione di TIPO → executiveLoad='pippo' su Float = HTTP 500. Se half1 ha già chiuso D30, questa nota è complementare."
+          },
+          {
+            "pista": "N19 — POST notifications type libero può sopprimere il dedup del cron",
+            "esito": "CONFERMATA",
+            "nota": "type interno accettato in POST (nascosto dalla GET utente ma conteggiato nella summary admin email-failed). Bypass del dedup cron non riprodotto a questo livello — owner primario N19 nell'altra metà; segnalato come coesistenza."
+          },
+          {
+            "pista": "N50b — GET memory/learning-signal senza try/catch → 500 non tracciato",
+            "esito": "CONFERMATA",
+            "nota": "memory GET e sky GET senza try/catch → 500 non catturato da captureApiError/Sentry"
+          }
+        ],
+        "note": "Blocco completato: 99/99 assertion meccaniche PASS (script f2-api-half2.ts) + repro complementare D30/N19 (f2-api-d30-n19.ts). Zero spesa LLM (nessuna route LLM nel blocco). Utenti effimeri (collaudo68-api2*, collaudo68-d30) creati e ricancellati (verificato: DB pulito). La coorte collaudo68-{admin,beta,nonbeta} risultava GIÀ SEEDATA (cookie admin disponibile → route admin testate anche in happy path 200). Nessuna finestra serale aperta, nessun effetto su altri utenti. Convenzioni guard confermate per il report: route protette=401/403/session_invalid; route admin/beta/*=404 per non-admin (by-design); auth/*=pubbliche. Script in scripts/e2e/collaudo-68/f2-api-half2.ts e f2-api-d30-n19.ts. Evidenze in docs/tasks/68-evidenze/fase2/ (api-contract-half2.md = matrice 27 route + 8 findings; n24/n16/n55/n56/n25/d28/d30 = repro singoli). NOTA DI TRIAGE: le due 500-su-input-invalido (N25 streaks, D30 adaptive-profile) e i due GET senza try/catch (memory, sky) sono la stessa famiglia 'hardening contratto': candidati a un unico Task 69 di validazione input+wrapping observability. N55 (gate beta assente su bug-report) è il più rilevante lato prodotto pre-rilascio."
+      },
+      "cron-middleware-status": {
+        "area": "Fase 2 — cron email + middleware + matrice status + doppio-tab (§8.2/§8.3/§8.4/§8.5)",
+        "esiti": [
+          {
+            "id": "§8.2-cron-auth",
+            "esito": "PASS",
+            "dettaglio": "GET /api/cron/evening-review: senza Bearer → 404; Bearer sbagliato → 404; Bearer=CRON_SECRET → 200 con shape {candidates,sent,skipped,failed}.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/cron-middleware-status.md §8.2 (no-Bearer 404, bad-Bearer 404, run1 200)"
+          },
+          {
+            "id": "§8.2-cron-dedup",
+            "esito": "PASS",
+            "dettaglio": "Secondo giro immediato: sull'esito reale (email fallita verso @probe.local) il fail-marker evening_email_failed NON viene duplicato (dedup per giorno-Rome, count=1 dopo 2 giri). Nota: sul percorso di fallimento l'email viene RI-TENTATA a ogni giro (nessun marker prompt che sopprima) — atteso da spec R15. Su invio riuscito, il marker prompt sopprime il re-send.",
+            "evidenza": "cron-middleware-status.md §8.2 run1/run2, fail-marker count=1"
+          },
+          {
+            "id": "§8.2-R15-fail-email",
+            "esito": "PASS",
+            "dettaglio": "Email fallita → Notification type=evening_email_failed scritta (read:true), nessun marker prompt (ritenta). RESEND_API_KEY presente ma indirizzo @probe.local respinto → percorso fallimento esercitato realmente.",
+            "evidenza": "cron-middleware-status.md: 'R15 verificato: failed=1, fail-marker presente, prompt-marker assente'"
+          },
+          {
+            "id": "§8.2-optout",
+            "esito": "PASS",
+            "dettaglio": "notificationsEnabled=false sull'effimero → zero Notification (rispettato). Isolamento: 62 altri opt-in messi in pausa e RIPRISTINATI in finally (verificato post-run: opt-in=57, opt-out=0, effimeri residui=0).",
+            "evidenza": "cron-middleware-status.md 'opt-out effimero: Notification count=0'; verifica cleanup separata"
+          },
+          {
+            "id": "§8.2-N30-DST",
+            "esito": "PASS",
+            "dettaglio": "Schedule fisso '30 19 * * *' UTC (vercel.json). Inverno CET→20:30 Rome, estate CEST→21:30 Rome. Finestra default 20:00-23:00 (schema:365-366) contiene ENTRAMBI → N30 SMENTITA per la finestra default. Buco possibile solo per finestre custom strette (≤1h) a cavallo di 20:30/21:30.",
+            "evidenza": "cron-middleware-status.md §8.2 N30"
+          },
+          {
+            "id": "§8.3-middleware-pubbliche",
+            "esito": "PASS",
+            "dettaglio": "/privacy /terms /reset-password /account-deletion anonime → 200 senza redirect (fuori dal matcher by-design). / anonima → 200 (landing). Tutte le altre 8 page route (tour, consent, onboarding, chat, tasks, focus, admin/beta, beta/assessment) anonime → 307 a /?auth=login.",
+            "evidenza": "cron-middleware-status.md §8.3 (13 pagine testate)"
+          },
+          {
+            "id": "§8.3-N31-chat",
+            "esito": "PASS",
+            "dettaglio": "/chat è nel matcher come /chat/:path* e non è home → gated (307 a login). Raggiungibile solo autenticati via URL; è un duplicato di / senza link in UI.",
+            "evidenza": "cron-middleware-status.md §8.3 N31"
+          },
+          {
+            "id": "§8.4-N17-active-abandoned",
+            "esito": "PASS",
+            "dettaglio": "'active' e 'abandoned' sono nell'enum taskStatuses() → PATCH li accetta (200). Nessun produttore nei flussi correnti, ma il dato è legale e persistibile.",
+            "evidenza": "cron-middleware-status.md §8.4 N17"
+          },
+          {
+            "id": "§8.4-N16-completed-noAt",
+            "esito": "PASS",
+            "dettaglio": "N16 CONFERMATA: PATCH status=completed senza completedAt → row.completedAt=null in DB (il PATCH non lo imposta). Incoerenza dati confermata. Status fuori dominio → 400 (non 500, non persistito).",
+            "evidenza": "cron-middleware-status.md §8.4 N16"
+          },
+          {
+            "id": "§8.4-status-viste",
+            "esito": "PASS",
+            "dettaglio": "GET /api/tasks senza filtro ritorna TUTTI gli stati incluso completed/abandoned/active/inbox (nessun filtro server): il filtro dei terminali è client-side.",
+            "evidenza": "cron-middleware-status.md §8.4 byStatus"
+          },
+          {
+            "id": "§8.4-D22-orfano",
+            "esito": "PASS",
+            "dettaglio": "D22 CONFERMATA: DELETE di un task in DailyPlan.top3Ids/doNowIds → id resta ORFANO nel JSON del piano (DELETE pulisce solo le join-row dailyPlanTask, non i JSON array). GET /api/daily-plan filtra l'id mancante (Top 3 → Top 2 a video), quindi impatto runtime nascosto ma dato stale persistito.",
+            "evidenza": "cron-middleware-status.md §8.4 D22"
+          },
+          {
+            "id": "§8.5-N15-fasce-perse",
+            "esito": "PASS",
+            "dettaglio": "N15 CONFERMATA: POST /api/daily-plan (rigenera engine) DOPO una review con fasce → dailyPlanTask.deleteMany del piano (route:117) + ricrea solo top3/doNow/schedule/delegate/postpone → le fasce morning/afternoon/evening spariscono, source passa da 'review' a 'engine'. Nessuna guardia server: la conferma D44 esiste SOLO client. Un secondo tab bypassa la guardia.",
+            "evidenza": "cron-middleware-status.md §8.5 N15 (fasce=0 dopo POST, source=engine)"
+          },
+          {
+            "id": "§8.5-N15b-store-reset",
+            "esito": "PASS",
+            "dettaglio": "N15b/D55 CONFERMATA a codice: shadow-store.ts:290-293 default energy:3/timeAvailable:480, store Zustand senza persist → ogni refresh riazzera i valori scelti. Coerente col default del POST (route:74-75).",
+            "evidenza": "lettura shadow-store.ts:290-293, daily-plan/route.ts:74-75"
+          }
+        ],
+        "findings": [
+          {
+            "titolo": "N15 — POST /api/daily-plan cancella le fasce della review serale senza guardia server (doppio-tab data loss)",
+            "tipo": "B",
+            "severita": "S2",
+            "file_riga": "src/app/api/daily-plan/route.ts:117 (dailyPlanTask.deleteMany) + :159-171 (ricrea solo top3/doNow/schedule/delegate/postpone)",
+            "repro": "1) Utente con DailyPlan di oggi che ha fasce morning/afternoon/evening scritte dalla review (source=review). 2) Da un secondo tab POST /api/daily-plan {energy:3,timeAvailable:480}. 3) GET /api/daily-plan: fasce sparite, source=engine. Verificato: dailyPlanTask con slot in {morning,afternoon,evening} = 0 dopo il POST.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/cron-middleware-status.md §8.5 N15",
+            "piste_dossier": [
+              "N15"
+            ]
+          },
+          {
+            "titolo": "D22 — id di task cancellato resta orfano in top3Ids/doNowIds del JSON DailyPlan",
+            "tipo": "B",
+            "severita": "S3",
+            "file_riga": "src/app/api/tasks/[id]/route.ts:110-112 (DELETE pulisce dailyPlanTask/reviewTask ma non i JSON array del piano)",
+            "repro": "1) DailyPlan con top3Ids=[a,b,c], join-row per a. 2) DELETE /api/tasks/a → 200. 3) DB: top3Ids contiene ancora 'a' (orfano), join-row rimosse. Mitigazione runtime: GET /api/daily-plan filtra l'id mancante (Top 3 → Top 2 a video), quindi non crash ma dato stale.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/cron-middleware-status.md §8.4 D22",
+            "piste_dossier": [
+              "D22"
+            ]
+          },
+          {
+            "titolo": "N16 — task 'completed' via PATCH resta con completedAt=null",
+            "tipo": "B",
+            "severita": "S3",
+            "file_riga": "src/app/api/tasks/[id]/route.ts:57-78 (PATCH copia status ma non deriva completedAt)",
+            "repro": "PATCH /api/tasks/{id} {status:'completed'} su un task inbox → 200; DB: status='completed', completedAt=null. Ogni logica che ordina/filtra per completedAt vede un completato senza timestamp.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/cron-middleware-status.md §8.4 N16",
+            "piste_dossier": [
+              "N16"
+            ]
+          },
+          {
+            "titolo": "N15b/D55 — energy/time tornano a 3/480 a ogni refresh (store non persistente)",
+            "tipo": "U",
+            "severita": "UX",
+            "file_riga": "src/store/shadow-store.ts:290-293 (energy:3, timeAvailable:480; store senza persist)",
+            "repro": "L'utente imposta energy/tempo, poi ricarica: valori riportati a 3/480. Il POST /api/daily-plan userà i default se il client non ri-invia i valori scelti.",
+            "evidenza": "lettura shadow-store.ts:290-293",
+            "piste_dossier": [
+              "N15b",
+              "D55"
+            ]
+          },
+          {
+            "titolo": "Cron review — sul percorso di fallimento email l'invio viene ri-tentato a ogni run senza backoff",
+            "tipo": "C",
+            "severita": "S3",
+            "file_riga": "src/app/api/cron/evening-review/route.ts:84-112 (fallimento: nessun marker prompt → nessuna soppressione del retry)",
+            "repro": "Utente candidato con email non recapitabile: ogni esecuzione del cron ri-tenta l'invio (failed++), scrivendo un solo fail-marker/giorno ma consumando quota Resend a ripetizione. Non un bug funzionale (R15 rispettato) ma un costo/rumore osservato durante il test.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/cron-middleware-status.md §8.2 (run1/run2 entrambi failed=1)",
+            "piste_dossier": [
+              "N30"
+            ]
+          }
+        ],
+        "piste_esito": [
+          {
+            "pista": "§8.2 cron auth 404/404/200 + shape",
+            "esito": "CONFERMATA",
+            "nota": "Comportamento corretto: 404 senza/con Bearer sbagliato, 200 {candidates,sent,skipped,failed} con secret giusto."
+          },
+          {
+            "pista": "§8.2 dedup secondo giro",
+            "esito": "CONFERMATA",
+            "nota": "Su invio riuscito il marker prompt sopprime; su fallimento il fail-marker è dedupato per giorno (count=1 dopo 2 giri) ma l'email si ri-tenta."
+          },
+          {
+            "pista": "R15 — email fallita → Notification evening_email_failed + niente marker prompt",
+            "esito": "CONFERMATA",
+            "nota": "Esercitato realmente: RESEND presente ma @probe.local respinto → failed=1, fail-marker=true, prompt-marker=false."
+          },
+          {
+            "pista": "§8.2 opt-out rispettato",
+            "esito": "CONFERMATA",
+            "nota": "notificationsEnabled=false → 0 Notification."
+          },
+          {
+            "pista": "N30 — schedule fisso 30 19 UTC vs DST",
+            "esito": "SMENTITA",
+            "nota": "Per la finestra default 20:00-23:00: cron cade a 20:30 (CET) e 21:30 (CEST), entrambi dentro. Buco solo per finestre custom strette (≤1h) tra 20:30 e 21:30."
+          },
+          {
+            "pista": "§8.3 pagine pubbliche anonime (privacy/terms/reset-password/account-deletion)",
+            "esito": "CONFERMATA",
+            "nota": "Tutte 200 senza redirect; fuori dal matcher by-design. Ogni altra page route → 307 a /?auth=login."
+          },
+          {
+            "pista": "N31 — /chat duplicato di / raggiungibile solo via URL",
+            "esito": "CONFERMATA",
+            "nota": "/chat è nel matcher (/chat/:path*), gated, 307 a login; nessun link in UI, solo via URL."
+          },
+          {
+            "pista": "N17 — stati active/abandoned senza produttori",
+            "esito": "CONFERMATA",
+            "nota": "Legali nell'enum taskStatuses(); PATCH li accetta (200). Nessun flusso corrente li produce ma il dato è persistibile."
+          },
+          {
+            "pista": "N16 — completed senza completedAt via PATCH",
+            "esito": "CONFERMATA",
+            "nota": "PATCH status=completed lascia completedAt=null in DB."
+          },
+          {
+            "pista": "D22 — DELETE task nel piano → id orfano nel JSON",
+            "esito": "CONFERMATA",
+            "nota": "Orfano in top3Ids/doNowIds; join-row pulite; GET filtra a runtime (Top 3→Top 2) ma il JSON resta stale."
+          },
+          {
+            "pista": "N15 — rigenera piano da secondo tab perde le fasce senza guardia server",
+            "esito": "CONFERMATA",
+            "nota": "POST /api/daily-plan fa deleteMany e ricrea solo i bucket engine; fasce perse, source=engine; guardia D44 solo client."
+          },
+          {
+            "pista": "N15b/D55 — store reset energy/time al refresh",
+            "esito": "CONFERMATA",
+            "nota": "shadow-store.ts:290-293 default 3/480, store senza persist."
+          }
+        ],
+        "note": "Script: scripts/e2e/collaudo-68/f2-cron-middleware-status.ts (39 assert PASS, 0 FAIL, 0 WARN). Evidenza: docs/tasks/68-evidenze/fase2/cron-middleware-status.md. Ambiente: dev :3000, DB royal-feather (preflight ok), CRON_SECRET presente in env → ramo 200 testato live. RESEND_API_KEY presente ma @probe.local non recapitabile → esercitato il percorso di FALLIMENTO (R15), non l'invio riuscito: se serve validare il ramo 'sent' reale, usare un indirizzo recapitabile in un run dedicato. Sicurezza operativa: durante il test 62 (poi 57) opt-in di altri utenti messi in pausa e RIPRISTINATI in finally; verifica post-run: opt-in=57, opt-out=0, effimeri residui=0 (nessuna pollution del dedup altrui, finestra serale candidato ripristinata). Nessun git/commit. Nessuna spesa LLM (blocco puramente meccanico). Tutti i 6 finding sono a-codice/dati confermati, non scelte LLM."
+      },
+      "engine-learning-observability": {
+        "area": "Engine deterministici + Loop apprendimento + Observability + Rolling summary + Onboarding→profilo (§8.6-8.10)",
+        "esiti": [
+          {
+            "id": "eisenhower-threshold",
+            "esito": "PASS",
+            "dettaglio": "Soglia AND imp>=4 && urg>=4 -> do_now regge: (4,4)/(5,5)/(4,5)/(5,4) do_now; (3,3) eliminate; (3,4) delegate; (4,3) schedule.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-eisenhower-grid.txt"
+          },
+          {
+            "id": "decompose-pattern",
+            "esito": "PASS",
+            "dettaglio": "Fallback pattern-aware: titolo concreto -> step di dominio (pulizia), titolo vago -> template generico; NON fotocopia identica.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-decompose-vago.json, f2-decompose-concreto.json"
+          },
+          {
+            "id": "ai-classify-shape",
+            "esito": "PASS",
+            "dettaglio": "quadrant/decision/confidence presenti; input senza titolo -> 400.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-ai-classify.json"
+          },
+          {
+            "id": "N5-task-completed",
+            "esito": "PASS",
+            "dettaglio": "complete_task via chat: tools=[get_today_tasks,complete_task], task->completed, ma 0 LearningSignal task_completed emessi (prima=0 dopo=0).",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-n5-chat-complete.json"
+          },
+          {
+            "id": "N6-processed-false",
+            "esito": "PASS",
+            "dettaglio": "apprendista: 0/14 segnali processed=true; i signal server-side (tools.ts, handler) non chiamano mai processSignal.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-learning-report.md"
+          },
+          {
+            "id": "N7-prioritizeTaskAdaptive-dead",
+            "esito": "PASS",
+            "dettaglio": "daily-plan/route.ts:91 usa prioritizeTask; prioritizeTaskAdaptive definito solo a priority-engine.ts:380, zero caller in src/.",
+            "evidenza": "grep src/"
+          },
+          {
+            "id": "N18-streak-userpattern",
+            "esito": "PASS",
+            "dettaglio": "Streak=1 riga in TUTTO il DB dev; UserPattern 1/43 non-default. Writer solo route orfane (register default, patterns, review legacy, streaks) senza caller UI.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-learning-report.md"
+          },
+          {
+            "id": "N19-notifications-type",
+            "esito": "PASS",
+            "dettaglio": "POST /api/notifications con type='evening_review_prompt' -> 200, riga persistita con quel type: puo sopprimere il dedup del cron.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-api-observability-report.md"
+          },
+          {
+            "id": "N24-strict-status",
+            "esito": "PASS",
+            "dettaglio": "PATCH strict-mode status='banana_invalid_status' -> 200, persistito; GET (filtra active_*/pending_exit) restituisce null -> sessione orfana invisibile.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-api-observability-report.md"
+          },
+          {
+            "id": "N25-streaks-numeric",
+            "esito": "PASS",
+            "dettaglio": "POST /api/streaks tasksCompleted='abc' -> 500 (Prisma Int throw), nessun NaN persistito ma nessuna validazione input (500 anziche 400).",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-n25-streaks.json"
+          },
+          {
+            "id": "N50-captureApiError",
+            "esito": "WARN",
+            "dettaglio": "6/54 route senza captureApiError: forgot-password, reset-password, [...nextauth], calendar/oauth, health, sky. sky e' viva.",
+            "evidenza": "grep src/app/api/**/route.ts"
+          },
+          {
+            "id": "N50b-memory-learning-get",
+            "esito": "PASS",
+            "dettaglio": "GET /api/memory e GET /api/learning-signal senza try/catch: happy path 200 ma un errore DB darebbe 500 fuori telemetria (POST invece coperte).",
+            "evidenza": "src/app/api/memory/route.ts, learning-signal/route.ts"
+          },
+          {
+            "id": "scrubbing-art9",
+            "esito": "PASS",
+            "dettaglio": "sentry-scrub.ts beforeSend rimuove request.data/cookies/query_string/headers, azzera user a solo id, elimina extra; breadcrumb allowlist tiene solo categoria/level. Solido a codice.",
+            "evidenza": "src/lib/beta/sentry-scrub.ts"
+          },
+          {
+            "id": "N12-rolling-summary",
+            "esito": "PASS",
+            "dettaglio": "probe-rolling-summary su apprendista: fold1 (40 msg, haiku, watermark corretto), rehydrate esclude summary, iniezione recupera ALFA-3, fold2 merge preserva ALFA-1..39, idempotenza sotto soglia. Contenuto sensato, non troncato storto. Pista N12 SMENTITA.",
+            "evidenza": "scripts/e2e/probe-rolling-summary.ts run"
+          },
+          {
+            "id": "N33-onboarding-profilo",
+            "esito": "PASS",
+            "dettaglio": "Drift confermato: activationDifficulty route=raw answer (5/2/3) vs engine computa (4.2/2.8/2.1) in tutti e 3 i casi; executiveLoad lineare vs a soglie diverge in 2/3. initializeProfileFromOnboarding e' dead code divergente.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-onboarding-profile-drift.md"
+          },
+          {
+            "id": "input-invalid-500",
+            "esito": "WARN",
+            "dettaglio": "ai-classify (body vuoto) e streaks (non-numerico) -> 500 anziche 4xx: viola contratto §8.1(c) mai 500 su input invalido. Il 500 e' tracciato.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-api-observability-report.md"
+          },
+          {
+            "id": "eisenhower-quadrant-decision-divergono",
+            "esito": "WARN",
+            "dettaglio": "Ai bordi quadrant e decision divergono sullo stesso task: (3,4) quadrant=delegate/decision=postpone; (4,3) quadrant=schedule/decision=do_now. Due etichette diverse -> potenziale confusione UI.",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-eisenhower-grid.txt"
+          }
+        ],
+        "findings": [
+          {
+            "titolo": "N5 — completamento task via chat/triage non emette task_completed: whatDone vuoto e calibrazione cieca per l'utente chat-first",
+            "tipo": "B",
+            "severita": "S2",
+            "file_riga": "src/lib/chat/tools.ts:1352 (executeCompleteTask)",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-n5-chat-complete.json — tools=[get_today_tasks,complete_task], task->completed, task_completed signals before=0 after=0",
+            "repro": "Utente effimero, task 'planned'. POST /api/chat/turn mode general 'ho completato X, segnalo come fatto'. Il task passa a completed ma non nasce alcun LearningSignal task_completed. selectLearningSignalsForDate (learning-signals-today.ts:43) e calibration.ts:137 leggono solo task_completed/task_avoided -> whatDone della review resta vuoto e la calibrazione DailyPlan e' sottostimata. Emesso solo da page.tsx:3044 (completamento UI).",
+            "piste_dossier": [
+              "N5",
+              "D11"
+            ]
+          },
+          {
+            "titolo": "N6 — i LearningSignal server-side restano processed=false per sempre: il profilo adattivo non li incorpora mai",
+            "tipo": "B",
+            "severita": "S2",
+            "file_riga": "src/lib/chat/tools.ts:1178/1202/1222/1915/1944 + confirm-close-review-handler.ts:145 + record-emotional-offload-handler.ts:43",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-learning-report.md — apprendista 14/14 processed=false (energy/mood/time_declared, task_blocked, task_postponed, emotional_offload, task_completed seminati)",
+            "repro": "seed apprendista con 14 segnali misti. Query: db.learningSignal.count(processed=true)=0. Solo POST /api/learning-signal chiama processSignal+set processed=true, ma i flussi server (chat tools, chiusura review) creano i signal via db.learningSignal.create diretto senza processarli. Il profilo non li vede mai.",
+            "piste_dossier": [
+              "N6",
+              "D11"
+            ]
+          },
+          {
+            "titolo": "N7 — il piano engine ignora il profilo appreso: prioritizeTaskAdaptive e' dead code",
+            "tipo": "C",
+            "severita": "S3",
+            "file_riga": "src/app/api/daily-plan/route.ts:91 (usa prioritizeTask); src/lib/engines/priority-engine.ts:380 (prioritizeTaskAdaptive, zero caller)",
+            "evidenza": "Grep prioritizeTaskAdaptive su src/ = solo la definizione",
+            "repro": "grep -rn prioritizeTaskAdaptive src/ mostra solo priority-engine.ts:380. daily-plan/route.ts prioritizza con prioritizeTask (non adaptive). La promessa del tour 'piu' lo usi piu' si adatta' sul piano non e' mantenuta (vive solo in nudge/insight/fill-ratio).",
+            "piste_dossier": [
+              "N7"
+            ]
+          },
+          {
+            "titolo": "N18 — Streak e UserPattern non aggiornati da alcun flusso corrente: contatori/streak stantii",
+            "tipo": "M",
+            "severita": "S3",
+            "file_riga": "scrittori: src/app/api/{streaks,patterns,review,auth/register}/route.ts",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-learning-report.md — Streak=1 riga in tutto il DB dev; UserPattern 1/43 non-default; 0 righe con contatori>0 tranne artefatti probe",
+            "repro": "count Streak globale=1; UserPattern coorte 43 righe, 1 sola con updatedAt!=createdAt (artefatto probe). Gli unici writer sono route orfane senza caller UI (streaks, patterns, review legacy). Le viste che leggono streakDays mostrano lo stato di creazione.",
+            "piste_dossier": [
+              "N18",
+              "N56"
+            ]
+          },
+          {
+            "titolo": "N33 — onboarding→AdaptiveProfile: logica inline della route diverge da initializeProfileFromOnboarding (dead code)",
+            "tipo": "C",
+            "severita": "S3",
+            "file_riga": "src/app/api/onboarding/complete/route.ts:141-184 vs src/lib/engines/learning-engine.ts:620",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-onboarding-profile-drift.md — activationDifficulty route(5/2/3) vs engine(4.2/2.8/2.1) in 3/3 casi; executiveLoad lineare vs a soglie diverge in 2/3",
+            "repro": "3 onboarding con risposte note via POST /api/onboarding/complete; confronto AdaptiveProfile generato vs initializeProfileFromOnboarding. activationDifficulty: route usa la risposta grezza dell'utente, engine la ricalcola. executiveLoad: route 2+n*0.5+figli, engine a soglie (>=5 +2, >=3 +1). Due implementazioni che divergono; l'engine non e' mai chiamato.",
+            "piste_dossier": [
+              "N33"
+            ]
+          },
+          {
+            "titolo": "N24 — PATCH /api/strict-mode accetta status arbitrario -> sessione orfana invisibile alla GET",
+            "tipo": "B",
+            "severita": "S3",
+            "file_riga": "src/app/api/strict-mode/route.ts:155 (if(status)updateData.status=status) vs :14 (GET filtra active_*/pending_exit)",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-api-observability-report.md — PATCH status='banana_invalid_status' -> 200, DB='banana_invalid_status', GET session=null",
+            "repro": "POST /api/strict-mode {mode:strict} -> 201; PATCH {sessionId, status:'banana_invalid_status'} -> 200; GET /api/strict-mode -> {session:null}. La sessione resta viva a DB ma nessuna vista la recupera.",
+            "piste_dossier": [
+              "N24"
+            ]
+          },
+          {
+            "titolo": "N19 — POST /api/notifications accetta type libero: un client puo scrivere evening_review_prompt e sopprimere l'email serale del cron",
+            "tipo": "B",
+            "severita": "S3",
+            "file_riga": "src/app/api/notifications/route.ts:61 (type: type || 'system')",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-api-observability-report.md — POST {type:'evening_review_prompt'} -> 200, riga persistita con quel type",
+            "repro": "POST /api/notifications {type:'evening_review_prompt', title, body} -> 200. Il cron evening-review usa il dedup su Notification per tipo: un client puo pre-scrivere quel tipo e far skippare l'email.",
+            "piste_dossier": [
+              "N19"
+            ]
+          },
+          {
+            "titolo": "N13 — fasce orarie a tre orologi: ai-assistant usa l'ora server (UTC su Vercel), execution-engine usa Rome, client usa il browser",
+            "tipo": "B",
+            "severita": "S3",
+            "file_riga": "src/app/api/ai-assistant/route.ts:98-104 getTimeSlot() (new Date().getHours()) consumato a :182/:212/:265/:437; vs src/lib/engines/execution-engine.ts:17-19 (nowHourInRome)",
+            "evidenza": "Read confronto a codice: getAdaptiveScore + timeSlotPerformance alimentati dallo slot UTC",
+            "repro": "A codice: getTimeSlot() in ai-assistant deriva la fascia da new Date().getHours() (ora locale processo = UTC su Vercel), mentre execution-engine e decompose usano nowHourInRome(). In prod la sera lo slot ai-assistant slitta -> raccomandazioni e telemetria timeSlotPerformance di fascia sbagliata. Mascherato in dev (macchina in fuso Rome).",
+            "piste_dossier": [
+              "N13",
+              "D-tz"
+            ]
+          },
+          {
+            "titolo": "N50b + input-invalid: GET memory/learning-signal senza try/catch (500 non tracciato su errore DB) e ai-classify/streaks tornano 500 su input invalido anziche 4xx",
+            "tipo": "B",
+            "severita": "S3",
+            "file_riga": "src/app/api/memory/route.ts:12-34 (GET no try/catch), learning-signal/route.ts:16-29 (GET no try/catch); ai-classify/route.ts:16 e streaks/route.ts:78 (req.json/Prisma throw dentro try->500)",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-api-observability-report.md; f2-n25-streaks.json (streaks non-numerico -> 500)",
+            "repro": "Le GET di memory e learning-signal non avvolgono findMany in try/catch: un errore DB da' 500 fuori da captureApiError (le POST invece sono coperte). Separatamente, POST ai-classify con body vuoto e POST streaks con tasksCompleted='abc' tornano 500 (violano il contratto 'mai 500 su input invalido' §8.1c); il 500 e' comunque tracciato via captureApiError.",
+            "piste_dossier": [
+              "N50b",
+              "N50",
+              "N25"
+            ]
+          },
+          {
+            "titolo": "Eisenhower: quadrant e decision divergono ai bordi sullo stesso task",
+            "tipo": "C",
+            "severita": "UX",
+            "file_riga": "src/lib/engines/priority-engine.ts (prioritizeTask)",
+            "evidenza": "docs/tasks/68-evidenze/fase2/f2-eisenhower-grid.txt — (3,4) quadrant=delegate/decision=postpone; (4,3) quadrant=schedule/decision=do_now",
+            "repro": "prioritizeTask su (imp,urg) ai bordi: (3,4)->quadrant delegate ma decision postpone; (4,3)->quadrant schedule ma decision do_now; (5,3)->quadrant schedule/decision do_now. Le due etichette dello stesso task possono contraddirsi -> confusione se entrambe mostrate.",
+            "piste_dossier": []
+          }
+        ],
+        "piste_esito": [
+          {
+            "pista": "N5 — completare via chat/triage non emette task_completed",
+            "esito": "CONFERMATA",
+            "nota": "complete_task via chat: task->completed, 0 task_completed signal. Solo page.tsx:3044 lo emette."
+          },
+          {
+            "pista": "N6 — segnali server-side restano processed=false per sempre",
+            "esito": "CONFERMATA",
+            "nota": "apprendista 14/14 processed=false; processSignal chiamato solo da POST /api/learning-signal."
+          },
+          {
+            "pista": "N7 — prioritizeTaskAdaptive dead code, piano ignora il profilo",
+            "esito": "CONFERMATA",
+            "nota": "solo definizione a priority-engine.ts:380; daily-plan usa prioritizeTask."
+          },
+          {
+            "pista": "N8 — nudge accettato -> sempre task_started",
+            "esito": "NON TESTATA",
+            "nota": "a codice page.tsx:1591 (client-side, non esercitato via API in questo blocco); da chiudere in un journey UI. La logica client registra task_started su accept indipendentemente dall'azione reale."
+          },
+          {
+            "pista": "N18 — Streak/UserPattern mai aggiornati nei flussi correnti",
+            "esito": "CONFERMATA",
+            "nota": "Streak=1 in tutto il DB dev; UserPattern tutte ai default tranne artefatti probe; writer solo route orfane."
+          },
+          {
+            "pista": "N13 — fasce orarie a 3 orologi (UTC/Roma/client)",
+            "esito": "CONFERMATA",
+            "nota": "a codice: ai-assistant getTimeSlot() usa ora server UTC vs execution-engine Rome; consumato da getAdaptiveScore+telemetria. Impatto in prod, mascherato in dev."
+          },
+          {
+            "pista": "N19 — POST notifications type libero sopprime dedup cron",
+            "esito": "CONFERMATA",
+            "nota": "type='evening_review_prompt' persistito via API pubblica autenticata."
+          },
+          {
+            "pista": "N24 — PATCH strict-mode status libero -> sessione invisibile",
+            "esito": "CONFERMATA",
+            "nota": "status arbitrario persistito, GET restituisce null."
+          },
+          {
+            "pista": "N25 — POST streaks non-numerici -> NaN",
+            "esito": "CONFERMATA",
+            "nota": "Variante: non produce NaN (Prisma Int throw -> 500), ma nessuna validazione input; 500 anziche 4xx."
+          },
+          {
+            "pista": "N50 — captureApiError copre le route nuove?",
+            "esito": "CONFERMATA",
+            "nota": "6/54 route senza captureApiError (forgot/reset-password, [...nextauth], calendar/oauth, health, sky); sky e' viva."
+          },
+          {
+            "pista": "N50b — GET memory/learning-signal senza try/catch -> 500 non tracciato",
+            "esito": "CONFERMATA",
+            "nota": "nessun try/catch nelle GET; happy path 200 ma errore DB fuori telemetria."
+          },
+          {
+            "pista": "Scrubbing art.9 (sentry beforeSend)",
+            "esito": "CONFERMATA",
+            "nota": "scrub solido: rimuove data/cookies/query/headers, user->solo id, extra; breadcrumb allowlist. Nessun contenuto chat/mood verso Sentry."
+          },
+          {
+            "pista": "N12 — rolling summary mai verificato nel contenuto",
+            "esito": "SMENTITA",
+            "nota": "probe-rolling-summary: fold sensato, watermark corretto/non regressivo, iniezione recupera ALFA-3, merge preserva batch1, idempotenza. Il debugSummaryChars richiede SHADOW_SUMMARY_DEBUG=1 (WARN)."
+          },
+          {
+            "pista": "N33 — onboarding inizializza profilo con logica inline duplicata/divergente",
+            "esito": "CONFERMATA",
+            "nota": "drift misurato su activationDifficulty (3/3 casi) e executiveLoad (2/3). initializeProfileFromOnboarding dead code divergente."
+          },
+          {
+            "pista": "Soglia Eisenhower ≥4",
+            "esito": "CONFERMATA",
+            "nota": "AND regge per do_now; osservazione a margine: quadrant e decision divergono ai bordi."
+          },
+          {
+            "pista": "Decomposizione pattern -> step fotocopia?",
+            "esito": "SMENTITA",
+            "nota": "fallback pattern-aware: concreto->step di dominio, vago->template; non fotocopia identica."
+          }
+        ],
+        "note": "Dev :3000 sano (health 200). Tutti i test su DB dev royal-feather con utenti effimeri collaudo68-f2* (creati e cancellati). apprendista lasciato INTATTO (14 segnali ancora processed=false) per altri agenti. Nessuna finestra serale aperta (non ho usato openEveningWindow). Utenti effimeri f2 rimasti=0 dopo cleanup. Script nuovi: scripts/e2e/collaudo-68/f2-engine.ts, f2-learning.ts, f2-api-observability.ts, f2-onboarding-profile.ts (+ riuso probe-rolling-summary.ts). Evidenze in docs/tasks/68-evidenze/fase2/ (engine-learning-observability.md riepilogo + f2-*.json/.txt/.md). Spesa LLM del blocco stimata pochi centesimi (decompose x2, ai-classify x1, 1 turno chat N5, 4 turni haiku + 2 fold rolling-summary ~$0.0078). N8 resta NON TESTATA (logica client page.tsx:1591, da chiudere in journey UI). Osservazione aggiuntiva non in dossier: quadrant vs decision divergono ai bordi Eisenhower (UX). Contratto §8.1(c) violato da ai-classify+streaks (500 su input invalido) — coperto da captureApiError quindi tracciato, non crash."
+      }
+    },
+    "senzaRisultato": []
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Sweep"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "api-contract-half1",
+      "phaseIndex": 1,
+      "phaseTitle": "Sweep",
+      "agentId": "af58a870cd597b2fa",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1783164355380,
+      "queuedAt": 1783164355312,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Contratto API — METÀ 1 (spec §8.1): 27 route, tutti i metod…",
+      "promptPreview": "Sei un agente esecutore della FASE 2 (sweep funzionale) del COLLAUDO 68 dell'app Shadow, repo C:\\shadow-app.\nLEGGI PRIMA docs/tasks/68-collaudo-finale-pre-rilascio.md §8 e le piste §12 pertinenti al tuo blocco.\n\nREGOLE (identiche alla Fase 1):\n- SOLO report, NESSUN fix al codice dell'app. Script SOLO in scripts/e2e/collaudo-68/ (prefissa i file col tuo blocco, es. f2-api-*.ts), evidenze in docs/ta…",
+      "lastProgressAt": 1783165566372,
+      "tokens": 144797,
+      "toolCalls": 52,
+      "durationMs": 1210992,
+      "resultPreview": "{\"area\":\"Contratto API — METÀ 1 (spec §8.1): 27 route, tutti i metodi esportati (401 senza cookie + happy 2xx + input invalido 4xx/mai-500)\",\"esiti\":[{\"id\":\"contract-27-route-401\",\"esito\":\"PASS\",\"dettaglio\":\"Tutte le 27 route (account, adaptive-profile, ai-assistant, ai-classify, beta/assessment, beta/bug-report, beta/feedback, beta/feedback/status, body-double/chat, body-double/checkin, calendar,…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "api-contract-half2",
+      "phaseIndex": 1,
+      "phaseTitle": "Sweep",
+      "agentId": "a7f7f5d58979bf147",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1783164355386,
+      "queuedAt": 1783164355312,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Contratto API — METÀ 2 (spec §8.1): 27 route (memory, micro…",
+      "promptPreview": "Sei un agente esecutore della FASE 2 (sweep funzionale) del COLLAUDO 68 dell'app Shadow, repo C:\\shadow-app.\nLEGGI PRIMA docs/tasks/68-collaudo-finale-pre-rilascio.md §8 e le piste §12 pertinenti al tuo blocco.\n\nREGOLE (identiche alla Fase 1):\n- SOLO report, NESSUN fix al codice dell'app. Script SOLO in scripts/e2e/collaudo-68/ (prefissa i file col tuo blocco, es. f2-api-*.ts), evidenze in docs/ta…",
+      "lastProgressAt": 1783164998901,
+      "tokens": 157487,
+      "toolCalls": 49,
+      "durationMs": 643515,
+      "resultPreview": "{\"area\":\"Contratto API — METÀ 2 (spec §8.1): 27 route (memory, micro-feedback, notifications, onboarding[+complete/reset], patterns, profile, push-subscription, recurring[+id], review, settings, sky, streaks, strict-mode, tasks[+id], voice/speak, admin/beta/bug-reports, admin/beta/summary, auth/{forgot-password,login,register,reset-password})\",\"esiti\":[{\"id\":\"contratto-401-happy-invalid\",\"esito\":\"…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "cron-middleware-status",
+      "phaseIndex": 1,
+      "phaseTitle": "Sweep",
+      "agentId": "a40db851e82970c6a",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1783164355392,
+      "queuedAt": 1783164355312,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Fase 2 — cron email + middleware + matrice status + doppio-…",
+      "promptPreview": "Sei un agente esecutore della FASE 2 (sweep funzionale) del COLLAUDO 68 dell'app Shadow, repo C:\\shadow-app.\nLEGGI PRIMA docs/tasks/68-collaudo-finale-pre-rilascio.md §8 e le piste §12 pertinenti al tuo blocco.\n\nREGOLE (identiche alla Fase 1):\n- SOLO report, NESSUN fix al codice dell'app. Script SOLO in scripts/e2e/collaudo-68/ (prefissa i file col tuo blocco, es. f2-api-*.ts), evidenze in docs/ta…",
+      "lastProgressAt": 1783164908700,
+      "tokens": 123352,
+      "toolCalls": 27,
+      "durationMs": 553308,
+      "resultPreview": "{\"area\":\"Fase 2 — cron email + middleware + matrice status + doppio-tab (§8.2/§8.3/§8.4/§8.5)\",\"esiti\":[{\"id\":\"§8.2-cron-auth\",\"esito\":\"PASS\",\"dettaglio\":\"GET /api/cron/evening-review: senza Bearer → 404; Bearer sbagliato → 404; Bearer=CRON_SECRET → 200 con shape {candidates,sent,skipped,failed}.\",\"evidenza\":\"docs/tasks/68-evidenze/fase2/cron-middleware-status.md §8.2 (no-Bearer 404, bad-Bearer 40…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "engine-learning-observability",
+      "phaseIndex": 1,
+      "phaseTitle": "Sweep",
+      "agentId": "ac34cf441da1f5b89",
+      "model": "claude-opus-4-8",
+      "state": "done",
+      "startedAt": 1783164355398,
+      "queuedAt": 1783164355312,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Engine deterministici + Loop apprendimento + Observability …",
+      "promptPreview": "Sei un agente esecutore della FASE 2 (sweep funzionale) del COLLAUDO 68 dell'app Shadow, repo C:\\shadow-app.\nLEGGI PRIMA docs/tasks/68-collaudo-finale-pre-rilascio.md §8 e le piste §12 pertinenti al tuo blocco.\n\nREGOLE (identiche alla Fase 1):\n- SOLO report, NESSUN fix al codice dell'app. Script SOLO in scripts/e2e/collaudo-68/ (prefissa i file col tuo blocco, es. f2-api-*.ts), evidenze in docs/ta…",
+      "lastProgressAt": 1783165296779,
+      "tokens": 171708,
+      "toolCalls": 61,
+      "durationMs": 941380,
+      "resultPreview": "{\"area\":\"Engine deterministici + Loop apprendimento + Observability + Rolling summary + Onboarding→profilo (§8.6-8.10)\",\"esiti\":[{\"id\":\"eisenhower-threshold\",\"esito\":\"PASS\",\"dettaglio\":\"Soglia AND imp>=4 && urg>=4 -> do_now regge: (4,4)/(5,5)/(4,5)/(5,4) do_now; (3,3) eliminate; (3,4) delegate; (4,3) schedule.\",\"evidenza\":\"docs/tasks/68-evidenze/fase2/f2-eisenhower-grid.txt\"},{\"id\":\"decompose-patt…"
+    }
+  ],
+  "totalTokens": 597344,
+  "totalToolCalls": 189
+}

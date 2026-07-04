@@ -1,0 +1,16 @@
+{
+  "tipoUserId": "cmr67hj1x0000ibmk8zoqezut",
+  "spendTipo": 1.5608286,
+  "byClass": [
+    {
+      "_sum": {
+        "costUsd": 1.5608286
+      },
+      "_count": 1,
+      "taskClass": "chat"
+    }
+  ],
+  "spendEphN4": 0.004097300000000001,
+  "spendEphN4bis": 0.00531915,
+  "totalUsd": 1.57024505
+}

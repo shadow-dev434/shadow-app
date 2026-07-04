@@ -1,0 +1,24 @@
+{
+  "threads": [
+    {
+      "id": "cmr68kviz010dibe4asbf390w",
+      "mode": "evening_review",
+      "state": "active",
+      "label": "Oggi",
+      "isActive": true,
+      "startedAt": "2026-07-04T10:45:41.147Z",
+      "lastTurnAt": "2026-07-04T10:46:38.665Z",
+      "messageCount": 10
+    },
+    {
+      "id": "cmr68klnh0105ibe4xeeuj370",
+      "mode": "general",
+      "state": "active",
+      "label": "Oggi",
+      "isActive": true,
+      "startedAt": "2026-07-04T10:45:28.350Z",
+      "lastTurnAt": "2026-07-04T10:45:38.556Z",
+      "messageCount": 2
+    }
+  ]
+}

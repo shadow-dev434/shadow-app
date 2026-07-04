@@ -1,0 +1,38 @@
+# J6b N58 — collaudo68-review-b4@probe.local cmr689by30000ib3og2nrv9lu — clientDate=2026-07-04 target=Aggiornare il curriculum
+  candidateTaskIds=["cmr689daj0008ib3otq2za7ha","cmr689dx1000cib3oitp9kf3s"] targetIsCandidate=false
+TURNO 1: "iniziamo" -> 200 state=active tools=[-]
+  assistant: Come stai stasera? 1-5.
+TURNO 2: "non ce la faccio piu', sono distrutto, oggi niente. ah, "Aggiornare il curriculum" l'ho gia' fatto stamattina comunque" -> 200 state=active tools=[record_emotional_offload]
+  assistant: Sento che oggi è stata pesante. Lasciamo perdere la review per stasera.
+
+Per il curriculum — bene, lo segno fatto.
+
+Vuoi che chiudiamo qui, o hai bisogno di parlare un momento?
+TURNO 3: "davvero, sono esausto, chiudiamo qui stasera" -> 200 state=archived tools=[mark_entry_discussed,record_emotional_offload,close_review_burnout]
+  assistant: Ok, chiudiamo. Riposati, a domani.
+
+## Esito
+{
+  "burnoutTurn": 3,
+  "toolsAll": [
+    "record_emotional_offload",
+    "mark_entry_discussed",
+    "record_emotional_offload",
+    "close_review_burnout"
+  ],
+  "after": {
+    "status": "completed",
+    "completedAt": "2026-07-04T10:37:08.627Z"
+  },
+  "planTomorrow": false,
+  "signals": [
+    {
+      "signalType": "emotional_offload"
+    },
+    {
+      "signalType": "emotional_offload"
+    }
+  ],
+  "wallSeconds": 35.7,
+  "spendUsd": 0.09538095
+}

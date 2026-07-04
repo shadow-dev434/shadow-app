@@ -1,0 +1,39 @@
+{
+  "accountability": {
+    "nudge": {
+      "id": "8b9840a0-5bbc-4571-a702-3ae1d5c36855",
+      "strategy": "accountability",
+      "intensity": "firm",
+      "title": "Ti stanno aspettando",
+      "message": "\"Compilare la dichiarazione dei redditi\" è atteso da qualcuno. Inizia ORA, anche solo il primo passo. Non farli aspettare ancora.",
+      "actionLabel": "Fallo ORA",
+      "dismissLabel": "Li deluderò",
+      "contextReason": "evitato 3 volte, alta resistenza, inattivo da molto",
+      "adaptiveReason": "Strategia accountability scelta per motivazione accountability+urgency, evitamento 3.0/5, stile direct",
+      "delaySeconds": 0
+    }
+  },
+  "identity": {
+    "nudge": {
+      "id": "0ea666ed-8de7-4f5c-82f2-7653f00c1d72",
+      "strategy": "identity",
+      "intensity": "firm",
+      "title": "Chi vuoi essere?",
+      "message": "Evitare \"Compilare la dichiarazione dei redditi\" non è chi sei. Affrontalo ora, anche solo il primo micro-step. Dimostra a te stesso chi sei.",
+      "actionLabel": "Dimostralo ORA",
+      "dismissLabel": "Non sono pronto",
+      "contextReason": "evitato 3 volte, alta resistenza, inattivo da molto",
+      "adaptiveReason": "Strategia identity scelta per motivazione identity+accountability, evitamento 3.0/5, stile direct",
+      "delaySeconds": 0
+    }
+  },
+  "cap3": {
+    "nudge": null
+  },
+  "interval": {
+    "nudge": null
+  },
+  "outcome": {
+    "success": true
+  }
+}

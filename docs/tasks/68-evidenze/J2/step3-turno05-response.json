@@ -1,0 +1,16 @@
+{
+  "userMessage": "Questa tienila per domani.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr687s3u00jlibe4xgfte1m8",
+    "mode": "evening_review",
+    "assistantMessage": "Ok. Da dove vuoi partire allora, o preferisci chiudere qui per stasera?",
+    "toolsExecuted": [],
+    "quickReplies": [],
+    "costUsd": 0.0119352,
+    "tokensIn": 15,
+    "tokensOut": 27,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 2545
+  }
+}

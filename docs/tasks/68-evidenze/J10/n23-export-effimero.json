@@ -1,0 +1,55 @@
+{
+  "statusAnon": 401,
+  "statusJson": 200,
+  "chiaviTotali": 204,
+  "chiaviTopLevel": [
+    "exportDate",
+    "exportVersion",
+    "id",
+    "name",
+    "email",
+    "emailVerified",
+    "image",
+    "passwordChangedAt",
+    "createdAt",
+    "updatedAt",
+    "profile",
+    "settings",
+    "tasks",
+    "recurringTasks",
+    "contacts",
+    "streaks",
+    "notifications",
+    "patterns",
+    "adaptiveProfile",
+    "learningSignals",
+    "microFeedbacks",
+    "memories",
+    "strictModeSessions",
+    "chatThreads",
+    "reviews",
+    "dailyPlans",
+    "calendarTokens",
+    "bugReports",
+    "betaFeedbacks",
+    "assessmentResponses",
+    "subscription",
+    "aiUsages",
+    "pushDevices"
+  ],
+  "pushDevices": {
+    "presente": true,
+    "tokenEscluso": true
+  },
+  "calendarTokens": {
+    "presente": true,
+    "segretiEsclusi": true
+  },
+  "passwordAssente": true,
+  "valoriSegretiNelTesto": false,
+  "csv": {
+    "status": 200,
+    "righe": 4,
+    "header": "id,title,description,importance,urgency,resistance,size,category,context,quadrant,decision,status,priorityScore,avoidanceCount,deadline,completedAt,createdAt"
+  }
+}

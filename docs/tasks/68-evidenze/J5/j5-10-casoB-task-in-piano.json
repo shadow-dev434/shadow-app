@@ -1,0 +1,10 @@
+{
+  "status": 200,
+  "recovery": {
+    "cmr67hun8001zibmkr7eul1rm": {
+      "reason": "non so da dove iniziare",
+      "microStep": "Imposta un timer di 2 minuti per \"Compilare la dichiarazione dei redditi\""
+    }
+  },
+  "source": "engine"
+}

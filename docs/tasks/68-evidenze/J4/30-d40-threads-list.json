@@ -1,0 +1,47 @@
+{
+  "status": 200,
+  "body": {
+    "threads": [
+      {
+        "id": "cmr6953u001k8ibe4ihftrfp5",
+        "mode": "general",
+        "state": "active",
+        "label": "Oggi",
+        "isActive": true,
+        "startedAt": "2026-07-04T11:01:25.032Z",
+        "lastTurnAt": "2026-07-04T11:01:31.673Z",
+        "messageCount": 2
+      },
+      {
+        "id": "cmr694jkt01j8ibe42pq8wcxy",
+        "mode": "evening_review",
+        "state": "active",
+        "label": "Oggi",
+        "isActive": true,
+        "startedAt": "2026-07-04T11:00:58.782Z",
+        "lastTurnAt": "2026-07-04T11:01:22.364Z",
+        "messageCount": 6
+      },
+      {
+        "id": "cmr6922rk01azibe4fehlcbnj",
+        "mode": "morning_checkin",
+        "state": "archived",
+        "label": "chat del 04/07/2026",
+        "isActive": false,
+        "startedAt": "2026-07-04T10:59:03.680Z",
+        "lastTurnAt": "2026-06-30T11:00:47.606Z",
+        "messageCount": 6
+      },
+      {
+        "id": "cmr67hpdg0013ibmkw3y1hto5",
+        "mode": "general",
+        "state": "archived",
+        "label": "chat del 30/06/2026",
+        "isActive": false,
+        "startedAt": "2026-06-29T22:00:00.000Z",
+        "lastTurnAt": "2026-06-30T11:00:47.606Z",
+        "messageCount": 2
+      }
+    ]
+  }
+}

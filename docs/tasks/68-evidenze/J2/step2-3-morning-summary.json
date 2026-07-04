@@ -1,0 +1,136 @@
+{
+  "bootstrapTriggered": true,
+  "bootstrapReason": null,
+  "romeHourAtBootstrap": "12:33",
+  "threadId": "cmr683kbj007pibe4ckjdj8xv",
+  "committed": true,
+  "commitTurn": 4,
+  "strictQr": {
+    "label": "Attiva strict",
+    "action": "start_strict",
+    "taskId": "cmr67hle00009ibmk4sishse6",
+    "durationMinutes": 25
+  },
+  "strictQrTurn": 4,
+  "totalTurns": 4,
+  "turniUtentePerCommit": 4,
+  "questionsBeforeCommit": 3,
+  "avgAssistantChars": 181,
+  "totalCostUsd": 0.11795790000000002,
+  "R1_claimSenzaCommit": null,
+  "N32_morningAsksMood": true,
+  "N32_morningAsksEnergy": false,
+  "quickRepliesTotali": 15,
+  "turns": [
+    {
+      "turn": 1,
+      "userMessage": "Buongiorno Shadow! Oggi mi sento bene, umore buono e energia direi 4 su 5.",
+      "status": 200,
+      "assistantChars": 48,
+      "questionMarks": 1,
+      "tools": [
+        "set_user_mood",
+        "set_user_energy"
+      ],
+      "quickReplies": [
+        {
+          "label": "meno di 2h",
+          "value": "meno di 2h"
+        },
+        {
+          "label": "2-4h",
+          "value": "2-4h"
+        },
+        {
+          "label": "4-6h",
+          "value": "4-6h"
+        },
+        {
+          "label": "più di 6h",
+          "value": "più di 6h"
+        }
+      ],
+      "planClaimInText": false,
+      "costUsd": 0.045082500000000005
+    },
+    {
+      "turn": 2,
+      "userMessage": "Ho circa 6 ore disponibili oggi, sono in ufficio fino al pomeriggio.",
+      "status": 200,
+      "assistantChars": 346,
+      "questionMarks": 1,
+      "tools": [
+        "set_user_mood",
+        "set_user_energy",
+        "set_user_time",
+        "get_today_tasks"
+      ],
+      "quickReplies": [
+        {
+          "label": "Bolletta già pagata",
+          "value": "Bolletta già pagata"
+        },
+        {
+          "label": "Mail già fatte",
+          "value": "Mail già fatte"
+        },
+        {
+          "label": "Niente, vai",
+          "value": "Niente, vai"
+        }
+      ],
+      "planClaimInText": false,
+      "costUsd": 0.021550500000000004
+    },
+    {
+      "turn": 3,
+      "userMessage": "Sì, confermo il piano così com'è. Partirei subito con la prima cosa.",
+      "status": 200,
+      "assistantChars": 239,
+      "questionMarks": 1,
+      "tools": [
+        "set_user_mood",
+        "set_user_energy",
+        "set_user_time",
+        "get_today_tasks"
+      ],
+      "quickReplies": [
+        {
+          "label": "sì, partiamo",
+          "value": "sì, partiamo"
+        },
+        {
+          "label": "cambiamo qualcosa",
+          "value": "cambiamo qualcosa"
+        }
+      ],
+      "planClaimInText": false,
+      "costUsd": 0.01764195
+    },
+    {
+      "turn": 4,
+      "userMessage": "Sì, mi aiuterebbe qualcosa per restare concentrato senza distrarmi col telefono.",
+      "status": 200,
+      "assistantChars": 89,
+      "questionMarks": 0,
+      "tools": [
+        "set_user_mood",
+        "set_user_energy",
+        "set_user_time",
+        "get_today_tasks",
+        "commit_today_plan",
+        "offer_strict_mode"
+      ],
+      "quickReplies": [
+        {
+          "label": "Attiva strict",
+          "action": "start_strict",
+          "taskId": "cmr67hle00009ibmk4sishse6",
+          "durationMinutes": 25
+        }
+      ],
+      "planClaimInText": false,
+      "costUsd": 0.03368295
+    }
+  ]
+}

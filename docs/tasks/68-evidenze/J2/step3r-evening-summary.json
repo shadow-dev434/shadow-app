@@ -1,0 +1,369 @@
+{
+  "threadId": "cmr68de8e00scibe4j2nsg7b8",
+  "completed": true,
+  "totalTurns": 17,
+  "updatePreviewSeen": [],
+  "N32_eveningAsksMood": true,
+  "N32_eveningAsksEnergy": true,
+  "totalCostUsd": 1.0737336,
+  "totalQuestionMarks": 11,
+  "quickRepliesTotali": 1,
+  "avgAssistantChars": 75,
+  "turns": [
+    {
+      "turn": 1,
+      "userMessage": "Ciao Shadow, la giornata è finita: facciamo la review?",
+      "status": 200,
+      "assistantChars": 23,
+      "questionMarks": 1,
+      "tools": [],
+      "quickReplies": [],
+      "costUsd": 0.014003100000000001,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 2,
+      "userMessage": "Direi 4: giornata piena ma soddisfacente.",
+      "status": 200,
+      "assistantChars": 18,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "record_mood",
+          "input": {
+            "value": 4
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.15419220000000003,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 3,
+      "userMessage": "Energia 3, un po' stanco ma ok.",
+      "status": 200,
+      "assistantChars": 54,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.0272307,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 4,
+      "userMessage": "Sì, partiamo!",
+      "status": 200,
+      "assistantChars": 87,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        },
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        },
+        {
+          "name": "set_current_entry",
+          "input": {
+            "entryId": "cmr67hm7i000hibmkzx5xxxic"
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.18013725000000003,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 5,
+      "userMessage": "Il regalo per Marta lo prendo nel weekend, tienilo per domani.",
+      "status": 200,
+      "assistantChars": 56,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        },
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        },
+        {
+          "name": "mark_entry_discussed",
+          "input": {
+            "entryId": "cmr67hm7i000hibmkzx5xxxic",
+            "outcome": "postponed"
+          }
+        },
+        {
+          "name": "set_current_entry",
+          "input": {
+            "entryId": "cmr67hm2r000fibmkb5xq89wa"
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.07624710000000001,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 6,
+      "userMessage": "Il regalo per Marta lo prendo nel weekend, tienilo per domani.",
+      "status": 200,
+      "assistantChars": 168,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.028481700000000006,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 7,
+      "userMessage": "Il regalo per Marta lo prendo nel weekend, tienilo per domani.",
+      "status": 200,
+      "assistantChars": 95,
+      "questionMarks": 1,
+      "tools": [],
+      "quickReplies": [],
+      "costUsd": 0.012113850000000002,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 8,
+      "userMessage": "Il regalo per Marta lo prendo nel weekend, tienilo per domani.",
+      "status": 200,
+      "assistantChars": 109,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "set_user_energy",
+          "input": {
+            "level": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.028862250000000006,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 9,
+      "userMessage": "Il regalo per Marta lo prendo nel weekend, tienilo per domani.",
+      "status": 200,
+      "assistantChars": 55,
+      "questionMarks": 1,
+      "tools": [],
+      "quickReplies": [],
+      "costUsd": 0.011882100000000001,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 10,
+      "userMessage": "Le mail non le ho toccate, tienile per domani.",
+      "status": 200,
+      "assistantChars": 48,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "mark_entry_discussed",
+          "input": {
+            "entryId": "cmr67hm2r000fibmkb5xq89wa",
+            "outcome": "postponed"
+          }
+        },
+        {
+          "name": "set_current_entry",
+          "input": {
+            "entryId": "cmr67hly0000dibmk3h3ds0oq"
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.04630005,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 11,
+      "userMessage": "La scrivania può aspettare, tienila per domani se ci sta.",
+      "status": 200,
+      "assistantChars": 67,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "record_energy",
+          "input": {
+            "value": 3
+          }
+        },
+        {
+          "name": "mark_entry_discussed",
+          "input": {
+            "entryId": "cmr67hly0000dibmk3h3ds0oq",
+            "outcome": "postponed"
+          }
+        },
+        {
+          "name": "set_current_entry",
+          "input": {
+            "entryId": "cmr67hlrd000bibmku2vhad1i"
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.0650706,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 12,
+      "userMessage": "No, il dentista non l'ho chiamato: lo studio era già chiuso. Rimandiamolo a domani.",
+      "status": 200,
+      "assistantChars": 63,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "mark_entry_discussed",
+          "input": {
+            "entryId": "cmr67hlrd000bibmku2vhad1i",
+            "outcome": "postponed"
+          }
+        },
+        {
+          "name": "set_current_entry",
+          "input": {
+            "entryId": "cmr67hl1c0007ibmk7m1g83b1"
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.0522615,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 13,
+      "userMessage": "No, il dentista non l'ho chiamato: lo studio era già chiuso. Rimandiamolo a domani.",
+      "status": 200,
+      "assistantChars": 33,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "set_user_energy",
+          "input": {
+            "level": 3
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.02992335,
+      "phaseAfter": "per_entry",
+      "state": "active"
+    },
+    {
+      "turn": 14,
+      "userMessage": "Tienila per domani, va bene.",
+      "status": 200,
+      "assistantChars": 188,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "mark_entry_discussed",
+          "input": {
+            "entryId": "cmr67hl1c0007ibmk7m1g83b1",
+            "outcome": "postponed"
+          }
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.0335241,
+      "phaseAfter": "plan_preview",
+      "state": "active"
+    },
+    {
+      "turn": 15,
+      "userMessage": "Quasi perfetto, ma sposta la chiamata al dentista al pomeriggio: domattina ho una riunione.",
+      "status": 200,
+      "assistantChars": 86,
+      "questionMarks": 1,
+      "tools": [],
+      "quickReplies": [
+        {
+          "label": "✅ Conferma il piano",
+          "value": "Conferma il piano"
+        }
+      ],
+      "costUsd": 0.13992375,
+      "phaseAfter": "plan_preview",
+      "state": "active"
+    },
+    {
+      "turn": 16,
+      "userMessage": "Perfetto, confermo il piano così.",
+      "status": 200,
+      "assistantChars": 103,
+      "questionMarks": 1,
+      "tools": [
+        {
+          "name": "confirm_plan_preview",
+          "input": {}
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.15014085,
+      "phaseAfter": "closing",
+      "state": "active"
+    },
+    {
+      "turn": 17,
+      "userMessage": "Sì, chiudi pure la review. Buonanotte!",
+      "status": 200,
+      "assistantChars": 17,
+      "questionMarks": 0,
+      "tools": [
+        {
+          "name": "confirm_close_review",
+          "input": {}
+        }
+      ],
+      "quickReplies": [],
+      "costUsd": 0.023439150000000002,
+      "phaseAfter": "closing",
+      "state": "completed"
+    }
+  ]
+}

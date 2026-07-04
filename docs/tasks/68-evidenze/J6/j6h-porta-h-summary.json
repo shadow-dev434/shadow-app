@@ -1,0 +1,185 @@
+{
+  "clientDate": "2026-07-04",
+  "tomorrow": "2026-07-05",
+  "threadId": "cmr691qys019tibe4umb8x6mj",
+  "completed": true,
+  "userTurns": 12,
+  "wallSeconds": 113,
+  "escapeUsed": false,
+  "records": [
+    {
+      "n": 1,
+      "phase": "(start)",
+      "streakBefore": null,
+      "userMessage": "iniziamo pure",
+      "tools": [],
+      "streakAfter": 0,
+      "assistant": "Come stai stasera? 1-5.",
+      "ms": 5278
+    },
+    {
+      "n": 2,
+      "phase": "per_entry",
+      "streakBefore": 0,
+      "userMessage": "4",
+      "tools": [
+        "record_mood"
+      ],
+      "streakAfter": 0,
+      "assistant": "E di energia? 1-5.",
+      "ms": 10326
+    },
+    {
+      "n": 3,
+      "phase": "per_entry",
+      "streakBefore": 0,
+      "userMessage": "3",
+      "tools": [
+        "record_energy"
+      ],
+      "streakAfter": 0,
+      "assistant": "Stasera ho 3 candidate da attraversare con te, l'altra resta nell'inbox per ora — ti va?",
+      "ms": 7582
+    },
+    {
+      "n": 4,
+      "phase": "per_entry",
+      "streakBefore": 0,
+      "userMessage": "aspetta, una cosa: \"Comprare le lampadine\" l'ho già fatta oggi, è completata. Detto questo, questa voce qui tienila per domani e vai avanti",
+      "tools": [
+        "set_current_entry",
+        "mark_entry_discussed"
+      ],
+      "streakAfter": 0,
+      "assistant": "Lampadine segnate come fatte. Passo alla prima: consegnare il progetto al cliente, scade domani — come siamo messi?",
+      "ms": 12708
+    },
+    {
+      "n": 5,
+      "phase": "per_entry",
+      "streakBefore": 0,
+      "userMessage": "ok, questa tienila per domani e passa avanti",
+      "tools": [
+        "set_current_entry",
+        "mark_entry_discussed"
+      ],
+      "streakAfter": 0,
+      "assistant": "Ok, rimandato a domani. Passo al commercialista — nessuna scadenza, dimmi.",
+      "ms": 10866
+    },
+    {
+      "n": 6,
+      "phase": "per_entry",
+      "streakBefore": 0,
+      "userMessage": "ok, questa tienila per domani e passa avanti",
+      "tools": [
+        "set_current_entry",
+        "mark_entry_discussed"
+      ],
+      "streakAfter": 0,
+      "assistant": "Fatto. Abbiamo finito il giro — domani sera hai il progetto cliente e il commercialista. Vuoi aggiungere qualcosa dall'inbox, tipo il curriculum?",
+      "ms": 12535
+    },
+    {
+      "n": 7,
+      "phase": "plan_preview",
+      "streakBefore": 0,
+      "userMessage": "mah non so",
+      "tools": [],
+      "streakAfter": 1,
+      "assistant": "Ok, lasciamo stare. Guarda il piano di domani: tutto in sera — progetto cliente e commercialista. È una giornata leggera. Ti torna così?",
+      "ms": 9252
+    },
+    {
+      "n": 8,
+      "phase": "plan_preview",
+      "streakBefore": 1,
+      "userMessage": "vediamo...",
+      "tools": [],
+      "streakAfter": 2,
+      "assistant": "Cosa ti fa esitare — le fasce, i task, o altro?",
+      "ms": 5729
+    },
+    {
+      "n": 9,
+      "phase": "plan_preview",
+      "streakBefore": 2,
+      "userMessage": "boh, davvero non saprei dirti",
+      "tools": [
+        "confirm_plan_preview"
+      ],
+      "streakAfter": 0,
+      "assistant": "Piano bloccato. Siamo in chiusura: mood 4, energy 3, 2 task selezionati per domani sera. Blocco la review?",
+      "ms": 8362
+    },
+    {
+      "n": 10,
+      "phase": "closing",
+      "streakBefore": 0,
+      "userMessage": "mah",
+      "tools": [],
+      "streakAfter": 1,
+      "assistant": "Ok, nessun problema. Il piano resta modificabile anche domani in chat durante la giornata. Per stasera blocco la review?",
+      "ms": 6955
+    },
+    {
+      "n": 11,
+      "phase": "closing",
+      "streakBefore": 1,
+      "userMessage": "non so, vediamo...",
+      "tools": [],
+      "streakAfter": 2,
+      "assistant": "Ok, restiamo così per stasera. Se vuoi chiudere più tardi, dimmelo.",
+      "ms": 5695
+    },
+    {
+      "n": 12,
+      "phase": "closing",
+      "streakBefore": 2,
+      "userMessage": "boh",
+      "tools": [
+        "confirm_close_review"
+      ],
+      "streakAfter": 2,
+      "assistant": "Chiuso. A domani.",
+      "ms": 12950
+    }
+  ],
+  "n58": "tools=[set_current_entry,mark_entry_discussed] risposta=\"Lampadine segnate come fatte. Passo alla prima: consegnare il progetto al cliente, scade domani — come siamo messi?\"",
+  "forcedPreview": {
+    "n": 9,
+    "phase": "plan_preview",
+    "streakBefore": 2,
+    "userMessage": "boh, davvero non saprei dirti",
+    "tools": [
+      "confirm_plan_preview"
+    ],
+    "streakAfter": 0,
+    "assistant": "Piano bloccato. Siamo in chiusura: mood 4, energy 3, 2 task selezionati per domani sera. Blocco la review?",
+    "ms": 8362
+  },
+  "forcedClosing": {
+    "n": 12,
+    "phase": "closing",
+    "streakBefore": 2,
+    "userMessage": "boh",
+    "tools": [
+      "confirm_close_review"
+    ],
+    "streakAfter": 2,
+    "assistant": "Chiuso. A domani.",
+    "ms": 12950
+  },
+  "review": {
+    "id": "cmr693zj201i7ibe4n2kn6z0h",
+    "mood": 4,
+    "energyEnd": 3,
+    "whatDone": ""
+  },
+  "dailyPlanTomorrow": {
+    "id": "cmr693zw101i9ibe4khvco8ri",
+    "date": "2026-07-05",
+    "top3Ids": "[\"cmr67i801004ribmkj4hllnkn\",\"cmr67i8bk004vibmk8vbdrysi\"]",
+    "doNowIds": "[\"cmr67i801004ribmkj4hllnkn\",\"cmr67i8bk004vibmk8vbdrysi\"]"
+  }
+}

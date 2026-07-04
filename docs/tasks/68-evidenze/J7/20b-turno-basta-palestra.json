@@ -1,0 +1,24 @@
+{
+  "status": 200,
+  "json": {
+    "threadId": "cmr69g37901zmibe4femcy0yw",
+    "mode": "general",
+    "assistantMessage": "Ho capito. Quale task della palestra vuoi togliere dalla ricorrenza?",
+    "toolsExecuted": [],
+    "quickReplies": [
+      {
+        "label": "Mostrami la lista",
+        "value": "Mostrami la lista"
+      },
+      {
+        "label": "Dimmi il nome",
+        "value": "Dimmi il nome"
+      }
+    ],
+    "costUsd": 0.001249,
+    "tokensIn": 426,
+    "tokensOut": 42,
+    "modelUsed": "claude-haiku-4-5",
+    "latencyMs": 1554
+  }
+}

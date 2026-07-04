@@ -1,0 +1,49 @@
+# J6e review interrotta — collaudo68-review-e@probe.local cmr67i2x2003qibmkzi7gjlfu — clientDate=2026-07-04
+
+## A0 — thread general di oggi (setup D40)
+general threadId=cmr68klnh0105ibe4xeeuj370 tools=[]
+
+## A — walk review, 3 turni poi PAUSA
+T1: "iniziamo la review" -> 200 (9337ms) phase=per_entry state=active qr=[] tools=[]
+T2: "4" -> 200 (9672ms) phase=per_entry state=active qr=[] tools=[record_mood]
+T3: "3" -> 200 (9149ms) phase=per_entry state=active qr=[] tools=[record_energy]
+intake dopo 3 turni: mood=4 energy=3 phase=per_entry
+
+## B — pausa (lastTurnAt -12min) → GET active-thread → paused
+[N1/D35] GET messages[last] keys=["id","role","content","createdAt"]; extraKeys=[]; msg assistant con payloadJson in DB=2; QR dell'ultimo POST=[]
+[N1 repro2] GET2 keys=["id","role","content","createdAt"]; firstTurnAfterResume=undefined
+
+## C — resume nello stesso thread
+resume: phase=per_entry risposta="Nessun problema. Partiamo dalla prima: consegnare il progetto al cliente, scade domani. La chiudi?"
+[N58] tools=[mark_entry_discussed] statoTask="inbox" risposta="Aspetta, ho chiuso il progetto come "kept" ma non abbiamo ancora parlato di come stai messo con la consegna di domani. Dimmi — è pronto o c'è ancora qualcosa da fare?"
+[N58] nessun complete_task nel toolset ristretto: task resta inbox — come lo comunica il modello e in trascrizione
+
+## D — sidebar threads (D40)
+threads: [
+  {
+    "id": "cmr68kviz010dibe4asbf390w",
+    "mode": "evening_review",
+    "state": "active",
+    "label": "Oggi",
+    "isActive": true,
+    "startedAt": "2026-07-04T10:45:41.147Z",
+    "lastTurnAt": "2026-07-04T10:46:38.665Z",
+    "messageCount": 10
+  },
+  {
+    "id": "cmr68klnh0105ibe4xeeuj370",
+    "mode": "general",
+    "state": "active",
+    "label": "Oggi",
+    "isActive": true,
+    "startedAt": "2026-07-04T10:45:28.350Z",
+    "lastTurnAt": "2026-07-04T10:45:38.556Z",
+    "messageCount": 2
+  }
+]
+[D40] voci con label "Oggi": 2 → [{"mode":"evening_review","state":"active","isActive":true},{"mode":"general","state":"active","isActive":true}]
+
+## E — abbandono: finestra chiusa + lastTurnAt -1 giorno (D45)
+[D45] dopo GET: state=active endedAt=undefined activeThread={"threadId":"cmr68klnh0105ibe4xeeuj370","mode":"general","messages":[{"id":"cmr68kp0n0107ibe4pltqxvhq","role":"user","content":"ciao, giornata piena ma tutto ok","createdAt":"2026-07-04T10:45:32.712Z"},{"id":"cmr68ktsm0109ibe4mx756pr8","role":"assistant","content":"Ciao! Ok, allora partiamo con il check-in del mattino.\n\nCome stai di umore oggi, da 1 a 5?","createdAt":"2026-07-04T10:45:38.558Z"}],"hasMore":false} eveningReview={"shouldStart":false}
+[D45] Review(2026-07-04)=ASSENTE; Review(2026-07-05)=ASSENTE; DailyPlan(2026-07-05)=ASSENTE; intake nel contextJson archiviato={"mood":4,"energyEnd":3}
+[D45 repro2] GET4 activeThread={"threadId":"cmr68klnh0105ibe4xeeuj370","mode":"general","messages":[{"id":"cmr68kp0n0107ibe4pltqxvhq","role":"user","content":"ciao, giornata piena ma tutto ok","createdAt":"2026-07-04T10:45:32.712Z"},{"id":"cmr68ktsm0109ibe4mx756pr8","role":"assistant","content":"Ciao! Ok, allora partiamo con il check-in del mattino.\n\nCome stai di umore oggi, da 1 a 5?","createdAt":"2026-07-04T10:45:38.558Z"}],"hasMore":false} eveningReview={"shouldStart":false} state=active

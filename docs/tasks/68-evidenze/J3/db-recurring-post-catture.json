@@ -1,0 +1,20 @@
+[
+  {
+    "id": "cmr685b6y00cxibe48spre7jp",
+    "userId": "cmr67hn32000mibmk75a8ukhw",
+    "title": "Andare in palestra",
+    "description": "",
+    "category": "health",
+    "urgency": 3,
+    "importance": 3,
+    "size": 3,
+    "frequency": "weekly",
+    "weekdays": "[1]",
+    "monthDay": null,
+    "active": true,
+    "startDate": "2026-07-04",
+    "endDate": null,
+    "createdAt": "2026-07-04T10:33:34.955Z",
+    "updatedAt": "2026-07-04T10:33:34.955Z"
+  }
+]

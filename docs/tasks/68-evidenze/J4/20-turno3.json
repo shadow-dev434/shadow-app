@@ -1,0 +1,87 @@
+{
+  "threadId": "cmr6922rk01azibe4fehlcbnj",
+  "mode": "morning_checkin",
+  "assistantMessage": "Fatto. Dimmi tu come proseguiamo.",
+  "toolsExecuted": [
+    {
+      "name": "set_user_mood",
+      "input": {
+        "level": 3
+      },
+      "result": {
+        "level": 3
+      }
+    },
+    {
+      "name": "get_today_tasks",
+      "input": {},
+      "result": [
+        {
+          "id": "cmr67hp0c000zibmkx1t2sqp9",
+          "title": "Inviare il modulo ISEE",
+          "urgency": 5,
+          "importance": 5,
+          "category": "general",
+          "status": "planned",
+          "deadline": "2026-07-02",
+          "recurring": false,
+          "estimatedMinutes": 25
+        },
+        {
+          "id": "cmr67hp6m0011ibmke42uwer4",
+          "title": "Rinnovare assicurazione auto",
+          "urgency": 4,
+          "importance": 4,
+          "category": "general",
+          "status": "planned",
+          "deadline": "2026-07-03",
+          "recurring": false,
+          "estimatedMinutes": 25
+        }
+      ]
+    },
+    {
+      "name": "commit_today_plan",
+      "input": {
+        "taskIds": [
+          "cmr67hp0c000zibmkx1t2sqp9",
+          "cmr67hp6m0011ibmke42uwer4"
+        ]
+      },
+      "result": {
+        "committed": 2,
+        "top3": [
+          "cmr67hp0c000zibmkx1t2sqp9",
+          "cmr67hp6m0011ibmke42uwer4"
+        ],
+        "invalidIds": [],
+        "note": "Piano di oggi salvato. Conferma all'utente in una frase e, se vuole, invitalo a iniziare dalla prima cosa. Ricordagli UNA VOLTA, con leggerezza, che può aggiustare il piano al volo dalla sezione Today (energia, tempo, contesto) se cambiano le condizioni."
+      }
+    },
+    {
+      "name": "offer_strict_mode",
+      "input": {
+        "taskId": "cmr67hp0c000zibmkx1t2sqp9",
+        "durationMinutes": 25
+      },
+      "result": {
+        "taskId": "cmr67hp0c000zibmkx1t2sqp9",
+        "title": "Inviare il modulo ISEE",
+        "durationMinutes": 25
+      }
+    }
+  ],
+  "quickReplies": [
+    {
+      "label": "Attiva strict",
+      "action": "start_strict",
+      "taskId": "cmr67hp0c000zibmkx1t2sqp9",
+      "durationMinutes": 25
+    }
+  ],
+  "costUsd": 0.022680600000000002,
+  "tokensIn": 1701,
+  "tokensOut": 303,
+  "modelUsed": "claude-sonnet-4-6",
+  "latencyMs": 10075
+}

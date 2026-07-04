@@ -1,0 +1,62 @@
+{
+  "beta": {
+    "status": 200,
+    "claims": {
+      "id": "cmr67iw2n00awibmkdhc6rmo2",
+      "sub": "cmr67iw2n00awibmkdhc6rmo2",
+      "email": "collaudo68-beta@probe.local",
+      "name": "C68 Beta",
+      "tourCompleted": true,
+      "onboardingComplete": true,
+      "consentGiven": true,
+      "isBetaTester": true,
+      "iat": 1783161278,
+      "exp": 1785753278,
+      "jti": "4fe9e64a-af62-4bce-bce6-6a831a2cc039"
+    }
+  },
+  "admin": {
+    "status": 200,
+    "claims": {
+      "id": "cmr67ix8300b2ibmk1ox3nsho",
+      "sub": "cmr67ix8300b2ibmk1ox3nsho",
+      "email": "collaudo68-admin@probe.local",
+      "name": "C68 Admin",
+      "tourCompleted": true,
+      "onboardingComplete": true,
+      "consentGiven": true,
+      "isBetaTester": true,
+      "iat": 1783161281,
+      "exp": 1785753281,
+      "jti": "5414d798-eda8-4e26-9be1-d59efba20984"
+    }
+  },
+  "nonbeta": {
+    "status": 200,
+    "claims": {
+      "id": "cmr67iyb800b8ibmkw4hecymk",
+      "sub": "cmr67iyb800b8ibmkw4hecymk",
+      "email": "collaudo68-nonbeta@probe.local",
+      "name": "C68 Nonbeta",
+      "tourCompleted": true,
+      "onboardingComplete": true,
+      "consentGiven": true,
+      "isBetaTester": false,
+      "iat": 1783161283,
+      "exp": 1785753283,
+      "jti": "2c3feb03-a7ca-408a-82dd-16a9811ca516"
+    }
+  },
+  "sessionBeta": {
+    "status": 200,
+    "user": {
+      "name": "C68 Beta",
+      "email": "collaudo68-beta@probe.local",
+      "id": "cmr67iw2n00awibmkdhc6rmo2",
+      "tourCompleted": true,
+      "onboardingComplete": true,
+      "consentGiven": true,
+      "isBetaTester": true
+    }
+  }
+}

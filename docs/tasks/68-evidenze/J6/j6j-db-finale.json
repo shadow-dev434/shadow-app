@@ -1,0 +1,163 @@
+{
+  "clientDate": "2026-07-04",
+  "tomorrow": "2026-07-05",
+  "dayAfter": "2026-07-06",
+  "threadId": "cmr699hkx01reibe4gjgg4fxg",
+  "completed": true,
+  "non200": 0,
+  "userTurns": 13,
+  "wallSeconds": 152,
+  "candidates": [
+    "Consegnare il progetto al cliente",
+    "Aggiornare il curriculum",
+    "Scrivere al proprietario di casa",
+    "Rinnovare il passaporto",
+    "Chiamare il commercialista"
+  ],
+  "outcomes": {
+    "Consegnare il progetto al cliente": "kept",
+    "Aggiornare il curriculum": "kept",
+    "Scrivere al proprietario di casa": "kept",
+    "Chiamare il commercialista": "kept",
+    "Rinnovare il passaporto": "kept"
+  },
+  "updatePreviewCalls": [
+    {
+      "removes": [
+        {
+          "taskId": "cmr67ibg5005jibmk7z8ypyw8"
+        },
+        {
+          "taskId": "cmr67ibbq005hibmk1aw4o7n5"
+        }
+      ]
+    },
+    {
+      "removes": [
+        {
+          "taskId": "cmr67ibg5005jibmk7z8ypyw8"
+        },
+        {
+          "taskId": "cmr67ibbq005hibmk1aw4o7n5"
+        }
+      ]
+    }
+  ],
+  "probes": {
+    "n58": "tools=[set_current_entry] risposta=\"Ok, le lampadine le segno come fatte — grazie per dirmelo.\n\nPrima entry: Consegnare il progetto al cliente, scade domani. Come siamo messi?\"",
+    "trim": "tools=[update_plan_preview] inputs=[{\"removes\":[{\"taskId\":\"cmr67ibg5005jibmk7z8ypyw8\"},{\"taskId\":\"cmr67ibbq005hibmk1aw4o7n5\"}]}] risposta=\"Commercialista e curriculum via. Domani restano il progetto, il passaporto e il proprietario di casa. Ti torna?\""
+  },
+  "review": {
+    "id": "cmr69cl1r01wwibe4j7340tgu",
+    "mood": 4,
+    "energyEnd": 3,
+    "whatDone": "",
+    "whatBlocked": ""
+  },
+  "dailyPlanTomorrow": {
+    "id": "cmr69clb801wyibe4jyqse5ue",
+    "date": "2026-07-05",
+    "top3Ids": "[\"cmr67ibl7005libmk9kfdsj0d\",\"cmr67ib75005fibmknm80qqnd\",\"cmr67ibqt005nibmkdrq5flgu\"]",
+    "doNowIds": "[\"cmr67ibl7005libmk9kfdsj0d\",\"cmr67ib75005fibmknm80qqnd\",\"cmr67ibqt005nibmkdrq5flgu\"]"
+  },
+  "dailyPlanDayAfter": null,
+  "allPlans": [
+    {
+      "id": "cmr693wk801i3ibe4hegarglw",
+      "date": "2026-07-01",
+      "top3Ids": "[]",
+      "doNowIds": "[]"
+    },
+    {
+      "id": "cmr69clb801wyibe4jyqse5ue",
+      "date": "2026-07-05",
+      "top3Ids": "[\"cmr67ibl7005libmk9kfdsj0d\",\"cmr67ib75005fibmknm80qqnd\",\"cmr67ibqt005nibmkdrq5flgu\"]",
+      "doNowIds": "[\"cmr67ibl7005libmk9kfdsj0d\",\"cmr67ib75005fibmknm80qqnd\",\"cmr67ibqt005nibmkdrq5flgu\"]"
+    },
+    {
+      "id": "cmr696a5h01mwibe43ftztkmi",
+      "date": "2026-07-02",
+      "top3Ids": "[\"cmr67ibqt005nibmkdrq5flgu\",\"cmr67ibl7005libmk9kfdsj0d\",\"cmr67ib75005fibmknm80qqnd\"]",
+      "doNowIds": "[\"cmr67ibqt005nibmkdrq5flgu\",\"cmr67ibl7005libmk9kfdsj0d\",\"cmr67ib75005fibmknm80qqnd\",\"cmr67ibbq005hibmk1aw4o7n5\",\"cmr67ibg5005jibmk7z8ypyw8\"]"
+    }
+  ],
+  "d46": {
+    "trimmedIds": [
+      "cmr67ibbq005hibmk1aw4o7n5",
+      "cmr67ibg5005jibmk7z8ypyw8"
+    ],
+    "trimmedDetail": [
+      {
+        "id": "cmr67ibbq005hibmk1aw4o7n5",
+        "title": "Aggiornare il curriculum",
+        "status": "planned",
+        "deadline": null,
+        "postponedCount": 1,
+        "avoidanceCount": 1,
+        "inPlanDomani": false,
+        "inPlanDopodomani": false
+      },
+      {
+        "id": "cmr67ibg5005jibmk7z8ypyw8",
+        "title": "Chiamare il commercialista",
+        "status": "planned",
+        "deadline": null,
+        "postponedCount": 0,
+        "avoidanceCount": 0,
+        "inPlanDomani": false,
+        "inPlanDopodomani": false
+      }
+    ],
+    "verdictHint": "NESSUNA traccia meccanica del \"dopodomani\": no DailyPlan futuro, no deadline"
+  },
+  "taskStates": [
+    {
+      "id": "cmr67ib75005fibmknm80qqnd",
+      "title": "Consegnare il progetto al cliente",
+      "status": "planned",
+      "deadline": "2026-07-04T22:00:00.000Z",
+      "postponedCount": 0,
+      "avoidanceCount": 0
+    },
+    {
+      "id": "cmr67ibg5005jibmk7z8ypyw8",
+      "title": "Chiamare il commercialista",
+      "status": "planned",
+      "deadline": null,
+      "postponedCount": 0,
+      "avoidanceCount": 0
+    },
+    {
+      "id": "cmr67ibl7005libmk9kfdsj0d",
+      "title": "Rinnovare il passaporto",
+      "status": "planned",
+      "deadline": null,
+      "postponedCount": 0,
+      "avoidanceCount": 0
+    },
+    {
+      "id": "cmr67ibqt005nibmkdrq5flgu",
+      "title": "Scrivere al proprietario di casa",
+      "status": "planned",
+      "deadline": null,
+      "postponedCount": 0,
+      "avoidanceCount": 0
+    },
+    {
+      "id": "cmr67ibbq005hibmk1aw4o7n5",
+      "title": "Aggiornare il curriculum",
+      "status": "planned",
+      "deadline": null,
+      "postponedCount": 1,
+      "avoidanceCount": 1
+    },
+    {
+      "id": "cmr699emb0001ibuc51u01j5y",
+      "title": "Comprare le lampadine",
+      "status": "inbox",
+      "deadline": null,
+      "postponedCount": 0,
+      "avoidanceCount": 0
+    }
+  ]
+}

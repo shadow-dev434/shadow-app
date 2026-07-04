@@ -1,0 +1,86 @@
+{
+  "clientDate": "2026-07-04",
+  "run1": {
+    "label": "run1-review-b",
+    "userId": "cmr67hy0x002qibmkwusmu9k4",
+    "threadId": "cmr683v39007xibe4kvubphny",
+    "userTurns": 2,
+    "wallSeconds": 20.4,
+    "burnoutToolTurn": 2,
+    "toolsPerTurn": [
+      [],
+      [
+        "close_review_burnout"
+      ]
+    ],
+    "threadState": "archived",
+    "reviewRow": {
+      "id": "cmr6846ox008xibe4zrxz1nsw",
+      "mood": 3,
+      "energyEnd": 3,
+      "whatDone": "",
+      "whatBlocked": "",
+      "threadId": "cmr683v39007xibe4kvubphny"
+    },
+    "planTomorrow": false,
+    "signals": [],
+    "paccoStatusAfter": "inbox",
+    "paccoWasCandidate": true,
+    "assistantMessages": [
+      "Come stai stasera? 1-5.",
+      "Ok, niente review stasera. Il pacco alle poste lo segno fatto. A domani."
+    ],
+    "non200": 0
+  },
+  "run2": {
+    "label": "run2-review-b2",
+    "userId": "cmr684d8x0002ibz4jbr7vgxp",
+    "threadId": "cmr684gbf009ribe4cqr4euwy",
+    "userTurns": 3,
+    "wallSeconds": 29,
+    "burnoutToolTurn": 3,
+    "toolsPerTurn": [
+      [],
+      [
+        "record_emotional_offload"
+      ],
+      [
+        "record_emotional_offload",
+        "close_review_burnout"
+      ]
+    ],
+    "threadState": "archived",
+    "reviewRow": {
+      "id": "cmr684zbt00byibe4g1716k6k",
+      "mood": 3,
+      "energyEnd": 3,
+      "whatDone": "",
+      "whatBlocked": "",
+      "threadId": "cmr684gbf009ribe4cqr4euwy"
+    },
+    "planTomorrow": false,
+    "signals": [
+      {
+        "signalType": "emotional_offload",
+        "taskId": null,
+        "metadata": "{}"
+      },
+      {
+        "signalType": "emotional_offload",
+        "taskId": null,
+        "metadata": "{}"
+      }
+    ],
+    "assistantMessages": [
+      "Come stai stasera? 1-5.",
+      "Sento che oggi è stata pesante. Lasciamo perdere la review per stasera. Vuoi parlarne un attimo o preferisci chiudere?",
+      "Ok, chiudiamo qui. Riposati, ci risentiamo domani."
+    ],
+    "non200": 0
+  },
+  "spendUsd": {
+    "reviewB": 0.3011268,
+    "reviewB2": 0.0793953,
+    "totale": 0.3805221
+  }
+}

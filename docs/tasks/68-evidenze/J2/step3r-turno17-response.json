@@ -1,0 +1,25 @@
+{
+  "userMessage": "Sì, chiudi pure la review. Buonanotte!",
+  "status": 200,
+  "json": {
+    "threadId": "cmr68de8e00scibe4j2nsg7b8",
+    "mode": "general",
+    "assistantMessage": "Chiuso. A domani.",
+    "toolsExecuted": [
+      {
+        "name": "confirm_close_review",
+        "input": {},
+        "result": {
+          "ok": true,
+          "alreadyClosed": false
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.023439150000000002,
+    "tokensIn": 171,
+    "tokensOut": 50,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 3490
+  }
+}

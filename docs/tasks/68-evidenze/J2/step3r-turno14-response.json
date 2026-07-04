@@ -1,0 +1,30 @@
+{
+  "userMessage": "Tienila per domani, va bene.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr68de8e00scibe4j2nsg7b8",
+    "mode": "evening_review",
+    "assistantMessage": "Tutte e 5 rimandate a domani. Ecco il piano: mattina la scrivania, pomeriggio il dentista, sera regalo Marta, mail e relazione trimestrale. È una giornata leggera — ci sta tutto. Ti torna?",
+    "toolsExecuted": [
+      {
+        "name": "mark_entry_discussed",
+        "input": {
+          "entryId": "cmr67hl1c0007ibmk7m1g83b1",
+          "outcome": "postponed"
+        },
+        "result": {
+          "entryId": "cmr67hl1c0007ibmk7m1g83b1",
+          "taskTitle": "Preparare la relazione trimestrale",
+          "outcome": "postponed",
+          "action": "marked_discussed"
+        }
+      }
+    ],
+    "quickReplies": [],
+    "costUsd": 0.0335241,
+    "tokensIn": 601,
+    "tokensOut": 161,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 6246
+  }
+}

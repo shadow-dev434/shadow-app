@@ -1,0 +1,33 @@
+# J6h caso avverso N2 — collaudo68-j6h-avverso2@probe.local cmr69advq0000ibjw11gqsope — clientDate=2026-07-04
+TURNO 1: [(start) streakPre=0] "iniziamo pure" -> 200 (5568ms) phase=per_entry state=active streakPost=0 tools=[] cost=$0.0136
+  assistant: "Come stai stasera? 1-5."
+TURNO 2: [per_entry streakPre=0] "4" -> 200 (7799ms) phase=per_entry state=active streakPost=0 tools=[record_mood] cost=$0.0293
+  assistant: "E di energia? 1-5."
+TURNO 3: [per_entry streakPre=0] "3" -> 200 (11434ms) phase=per_entry state=active streakPost=0 tools=[record_energy] cost=$0.0296
+  assistant: "Stasera ho 3 candidate da attraversare con te, le altre 0 restano nell'inbox per ora — ti va?"
+TURNO 4: [per_entry streakPre=0] "ok, questa tienila per domani e passa avanti" -> 200 (8744ms) phase=per_entry state=active streakPost=0 tools=[] cost=$0.0143
+  assistant: "Su quale task ti riferisci? La prima è "Finire il progetto per il cliente" — vuoi rimandare quella?"
+TURNO 5: [per_entry streakPre=0] "ok, questa tienila per domani e passa avanti" -> 200 (17858ms) phase=per_entry state=active streakPost=0 tools=[set_current_entry,mark_entry_discussed] cost=$0.0458
+  assistant: "Ok, rimandata a domani. Nota che scade domani — tienila d'occhio.
+
+Prossima: "Fare la spesa settimanale" — dimmi."
+TURNO 6: [per_entry streakPre=0] "ok, questa tienila per domani e passa avanti" -> 200 (11244ms) phase=per_entry state=active streakPost=0 tools=[set_current_entry,mark_entry_discussed] cost=$0.0461
+  assistant: "Rimandato. Ultima: "Aggiornare il curriculum" — dimmi."
+TURNO 7: [per_entry streakPre=0] "ok, questa tienila per domani e passa avanti" -> 200 (16542ms) phase=plan_preview state=active streakPost=0 tools=[set_current_entry,mark_entry_discussed] cost=$0.0514
+  assistant: "Tutte e tre rimandate. Il piano per domani è leggero: curriculum di mattina, progetto e spesa di sera. Ti torna come piano?"
+TURNO 8: [plan_preview streakPre=0] "mah non so" -> 200 (6347ms) phase=plan_preview state=active streakPost=1 tools=[] cost=$0.0155
+  assistant: "Cosa ti fa dubitare? La densità, le fasce, qualche task?"
+TURNO 9: [plan_preview streakPre=1] "vediamo..." -> 200 (6622ms) phase=plan_preview state=active streakPost=2 tools=[] cost=$0.0115
+  assistant: "Prenditi pure il tempo. Vuoi spostare qualcosa o va bene così?"
+  [N2 TURNO AVVERSO] streakPre=2 tools=[{"name":"update_plan_preview","input":{"moves":[{"taskId":"cmr69afb20008ibjwtb8xyx89","to":"morning"}],"removes":[{"taskId":"cmr69afls000aibjwed4669g8"}]}}]
+TURNO 10: [plan_preview streakPre=2] "ok... anzi no, sposta il progetto a domani e togli il curriculum" -> 200 (11258ms) phase=plan_preview state=active streakPost=0 tools=[update_plan_preview] cost=$0.0291
+  assistant: "Progetto di mattina, curriculum via. Ti torna?"
+TURNO 11: [plan_preview streakPre=0] "va bene così, confermo il piano" -> 200 (8682ms) phase=closing state=active streakPost=0 tools=[confirm_plan_preview] cost=$0.0323
+  assistant: "Piano bloccato. Ora siamo in fase closing — siamo già lì.
+
+Piano per domani: 3 task selezionati, mood 4, energy 3. Blocco la review e chiudo?"
+TURNO 12: [closing streakPre=0] "sì, chiudi pure la review" -> 200 (13667ms) phase=closing state=completed streakPost=0 tools=[confirm_close_review] cost=$0.0230
+  assistant: "Chiuso. A domani."
+
+[N2 VERDETTO] ONORATA: update_plan_preview eseguito, curriculum FUORI dal piano finale
+(escape post-avverso usato: il modello NON ha chiuso sul turno avverso)

@@ -1,0 +1,9 @@
+{
+  "userTurns": 9,
+  "triageTurns": 2,
+  "wallSeconds": 93,
+  "assistantMsgs": 9,
+  "assistantTurnsConDomanda": 7,
+  "totalAssistantLatencyMs": 41086,
+  "assistantChars": 740
+}

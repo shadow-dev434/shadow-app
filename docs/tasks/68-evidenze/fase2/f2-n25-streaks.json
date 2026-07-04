@@ -1,0 +1,7 @@
+{
+  "status": 500,
+  "body": {
+    "error": "Errore nel salvataggio streak"
+  },
+  "row": null
+}

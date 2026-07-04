@@ -1,0 +1,21 @@
+{
+  "userMessage": "Quasi perfetto, ma sposta la chiamata al dentista al pomeriggio: domattina ho una riunione.",
+  "status": 200,
+  "json": {
+    "threadId": "cmr68de8e00scibe4j2nsg7b8",
+    "mode": "evening_review",
+    "assistantMessage": "Il dentista è già di pomeriggio nel piano. Vuoi spostare qualcos'altro o va bene così?",
+    "toolsExecuted": [],
+    "quickReplies": [
+      {
+        "label": "✅ Conferma il piano",
+        "value": "Conferma il piano"
+      }
+    ],
+    "costUsd": 0.13992375,
+    "tokensIn": 35,
+    "tokensOut": 32,
+    "modelUsed": "claude-sonnet-4-6",
+    "latencyMs": 2743
+  }
+}

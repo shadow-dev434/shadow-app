@@ -1,0 +1,8 @@
+{
+  "userTurnsDb": 13,
+  "userTurnsHttp": 13,
+  "wallSeconds": 137,
+  "totalAssistantLatencyMs": 81912,
+  "assistantChars": 847,
+  "avgAssistantMsgChars": 65
+}

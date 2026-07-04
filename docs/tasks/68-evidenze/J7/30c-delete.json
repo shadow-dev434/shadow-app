@@ -1,0 +1,11 @@
+{
+  "delStatus": 200,
+  "instBefore": 1,
+  "orphanAfter": [
+    {
+      "id": "cmr69fwbl01zaibe48j3i9lx4",
+      "recurringTemplateId": null,
+      "status": "inbox"
+    }
+  ]
+}

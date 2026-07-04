@@ -1,0 +1,24 @@
+{
+  "threadId": "cmr68kviz010dibe4asbf390w",
+  "keysUnion": [
+    "content",
+    "createdAt",
+    "id",
+    "role"
+  ],
+  "dbPayloadCount": 4,
+  "sample": [
+    {
+      "id": "cmr68lxg0011pibe4d57j0dvn",
+      "role": "user",
+      "content": "aspetta, una cosa fuori lista: \"Comprare le pile per il telecomando\" l'ho gia fatta oggi, segnala come completata. Poi continuiamo pure",
+      "createdAt": "2026-07-04T10:46:30.289Z"
+    },
+    {
+      "id": "cmr68m43a011ribe46fo0to9k",
+      "role": "assistant",
+      "content": "Aspetta, ho chiuso il progetto come \"kept\" ma non abbiamo ancora parlato di come stai messo con la consegna di domani. Dimmi — è pronto o c'è ancora qualcosa da fare?",
+      "createdAt": "2026-07-04T10:46:38.667Z"
+    }
+  ]
+}

@@ -1,0 +1,314 @@
+{
+  "sky": {
+    "status": 200,
+    "body": {
+      "state": {
+        "rawLitStars": 0,
+        "litStars": 0,
+        "totalStars": 96,
+        "skyFull": false,
+        "completedCount": 0,
+        "currentIndex": 0,
+        "freshStarGlobalIndex": null,
+        "freshStarLocalIndex": null,
+        "constellations": [
+          {
+            "id": "lucciola",
+            "name": "La Lucciola",
+            "index": 0,
+            "totalStars": 4,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "glow"
+          },
+          {
+            "id": "ponte",
+            "name": "Il Ponte",
+            "index": 1,
+            "totalStars": 5,
+            "litStars": 0,
+            "complete": false
+          },
+          {
+            "id": "barca",
+            "name": "La Barca",
+            "index": 2,
+            "totalStars": 6,
+            "litStars": 0,
+            "complete": false
+          },
+          {
+            "id": "albero",
+            "name": "L'Albero",
+            "index": 3,
+            "totalStars": 7,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "foliage"
+          },
+          {
+            "id": "gufo",
+            "name": "Il Gufo",
+            "index": 4,
+            "totalStars": 7,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "eyes"
+          },
+          {
+            "id": "chiave",
+            "name": "La Chiave",
+            "index": 5,
+            "totalStars": 8,
+            "litStars": 0,
+            "complete": false
+          },
+          {
+            "id": "casa",
+            "name": "La Casa",
+            "index": 6,
+            "totalStars": 8,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "window"
+          },
+          {
+            "id": "fiume",
+            "name": "Il Fiume",
+            "index": 7,
+            "totalStars": 9,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "flow"
+          },
+          {
+            "id": "vela",
+            "name": "La Vela",
+            "index": 8,
+            "totalStars": 9,
+            "litStars": 0,
+            "complete": false
+          },
+          {
+            "id": "montagna",
+            "name": "La Montagna",
+            "index": 9,
+            "totalStars": 10,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "snow"
+          },
+          {
+            "id": "fenice",
+            "name": "La Fenice",
+            "index": 10,
+            "totalStars": 11,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "fire"
+          },
+          {
+            "id": "corona",
+            "name": "La Corona",
+            "index": 11,
+            "totalStars": 12,
+            "litStars": 0,
+            "complete": false,
+            "reveal": "aurora"
+          }
+        ]
+      }
+    }
+  },
+  "streaks": {
+    "status": 200,
+    "body": {
+      "currentStreak": 0,
+      "bestStreak": 0,
+      "streakData": [
+        {
+          "date": "2026-06-05",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-06",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-07",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-08",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-09",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-10",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-11",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-12",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-13",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-14",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-15",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-16",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-17",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-18",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-19",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-20",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-21",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-22",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-23",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-24",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-25",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-26",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-27",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-28",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-29",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-06-30",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-07-01",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-07-02",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-07-03",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        },
+        {
+          "date": "2026-07-04",
+          "completed": 0,
+          "planned": 0,
+          "rate": 0
+        }
+      ],
+      "totalCompleted": 0,
+      "totalAvoided": 0
+    }
+  }
+}

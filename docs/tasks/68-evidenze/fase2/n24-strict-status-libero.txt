@@ -1,0 +1,4 @@
+N24 repro
+PATCH status='pippo'
+DB status persistito: pippo
+GET dopo: SI (session=null)

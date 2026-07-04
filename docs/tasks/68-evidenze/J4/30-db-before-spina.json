@@ -1,0 +1,14 @@
+[
+  {
+    "id": "cmr6922rk01azibe4fehlcbnj",
+    "mode": "morning_checkin",
+    "state": "active",
+    "lastTurnAt": "2026-06-30T11:00:47.606Z"
+  },
+  {
+    "id": "cmr67hpdg0013ibmkw3y1hto5",
+    "mode": "general",
+    "state": "archived",
+    "lastTurnAt": "2026-06-30T11:00:47.606Z"
+  }
+]

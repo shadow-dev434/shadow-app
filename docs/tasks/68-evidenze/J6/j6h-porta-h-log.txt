@@ -1,0 +1,30 @@
+# J6h porta (h) chiusura d'ufficio 67B — collaudo68-review-h@probe.local cmr67i72s004kibmktv4af82x — clientDate=2026-07-04
+TURNO 1: [(start) streakPre=-] "iniziamo pure" -> 200 (5278ms) phase=per_entry state=active streakPost=0 tools=[] qr=[] cost=$0.0137
+  assistant: "Come stai stasera? 1-5."
+TURNO 2: [per_entry streakPre=0] "4" -> 200 (10326ms) phase=per_entry state=active streakPost=0 tools=[record_mood] qr=[] cost=$0.0295
+  assistant: "E di energia? 1-5."
+TURNO 3: [per_entry streakPre=0] "3" -> 200 (7582ms) phase=per_entry state=active streakPost=0 tools=[record_energy] qr=[] cost=$0.0297
+  assistant: "Stasera ho 3 candidate da attraversare con te, l'altra resta nell'inbox per ora — ti va?"
+  [N58] tools=[set_current_entry,mark_entry_discussed] risposta="Lampadine segnate come fatte. Passo alla prima: consegnare il progetto al cliente, scade domani — come siamo messi?"
+TURNO 4: [per_entry streakPre=0] "aspetta, una cosa: "Comprare le lampadine" l'ho già fatta oggi, è completata. Detto questo, questa voce qui tienila per domani e vai avanti" -> 200 (12708ms) phase=per_entry state=active streakPost=0 tools=[set_current_entry,mark_entry_discussed] qr=[] cost=$0.0456
+  assistant: "Lampadine segnate come fatte. Passo alla prima: consegnare il progetto al cliente, scade domani — come siamo messi?"
+TURNO 5: [per_entry streakPre=0] "ok, questa tienila per domani e passa avanti" -> 200 (10866ms) phase=per_entry state=active streakPost=0 tools=[set_current_entry,mark_entry_discussed] qr=[] cost=$0.0459
+  assistant: "Ok, rimandato a domani. Passo al commercialista — nessuna scadenza, dimmi."
+TURNO 6: [per_entry streakPre=0] "ok, questa tienila per domani e passa avanti" -> 200 (12535ms) phase=plan_preview state=active streakPost=0 tools=[set_current_entry,mark_entry_discussed] qr=[] cost=$0.0508
+  assistant: "Fatto. Abbiamo finito il giro — domani sera hai il progetto cliente e il commercialista. Vuoi aggiungere qualcosa dall'inbox, tipo il curriculum?"
+TURNO 7: [plan_preview streakPre=0] "mah non so" -> 200 (9252ms) phase=plan_preview state=active streakPost=1 tools=[] qr=[✅ Conferma il piano] cost=$0.0156
+  assistant: "Ok, lasciamo stare. Guarda il piano di domani: tutto in sera — progetto cliente e commercialista. È una giornata leggera. Ti torna così?"
+TURNO 8: [plan_preview streakPre=1] "vediamo..." -> 200 (5729ms) phase=plan_preview state=active streakPost=2 tools=[] qr=[] cost=$0.0115
+  assistant: "Cosa ti fa esitare — le fasce, i task, o altro?"
+TURNO 9: [plan_preview streakPre=2] "boh, davvero non saprei dirti" -> 200 (8362ms) phase=closing state=active streakPost=0 tools=[confirm_plan_preview] qr=[] cost=$0.0315
+  assistant: "Piano bloccato. Siamo in chiusura: mood 4, energy 3, 2 task selezionati per domani sera. Blocco la review?"
+TURNO 10: [closing streakPre=0] "mah" -> 200 (6955ms) phase=closing state=active streakPost=1 tools=[] qr=[] cost=$0.0115
+  assistant: "Ok, nessun problema. Il piano resta modificabile anche domani in chat durante la giornata. Per stasera blocco la review?"
+TURNO 11: [closing streakPre=1] "non so, vediamo..." -> 200 (5695ms) phase=closing state=active streakPost=2 tools=[] qr=[] cost=$0.0114
+  assistant: "Ok, restiamo così per stasera. Se vuoi chiudere più tardi, dimmelo."
+TURNO 12: [closing streakPre=2] "boh" -> 200 (12950ms) phase=closing state=completed streakPost=2 tools=[confirm_close_review] qr=[] cost=$0.1429
+  assistant: "Chiuso. A domani."
+
+completed=true non200=0 turniUtente=12 wallClock=113s escapeUsed=false
+[67B preview] turno forzato n=9 tools=[confirm_plan_preview] msg="Piano bloccato. Siamo in chiusura: mood 4, energy 3, 2 task selezionati per domani sera. Blocco la review?"
+[67B closing] turno forzato n=12 tools=[confirm_close_review] msg="Chiuso. A domani."

@@ -1,0 +1,70 @@
+{
+  "clientDate": "2026-07-04",
+  "tomorrow": "2026-07-05",
+  "threadId": "cmr691s0b019zibe4ydsa3a1p",
+  "completed": true,
+  "non200": 0,
+  "userTurns": 11,
+  "wallSeconds": 117,
+  "pregenerated": {
+    "Sistemare il giardino": [
+      "Apri/prepara quello che serve per \"Sistemare il giardino\"",
+      "Fai la prima cosa più ovvia e semplice",
+      "Fai un secondo piccolo passo"
+    ],
+    "Organizzare la festa di compleanno di Luca": [
+      "Apri/prepara quello che serve per \"Organizzare la festa di compleanno di Luca\"",
+      "Fai la prima cosa più ovvia e semplice",
+      "Fai un secondo piccolo passo"
+    ],
+    "Preparare il trasloco della cantina": [
+      "Apri/prepara quello che serve per \"Preparare il trasloco della cantina\"",
+      "Fai la prima cosa più ovvia e semplice",
+      "Fai un secondo piccolo passo"
+    ]
+  },
+  "firstBareId": "cmr67i6pl004hibmk6ssfyiz0",
+  "secondBareId": "cmr67i6lc004fibmk0ud03rgk",
+  "approveCount": 0,
+  "approvedTaskIds": [],
+  "probes": {
+    "qrOneTapSeen": false,
+    "stepsPresentedInMessage": false,
+    "regeneratedDifferent": null,
+    "n58": "NON INVIATA",
+    "nonCandStatusAfter": "inbox"
+  },
+  "tasksAfter": [
+    {
+      "title": "Preparare il trasloco della cantina",
+      "status": "planned",
+      "microSteps": []
+    },
+    {
+      "title": "Organizzare la festa di compleanno di Luca",
+      "status": "planned",
+      "microSteps": [
+        "Apri/prepara quello che serve per \"Organizzare la festa di compleanno di Luca\"",
+        "Fai la prima cosa più ovvia e semplice",
+        "Fai un secondo piccolo passo"
+      ]
+    },
+    {
+      "title": "Sistemare il giardino",
+      "status": "planned",
+      "microSteps": [
+        "Tagliare l'erba",
+        "Potare la siepe"
+      ]
+    }
+  ],
+  "review": {
+    "id": "cmr6945h101ilibe4su86pc4u",
+    "mood": 4,
+    "energyEnd": 3
+  },
+  "planTomorrow": {
+    "id": "cmr6945ue01ipibe42218cm3b",
+    "top3Ids": "[\"cmr67i6lc004fibmk0ud03rgk\",\"cmr67i6u5004jibmk6pulk5c7\",\"cmr67i6pl004hibmk6ssfyiz0\"]"
+  }
+}

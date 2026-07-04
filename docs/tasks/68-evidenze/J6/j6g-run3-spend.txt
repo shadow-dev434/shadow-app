@@ -1,0 +1,1 @@
+llmSpend cumulato = 1.29915165

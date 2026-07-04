@@ -1,0 +1,60 @@
+{
+  "userId": "cmr67hr4n001aibmkxwssloew",
+  "spendUsd": 0.17489565,
+  "settings": {
+    "eveningWindowStart": "20:00",
+    "eveningWindowEnd": "23:00"
+  },
+  "threads": [
+    {
+      "id": "cmr67hsgj001libmkb0o2ybye",
+      "mode": "general",
+      "state": "archived",
+      "startedAt": "2026-06-18T22:00:00.000Z",
+      "lastTurnAt": "2026-06-19T11:11:55.683Z",
+      "endedAt": "2026-07-04T11:08:25.094Z",
+      "_count": {
+        "messages": 2
+      }
+    },
+    {
+      "id": "cmr69fzip01zeibe44p5vmt2r",
+      "mode": "morning_checkin",
+      "state": "archived",
+      "startedAt": "2026-07-04T11:09:52.657Z",
+      "lastTurnAt": "2026-06-19T11:11:55.683Z",
+      "endedAt": "2026-07-04T11:12:00.870Z",
+      "_count": {
+        "messages": 10
+      }
+    },
+    {
+      "id": "cmr69iusc023tibe4vkw3bos8",
+      "mode": "evening_review",
+      "state": "active",
+      "startedAt": "2026-07-04T11:12:06.492Z",
+      "lastTurnAt": "2026-07-04T11:12:32.452Z",
+      "endedAt": null,
+      "_count": {
+        "messages": 6
+      }
+    }
+  ],
+  "plans": [
+    {
+      "date": "2026-06-19",
+      "top3Ids": "[\"cmr67hs6t001hibmkbbwajw5u\",\"cmr67hsb0001jibmkzy4sime4\"]"
+    },
+    {
+      "date": "2026-07-04",
+      "top3Ids": "[\"cmr67hs6t001hibmkbbwajw5u\"]"
+    }
+  ],
+  "reviews": [
+    {
+      "date": "2026-06-18",
+      "mood": 2
+    }
+  ],
+  "notifications": []
+}

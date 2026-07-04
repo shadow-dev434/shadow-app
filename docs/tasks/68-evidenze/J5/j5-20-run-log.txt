@@ -1,0 +1,23 @@
+T1 [-] QR=[] :: Come stai stasera? 1-5.
+T2 [record_mood] QR=[] :: E di energia? 1-5.
+T3 [record_energy] QR=[] :: Stasera ho 4 candidate da attraversare con te, le altre 0 restano nell'inbox per ora — ti va?
+T4 [-] QR=[] :: Non ho ancora aperto nessuna entry — a quale task ti riferisci?
+T5 [set_user_mood,set_user_energy] QR=[] :: Non ho ancora aperto nessuna entry specifica — non so a quale task ti riferisci. Partiamo dal primo: la mail difficile al capo. Vuoi rimanda
+T6 [set_current_entry] QR=[Sì, salvali | Cambiali | Lascia stare] :: La mail difficile al capo è qui da un po' — questa è di quelle da spezzare prima di iniziare, l'ho già divisa in 4 passi: apri il documento,
+T7 [approve_decomposition] QR=[] :: Salvati. Cosa vuoi farne stasera — la tieni per domani o la affrontiamo?
+T8 [mark_entry_discussed] QR=[] :: Rimandato. Prossima: la dichiarazione dei redditi. È qui da un po' — cosa vuoi farne?
+T9 [set_current_entry,propose_decomposition] QR=[] :: Ti torna come inizio?
+T10 [mark_what_blocked_asked] QR=[] :: Fatto. Dimmi tu come proseguiamo.
+T11 [-] QR=[] :: Aspetta, siamo ancora sulla dichiarazione dei redditi — vuoi rimandarla a domani?
+T12 [propose_decomposition] QR=[] :: Per la dichiarazione dei redditi ho pensato a 4 passi: apri il sito dell'Agenzia delle Entrate o del tuo CAF, cerca il modello 730, raccogli
+T13 [mark_entry_discussed] QR=[] :: Prossima: prenotare la visita medica di controllo. Cosa vuoi farne?
+T14 [-] QR=[] :: Noto che stai rimandando tutto — stasera con mood e energia a 2 ha senso. Vuoi chiudere qui la review?
+T15 [set_current_entry] QR=[] :: Aspetta, ho bisogno di sistemare alcune cose prima di chiudere. Ci sono ancora alcune entry da processare. Partiamo dalla dichiarazione dei 
+T16 [set_current_entry,set_current_entry,set_current_entry,mark_entry_discussed,set_current_entry,mark_entry_discussed] QR=[] :: Tutto rimandato a domani. Il piano è leggero: visita di mattina, pacco alle poste di pomeriggio, mail al capo e dichiarazione dei redditi di
+T17 [-] QR=[✅ Conferma il piano] :: Piano per domani pronto: 4 task selezionati, mood 2, energy 2. Blocco la review e chiudo?
+T18 [-] QR=[] :: Piano bloccato. A domani.
+T19 [confirm_plan_preview] QR=[] :: Piano bloccato. A domani.
+T20 [confirm_close_review] QR=[] :: Chiuso. A domani.
+tools totali: record_mood, record_energy, set_user_mood, set_user_energy, set_current_entry, approve_decomposition, mark_entry_discussed, set_current_entry, propose_decomposition, mark_what_blocked_asked, propose_decomposition, mark_entry_discussed, set_current_entry, set_current_entry, set_current_entry, set_current_entry, mark_entry_discussed, set_current_entry, mark_entry_discussed, confirm_plan_preview, confirm_close_review
+trascrizione: C:\shadow-app\docs\tasks\68-evidenze\J5\j5-20-review-serale.md
+spesa LLM utente: $0.7579

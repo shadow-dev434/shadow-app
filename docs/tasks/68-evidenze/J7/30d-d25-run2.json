@@ -1,0 +1,37 @@
+{
+  "getStatus": 200,
+  "before": [
+    {
+      "id": "cmr69ej4u01yuibe4po1rta4c",
+      "status": "planned",
+      "occurrenceDate": "2026-07-03"
+    }
+  ],
+  "after": [
+    {
+      "id": "cmr69ej4u01yuibe4po1rta4c",
+      "status": "planned",
+      "occurrenceDate": "2026-07-03",
+      "title": "Prendere le medicine"
+    },
+    {
+      "id": "cmr69i70t022libe4d5okrreb",
+      "status": "inbox",
+      "occurrenceDate": "2026-07-04",
+      "title": "Prendere le medicine"
+    }
+  ],
+  "openMedicine": 2,
+  "yesterdayStill": {
+    "id": "cmr69ej4u01yuibe4po1rta4c",
+    "status": "planned",
+    "occurrenceDate": "2026-07-03",
+    "title": "Prendere le medicine"
+  },
+  "todayNew": {
+    "id": "cmr69i70t022libe4d5okrreb",
+    "status": "inbox",
+    "occurrenceDate": "2026-07-04",
+    "title": "Prendere le medicine"
+  }
+}

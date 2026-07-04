@@ -1,0 +1,71 @@
+{
+  "clientDate": "2026-07-04",
+  "tomorrow": "2026-07-05",
+  "slug": "j6h-avverso2",
+  "userId": "cmr69advq0000ibjw11gqsope",
+  "threadId": "cmr69ahvh01sqibe4b6kla988",
+  "completed": true,
+  "userTurns": 12,
+  "wallSeconds": 130,
+  "taskIds": {
+    "progetto": "cmr69afb20008ibjwtb8xyx89",
+    "curriculum": "cmr69afls000aibjwed4669g8",
+    "spesa": "cmr69afvq000cibjwqll2tw41"
+  },
+  "adverseRecord": {
+    "n": 10,
+    "streakBefore": 2,
+    "tools": [
+      "update_plan_preview"
+    ],
+    "toolInputs": [
+      {
+        "name": "update_plan_preview",
+        "input": {
+          "moves": [
+            {
+              "taskId": "cmr69afb20008ibjwtb8xyx89",
+              "to": "morning"
+            }
+          ],
+          "removes": [
+            {
+              "taskId": "cmr69afls000aibjwed4669g8"
+            }
+          ]
+        }
+      }
+    ],
+    "assistant": "Progetto di mattina, curriculum via. Ti torna?"
+  },
+  "verdict": "ONORATA: update_plan_preview eseguito, curriculum FUORI dal piano finale",
+  "curriculumInPlan": false,
+  "escapeUsed": true,
+  "plan": {
+    "top3Ids": "[\"cmr69afb20008ibjwtb8xyx89\",\"cmr69afvq000cibjwqll2tw41\"]",
+    "doNowIds": "[\"cmr69afb20008ibjwtb8xyx89\",\"cmr69afvq000cibjwqll2tw41\"]",
+    "scheduleIds": "[]",
+    "postponeIds": "[]",
+    "originalPlanJson": "{\"version\":1,\"capturedAt\":\"2026-07-04T11:07:37.341Z\",\"preview\":{\"morning\":[{\"taskId\":\"cmr69afb20008ibjwtb8xyx89\",\"title\":\"Finire il progetto per il cliente\",\"size\":3,\"durationLabel\":\"short\",\"durationMinutes\":25,\"energyHint\":null,\"pinned\":false,\"allocatedSlot\":\"morning\"}],\"afternoon\":[],\"evening\":[{\"taskId\":\"cmr69afvq000cibjwqll2tw41\",\"title\":\"Fare la spesa settimanale\",\"size\":3,\"durationLabel\":\"short\",\"durationMinutes\":25,\"energyHint\":null,\"pinned\":false,\"allocatedSlot\":\"evening\"}],\"cut\":[],\"fillEstimate\":{\"used\":\"0.8h\",\"capacity\":\"9.6h\",\"state\":\"low\",\"percentage\":8.680555555555555},\"appointmentAware\":false,\"warnings\":[]},\"pinnedIds\":[]}"
+  },
+  "tasksFinal": [
+    {
+      "id": "cmr69afb20008ibjwtb8xyx89",
+      "title": "Finire il progetto per il cliente",
+      "status": "planned",
+      "postponedCount": 1
+    },
+    {
+      "id": "cmr69afvq000cibjwqll2tw41",
+      "title": "Fare la spesa settimanale",
+      "status": "planned",
+      "postponedCount": 1
+    },
+    {
+      "id": "cmr69afls000aibjwed4669g8",
+      "title": "Aggiornare il curriculum",
+      "status": "planned",
+      "postponedCount": 2
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+N25 repro
+POST tasksCompleted='abc' tasksPlanned=5
+HTTP: 500
+body: {"error":"Errore nel salvataggio streak"}
+DB tasksCompleted: undefined
+DB completionRate: undefined (NaN=false)

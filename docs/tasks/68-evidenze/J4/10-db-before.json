@@ -1,0 +1,44 @@
+{
+  "takenAt": "2026-07-04T10:57:54.343Z",
+  "threads": [
+    {
+      "id": "cmr67hpdg0013ibmkw3y1hto5",
+      "mode": "general",
+      "state": "active",
+      "startedAt": "2026-06-29T22:00:00.000Z",
+      "lastTurnAt": "2026-06-29T22:00:00.000Z",
+      "endedAt": null,
+      "_count": {
+        "messages": 2
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "id": "cmr67hp0c000zibmkx1t2sqp9",
+      "title": "Inviare il modulo ISEE",
+      "status": "planned",
+      "deadline": "2026-07-01T22:00:00.000Z"
+    },
+    {
+      "id": "cmr67hp6m0011ibmke42uwer4",
+      "title": "Rinnovare assicurazione auto",
+      "status": "planned",
+      "deadline": "2026-07-02T22:00:00.000Z"
+    }
+  ],
+  "plans": [
+    {
+      "id": "cmr67hqef0017ibmkjcbrpowx",
+      "date": "2026-06-30",
+      "top3Ids": "[\"cmr67hp0c000zibmkx1t2sqp9\",\"cmr67hp6m0011ibmke42uwer4\"]"
+    }
+  ],
+  "reviews": [
+    {
+      "id": "cmr67hqnc0019ibmkjiheszdc",
+      "date": "2026-06-29",
+      "mood": 3
+    }
+  ]
+}

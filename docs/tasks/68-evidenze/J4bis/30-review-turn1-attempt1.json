@@ -1,0 +1,12 @@
+{
+  "threadId": "cmr69iusc023tibe4vkw3bos8",
+  "mode": "evening_review",
+  "assistantMessage": "Bentornato, è passato un po' — bello risentirti. Prenditi il tempo che ti serve stasera.\n\nCome stai? 1-5.",
+  "toolsExecuted": [],
+  "quickReplies": [],
+  "costUsd": 0.0139641,
+  "tokensIn": 647,
+  "tokensOut": 44,
+  "modelUsed": "claude-sonnet-4-6",
+  "latencyMs": 3856
+}

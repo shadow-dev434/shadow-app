@@ -1,0 +1,18 @@
+{
+  "id": "cmr67iosw009nibmkzssz0axn",
+  "userId": "cmr67inti009eibmkfzdqmupz",
+  "title": "Palestra",
+  "description": "",
+  "category": "general",
+  "urgency": 3,
+  "importance": 3,
+  "size": 3,
+  "frequency": "weekly",
+  "weekdays": "[1,3,5]",
+  "monthDay": null,
+  "active": false,
+  "startDate": "2026-06-20",
+  "endDate": null,
+  "createdAt": "2026-07-04T10:15:59.504Z",
+  "updatedAt": "2026-07-04T11:10:12.350Z"
+}

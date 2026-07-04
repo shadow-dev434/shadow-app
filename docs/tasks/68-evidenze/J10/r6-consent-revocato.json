@@ -1,0 +1,59 @@
+{
+  "revoke": {
+    "status": 200
+  },
+  "dbConsentGivenAt": null,
+  "routes": {
+    "GET /api/tasks": {
+      "status": 403,
+      "error": "consent_required",
+      "header": "1"
+    },
+    "GET /api/daily-plan": {
+      "status": 403,
+      "error": "consent_required",
+      "header": "1"
+    },
+    "GET /api/settings": {
+      "status": 403,
+      "error": "consent_required",
+      "header": "1"
+    },
+    "GET /api/notifications": {
+      "status": 403,
+      "error": "consent_required",
+      "header": "1"
+    },
+    "GET /api/chat/active-thread": {
+      "status": 403,
+      "error": "consent_required",
+      "header": "1"
+    },
+    "GET /api/recurring": {
+      "status": 403,
+      "error": "consent_required",
+      "header": "1"
+    },
+    "GET /api/streaks": {
+      "status": 403,
+      "error": "consent_required",
+      "header": "1"
+    },
+    "POST /api/tasks": {
+      "status": 403,
+      "error": "consent_required",
+      "header": "1"
+    }
+  },
+  "chatTurn": {
+    "status": 403,
+    "json": {
+      "error": "consent_required"
+    }
+  },
+  "exportDopoRevoca": 200,
+  "pagina": {
+    "status": 307,
+    "location": "/consent"
+  }
+}

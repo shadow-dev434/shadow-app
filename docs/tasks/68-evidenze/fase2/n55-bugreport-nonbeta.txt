@@ -1,0 +1,5 @@
+N55 repro
+utente NON beta (collaudo68-api2@probe.local) POST /api/beta/bug-report severity=blocking
+HTTP: 200
+body: {"report":{"id":"cmr6a9ytj02i4ibe43svljzlj","status":"new","createdAt":"2026-07-04T11:33:11.431Z"}}
+Guard usato: requireSession (NON requireBetaSession) → nessun gate beta
