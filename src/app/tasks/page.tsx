@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
+import { InstallBanner } from '@/features/pwa/InstallBanner';
 import { signOut, useSession } from 'next-auth/react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { StrictModeExitDialog, type StrictModeExitResult } from '@/features/strict-mode/StrictModeExitDialog';
@@ -552,8 +553,6 @@ function recordNudgeShown(): void {
 
 export default function ShadowApp() {
   const store = useShadowStore();
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [initializing, setInitializing] = useState(true);
   // Task 52 (D1): id del task di una sessione body doubling attiva (o '' se la
   // sessione non ha taskId) → banner "riprendi"; null = nessuna sessione attiva.
@@ -704,16 +703,8 @@ export default function ShadowApp() {
     }
   }, []);
 
-  // Listen for install prompt
-  useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setInstallPrompt(e as BeforeInstallPromptEvent);
-      setShowInstallBanner(true);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
+  // Task 70 (N29): il banner install è un componente condiviso con la chat
+  // (features/pwa/InstallBanner) — la cattura di beforeinstallprompt vive lì.
 
   // AI Assistant: trigger proattivi a EVENTI, non più a polling (Task 66 B/D57).
   // Il vecchio setInterval da 5 min girava su qualunque vista (popup possibile
@@ -891,15 +882,6 @@ export default function ShadowApp() {
     };
   }, [store.isAuthenticated]);
 
-  const handleInstall = useCallback(async () => {
-    if (!installPrompt) return;
-    installPrompt.prompt();
-    const result = await installPrompt.userChoice;
-    if (result.outcome === 'accepted') toast({ title: 'Shadow installata!' });
-    setInstallPrompt(null);
-    setShowInstallBanner(false);
-  }, [installPrompt]);
-
   const handleLogout = useCallback(async () => {
     store.setAuthUser(null);
     store.setIsAuthenticated(false);
@@ -938,18 +920,7 @@ export default function ShadowApp() {
         <AppHeader onLogout={handleLogout} />
       )}
       <main className="flex-1 pb-20 overflow-y-auto">
-        {showInstallBanner && !hideHeaderNav && (
-          <div className="bg-amber-600 text-white px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 shrink-0" />
-              <span className="text-sm font-medium">Installa Shadow sul telefono</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="secondary" className="h-7 text-xs" onClick={handleInstall}>Installa</Button>
-              <button onClick={() => setShowInstallBanner(false)} className="p-1 hover:bg-amber-700 rounded"><X className="w-4 h-4" /></button>
-            </div>
-          </div>
-        )}
+        {!hideHeaderNav && <InstallBanner />}
 
         {/* Task 52 (D1): banner globale "riprendi" sessione body doubling attiva.
             Si auto-azzera quando la sessione finisce (re-check al mount di /tasks). */}
@@ -993,12 +964,6 @@ export default function ShadowApp() {
       <ProactiveChatbotPopup />
     </div>
   );
-}
-
-// BeforeInstallPromptEvent type
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
 // ─── Auth Gate View ─────────────────────────────────────────────────────────
@@ -2515,14 +2480,18 @@ function TodayView() {
   const doRegenerate = useCallback(async () => {
     setRegenerating(true);
     try {
+      // Task 70 (E/N36): stato LIVE, non la closure — l'auto-generazione al
+      // mount parte subito dopo l'idratazione di energia/tempo dal contesto
+      // del mattino, e lo snapshot del primo render non la vedrebbe.
+      const live = useShadowStore.getState();
       const currentContext =
-        slotLocationToContext(slotLocations[currentSlotKey()]) ?? store.currentContext;
+        slotLocationToContext(slotLocations[currentSlotKey()]) ?? live.currentContext;
       const res = await apiFetch('/api/daily-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          energy: store.energy,
-          timeAvailable: store.timeAvailable,
+          energy: live.energy,
+          timeAvailable: live.timeAvailable,
           currentContext,
         }),
         skipErrorToast: true,
@@ -2591,9 +2560,16 @@ function TodayView() {
   // Idrata il piano committato di oggi all'apertura: lo store non ha persist,
   // quindi senza questo il Top 3 sparirebbe a ogni refresh. La GET non ri-scora,
   // restituisce lo snapshot dell'ultima generazione / commit conversazionale.
+  // Task 70 (E/N36): guardia one-shot per visita — l'auto-generazione parte al
+  // massimo una volta per mount, mai in loop.
+  const autoGenTriedRef = useRef(false);
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Task 70 (E/N36): traccia lo stato del piano per decidere, a valle
+      // dell'idratazione, se generare da soli invece di chiedere.
+      let planWithTasks = false;
+      let conversationalEmpty = false;
       try {
         const res = await apiFetch('/api/daily-plan', { skipErrorToast: true });
         const data = await res.json();
@@ -2603,46 +2579,78 @@ function TodayView() {
         if (data?.recovery && typeof data.recovery === 'object') {
           setRecoveryMap(data.recovery as Record<string, { reason: string; microStep: string }>);
         }
-        if (!data?.plan) return;
-        // Task 49: sincronizza energia/tempo/contesto dichiarati in chat con la
-        // schermata Today (lo store non ha persist → senza questo non li vedresti).
-        if (typeof data.plan.energyLevel === 'number') store.setEnergy(data.plan.energyLevel);
-        if (typeof data.plan.timeAvailable === 'number') store.setTimeAvailable(data.plan.timeAvailable);
-        if (typeof data.plan.currentContext === 'string') store.setCurrentContext(data.plan.currentContext);
-        // Task 50: idrata le location per fascia salvate (review serale / Today).
-        if (typeof data.plan.slotContextsJson === 'string') {
-          try {
-            const parsed = JSON.parse(data.plan.slotContextsJson);
-            if (parsed && typeof parsed === 'object') setSlotLocations(parsed);
-          } catch {
-            // ignora JSON malformato
+        if (data?.plan) {
+          // Task 49: sincronizza energia/tempo/contesto dichiarati in chat con la
+          // schermata Today (lo store non ha persist → senza questo non li vedresti).
+          if (typeof data.plan.energyLevel === 'number') store.setEnergy(data.plan.energyLevel);
+          if (typeof data.plan.timeAvailable === 'number') store.setTimeAvailable(data.plan.timeAvailable);
+          if (typeof data.plan.currentContext === 'string') store.setCurrentContext(data.plan.currentContext);
+          // Task 50: idrata le location per fascia salvate (review serale / Today).
+          if (typeof data.plan.slotContextsJson === 'string') {
+            try {
+              const parsed = JSON.parse(data.plan.slotContextsJson);
+              if (parsed && typeof parsed === 'object') setSlotLocations(parsed);
+            } catch {
+              // ignora JSON malformato
+            }
+          }
+          // Idrata il piano solo se ci sono task e non è già caricato: una riga di
+          // solo contesto (energia/tempo senza piano committato) non è un piano.
+          const b = data.breakdown;
+          const hasTasks = !!b && ((b.top3?.length ?? 0) > 0 || (b.doNow?.length ?? 0) > 0);
+          planWithTasks = hasTasks;
+          // Un piano conversazionale committato VUOTO (review 0-candidate, R17)
+          // è una decisione, non un buco: non va riempito d'ufficio.
+          conversationalEmpty =
+            !hasTasks && (data.source === 'review' || data.source === 'chat');
+          if (!store.dailyPlan && hasTasks) {
+            const all = await fetchTasks();
+            if (cancelled) return;
+            store.setTasks(all);
+            const pick = (arr: { id: string }[]): ShadowTask[] =>
+              arr.map((t) => all.find((x) => x.id === t.id)).filter(Boolean) as ShadowTask[];
+            // Task 64 (A2): fasce della review serale + sorgente del piano.
+            const s = data.slots as { morning: { id: string }[]; afternoon: { id: string }[]; evening: { id: string }[] } | null;
+            store.setDailyPlan({
+              top3: pick(b.top3),
+              doNow: pick(b.doNow),
+              schedule: pick(b.schedule),
+              delegate: pick(b.delegate),
+              postpone: pick(b.postpone),
+              slots: s ? { morning: pick(s.morning), afternoon: pick(s.afternoon), evening: pick(s.evening) } : null,
+              source: data.source === 'review' || data.source === 'chat' ? data.source : 'engine',
+            });
           }
         }
-        // Idrata il piano solo se ci sono task e non è già caricato: una riga di
-        // solo contesto (energia/tempo senza piano committato) non è un piano.
-        const b = data.breakdown;
-        const hasTasks = !!b && ((b.top3?.length ?? 0) > 0 || (b.doNow?.length ?? 0) > 0);
-        if (!store.dailyPlan && hasTasks) {
-          const all = await fetchTasks();
-          if (cancelled) return;
-          store.setTasks(all);
-          const pick = (arr: { id: string }[]): ShadowTask[] =>
-            arr.map((t) => all.find((x) => x.id === t.id)).filter(Boolean) as ShadowTask[];
-          // Task 64 (A2): fasce della review serale + sorgente del piano.
-          const s = data.slots as { morning: { id: string }[]; afternoon: { id: string }[]; evening: { id: string }[] } | null;
-          store.setDailyPlan({
-            top3: pick(b.top3),
-            doNow: pick(b.doNow),
-            schedule: pick(b.schedule),
-            delegate: pick(b.delegate),
-            postpone: pick(b.postpone),
-            slots: s ? { morning: pick(s.morning), afternoon: pick(s.afternoon), evening: pick(s.evening) } : null,
-            source: data.source === 'review' || data.source === 'chat' ? data.source : 'engine',
-          });
-        }
       } catch {
-        // silenzioso: nessun piano o errore di rete → resta lo stato vuoto
+        // silenzioso: nessun piano o errore di rete → resta lo stato vuoto.
+        // Rete giù = stato ignoto: niente auto-generazione.
+        return;
       }
+      // Task 70 (E/N36): Today vuota GENERA il piano invece di chiedere.
+      // Condizioni: nessun piano di oggi con task, non è un vuoto
+      // conversazionale deliberato, c'è almeno 1 task pianificabile, non già
+      // tentato in questa visita. doRegenerate legge lo stato live (energia/
+      // tempo del mattino appena idratati). «Rigenera» su piano esistente
+      // continua a chiedere conferma (fix 64 intatto: qui il piano non c'è).
+      if (cancelled || planWithTasks || conversationalEmpty) return;
+      if (useShadowStore.getState().dailyPlan || autoGenTriedRef.current) return;
+      let known = useShadowStore.getState().tasks;
+      if (known.length === 0) {
+        try {
+          known = await fetchTasks();
+          if (cancelled) return;
+          store.setTasks(known);
+        } catch {
+          return; // rete giù: resta l'empty state coi bottoni
+        }
+      }
+      const anyPlannable = known.some(
+        (t) => t.status !== 'completed' && t.status !== 'archived' && t.status !== 'abandoned',
+      );
+      if (!anyPlannable) return;
+      autoGenTriedRef.current = true;
+      void doRegenerate();
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

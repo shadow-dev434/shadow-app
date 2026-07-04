@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Archive, Info, List, Pencil, Send, Loader2, CheckCircle2, History, ArrowLeft, Lock, MessageSquare, Paperclip, X, FileText } from 'lucide-react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { BetaCheckin } from '@/features/beta/BetaCheckinCard';
+import { InstallBanner } from '@/features/pwa/InstallBanner';
 import { enterStrictMode } from '@/lib/strict-mode/enter';
 import {
   SidebarProvider,
@@ -752,6 +753,9 @@ export function ChatView() {
           <List size={20} />
         </button>
       </header>
+
+      {/* Task 70 (N29): banner install anche sulla home — prima solo /tasks. */}
+      <InstallBanner />
 
       {viewing ? (
         <ArchivedThreadView
