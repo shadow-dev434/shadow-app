@@ -68,6 +68,7 @@ import { isInsideEveningWindow } from '@/lib/evening-review/window';
 import { computeEveningReviewSignal } from '@/lib/evening-review/compute-signal';
 import { INACTIVITY_PAUSE_MINUTES } from '@/lib/evening-review/config';
 import { normalizeThreadState } from '@/lib/evening-review/normalize';
+import { materializePartialReview } from '@/lib/evening-review/materialize-partial';
 import { computeInactivityGapDays } from '@/lib/evening-review/inactivity-gap';
 import { shouldRollOverThread } from '@/lib/chat/day-rollover';
 
@@ -180,6 +181,22 @@ export async function GET(req: NextRequest) {
             // continuera' a scattare in modo sub-ottimale ma non rompera'
             // la review.
             updatedContextJson = null;
+          }
+        }
+
+        // Task 69 (B, S2-B/D45): il thread sta per essere archiviato con una
+        // review a meta' — materializza una Review parziale (mood/energy/
+        // whatBlocked/whatDone) invece di perdere la serata in silenzio.
+        // Fail-soft: un errore qui non deve bloccare l'archiviazione.
+        if (result.shouldPersist && result.desiredState === 'archived') {
+          try {
+            await materializePartialReview({
+              userId,
+              threadId: thread.id,
+              contextJson: thread.contextJson,
+            });
+          } catch (err) {
+            captureApiError(err, '/api/chat/active-thread#materialize-partial');
           }
         }
 
