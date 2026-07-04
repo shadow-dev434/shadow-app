@@ -25,6 +25,8 @@ import {
   FILL_RATIO_FLOOR,
   FILL_RATIO_CEILING,
   SENSITIVITY_HIGH_THRESHOLD,
+  ENERGY_LOW_RATIO_PENALTY_SEVERE,
+  ENERGY_LOW_RATIO_PENALTY_MILD,
 } from './config';
 
 export type FillRatioProfile = {
@@ -47,17 +49,42 @@ export function baseFillRatio(shameFrustrationSensitivity: number): number {
   return DEFAULT_FILL_RATIO;
 }
 
-export function getFillRatio(profile: FillRatioProfile): number {
+export type FillRatioOptions = {
+  /**
+   * Task 69 (E, S2-E): energia dichiarata all'intake della review (1-5,
+   * TriageState.moodIntake.energyEnd). 1-2 riducono il ratio (penalita'
+   * additiva, clamp a FILL_RATIO_FLOOR); 3-5 o assente = invariato. Mai al
+   * rialzo: energia alta non carica il piano oltre il default/calibrato.
+   */
+  energyEnd?: number | null;
+};
+
+export function getFillRatio(
+  profile: FillRatioProfile,
+  options: FillRatioOptions = {},
+): number {
   const base = baseFillRatio(profile.shameFrustrationSensitivity);
   const calibrated = profile.calibratedFillRatio ?? null;
-  if (calibrated === null) return base;
 
-  const clamped = Math.min(
-    FILL_RATIO_CEILING,
-    Math.max(FILL_RATIO_FLOOR, calibrated),
-  );
-  if (profile.shameFrustrationSensitivity >= SENSITIVITY_HIGH_THRESHOLD) {
-    return Math.min(clamped, FILL_RATIO_FOR_HIGH_SENSITIVITY);
+  let ratio: number;
+  if (calibrated === null) {
+    ratio = base;
+  } else {
+    const clamped = Math.min(
+      FILL_RATIO_CEILING,
+      Math.max(FILL_RATIO_FLOOR, calibrated),
+    );
+    ratio =
+      profile.shameFrustrationSensitivity >= SENSITIVITY_HIGH_THRESHOLD
+        ? Math.min(clamped, FILL_RATIO_FOR_HIGH_SENSITIVITY)
+        : clamped;
   }
-  return clamped;
+
+  const energy = options.energyEnd ?? null;
+  if (energy !== null && energy <= 2) {
+    const penalty =
+      energy <= 1 ? ENERGY_LOW_RATIO_PENALTY_SEVERE : ENERGY_LOW_RATIO_PENALTY_MILD;
+    ratio = Math.max(FILL_RATIO_FLOOR, ratio - penalty);
+  }
+  return ratio;
 }

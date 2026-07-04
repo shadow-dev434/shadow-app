@@ -146,6 +146,12 @@ model Task {
   // Review serale
   postponedCount Int    @default(0)
   source         String @default("manual") // manual | gmail | review_carryover | recurring
+  // Task 69 (C, S2-C/D46): ripescaggio reale dei rimandati. Settato quando la
+  // review taglia il task dal piano (trimming low_priority) o l'utente lo
+  // rimanda al triage (outcome postponed): la review che pianifica quel giorno
+  // lo ripropone come candidate (reason 'deferred'). Azzerato quando il task
+  // entra in un piano committato. Null = nessun ripescaggio promesso.
+  deferredUntil  DateTime?
 
   // Ricorrenza (Task 46) — un'istanza materializzata da un RecurringTask template.
   recurringTemplateId String?

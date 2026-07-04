@@ -30,6 +30,7 @@ import type { DailyPlanPreview } from './plan-preview';
 import type { OriginalPlanSnapshot } from '@/lib/types/evening-review-snapshot';
 import { selectLearningSignalsForDate } from './learning-signals-today';
 import { loadPreviewStateFromContext } from './apply-overrides';
+import { addDaysIso, endOfDayInZone } from './dates';
 
 export type CloseReviewInput = {
   userId: string;
@@ -246,6 +247,30 @@ export async function closeReview(
       })),
     ];
     await tx.dailyPlanTask.createMany({ data: dailyPlanTaskRows });
+
+    // Task 69 (C, S2-C/D46): la formula "le altre due dopodomani" (prompt
+    // CASO 1) ora ha un backing reale. I task tagliati dal trimming per
+    // low_priority vengono marcati deferredUntil = planDate+1 (= dopodomani
+    // rispetto a stasera): la review di domani sera li ripropone come
+    // candidate 'deferred'. exceeds_ceiling resta fuori: li' Shadow non
+    // taglia, la scelta e' rimessa all'utente (CASO 2 del prompt).
+    const cutLowPriorityIds = input.preview.cut
+      .filter((c) => c.cutReason === 'low_priority')
+      .map((c) => c.taskId);
+    if (cutLowPriorityIds.length > 0) {
+      await tx.task.updateMany({
+        where: { id: { in: cutLowPriorityIds }, userId: input.userId },
+        data: { deferredUntil: endOfDayInZone(addDaysIso(input.planDate, 1)) },
+      });
+    }
+    // Consumo della promessa: chi entra nel piano committato non ha piu'
+    // ripescaggi pendenti (il deferral di un giro precedente e' assolto).
+    if (doNowIds.length > 0) {
+      await tx.task.updateMany({
+        where: { id: { in: doNowIds }, userId: input.userId },
+        data: { deferredUntil: null },
+      });
+    }
 
     await tx.chatThread.update({
       where: { id: input.threadId },

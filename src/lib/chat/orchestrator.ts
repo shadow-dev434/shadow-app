@@ -1491,8 +1491,26 @@ async function loadAllNonTerminalTasks(userId: string): Promise<TaskProjection[]
     where: { userId, status: { notIn: terminalTaskStatuses() } },
     // Task 67 C: decision + description alimentano la pre-generazione degli
     // step per le candidate decompose_then_do (pregenerateDecompositionProposals).
-    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true, source: true, postponedCount: true, microSteps: true, size: true, priorityScore: true, status: true, recurringTemplateId: true, decision: true, description: true },
+    // Task 69 C: deferredUntil per il ramo 'deferred' di selectCandidates.
+    select: { id: true, title: true, deadline: true, avoidanceCount: true, createdAt: true, lastAvoidedAt: true, source: true, postponedCount: true, microSteps: true, size: true, priorityScore: true, status: true, recurringTemplateId: true, decision: true, description: true, deferredUntil: true },
   });
+}
+
+/**
+ * Task 69 (D, S2-D shame-day): id dei task dell'ultimo DailyPlan non-futuro
+ * (normalmente il piano di OGGI, costruito ieri sera) — la review era cieca
+ * al piano appena fallito e i planned non chiusi sparivano per sempre.
+ * Finestra di 3 giorni: se l'utente ha saltato qualche review prendiamo
+ * comunque l'ultimo piano recente; oltre, ci pensa il flusso di rientro
+ * (niente shame-list di piani vecchi settimane).
+ */
+async function loadLatestPlanTaskIds(userId: string, clientDate: string): Promise<Set<string>> {
+  const plan = await db.dailyPlan.findFirst({
+    where: { userId, date: { lte: clientDate, gte: addDaysIso(clientDate, -3) } },
+    orderBy: { date: 'desc' },
+    select: { tasks: { select: { taskId: true } } },
+  });
+  return new Set(plan?.tasks.map((t) => t.taskId) ?? []);
 }
 
 async function initEveningReview(
@@ -1505,12 +1523,15 @@ async function initEveningReview(
   await materializeRecurringForDate(userId, addDaysIso(clientDate, 1));
 
   const allTasks = await loadAllNonTerminalTasks(userId);
+  // Task 69 (D): i task del piano di oggi ancora aperti entrano come carryover.
+  const yesterdayPlanTaskIds = await loadLatestPlanTaskIds(userId, clientDate);
 
   const candidates = selectCandidates({
     tasks: allTasks,
     clientDate,
     deadlineProximityDays: DEADLINE_PROXIMITY_DAYS,
     softCap: CANDIDATE_LIST_SOFT_CAP,
+    yesterdayPlanTaskIds,
   });
 
   // Task 67 C (§6.12): step pre-generati per le candidate decompose_then_do

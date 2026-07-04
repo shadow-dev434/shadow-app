@@ -140,6 +140,10 @@ export function reconstructEveningReviewPreview(
       })),
     // 6c: now esplicito al call site (G.D3) per immunita' deadline trimming.
     now,
+    // Task 69 (E, S2-E): l'energia dichiarata all'intake entra nel sizing del
+    // piano (getFillRatio). undefined finche' l'intake non e' completato:
+    // comportamento identico al pre-69 fino a quel momento.
+    energyEnd: triageState.moodIntake?.energyEnd ?? null,
   };
 
   // applyPreviewOverrides chiamato sempre in evening_review (G.2):

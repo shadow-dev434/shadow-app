@@ -48,6 +48,7 @@ function makeTask(overrides: Partial<TaskProjection>): TaskProjection {
     recurringTemplateId: null,
     decision: 'unclassified',
     description: '',
+    deferredUntil: null,
     ...overrides,
   };
 }
@@ -189,6 +190,96 @@ describe('selectCandidates', () => {
     const outside = makeTask({ id: 'outside', deadline: new Date(CUTOFF_MS + 1) });
     const r = runTriage([inside, outside]);
     expect(r.map((c) => c.id)).toEqual(['inside']);
+  });
+});
+
+describe('selectCandidates — Task 69 (deferred / carryover-di-ieri / backlog)', () => {
+  // La review del 27 pianifica il 28: fine-giornata Roma del 28 (CEST).
+  const PLAN_DATE_END = new Date('2026-04-28T21:59:59.999Z');
+  // Task vecchio e senza altri rami: prima del 69 sarebbe stato escluso.
+  const stale = (overrides: Partial<TaskProjection>) =>
+    makeTask({ createdAt: new Date('2026-04-20T10:00:00Z'), ...overrides });
+
+  it('C: deferredUntil maturo (<= fine domani) -> reason=deferred', () => {
+    const t = stale({ id: 't1', deferredUntil: PLAN_DATE_END });
+    const r = runTriage([t]);
+    expect(r).toHaveLength(1);
+    expect(r[0].reason).toBe('deferred');
+  });
+
+  it('C: deferredUntil oltre domani -> non candidate (la promessa non e\' ancora matura)', () => {
+    const t = stale({ id: 't1', deferredUntil: new Date(PLAN_DATE_END.getTime() + 1) });
+    expect(runTriage([t])).toEqual([]);
+  });
+
+  it('C: precedenza — deadline vince su deferred, deferred vince su carryover', () => {
+    const both = stale({
+      id: 'both',
+      deadline: new Date('2026-04-28T18:00:00Z'),
+      deferredUntil: PLAN_DATE_END,
+    });
+    expect(runTriage([both])[0].reason).toBe('deadline');
+    const deferredAvoided = stale({ id: 'da', deferredUntil: PLAN_DATE_END, avoidanceCount: 2 });
+    expect(runTriage([deferredAvoided])[0].reason).toBe('deferred');
+  });
+
+  it('D: task nel piano di oggi non chiuso -> carryover anche con avoidanceCount=0', () => {
+    const failed = stale({ id: 'failed', status: 'planned' });
+    const r = selectCandidates({
+      tasks: [failed],
+      clientDate: CLIENT_DATE,
+      deadlineProximityDays: DEADLINE_DAYS,
+      softCap: SOFT_CAP,
+      yesterdayPlanTaskIds: new Set(['failed']),
+    });
+    expect(r).toHaveLength(1);
+    expect(r[0].reason).toBe('carryover');
+  });
+
+  it('D: senza yesterdayPlanTaskIds il comportamento resta pre-69', () => {
+    const failed = stale({ id: 'failed', status: 'planned' });
+    // decision unclassified: nemmeno il ramo backlog lo prende.
+    expect(runTriage([failed])).toEqual([]);
+  });
+
+  it('F: planned do_now senza deadline non-new -> reason=backlog', () => {
+    const t = stale({ id: 'b1', status: 'planned', decision: 'do_now' });
+    const r = runTriage([t]);
+    expect(r).toHaveLength(1);
+    expect(r[0].reason).toBe('backlog');
+  });
+
+  it('F: il cap backlog tiene i piu\' prioritari (default 3)', () => {
+    const tasks = [10, 40, 20, 30].map((score, i) =>
+      stale({ id: `b${score}`, status: 'planned', decision: 'do_now', priorityScore: score }),
+    );
+    const r = runTriage(tasks);
+    expect(r.map((c) => c.id).sort()).toEqual(['b20', 'b30', 'b40']);
+    expect(r.every((c) => c.reason === 'backlog')).toBe(true);
+  });
+
+  it('F: backlogCap=0 spegne il ramo', () => {
+    const t = stale({ id: 'b1', status: 'planned', decision: 'do_now' });
+    const r = selectCandidates({
+      tasks: [t],
+      clientDate: CLIENT_DATE,
+      deadlineProximityDays: DEADLINE_DAYS,
+      softCap: SOFT_CAP,
+      backlogCap: 0,
+    });
+    expect(r).toEqual([]);
+  });
+
+  it('F: precedenza — creato oggi resta new, inbox do_now non e\' backlog', () => {
+    const createdToday = makeTask({
+      id: 'today',
+      status: 'planned',
+      decision: 'do_now',
+      createdAt: new Date('2026-04-27T10:00:00Z'),
+    });
+    expect(runTriage([createdToday])[0].reason).toBe('new');
+    const inboxTask = stale({ id: 'inbox', status: 'inbox', decision: 'do_now' });
+    expect(runTriage([inboxTask])).toEqual([]);
   });
 });
 
@@ -362,6 +453,7 @@ describe('reasonsFromCandidates', () => {
         recurringTemplateId: null,
         decision: 'unclassified',
         description: '',
+        deferredUntil: null,
         reason: 'deadline',
       },
       {
@@ -380,6 +472,7 @@ describe('reasonsFromCandidates', () => {
         recurringTemplateId: null,
         decision: 'unclassified',
         description: '',
+        deferredUntil: null,
         reason: 'carryover',
       },
     ];

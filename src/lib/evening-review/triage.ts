@@ -4,6 +4,7 @@ import {
   RECENT_AVOIDANCE_HOURS,
   MIN_MICRO_STEPS,
   MAX_MICRO_STEPS,
+  BACKLOG_CANDIDATE_CAP,
 } from './config';
 import type { ExecutionContext, MicroStep } from '@/lib/types/shadow';
 import { decomposeWithAI } from '@/lib/engines/decomposition-engine';
@@ -48,9 +49,23 @@ export type TaskProjection = {
   // l'engine di decomposizione (decomposeWithAI vuole title+description).
   decision: string;
   description: string;
+  // Task 69 (C, S2-C/D46): ripescaggio reale dei rimandati — settato quando
+  // la review taglia il task dal piano o l'utente lo rimanda (postponed).
+  // null = nessun ripescaggio promesso.
+  deferredUntil: Date | null;
 };
 
-export type CandidateReason = 'deadline' | 'recurring' | 'new' | 'carryover';
+export type CandidateReason =
+  | 'deadline'
+  | 'recurring'
+  | 'new'
+  | 'carryover'
+  // Task 69 (C): il task era stato rimandato ("le altre le rivediamo domani
+  // sera") e il giorno promesso e' arrivato: la promessa viene mantenuta.
+  | 'deferred'
+  // Task 69 (F, S2-F): planned urgente senza deadline fermo da almeno un
+  // giorno — il sommerso che prima non entrava MAI nel triage.
+  | 'backlog';
 
 export type Candidate = TaskProjection & {
   reason: CandidateReason;
@@ -61,6 +76,15 @@ export type SelectCandidatesInput = {
   clientDate: string;                // 'YYYY-MM-DD'
   deadlineProximityDays: number;     // tipicamente DEADLINE_PROXIMITY_DAYS
   softCap: number;                   // tipicamente CANDIDATE_LIST_SOFT_CAP
+  // Task 69 (D, S2-D shame-day): id dei task dell'ultimo DailyPlan non-futuro
+  // (il piano di OGGI, costruito ieri sera) ancora non terminali = i "falliti
+  // di oggi". Entrano come 'carryover' anche con avoidanceCount=0 — prima
+  // erano strutturalmente invisibili alla review. Il chiamante fa la query
+  // (questa funzione resta pura); assente/vuoto = comportamento pre-69.
+  yesterdayPlanTaskIds?: ReadonlySet<string>;
+  // Task 69 (F, S2-F): cap del ramo 'backlog' (i piu' prioritari per sera).
+  // Default BACKLOG_CANDIDATE_CAP; 0 = ramo spento.
+  backlogCap?: number;
 };
 
 /**
@@ -87,27 +111,47 @@ export type SelectCandidatesInput = {
  */
 export function selectCandidates(input: SelectCandidatesInput): Candidate[] {
   const { tasks, clientDate, deadlineProximityDays, softCap } = input;
+  const yesterdayPlanTaskIds = input.yesterdayPlanTaskIds ?? new Set<string>();
+  const backlogCap = input.backlogCap ?? BACKLOG_CANDIDATE_CAP;
 
   const cutoff = endOfDayInZone(addDaysIso(clientDate, deadlineProximityDays), TRIAGE_ZONE);
   const cutoffMs = cutoff.getTime();
+  // Task 69 (C): la review di stasera pianifica DOMANI — un deferredUntil
+  // entro fine-domani significa "il giorno promesso e' arrivato".
+  const planDateEndMs = endOfDayInZone(addDaysIso(clientDate, 1), TRIAGE_ZONE).getTime();
 
   const candidates: Candidate[] = [];
+  const backlogPool: Candidate[] = [];
   for (const task of tasks) {
-    const reason = pickReason(task, clientDate, cutoffMs);
-    if (reason !== null) {
+    const reason = pickReason(task, clientDate, cutoffMs, planDateEndMs, yesterdayPlanTaskIds);
+    if (reason === 'backlog') {
+      backlogPool.push({ ...task, reason });
+    } else if (reason !== null) {
       candidates.push({ ...task, reason });
     }
   }
+
+  // Task 69 (F): il backlog entra col suo cap dedicato, i piu' prioritari
+  // prima — ridurre il sommerso senza affollare la review (il softCap globale
+  // a valle resta l'ultimo argine).
+  backlogPool.sort((a, b) => b.priorityScore - a.priorityScore);
+  candidates.push(...backlogPool.slice(0, backlogCap));
 
   candidates.sort(compareForOrdering);
 
   return candidates.slice(0, softCap);
 }
 
-function pickReason(task: TaskProjection, clientDate: string, cutoffMs: number): CandidateReason | null {
+function pickReason(
+  task: TaskProjection,
+  clientDate: string,
+  cutoffMs: number,
+  planDateEndMs: number,
+  yesterdayPlanTaskIds: ReadonlySet<string>,
+): CandidateReason | null {
   // Deadline within cutoff: includes overdue tasks (deadline in the past) -- they're
   // still relevant for tonight's review. Reason precedence: deadline > recurring >
-  // carryover > new.
+  // deferred > carryover > new > backlog.
   if (task.deadline !== null && task.deadline.getTime() <= cutoffMs) {
     return 'deadline';
   }
@@ -116,11 +160,23 @@ function pickReason(task: TaskProjection, clientDate: string, cutoffMs: number):
   if (task.recurringTemplateId !== null) {
     return 'recurring';
   }
-  if (task.avoidanceCount >= 1) {
+  // Task 69 (C, D46): promessa di ripescaggio arrivata a maturazione. Prima di
+  // carryover: "te l'avevo promesso" pesa piu' di "l'hai evitato".
+  if (task.deferredUntil !== null && task.deferredUntil.getTime() <= planDateEndMs) {
+    return 'deferred';
+  }
+  // Task 69 (D, shame-day): pianificato per oggi e non chiuso ⇒ carryover,
+  // anche a evitamento zero. Il ramo storico (avoidanceCount) resta.
+  if (yesterdayPlanTaskIds.has(task.id) || task.avoidanceCount >= 1) {
     return 'carryover';
   }
   if (formatDateInZone(task.createdAt, TRIAGE_ZONE) === clientDate) {
     return 'new';
+  }
+  // Task 69 (F, S2-F): planned urgente (decision do_now) senza deadline e non
+  // creato oggi — il sommerso. Il chiamante applica il cap.
+  if (task.status === 'planned' && task.decision === 'do_now') {
+    return 'backlog';
   }
   return null;
 }

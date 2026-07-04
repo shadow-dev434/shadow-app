@@ -26,7 +26,8 @@ vi.mock('@/lib/db', () => ({
     user: { findUnique: vi.fn() },
     settings: { findFirst: vi.fn() },
     // Task 63: findFirst per la dedup di create_task (claim-guard test).
-    task: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn() },
+    // Task 69 (C): updateMany per il deferral/consumo in closeReview.
+    task: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
     // Task 46: materializeRecurringForDate (chiamato da initEveningReview) legge i
     // template ricorrenti. Default [] in beforeEach -> no-op nei test esistenti.
     recurringTask: { findMany: vi.fn() },
@@ -34,7 +35,8 @@ vi.mock('@/lib/db', () => ({
     // + dailyPlanTask.* per Slice 7 BUG #B). Additivi: i test esistenti
     // non li usano, quindi default no-op safe in beforeEach.
     review: { upsert: vi.fn(), findUnique: vi.fn() },
-    dailyPlan: { upsert: vi.fn(), findUnique: vi.fn() },
+    // Task 69 (D): findFirst per loadLatestPlanTaskIds (carryover di ieri).
+    dailyPlan: { upsert: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn() },
     dailyPlanTask: { deleteMany: vi.fn(), createMany: vi.fn() },
     learningSignal: { create: vi.fn(), findMany: vi.fn() },
     $transaction: vi.fn(),
@@ -113,6 +115,8 @@ beforeEach(() => {
   vi.mocked(db.user.findUnique).mockResolvedValue(null);
   vi.mocked(db.settings.findFirst).mockResolvedValue(null);
   vi.mocked(db.task.findMany).mockResolvedValue([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vi.mocked(db.task.updateMany).mockResolvedValue({ count: 0 } as any);
   vi.mocked(db.recurringTask.findMany).mockResolvedValue([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.mocked(db.learningSignal.create).mockResolvedValue({ id: 'sig1' } as any);
@@ -124,6 +128,8 @@ beforeEach(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.mocked(db.dailyPlan.upsert).mockResolvedValue({ id: 'plan-default' } as any);
   vi.mocked(db.dailyPlan.findUnique).mockResolvedValue(null);
+  // Task 69 (D): default nessun piano recente -> nessun carryover di ieri.
+  vi.mocked(db.dailyPlan.findFirst).mockResolvedValue(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vi.mocked(db.dailyPlanTask.deleteMany).mockResolvedValue({ count: 0 } as any);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

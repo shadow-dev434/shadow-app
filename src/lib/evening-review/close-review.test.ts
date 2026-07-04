@@ -38,6 +38,8 @@ function makeMockDb() {
     },
     task: {
       findMany: vi.fn(),
+      // Task 69 (C): deferral dei cut low_priority + consumo sui task del piano.
+      updateMany: vi.fn(),
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     $transaction: vi.fn() as any,
@@ -127,6 +129,7 @@ beforeEach(() => {
   mockDb.dailyPlanTask.createMany.mockResolvedValue({ count: 0 });
   mockDb.learningSignal.findMany.mockResolvedValue([]);
   mockDb.task.findMany.mockResolvedValue([]);
+  mockDb.task.updateMany.mockResolvedValue({ count: 0 });
 });
 
 // ─── Tests ────────────────────────────────────────────────────────────────
@@ -516,5 +519,60 @@ describe('closeReview', () => {
     expect(createCall.data).toEqual([
       { dailyPlanId: 'plan1', taskId: 'updated', slot: 'afternoon' },
     ]);
+  });
+});
+
+// ─── Task 69 (C, S2-C/D46): deferral dei cut + consumo della promessa ──────
+
+describe('closeReview — deferredUntil (Task 69 C)', () => {
+  const cutTask = (taskId: string, cutReason: 'low_priority' | 'exceeds_ceiling') => ({
+    ...makeAllocatedTask(taskId, `Cut ${taskId}`),
+    cutReason,
+  });
+
+  it('cut low_priority -> deferredUntil = fine di planDate+1 (dopodomani)', async () => {
+    const preview = makePreview([{ id: 'kept1', title: 'Nel piano' }]);
+    preview.cut = [cutTask('cut1', 'low_priority'), cutTask('cut2', 'low_priority')];
+    const result = await closeReview(
+      makeInput({ preview }),
+      mockDb as unknown as Parameters<typeof closeReview>[1],
+    );
+    expect(result.ok).toBe(true);
+
+    const deferCall = mockDb.task.updateMany.mock.calls.find(
+      (c) => c[0].data.deferredUntil instanceof Date,
+    );
+    expect(deferCall).toBeDefined();
+    expect(deferCall![0].where).toEqual({ id: { in: ['cut1', 'cut2'] }, userId: 'u1' });
+    // planDate=2026-05-15 -> dopodomani=2026-05-16, fine giornata Europe/Rome (CEST).
+    expect(deferCall![0].data.deferredUntil.toISOString()).toBe('2026-05-16T21:59:59.999Z');
+  });
+
+  it('exceeds_ceiling NON deferisce (la scelta resta all\'utente, CASO 2)', async () => {
+    const preview = makePreview();
+    preview.cut = [cutTask('cut1', 'exceeds_ceiling')];
+    await closeReview(makeInput({ preview }), mockDb as unknown as Parameters<typeof closeReview>[1]);
+    const deferCall = mockDb.task.updateMany.mock.calls.find(
+      (c) => c[0].data.deferredUntil instanceof Date,
+    );
+    expect(deferCall).toBeUndefined();
+  });
+
+  it('i task entrati nel piano committato consumano il deferral (deferredUntil=null)', async () => {
+    const preview = makePreview([
+      { id: 'a', title: 'A' },
+      { id: 'b', title: 'B', slot: 'evening' },
+    ]);
+    await closeReview(makeInput({ preview }), mockDb as unknown as Parameters<typeof closeReview>[1]);
+    const consumeCall = mockDb.task.updateMany.mock.calls.find(
+      (c) => c[0].data.deferredUntil === null,
+    );
+    expect(consumeCall).toBeDefined();
+    expect(consumeCall![0].where).toEqual({ id: { in: ['a', 'b'] }, userId: 'u1' });
+  });
+
+  it('preview vuoto senza cut -> nessuna updateMany', async () => {
+    await closeReview(makeInput(), mockDb as unknown as Parameters<typeof closeReview>[1]);
+    expect(mockDb.task.updateMany).not.toHaveBeenCalled();
   });
 });

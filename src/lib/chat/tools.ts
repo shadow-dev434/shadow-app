@@ -74,7 +74,7 @@ import { MARK_WHAT_BLOCKED_ASKED_TOOL } from './tools/mark-what-blocked-asked-to
 import { handleMarkWhatBlockedAsked } from './tools/mark-what-blocked-asked-handler';
 import type { PreviewState } from '@/lib/evening-review/apply-overrides';
 import type { BuildDailyPlanPreviewInput } from '@/lib/evening-review/plan-preview';
-import { formatDateInRome, formatTodayInRome } from '@/lib/evening-review/dates';
+import { formatDateInRome, formatTodayInRome, addDaysIso, endOfDayInZone } from '@/lib/evening-review/dates';
 import { estimateDuration } from '@/lib/evening-review/duration-estimation';
 import { commitTodayPlan, upsertTodayContext } from '@/lib/daily-plan/commit-today-plan';
 import { fitTodayPlanToTime } from '@/lib/daily-plan/fit-to-time';
@@ -1908,9 +1908,17 @@ async function executeMarkEntryDiscussed(
   // sono evitamento mascherato — l'analisi resta differita.
   switch (outcome) {
     case 'postponed':
+      // Task 69 (C, S2-C/D46): "non domani" ora e' una promessa mantenuta —
+      // deferredUntil = dopodomani (fine giornata Europe/Rome): la review di
+      // domani sera, che pianifica dopodomani, lo ripropone come candidate
+      // (reason 'deferred'). Prima incrementava solo il counter e il task
+      // spariva dal radar.
       await db.task.update({
         where: { id: entryId },
-        data: { postponedCount: { increment: 1 } },
+        data: {
+          postponedCount: { increment: 1 },
+          deferredUntil: endOfDayInZone(addDaysIso(triageState.clientDate, 2), 'Europe/Rome'),
+        },
       });
       await db.learningSignal.create({
         data: {

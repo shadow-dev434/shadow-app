@@ -90,6 +90,11 @@ export type BuildDailyPlanPreviewInput = {
   // 6c: per immunita' deadline. Default new Date() se assente (safety net).
   // L'orchestrator passa esplicitamente al call site.
   now?: Date;
+  // Task 69 (E, S2-E): energia dichiarata all'intake della review. Popolato
+  // da reconstructEveningReviewPreview (triageState.moodIntake.energyEnd) e
+  // preservato dallo spread di applyPreviewOverrides. 1-2 riducono il fill
+  // ratio (vedi getFillRatio); assente = comportamento pre-69 invariato.
+  energyEnd?: number | null;
 };
 
 const ENERGY_HINT_PEAK = 'peak window for hard task';
@@ -133,7 +138,7 @@ export function buildDailyPlanPreview(input: BuildDailyPlanPreviewInput): DailyP
   });
 
   const bounds = getSlotBounds(input.settings);
-  const ratio = getFillRatio(input.profile);
+  const ratio = getFillRatio(input.profile, { energyEnd: input.energyEnd ?? null });
 
   // 6c step 3.5: bounds effettive post fillRatio. Clone difensivo per
   // preservare bounds raw (servono al ceiling calc + immunita' deadline non

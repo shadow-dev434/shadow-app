@@ -667,9 +667,14 @@ describe('executeTool: mark_entry_discussed', () => {
     );
     expect(result.kind).toBe('mutatorWithSideEffects');
     expect(db.task.update).toHaveBeenCalledTimes(1);
+    // Task 69 (C, D46): il postpone ora promette il ripescaggio — deferredUntil
+    // = fine di clientDate+2 in Europe/Rome (qui 2026-04-30, CEST).
     expect(db.task.update).toHaveBeenCalledWith({
       where: { id: 'a' },
-      data: { postponedCount: { increment: 1 } },
+      data: {
+        postponedCount: { increment: 1 },
+        deferredUntil: new Date('2026-04-30T21:59:59.999Z'),
+      },
     });
     // Belt-and-suspenders: lastAvoidedAt non toccato. Cattura la regressione
     // "qualcuno aggiunge lastAvoidedAt al postponed update" (postponed !=

@@ -302,7 +302,7 @@ CONTESTO TRIAGE:
 La lista corrente di candidate viene fornita in coda a questo prompt nel blocco "TRIAGE CORRENTE". Il blocco contiene:
 - una riga IS_FIRST_TURN=true|false con il flag del turno (vedi sotto)
 - due righe MOOD_INTAKE=<1-5|pending> + ENERGY_INTAKE=<1-5|pending> (Slice 7 V1.x): stato dell'intake di apertura, dimensioni indipendenti. 'pending' = non ancora chiesto o l'utente non ha risposto con un numero su quella dimensione; valore numerico 1-5 = gia' registrato e salvato in triage state. Usato per decidere apertura (vedi APERTURA E STATO DEL TURNO) e per il riepilogo in fase closing.
-- N candidate già selezionate (con id, titolo, reason, deadline, avoidance)
+- N candidate già selezionate (con id, titolo, reason, deadline, avoidance). La reason dice PERCHÉ la voce è in lista stasera: deadline (scadenza vicina), recurring (abitudine ricorrente), new (creata oggi), deferred (rimandata in una review precedente con la promessa di riproporla: il giorno promesso È ARRIVATO — riconoscilo con naturalezza, "questa l'avevamo rimandata, la riprendiamo?", mai in tono di rimprovero), carryover (era nel piano di oggi e non risulta chiusa, oppure evitata più volte: presentala neutra, zero shaming, MAI conteggiare giorni o fallimenti), backlog (urgente ferma da un po' SENZA scadenza: l'obiettivo è deciderla — nel piano, ridimensionata o archiviata — non farla galleggiare un'altra settimana).
 - M task in inbox fuori dal triage automatico (id, titolo)
 - CURRENT_ENTRY=<id|none>: il cursor di triage. Se diverso da none, una entry è attiva.
 - CURRENT_ENTRY_DETAIL (se cursor attivo): source, avoidanceCount, postponedCount, lastAvoidedHoursAgo, recentlyAvoided, recentlyPostponed, hasExistingMicroSteps. Usato per scegliere variante di apertura e decidere se proporre decomposizione.
@@ -1232,7 +1232,10 @@ CASO 1 -- TASK_TAGLIATI con reason=low_priority (B.5.1):
 
 Il piano sforava capacity, server-side ho tagliato i task con priorityScore
 piu' basso. Nomina il taglio + chiedi conferma. Pattern: "tengo queste, le
-altre dopo".
+altre dopo". La promessa e' MANTENUTA DAL SISTEMA (Task 69): i task tagliati
+vengono marcati e la review di domani sera li ripropone davvero come
+candidate (reason=deferred) — puoi dire "le rivediamo domani sera" con
+sicurezza, e' vero.
 
 VARIAZIONE PER preferredPromptStyle:
   direct:

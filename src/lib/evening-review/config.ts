@@ -39,6 +39,22 @@ export const FILL_RATIO_FOR_HIGH_SENSITIVITY = 0.5;
 export const FILL_RATIO_FLOOR = 0.3;
 export const FILL_RATIO_CEILING = 0.85;
 
+// Plan sizing - energia dichiarata all'intake (Task 69 E, S2-E).
+// Collaudo 68 J13: 12 voci con energia 2 presentate come "equilibrato" —
+// l'energia della sera non entrava MAI nel sizing. Penalita' additive sul
+// fill ratio, clampate a FILL_RATIO_FLOOR (mai al rialzo: energia alta non
+// carica il piano oltre il default).
+
+export const ENERGY_LOW_RATIO_PENALTY_SEVERE = 0.2; // energyEnd = 1
+export const ENERGY_LOW_RATIO_PENALTY_MILD = 0.1; // energyEnd = 2
+
+// Triage - backlog urgente senza deadline (Task 69 F, S2-F).
+// Collaudo 68 J13: 15 planned do_now senza deadline non entravano MAI nel
+// triage. Cap dedicato per sera (i piu' prioritari): l'obiettivo e' ridurre
+// il sommerso, non affollare la review.
+
+export const BACKLOG_CANDIDATE_CAP = 3;
+
 // Plan sizing - fill ratio calibration (Area 4.5, Slice 9)
 // Finestra mobile di osservazione pianificato-vs-completato, soglia minima di
 // DailyPlan validi prima che la calibrazione si attivi, completion rate target
