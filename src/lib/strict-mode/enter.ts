@@ -222,6 +222,10 @@ export async function enterStrictMode({
   // banner rosso compare senza attendere la rete.
   store.setSelectedTaskId(taskId);
   store.setExecutionMode('launch');
+  // Task 70 (G/D9): il task entra in_progress anche nello store (il server
+  // fa la stessa transizione nel POST): prima restava 'planned' per tutta
+  // la sessione. Ottimistico: al peggio la GET successiva riconcilia.
+  store.updateTask(taskId, { status: 'in_progress' });
   // isExecuting NON si setta qui: lo fa la FocusView al mount, che nello stesso
   // effect inizializza il timer del task alla sua durata — settandolo prima, il
   // timer resterebbe a 0:00 "Terminato".

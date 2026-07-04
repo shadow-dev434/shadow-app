@@ -248,14 +248,22 @@ export function updateProfileFromSignal(
     }
 
     case 'strict_exited': {
-      // User exited strict mode — check if task was completed
+      // Task 70 (G/D24): tre esiti, non due. Prima qualunque uscita senza
+      // completamento spingeva l'EMA verso 0.0 — e il completamento non
+      // emetteva mai il segnale: strictModeEffectiveness poteva SOLO scendere.
+      // - taskCompleted: la sessione ha prodotto il completamento -> 1.0
+      // - cleanExit con durata sostanziale (>=50% del pianificato): uscita
+      //   deliberata a lavoro fatto in parte -> 0.5 neutro, non un fallimento
+      // - bail-out precoce o uscita sporca -> 0.0
       const metadata = signal.metadata ?? {};
       const completed = Boolean(metadata.taskCompleted);
-      if (completed) {
-        updates.strictModeEffectiveness = ema(profile.strictModeEffectiveness, 1.0, EMA_ALPHA);
-      } else {
-        updates.strictModeEffectiveness = ema(profile.strictModeEffectiveness, 0.0, EMA_ALPHA);
-      }
+      const actual = Number(metadata.actualMinutes);
+      const planned = Number(metadata.plannedMinutes);
+      const substantial =
+        Number.isFinite(actual) && Number.isFinite(planned) && planned > 0 && actual / planned >= 0.5;
+      const cleanExit = Boolean(metadata.cleanExit) && substantial;
+      const target = completed ? 1.0 : cleanExit ? 0.5 : 0.0;
+      updates.strictModeEffectiveness = ema(profile.strictModeEffectiveness, target, EMA_ALPHA);
       confidenceChange = 0.015;
       break;
     }

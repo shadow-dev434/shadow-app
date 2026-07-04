@@ -315,7 +315,15 @@ async function loadProfile(): Promise<UserProfileData | null> {
   }
 }
 
-async function endStrictModeSession(sessionId: string, exitReason: string, exitConfirmationText: string) {
+async function endStrictModeSession(
+  sessionId: string,
+  exitReason: string,
+  exitConfirmationText: string,
+  // Task 70 (G/D24): il completamento durante la sessione arriva al server
+  // (taskCompletedDuringSession) — il PATCH lo accettava già, nessuno lo
+  // mandava.
+  opts?: { taskCompleted?: boolean },
+) {
   // Ferma lo scudo nativo e recupera i tentativi bloccati (null su web).
   const blockedAttempts = await stopNativeShield();
   const res = await apiFetch('/api/strict-mode', {
@@ -326,11 +334,26 @@ async function endStrictModeSession(sessionId: string, exitReason: string, exitC
       status: 'exited',
       exitReason,
       exitConfirmationText,
+      ...(opts?.taskCompleted !== undefined ? { taskCompleted: opts.taskCompleted } : {}),
       ...(blockedAttempts != null ? { distractionsBlocked: blockedAttempts } : {}),
     }),
     skipErrorToast: true,
   });
   return res.json();
+}
+
+// Task 70 (G/D24): durate della sessione strict corrente dallo store LIVE,
+// per il metadata di strict_exited (l'engine giudica l'uscita pulita sul
+// rapporto actual/planned). Da chiamare PRIMA di azzerare i campi sessione.
+function strictSessionDurations(): { actualMinutes?: number; plannedMinutes?: number } {
+  const st = useShadowStore.getState();
+  const started = st.strictSessionStartedAt;
+  const ends = st.strictSessionEndsAt;
+  if (!started) return {};
+  const actualMinutes = Math.max(0, Math.round((Date.now() - started) / 60000));
+  const plannedMinutes =
+    ends && ends > started ? Math.round((ends - started) / 60000) : undefined;
+  return { actualMinutes, ...(plannedMinutes !== undefined ? { plannedMinutes } : {}) };
 }
 
 // ─── Learning Signal Helpers ─────────────────────────────────────────────────
@@ -1376,6 +1399,18 @@ function StrictModeExitDialogConnected() {
   }, [store]);
 
   const handleConfirm = useCallback(async ({ reason, confirmationText }: StrictModeExitResult) => {
+    // Task 70 (G/D24): l'uscita che completa la friction (4 step deliberati)
+    // è "pulita": segnale con cleanExit + durate, l'engine la giudica sul
+    // rapporto actual/planned (>=50% -> neutro 0.5, non un fallimento).
+    // Prima l'uscita friction non emetteva NULLA. Durate lette prima di
+    // azzerare i campi sessione.
+    const durations = strictSessionDurations();
+    recordSignal('strict_exited', store.selectedTaskId, {
+      taskCompleted: false,
+      cleanExit: true,
+      ...durations,
+    });
+
     // Actually exit strict mode
     if (store.strictSessionId) {
       try {
@@ -3051,8 +3086,16 @@ function FocusView() {
 
     // End strict mode if active
     if (store.strictModeState === 'active_strict' || store.strictModeState === 'active_soft') {
+      // Task 70 (G/D24): il completamento DENTRO la sessione è l'esito che
+      // fa SALIRE strictModeEffectiveness — prima non emetteva alcun
+      // segnale (e il server non riceveva mai taskCompleted). Durate lette
+      // prima di azzerare i campi sessione.
+      const durations = strictSessionDurations();
+      recordSignal('strict_exited', selectedTask.id, { taskCompleted: true, ...durations });
       if (store.strictSessionId) {
-        try { await endStrictModeSession(store.strictSessionId, 'completed', ''); } catch {}
+        try {
+          await endStrictModeSession(store.strictSessionId, 'completed', '', { taskCompleted: true });
+        } catch {}
       }
       store.setStrictModeState('exited');
       store.setStrictSessionId(null);
@@ -3170,7 +3213,13 @@ function FocusView() {
     // @ts-expect-error TS2367 -- 'active_strict' missing from strictModeState type union, scoped to Task 9 (split file)
     const wasStrict = store.strictModeState === 'active_strict' || store.strictModeState === 'active_soft';
     if (wasStrict) {
-      recordSignal('strict_exited', selectedTask?.id, { taskCompleted: false });
+      // Task 70 (G/D24): fine sessione soft deliberata = uscita pulita, con
+      // durate — l'engine decide 0.5 vs 0.0 sul rapporto actual/planned.
+      recordSignal('strict_exited', selectedTask?.id, {
+        taskCompleted: false,
+        cleanExit: true,
+        ...strictSessionDurations(),
+      });
     }
 
     store.setStrictModeState('inactive');

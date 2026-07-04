@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
     // le statistiche di ogni sessione chiusa per sostituzione.
     const activeSessions = await db.strictModeSession.findMany({
       where: { userId, status: { in: ['active_soft', 'active_strict', 'pending_exit'] } },
-      select: { id: true, startedAt: true, endsAt: true },
+      select: { id: true, startedAt: true, endsAt: true, taskId: true },
     });
     if (activeSessions.length > 0) {
       const nowMs = Date.now();
@@ -77,6 +77,18 @@ export async function POST(req: NextRequest) {
           }),
         ),
       );
+      // Task 70 (G/D9): le sessioni chiuse d'ufficio non lasciano task
+      // in_progress orfani (esclude il task della sessione nuova: verrà
+      // rimesso in_progress subito sotto).
+      const supersededTaskIds = activeSessions
+        .map((s) => s.taskId)
+        .filter((id): id is string => typeof id === 'string' && id !== taskId);
+      if (supersededTaskIds.length > 0) {
+        await db.task.updateMany({
+          where: { id: { in: supersededTaskIds }, userId, status: 'in_progress' },
+          data: { status: 'planned' },
+        });
+      }
     }
 
     const now = new Date();
@@ -95,6 +107,16 @@ export async function POST(req: NextRequest) {
         endsAt,
       },
     });
+
+    // Task 70 (G/D9): il task lavorato entra in_progress in DB — prima
+    // restava 'planned' per tutta la sessione (viste ed engine non vedevano
+    // mai l'esecuzione). Guardia di stato: mai risuscitare task terminali.
+    if (taskId) {
+      await db.task.updateMany({
+        where: { id: taskId, userId, status: { in: ['inbox', 'planned', 'active'] } },
+        data: { status: 'in_progress' },
+      });
+    }
 
     return NextResponse.json({
       session: {
@@ -176,6 +198,19 @@ export async function PATCH(req: NextRequest) {
         nowMs: Date.now(),
         exitReason: typeof exitReason === 'string' ? exitReason : null,
       });
+      // Task 70 (G/D9): esito sul task della sessione. Completamento: il
+      // client PATCHa il task a completed via /api/tasks PRIMA di chiudere
+      // la sessione — qui solo il flag. Uscita senza completamento (friction,
+      // soft end, expired, superseded): il task torna planned, mai orfano
+      // in_progress.
+      if (exitReason === 'completed') {
+        updateData.taskCompletedDuringSession = true;
+      } else if (existing.taskId) {
+        await db.task.updateMany({
+          where: { id: existing.taskId, userId, status: 'in_progress' },
+          data: { status: 'planned' },
+        });
+      }
     }
 
     const session = await db.strictModeSession.update({
