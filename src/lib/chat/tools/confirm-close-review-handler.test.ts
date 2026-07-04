@@ -150,6 +150,34 @@ describe('handleConfirmCloseReview — scenario 3 brief: fallback mood D1', () =
     expect(MOOD_INTAKE_FALLBACK_VALUE).toBe(3); // sanity check sulla constante
   });
 
+  // Task 70 (A/N32): con i valori del mattino nel triage, lo skip degrada a
+  // quelli, non al 3 secco.
+  it('skip con morningMood/morningEnergy -> closeReview riceve i valori del mattino', async () => {
+    await handleConfirmCloseReview(
+      makeInput({
+        triageState: makeTriageState({
+          moodIntake: { morningMood: 4, morningEnergy: 2 },
+        }),
+      }),
+    );
+    const call = vi.mocked(closeReview).mock.calls[0][0];
+    expect(call.mood).toBe(4);
+    expect(call.energyEnd).toBe(2);
+  });
+
+  it('valori serali registrati vincono sui morning', async () => {
+    await handleConfirmCloseReview(
+      makeInput({
+        triageState: makeTriageState({
+          moodIntake: { mood: 2, energyEnd: 5, morningMood: 4, morningEnergy: 3 },
+        }),
+      }),
+    );
+    const call = vi.mocked(closeReview).mock.calls[0][0];
+    expect(call.mood).toBe(2);
+    expect(call.energyEnd).toBe(5);
+  });
+
   it('triageState.moodIntake = {mood:4, energyEnd:4} -> closeReview riceve mood=4, energyEnd=4', async () => {
     await handleConfirmCloseReview(
       makeInput({

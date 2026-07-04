@@ -47,4 +47,51 @@ describe('handleRecordMood', () => {
     if (r.ok) return;
     expect(r.error).toContain('closing');
   });
+
+  // Task 70 (A/N32): conferma del default del mattino via triage state.
+  it('conferma "confermo" con morningMood=4: value=4 -> ok e preserva i campi morning', () => {
+    const r = handleRecordMood({
+      args: { value: 4 },
+      triageState: baseState({ morningMood: 4, morningEnergy: 3 }),
+      currentPhase: 'per_entry',
+      userMessage: 'confermo',
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.newTriageState.moodIntake).toEqual({
+      mood: 4,
+      morningMood: 4,
+      morningEnergy: 3,
+    });
+  });
+
+  it('conferma con value diverso dal morningMood -> reject', () => {
+    const r = handleRecordMood({
+      args: { value: 5 },
+      triageState: baseState({ morningMood: 4 }),
+      currentPhase: 'per_entry',
+      userMessage: 'confermo',
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  it('conferma senza morningMood nel triage -> reject (nessun default da confermare)', () => {
+    const r = handleRecordMood({
+      args: { value: 4 },
+      triageState: baseState(),
+      currentPhase: 'per_entry',
+      userMessage: 'confermo',
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  it('coppia "4 e 3": record_mood prende il primo valore', () => {
+    const r = handleRecordMood({
+      args: { value: 4 },
+      triageState: baseState(),
+      currentPhase: 'per_entry',
+      userMessage: '4 e 3',
+    });
+    expect(r.ok).toBe(true);
+  });
 });

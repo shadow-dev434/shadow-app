@@ -55,6 +55,7 @@ import {
 // nel modulo dedicato per i test; qui solo il wiring del blocco 7c.
 import { textClaimsWrite, isWriteToolName, CLAIM_GUARD_GUIDANCE, honestFallbackMessage } from './claim-guard';
 import { captureWhatBlocked } from '@/lib/evening-review/what-blocked-capture';
+import { selectMorningMoodEnergyForDate } from '@/lib/evening-review/morning-mood-energy';
 // Task 40: rolling summary — finestra ancorata al watermark + blocco system
 // cachato. Soglie e helper vivono nel modulo (auto-approvabile), qui solo wiring.
 import {
@@ -1580,6 +1581,11 @@ async function initEveningReview(
   const allTasks = await loadAllNonTerminalTasks(userId);
   // Task 69 (D): i task del piano di oggi ancora aperti entrano come carryover.
   const yesterdayPlanTaskIds = await loadLatestPlanTaskIds(userId, clientDate);
+  // Task 70 (A/N32): mood/energia dichiarati al morning check-in di oggi.
+  // Stash nel triage state iniziale (persiste in contextJson): alimentano il
+  // default confermabile in apertura, il confirmValue dei validatori
+  // record_mood/record_energy e il fallback in closing.
+  const morning = await selectMorningMoodEnergyForDate(userId, clientDate);
 
   const candidates = selectCandidates({
     tasks: allTasks,
@@ -1615,6 +1621,14 @@ async function initEveningReview(
     outcomes: {},
     decomposition: null,
     ...(Object.keys(proposedStepsByTaskId).length > 0 && { proposedStepsByTaskId }),
+    // Task 70 (A/N32): default confermabile — solo i campi effettivamente
+    // dichiarati stamattina (assenti = flusso di intake classico).
+    ...((morning.morningMood !== undefined || morning.morningEnergy !== undefined) && {
+      moodIntake: {
+        ...(morning.morningMood !== undefined && { morningMood: morning.morningMood }),
+        ...(morning.morningEnergy !== undefined && { morningEnergy: morning.morningEnergy }),
+      },
+    }),
   };
 
   return { triageState, allTasks };
@@ -1710,6 +1724,17 @@ export function buildEveningReviewModeContext(
   const energyValue = triageState.moodIntake?.energyEnd;
   lines.push(`MOOD_INTAKE=${moodValue !== undefined ? moodValue : 'pending'}`);
   lines.push(`ENERGY_INTAKE=${energyValue !== undefined ? energyValue : 'pending'}`);
+  // Task 70 (A/N32): default confermabile dal mattino. Righe emesse SOLO se
+  // il dato del morning check-in esiste E la rispettiva dimensione e' ancora
+  // pending: registrata la risposta, spariscono (il prompt non le ripropone).
+  const morningMood = triageState.moodIntake?.morningMood;
+  const morningEnergy = triageState.moodIntake?.morningEnergy;
+  if (moodValue === undefined && morningMood !== undefined) {
+    lines.push(`MORNING_MOOD=${morningMood}`);
+  }
+  if (energyValue === undefined && morningEnergy !== undefined) {
+    lines.push(`MORNING_ENERGY=${morningEnergy}`);
+  }
   lines.push(`N=${candidateLines.length} candidate, M=${outOfTriage.length} task in inbox fuori dal triage.`);
   lines.push('');
   lines.push('Candidate (in ordine):');

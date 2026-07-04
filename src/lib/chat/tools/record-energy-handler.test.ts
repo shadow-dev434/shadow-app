@@ -47,4 +47,42 @@ describe('handleRecordEnergy', () => {
     if (r.ok) return;
     expect(r.error).toContain('closing');
   });
+
+  // Task 70 (A/N32): conferma del default del mattino via triage state.
+  it('conferma "come stamattina" con morningEnergy=3: value=3 -> ok, mood registrato preservato', () => {
+    const r = handleRecordEnergy({
+      args: { value: 3 },
+      triageState: baseState({ mood: 4, morningMood: 4, morningEnergy: 3 }),
+      currentPhase: 'per_entry',
+      userMessage: 'come stamattina',
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.newTriageState.moodIntake).toEqual({
+      mood: 4,
+      energyEnd: 3,
+      morningMood: 4,
+      morningEnergy: 3,
+    });
+  });
+
+  it('conferma con value diverso dal morningEnergy -> reject', () => {
+    const r = handleRecordEnergy({
+      args: { value: 4 },
+      triageState: baseState({ morningEnergy: 3 }),
+      currentPhase: 'per_entry',
+      userMessage: 'confermo',
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  it('coppia "4 e 3": record_energy prende il secondo valore', () => {
+    const r = handleRecordEnergy({
+      args: { value: 3 },
+      triageState: baseState(),
+      currentPhase: 'per_entry',
+      userMessage: '4 e 3',
+    });
+    expect(r.ok).toBe(true);
+  });
 });

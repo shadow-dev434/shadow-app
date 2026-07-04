@@ -67,8 +67,9 @@ export async function materializePartialReview(
     data: {
       userId: input.userId,
       date: triage.clientDate,
-      mood: mood ?? MOOD_INTAKE_FALLBACK_VALUE,
-      energyEnd: energyEnd ?? MOOD_INTAKE_FALLBACK_VALUE,
+      // Task 70 (A/N32): a parita' di skip, il valore del mattino batte il 3.
+      mood: mood ?? triage.moodIntake?.morningMood ?? MOOD_INTAKE_FALLBACK_VALUE,
+      energyEnd: energyEnd ?? triage.moodIntake?.morningEnergy ?? MOOD_INTAKE_FALLBACK_VALUE,
       whatBlocked,
       whatDone: signals.done.join('\n'),
       whatAvoided: signals.avoided.join('\n'),

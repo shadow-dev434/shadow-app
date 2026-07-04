@@ -40,10 +40,15 @@ export type HandleCloseReviewBurnoutResult =
 export async function handleCloseReviewBurnout(
   input: HandleCloseReviewBurnoutInput,
 ): Promise<HandleCloseReviewBurnoutResult> {
+  // Task 70 (A/N32): a parita' di skip, il valore del mattino batte il 3 secco.
   const mood =
-    input.triageState.moodIntake?.mood ?? MOOD_INTAKE_FALLBACK_VALUE;
+    input.triageState.moodIntake?.mood ??
+    input.triageState.moodIntake?.morningMood ??
+    MOOD_INTAKE_FALLBACK_VALUE;
   const energyEnd =
-    input.triageState.moodIntake?.energyEnd ?? MOOD_INTAKE_FALLBACK_VALUE;
+    input.triageState.moodIntake?.energyEnd ??
+    input.triageState.moodIntake?.morningEnergy ??
+    MOOD_INTAKE_FALLBACK_VALUE;
   const whatBlocked = input.triageState.whatBlocked ?? '';
   const reviewDate = input.triageState.clientDate;
 

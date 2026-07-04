@@ -32,10 +32,13 @@ export const RECORD_ENERGY_TOOL: LLMTool = {
   name: 'record_energy',
   description:
     "Registra il livello di energia 1-5 che l'utente dichiara al secondo " +
-    "turno della review serale (Q2, dopo Q1 sull'umore). PARAMETRO: 'value' " +
-    "(NON 'level'). Esempio: { value: 3 }. Il valore viene salvato come " +
-    "energyEnd della Review. Non confondere con record_mood (Q1 sull'umore) " +
-    "ne' con set_user_energy del morning checkin (che usa 'level').",
+    "turno della review serale (Q2, dopo Q1 sull'umore), oppure quando " +
+    "conferma il valore del mattino proposto (value = MORNING_ENERGY) o " +
+    "risponde con una coppia 'mood e energia' (value = SECONDO numero). " +
+    "PARAMETRO: 'value' (NON 'level'). Esempio: { value: 3 }. Il valore " +
+    "viene salvato come energyEnd della Review. Non confondere con " +
+    "record_mood (Q1 sull'umore) ne' con set_user_energy del morning " +
+    "checkin (che usa 'level').",
   input_schema: {
     type: 'object',
     properties: {

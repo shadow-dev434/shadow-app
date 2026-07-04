@@ -89,11 +89,16 @@ export async function handleConfirmCloseReview(
   const modifiedInput = applyPreviewOverrides(input.baseInput, input.previewState);
   const preview = buildDailyPlanPreview(modifiedInput);
 
-  // Aggregazione campi per closeReview.
+  // Aggregazione campi per closeReview. Task 70 (A/N32): a parita' di skip,
+  // il valore dichiarato al mattino e' piu' vero del 3 secco.
   const mood =
-    input.triageState.moodIntake?.mood ?? MOOD_INTAKE_FALLBACK_VALUE;
+    input.triageState.moodIntake?.mood ??
+    input.triageState.moodIntake?.morningMood ??
+    MOOD_INTAKE_FALLBACK_VALUE;
   const energyEnd =
-    input.triageState.moodIntake?.energyEnd ?? MOOD_INTAKE_FALLBACK_VALUE;
+    input.triageState.moodIntake?.energyEnd ??
+    input.triageState.moodIntake?.morningEnergy ??
+    MOOD_INTAKE_FALLBACK_VALUE;
   const whatBlocked = input.triageState.whatBlocked ?? '';
   const pinnedTaskIds = input.previewState.pinnedTaskIds;
   const reviewDate = input.clientDate;

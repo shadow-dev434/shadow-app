@@ -39,10 +39,11 @@ export const RECORD_MOOD_TOOL: LLMTool = {
   description:
     "Registra il livello di umore 1-5 che l'utente dichiara al primo turno " +
     "della review serale (Q1). Chiamare SOLO quando l'utente fornisce un " +
-    "numero (o un valore qualitativo che mappi univocamente a 1-5) in " +
-    "risposta alla domanda di apertura sul mood. Il valore viene salvato " +
-    "come mood della Review. Non confondere con record_energy (Q2 separata " +
-    "sull'energia) ne' con set_user_energy (morning checkin).",
+    "numero (o un valore qualitativo che mappi univocamente a 1-5), conferma " +
+    "il valore del mattino proposto (value = MORNING_MOOD), o risponde con " +
+    "una coppia 'mood e energia' (value = PRIMO numero). Il valore viene " +
+    "salvato come mood della Review. Non confondere con record_energy (Q2 " +
+    "separata sull'energia) ne' con set_user_energy (morning checkin).",
   input_schema: {
     type: 'object',
     properties: {

@@ -37,7 +37,11 @@ export function handleRecordMood(
     };
   }
 
-  const validation = validateRecordMoodArgs(input.args, input.userMessage);
+  // Task 70 (A/N32): il valore del mattino, se presente nel triage state,
+  // rende accettabile la conferma pura ("confermo") senza numero esplicito.
+  const validation = validateRecordMoodArgs(input.args, input.userMessage, {
+    confirmValue: input.triageState.moodIntake?.morningMood,
+  });
   if (!validation.ok) {
     return { ok: false, error: validation.error };
   }

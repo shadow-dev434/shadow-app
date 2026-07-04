@@ -109,4 +109,29 @@ describe('materializePartialReview', () => {
     expect(createArg.data.mood).toBe(MOOD_INTAKE_FALLBACK_VALUE);
     expect(createArg.data.energyEnd).toBe(MOOD_INTAKE_FALLBACK_VALUE);
   });
+
+  // Task 70 (A/N32): il default del mattino batte il 3 secco nel fallback.
+  it('skip con valori del mattino nel triage -> fallback ai morning, non al 3', async () => {
+    const result = await run(
+      ctx({
+        ...BASE_TRIAGE,
+        outcomes: { a: 'postponed' },
+        moodIntake: { morningMood: 4, morningEnergy: 2 },
+      }),
+    );
+    expect(result).toEqual({ materialized: true, reviewId: 'review-partial' });
+    const createArg = mockDb.review.create.mock.calls[0][0];
+    expect(createArg.data.mood).toBe(4);
+    expect(createArg.data.energyEnd).toBe(2);
+  });
+
+  it('SOLO valori del mattino (nessun dato serale) -> nothing_to_save', async () => {
+    // I morning non sono dati della review: senza intake/outcome/whatBlocked
+    // serali non va materializzato niente.
+    const result = await run(
+      ctx({ ...BASE_TRIAGE, moodIntake: { morningMood: 4, morningEnergy: 2 } }),
+    );
+    expect(result).toEqual({ materialized: false, reason: 'nothing_to_save' });
+    expect(mockDb.review.create).not.toHaveBeenCalled();
+  });
 });

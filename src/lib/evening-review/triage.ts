@@ -321,8 +321,20 @@ export type TriageState = {
    * settati da record_mood (mood) e record_energy (energyEnd). undefined finche'
    * l'utente non risponde o non viene applicato il fallback D1
    * (MOOD_INTAKE_FALLBACK_VALUE per-field in confirm-close-review-handler).
+   *
+   * Task 70 (A/N32): morningMood/morningEnergy = valori dichiarati al morning
+   * check-in (LearningSignal mood/energy_declared di oggi), caricati da
+   * initEveningReview al primo turno. Alimentano il default confermabile
+   * ("stamattina eri a 4 — confermi?"): righe MORNING_* nel modeContext,
+   * confirmValue dei validatori record_mood/record_energy, fallback closing
+   * al posto del 3 secco. Additivi: contextJson pre-70 caricano intatti.
    */
-  moodIntake?: { mood?: number; energyEnd?: number };
+  moodIntake?: {
+    mood?: number;
+    energyEnd?: number;
+    morningMood?: number;
+    morningEnergy?: number;
+  };
 
   /**
    * Slice 7: whatBlocked aggregato in formato append-style D2
