@@ -3,6 +3,8 @@ import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
 import { taskStatuses } from '@/lib/types/shadow';
+import { safeEmitLearningSignal } from '@/lib/learning/emit-signal';
+import { getCurrentTimeSlot } from '@/lib/engines/execution-engine';
 
 // GET /api/tasks/[id]
 export async function GET(
@@ -76,6 +78,21 @@ export async function PATCH(
     }
 
     const task = await db.task.update({ where: { id }, data: updateData });
+
+    // Task 69 (G, S2-G/N5): la transizione a completed emette il segnale QUI,
+    // lato server (prima lo faceva solo il client, fail-silent: whatDone e
+    // calibrazione restavano ciechi). Fail-soft: il PATCH non fallisce mai
+    // per colpa del learning.
+    if (body.status === 'completed' && existing.status !== 'completed') {
+      await safeEmitLearningSignal({
+        userId,
+        signalType: 'task_completed',
+        taskId: task.id,
+        category: task.category,
+        context: task.context,
+        timeSlot: getCurrentTimeSlot(),
+      });
+    }
 
     const serialized = {
       ...task,

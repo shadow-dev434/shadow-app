@@ -3,7 +3,9 @@ import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import {
   prioritizeTask,
+  applyAdaptiveBlend,
 } from '@/lib/engines/priority-engine';
+import { dbRecordToProfileData, getAdaptiveScore } from '@/lib/engines/learning-engine';
 import { buildDailyPlan, getCurrentTimeSlot, generateRecoveryAction } from '@/lib/engines/execution-engine';
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses, type ExecutionContext, type TaskRecord } from '@/lib/types/shadow';
@@ -87,9 +89,36 @@ export async function POST(req: NextRequest) {
     });
 
     const taskRecords = tasks.map(toTaskRecord);
+
+    // Task 69 (G, S2-G/N7): il piano ora legge il profilo appreso — prima il
+    // learning non arrivava mai al deliverable centrale. Blend conservativo
+    // SULLA pipeline esistente (applyAdaptiveBlend): profilo assente ->
+    // percorso identico al pre-69.
+    const profileRecord = await db.adaptiveProfile.findUnique({ where: { userId } });
+    const adaptiveProfile = profileRecord
+      ? dbRecordToProfileData(profileRecord as unknown as Record<string, unknown>)
+      : null;
+
     const prioritized = taskRecords.map((task) => {
-      const result = prioritizeTask(task, ctx, taskRecords);
-      return { ...task, ...result };
+      const base = prioritizeTask(task, ctx, taskRecords);
+      if (adaptiveProfile === null) {
+        return { ...task, ...base };
+      }
+      const adaptive = getAdaptiveScore(
+        {
+          category: task.category,
+          context: task.context,
+          timeSlot: ctx.currentTimeSlot,
+          resistance: task.resistance,
+          size: task.size,
+          importance: task.importance,
+          urgency: task.urgency,
+          delegable: task.delegable,
+        },
+        adaptiveProfile,
+        { timeSlot: ctx.currentTimeSlot, context: ctx.currentContext },
+      );
+      return { ...task, ...applyAdaptiveBlend(base, adaptive.adaptiveScore) };
     });
 
     prioritized.sort((a, b) => b.finalScore - a.finalScore);

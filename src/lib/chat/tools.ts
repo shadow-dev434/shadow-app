@@ -75,6 +75,8 @@ import { handleMarkWhatBlockedAsked } from './tools/mark-what-blocked-asked-hand
 import type { PreviewState } from '@/lib/evening-review/apply-overrides';
 import type { BuildDailyPlanPreviewInput } from '@/lib/evening-review/plan-preview';
 import { formatDateInRome, formatTodayInRome, addDaysIso, endOfDayInZone } from '@/lib/evening-review/dates';
+import { safeEmitLearningSignal } from '@/lib/learning/emit-signal';
+import { getCurrentTimeSlot } from '@/lib/engines/execution-engine';
 import { estimateDuration } from '@/lib/evening-review/duration-estimation';
 import { commitTodayPlan, upsertTodayContext } from '@/lib/daily-plan/commit-today-plan';
 import { fitTodayPlanToTime } from '@/lib/daily-plan/fit-to-time';
@@ -1327,7 +1329,7 @@ async function executeCompleteTask(
 
   const task = await db.task.findFirst({
     where: { id: taskId, userId },
-    select: { id: true, title: true, status: true },
+    select: { id: true, title: true, status: true, category: true, context: true },
   });
   if (!task) {
     return { kind: 'sideEffect', success: false, error: `Task ${taskId} not found or not owned by user` };
@@ -1352,6 +1354,17 @@ async function executeCompleteTask(
   await db.task.update({
     where: { id: task.id },
     data: { status: 'completed', completedAt: new Date() },
+  });
+
+  // Task 69 (G, S2-G/N5): completare via chat ora emette il segnale come la
+  // UI — prima whatDone/calibrazione erano ciechi ai completamenti in chat.
+  await safeEmitLearningSignal({
+    userId,
+    signalType: 'task_completed',
+    taskId: task.id,
+    category: task.category,
+    context: task.context,
+    timeSlot: getCurrentTimeSlot(),
   });
 
   return {
@@ -1920,14 +1933,9 @@ async function executeMarkEntryDiscussed(
           deferredUntil: endOfDayInZone(addDaysIso(triageState.clientDate, 2), 'Europe/Rome'),
         },
       });
-      await db.learningSignal.create({
-        data: {
-          userId,
-          taskId: entryId,
-          signalType: 'task_postponed',
-          metadata: '{}',
-        },
-      });
+      // Task 69 (G): via l'insert diretto — l'helper processa il segnale
+      // (prima restava processed=false per sempre, N6).
+      await safeEmitLearningSignal({ userId, taskId: entryId, signalType: 'task_postponed' });
       break;
     case 'cancelled':
       await db.task.update({
@@ -1944,19 +1952,14 @@ async function executeMarkEntryDiscussed(
         where: { id: entryId },
         data: { status: 'completed', completedAt: new Date() },
       });
+      // Task 69 (G, S2-G/N5): parita' VERA con complete_task — anche il
+      // triage emette task_completed (prima la sera "l'ho gia' fatta"
+      // spariva da whatDone e dalla calibrazione).
+      await safeEmitLearningSignal({ userId, taskId: entryId, signalType: 'task_completed' });
       break;
     case 'emotional_skip':
-      // metadata: '{}' e' predisposizione di schema; commit 4 (friction
-      // detector) popolera' { matched: <pattern|signal> } quando la mossa 3.3
-      // viene scatenata automaticamente.
-      await db.learningSignal.create({
-        data: {
-          userId,
-          taskId: entryId,
-          signalType: 'task_emotional_skip',
-          metadata: '{}',
-        },
-      });
+      // Task 69 (G): via l'insert diretto — l'helper processa il segnale.
+      await safeEmitLearningSignal({ userId, taskId: entryId, signalType: 'task_emotional_skip' });
       break;
     case 'kept':
     case 'parked':

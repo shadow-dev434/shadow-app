@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
+import { emitAndProcessLearningSignal } from '@/lib/learning/emit-signal';
 
 // GET /api/micro-feedback?limit=50
 export async function GET(req: NextRequest) {
@@ -81,87 +82,22 @@ export async function POST(req: NextRequest) {
       metadata.sessionExp = response;
     }
 
-    const signal = await db.learningSignal.create({
-      data: {
-        userId,
-        signalType,
-        taskId: taskId ?? null,
-        category: category ?? null,
-        context: null,
-        timeSlot,
-        value: 1,
-        metadata: JSON.stringify(metadata),
-      },
-    });
-
-    const profileRecord = await db.adaptiveProfile.findUnique({ where: { userId } });
-
-    if (!profileRecord) {
-      return NextResponse.json({
-        feedback,
-        signal,
-        profile: null,
-        message: 'Feedback saved but no adaptive profile found to update.',
-      });
-    }
-
-    const { dbRecordToProfileData, processSignal } = await import('@/lib/engines/learning-engine');
-    const profile = dbRecordToProfileData(profileRecord as unknown as Record<string, unknown>);
-
-    const updates = processSignal(profile, {
+    // Task 69 (G): create+process+update erano una copia inline della POST
+    // /api/learning-signal — ora entrambe passano da emit-signal.ts.
+    const result = await emitAndProcessLearningSignal({
+      userId,
       signalType,
-      taskId: taskId ?? undefined,
-      category: category ?? undefined,
-      context: undefined,
+      taskId,
+      category,
       timeSlot,
-      value: 1,
       metadata,
     });
 
-    const updateData: Record<string, unknown> = {};
-    const jsonFields = new Set([
-      'bestTimeWindows', 'worstTimeWindows', 'motivationProfile',
-      'taskPreferenceMap', 'energyRhythm', 'commonFailureReasons',
-      'commonSuccessConditions', 'categorySuccessRates', 'categoryBlockRates',
-      'categoryAvgResistance', 'contextPerformanceRates', 'timeSlotPerformance',
-      'nudgeTypeEffectiveness', 'decompositionStyleEffectiveness',
-    ]);
-
-    for (const [key, val] of Object.entries(updates)) {
-      if (val !== undefined) {
-        if (jsonFields.has(key) && typeof val !== 'string') {
-          updateData[key] = JSON.stringify(val);
-        } else {
-          updateData[key] = val;
-        }
-      }
-    }
-
-    if (updates.totalSignals !== undefined) {
-      const totalSignals = updates.totalSignals as number;
-      updateData.lastUpdatedFrom = totalSignals > 50 ? 'predictive' : 'behavioral';
-    }
-
-    let updatedProfile = profile;
-    if (Object.keys(updateData).length > 0) {
-      const updatedRecord = await db.adaptiveProfile.update({
-        where: { userId },
-        data: updateData as Parameters<typeof db.adaptiveProfile.update>[0]['data'],
-      });
-
-      await db.learningSignal.update({
-        where: { id: signal.id },
-        data: { processed: true, processedAt: new Date() },
-      });
-
-      updatedProfile = dbRecordToProfileData(updatedRecord as unknown as Record<string, unknown>);
-    }
-
     return NextResponse.json({
       feedback,
-      signal,
-      profile: updatedProfile,
-      updatesApplied: Object.keys(updateData),
+      signal: result.signal,
+      profile: result.profile,
+      updatesApplied: result.updatesApplied,
     });
   } catch (error) {
     captureApiError(error, 'POST /api/micro-feedback');

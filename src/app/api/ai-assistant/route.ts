@@ -395,11 +395,17 @@ export async function POST(request: NextRequest) {
         }
 
         try {
+          // Task 69 (G, N6): il profilo e' GIA' aggiornato qui sopra da
+          // recordNudgeOutcome — questo segnale e' solo traccia dataset, va
+          // marcato processed alla nascita (niente doppio processing, ma
+          // nemmeno il limbo processed=false eterno del collaudo 68).
           await db.learningSignal.create({
             data: {
               userId,
               signalType: accepted ? 'nudge_accepted' : 'nudge_ignored',
               metadata: JSON.stringify({ nudgeStrategy: strategy }),
+              processed: true,
+              processedAt: new Date(),
             },
           });
         } catch {}

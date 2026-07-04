@@ -349,6 +349,37 @@ export function calculatePFAdaptive(PF: number, adaptiveScore: number): number {
   return PF + adaptiveScore;
 }
 
+/**
+ * Task 69 (G, S2-G/N7): scala del contributo adattivo quando il daily plan
+ * legge il profilo appreso. NOTA ARCHITETTURALE: prioritizeTaskAdaptive (qui
+ * sotto) usa la pipeline PF normalizzata 0-1, INCOMPATIBILE con la scala a
+ * decine di prioritizeTask usata in produzione — adottarla non sarebbe un
+ * blend ma un cambio di formula. Il blend conservativo deciso il 2026-07-04
+ * vive quindi SULLA pipeline esistente: finalScore + adaptiveScore * SCALE.
+ * adaptiveScore e' clampato a ±0.5 (learning-engine) -> contributo massimo
+ * ±4 punti su score tipici 10-30 (~15-25%): l'ordinamento cambia solo dove
+ * il profilo ha evidenza forte, mai ribaltato da segnali deboli.
+ */
+export const ADAPTIVE_BLEND_SCALE = 8;
+
+/**
+ * Applica il contributo adattivo al risultato della pipeline di produzione
+ * (prioritizeTask), senza cambiarne formula o scala. adaptiveScore assente o
+ * nullo -> risultato IDENTICO (non-regressione garantita per costruzione).
+ */
+export function applyAdaptiveBlend(
+  result: PriorityResult,
+  adaptiveScore: number | null | undefined,
+): PriorityResult {
+  if (!adaptiveScore) return result;
+  const delta = adaptiveScore * ADAPTIVE_BLEND_SCALE;
+  return {
+    ...result,
+    adhdScore: result.adhdScore + delta,
+    finalScore: Math.max(0, result.finalScore + delta),
+  };
+}
+
 // ── 5 Discrete Rules ────────────────────────────────────────────────────
 
 export function applyDiscreteRules(

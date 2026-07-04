@@ -3040,8 +3040,8 @@ function FocusView() {
       store.setStrictSessionEndsAt(null);
     }
 
-    // Record learning signal
-    recordSignal('task_completed', selectedTask.id);
+    // Task 69 (G): task_completed lo emette il SERVER nella PATCH di status
+    // (fonte autorevole, niente doppio segnale, niente fail-silent di rete).
     // Micro-feedback al completamento: confine naturale (Task 66 B/D57) —
     // passa dal coordinatore (sfratta un eventuale nudge, cede al popup).
     setTimeout(() => showMicroFeedbackNow('drain_activate', selectedTask.id), 500);

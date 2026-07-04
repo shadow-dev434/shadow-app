@@ -3,8 +3,11 @@ import {
   classifyEisenhower,
   classifyEisenhowerQ,
   calculateBaseScore,
+  prioritizeTask,
+  applyAdaptiveBlend,
+  ADAPTIVE_BLEND_SCALE,
 } from './priority-engine';
-import type { TaskRecord } from '@/lib/types/shadow';
+import type { TaskRecord, ExecutionContext } from '@/lib/types/shadow';
 
 // Minimal TaskRecord factory: only i campi letti dalle funzioni sotto test
 // contano; il resto e' riempito con default neutri.
@@ -114,5 +117,43 @@ describe('calculateBaseScore — spread continuo + bonus deadline', () => {
     const tomorrow = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
     const base = calculateBaseScore(makeTask({ importance: 3, urgency: 3 }));
     expect(calculateBaseScore(makeTask({ importance: 3, urgency: 3, deadline: tomorrow }))).toBe(base + 5);
+  });
+});
+
+describe('applyAdaptiveBlend — blend conservativo sul piano (Task 69 G)', () => {
+  const ctx: ExecutionContext = {
+    energy: 3,
+    timeAvailable: 240,
+    currentContext: 'any',
+    currentTimeSlot: 'morning',
+  };
+
+  it('adaptiveScore assente/null/0 -> risultato IDENTICO (non-regressione)', () => {
+    const task = makeTask({ importance: 4, urgency: 2, resistance: 4 });
+    const base = prioritizeTask(task, ctx, [task]);
+    expect(applyAdaptiveBlend(base, undefined)).toEqual(base);
+    expect(applyAdaptiveBlend(base, null)).toEqual(base);
+    expect(applyAdaptiveBlend(base, 0)).toEqual(base);
+  });
+
+  it('score positivo alza finalScore di score*SCALE, negativo lo abbassa', () => {
+    const task = makeTask({ importance: 4, urgency: 4 });
+    const base = prioritizeTask(task, ctx, [task]);
+    const boosted = applyAdaptiveBlend(base, 0.3);
+    const dampened = applyAdaptiveBlend(base, -0.3);
+    expect(boosted.finalScore).toBeCloseTo(base.finalScore + 0.3 * ADAPTIVE_BLEND_SCALE, 5);
+    expect(dampened.finalScore).toBeCloseTo(base.finalScore - 0.3 * ADAPTIVE_BLEND_SCALE, 5);
+    // Decisione e quadrante non vengono MAI toccati dal blend.
+    expect(boosted.decision).toBe(base.decision);
+    expect(boosted.quadrant).toBe(base.quadrant);
+  });
+
+  it('contributo massimo (score clampato ±0.5) = ±4 punti; finalScore mai negativo', () => {
+    const task = makeTask({ importance: 3, urgency: 3 });
+    const base = prioritizeTask(task, ctx, [task]);
+    const maxBoost = applyAdaptiveBlend(base, 0.5);
+    expect(maxBoost.finalScore - base.finalScore).toBeCloseTo(0.5 * ADAPTIVE_BLEND_SCALE, 5);
+    const floored = applyAdaptiveBlend({ ...base, finalScore: 1 }, -0.5);
+    expect(floored.finalScore).toBe(0);
   });
 });

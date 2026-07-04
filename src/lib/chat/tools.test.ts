@@ -12,6 +12,13 @@ vi.mock('@/lib/db', () => ({
     },
     learningSignal: {
       create: vi.fn(),
+      update: vi.fn(),
+    },
+    // Task 69 (G): l'helper emit-signal legge il profilo dopo il create.
+    // Default null (beforeEach) = segnale salvato, nessun processing.
+    adaptiveProfile: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
     },
   },
 }));
@@ -684,12 +691,17 @@ describe('executeTool: mark_entry_discussed', () => {
     expect(updateArg.data).not.toHaveProperty('lastAvoidedAt');
     // Slice 9: il postponed emette il LearningSignal task_postponed (dataset
     // per l'analisi "postponed multipli = evitamento mascherato", differita).
+    // Task 69 (G): il segnale passa da emit-signal (payload completo).
     expect(db.learningSignal.create).toHaveBeenCalledTimes(1);
     expect(db.learningSignal.create).toHaveBeenCalledWith({
       data: {
         userId: 'user1',
         taskId: 'a',
         signalType: 'task_postponed',
+        category: null,
+        context: null,
+        timeSlot: null,
+        value: 1,
         metadata: '{}',
       },
     });
@@ -715,10 +727,12 @@ describe('executeTool: mark_entry_discussed', () => {
     expect(db.learningSignal.create).not.toHaveBeenCalled();
   });
 
-  it("'completed' outcome (Task 65 E3/J2): sets status='completed' with completedAt, no signal", async () => {
+  it("'completed' outcome: sets status='completed' with completedAt AND emits task_completed (Task 69 G)", async () => {
     mockTaskOwned('a', 'Task A');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked(db.task.update).mockResolvedValue({ id: 'a' } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(db.learningSignal.create).mockResolvedValue({ id: 'sig1' } as any);
     const state = makeState();
     const result = await executeTool(
       'mark_entry_discussed',
@@ -734,8 +748,16 @@ describe('executeTool: mark_entry_discussed', () => {
     expect(updateArg.where).toEqual({ id: 'a' });
     expect(updateArg.data).toMatchObject({ status: 'completed' });
     expect((updateArg.data as { completedAt?: unknown }).completedAt).toBeInstanceOf(Date);
-    // Parita' con complete_task (executeCompleteTask): nessun LearningSignal.
-    expect(db.learningSignal.create).not.toHaveBeenCalled();
+    // Task 69 (G, S2-G/N5): parita' VERA con complete_task — il triage emette
+    // task_completed (collaudo 68: "l'ho gia' fatta" spariva da whatDone).
+    // Il vecchio contratto era l'opposto (nessun segnale): invertito.
+    expect(db.learningSignal.create).toHaveBeenCalledTimes(1);
+    const signalArg = vi.mocked(db.learningSignal.create).mock.calls[0][0];
+    expect(signalArg.data).toMatchObject({
+      userId: 'user1',
+      taskId: 'a',
+      signalType: 'task_completed',
+    });
     // Terminale: registrato nello state come gli altri outcome.
     expect(result.newTriageState.outcomes).toEqual({ a: 'completed' });
   });
@@ -752,12 +774,17 @@ describe('executeTool: mark_entry_discussed', () => {
       { triageState: state },
     );
     expect(result.kind).toBe('mutatorWithSideEffects');
+    // Task 69 (G): il segnale passa da emit-signal (payload completo).
     expect(db.learningSignal.create).toHaveBeenCalledTimes(1);
     expect(db.learningSignal.create).toHaveBeenCalledWith({
       data: {
         userId: 'user1',
         taskId: 'a',
         signalType: 'task_emotional_skip',
+        category: null,
+        context: null,
+        timeSlot: null,
+        value: 1,
         metadata: '{}',
       },
     });
