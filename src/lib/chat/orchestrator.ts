@@ -903,7 +903,8 @@ export async function orchestrate(
             pendingStrictMode = {
               taskId: d.taskId,
               durationMinutes: typeof d.durationMinutes === 'number' ? d.durationMinutes : 50,
-              label: 'Attiva strict',
+              // Task 70 (I/N37): copy italiano senza gergo ('strict').
+              label: 'Blocca le distrazioni',
             };
           }
         }

@@ -54,9 +54,11 @@ export async function apiFetch(input: string, options: ApiFetchOptions = {}): Pr
   }
 
   if (!res.ok && !skipErrorToast) {
+    // Task 70 (I/N46): copy italiano pulito — niente codici di stato grezzi
+    // nel toast (lo status resta nella telemetria server, captureApiError).
     toast({
       title: 'Errore',
-      description: `Qualcosa e' andato storto (${res.status}). Riprova tra poco.`,
+      description: 'Qualcosa è andato storto. Riprova tra poco.',
       variant: 'destructive',
     });
   }

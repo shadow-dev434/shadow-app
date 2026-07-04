@@ -189,8 +189,9 @@ export function OnboardingView() {
       // AdaptiveProfile, setta onboardingComplete=true.
       const res = await fetch('/api/onboarding/complete', { method: 'POST' });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: 'Errore sconosciuto' }));
-        throw new Error(data.error || `HTTP ${res.status}`);
+        // Task 70 (I/N46): mai 'HTTP 500' nel banner utente.
+        const data = await res.json().catch(() => ({ error: null }));
+        throw new Error(data.error || 'Non sono riuscito a salvare il profilo. Riprova tra poco.');
       }
 
       setIsConfiguring(false);

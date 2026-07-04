@@ -6,6 +6,7 @@ import { Archive, Info, List, Pencil, Send, Loader2, CheckCircle2, History, Arro
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { BetaCheckin } from '@/features/beta/BetaCheckinCard';
 import { InstallBanner } from '@/features/pwa/InstallBanner';
+import { categoryLabel } from '@/lib/types/category-labels';
 import { enterStrictMode } from '@/lib/strict-mode/enter';
 import {
   SidebarProvider,
@@ -1175,7 +1176,8 @@ function ToolExecutionCard({ tool }: { tool: ToolExecution }) {
           <div className="text-sm text-zinc-200 truncate">{result.title}</div>
           {(result.category || result.urgency) && (
             <div className="text-xs text-zinc-500 mt-0.5">
-              {result.category && <span>{result.category}</span>}
+              {/* Task 70 (I/N38): etichetta IT, mai l'enum grezzo ('personal'). */}
+              {result.category && <span>{categoryLabel(result.category)}</span>}
               {result.category && result.urgency && <span> - </span>}
               {result.urgency && <span>urgenza {result.urgency}</span>}
             </div>

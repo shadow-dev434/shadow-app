@@ -56,8 +56,9 @@ export function ConsentView() {
         body: JSON.stringify({ acceptTerms, acceptArt9 }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: 'Errore sconosciuto' }));
-        throw new Error(data.error || `HTTP ${res.status}`);
+        // Task 70 (I/N46): mai 'HTTP 500' nel banner utente.
+        const data = await res.json().catch(() => ({ error: null }));
+        throw new Error(data.error || 'Non sono riuscito a salvare il consenso. Riprova tra poco.');
       }
       // Il middleware vedrà consentGivenAt al prossimo hop (DB re-read #8.4).
       try {

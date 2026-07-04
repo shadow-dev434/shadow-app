@@ -40,6 +40,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { InstallBanner } from '@/features/pwa/InstallBanner';
+import { ROLES } from '@/features/onboarding/constants';
 import { signOut, useSession } from 'next-auth/react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { StrictModeExitDialog, type StrictModeExitResult } from '@/features/strict-mode/StrictModeExitDialog';
@@ -3949,7 +3950,7 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
               <div className="space-y-3">
                 <div>
                   <Button variant="outline" size="sm" onClick={handleRevokeConsent}>Revoca il consenso</Button>
-                  <p className="text-xs text-zinc-400 mt-1">{"Revocare il consenso ferma l'app finche' non lo riconcedi. Non cancella i tuoi dati."}</p>
+                  <p className="text-xs text-zinc-400 mt-1">{"Revocare il consenso ferma l'app finché non lo riconcedi. Non cancella i tuoi dati."}</p>
                 </div>
 
                 {!showDeleteConfirm ? (
@@ -3992,7 +3993,8 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
         <Card className="border-zinc-200 dark:border-zinc-800">
           <CardHeader className="p-4 pb-2"><CardTitle className="text-base flex items-center gap-2"><Brain className="w-4 h-4 text-amber-500" /> Profilo Esecutivo</CardTitle></CardHeader>
           <CardContent className="p-4 pt-0 space-y-2">
-            <div className="flex justify-between text-sm"><span className="text-zinc-500">Ruolo</span><span>{profile.role}</span></div>
+            {/* Task 70 (I/N38): label IT, non il value grezzo ('worker'). */}
+            <div className="flex justify-between text-sm"><span className="text-zinc-500">Ruolo</span><span>{ROLES.find((r) => r.value === profile.role)?.label ?? profile.role}</span></div>
             <div className="flex justify-between text-sm"><span className="text-zinc-500">Occupazione</span><span>{profile.occupation || '-'}</span></div>
             <div className="flex justify-between text-sm"><span className="text-zinc-500">Carico cognitivo</span><span>{profile.cognitiveLoad}/5</span></div>
             <div className="flex justify-between text-sm"><span className="text-zinc-500">Carico responsabilità</span><span>{profile.responsibilityLoad}/5</span></div>
