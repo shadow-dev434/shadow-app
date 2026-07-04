@@ -58,6 +58,19 @@ community ADHD.
   puri `src/lib/sky/*` + `GET /api/sky` + `SkyView` + tab nav "Cielo". Spec
   `docs/tasks/55-gamification-costellazioni.md`. Build/tsc/test verdi su
   `feature/55-sky-constellations`. Push/merge: decisione Antonio.
+- **2026-07-04** — **Task 69: Pre-rilascio S1+S2 (sblocca il GO)**. Il batch
+  bloccante del collaudo 68: claim-guard v2 esteso alla review con fallback
+  onesto deterministico (S1-1+S2-A, il claim falso non raggiunge mai l'utente),
+  review interrotta materializzata (D45), ripescaggio reale dei rimandati via
+  `Task.deferredUntil` (D46, migration additiva), carryover dei falliti di
+  oggi + backlog urgente nel triage + piano energy-aware (S2-D/E/F), learning
+  loop chiuso (segnali server-side emessi E processati, daily plan col blend
+  adattivo ±4 punti, S2-G), guard admin/beta revocano sessioni pre-reset
+  (N21), 400 su input rotti a chat/turn (S2-K), export GDPR per tutti (N22),
+  consenso a versione 1.0 senza "bozza" (S2-O, decisione: nessun ri-consenso).
+  Spec `docs/tasks/69-pre-rilascio-s1-s2.md`. 1016 test verdi, 27 probe
+  meccanici + 3 run LLM reali (zero claim-senza-tool, 10/10 catture in DB) su
+  `feature/69-pre-rilascio-s1-s2`. Push/merge: decisione Antonio.
 
 ---
 
