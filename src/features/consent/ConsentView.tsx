@@ -16,12 +16,11 @@ import { ShieldCheck, LogOut, Sparkles } from 'lucide-react';
 // DB (pattern #8.4); il setTimeout è la safety-net contro intercettazioni
 // del service worker (stesso pattern di OnboardingView/TourView, hotfix #8.5).
 
-// ─── COPY v0.2 — bozza pre-validazione legale ──────────────────────────────
-// Sorgente: shadow-consenso-esplicito-bozza-v0_2.md (§1 intro, §2.1, §2.2).
-// CONSENT_COPY_VERSION mappa 1:1 il file (…v0_2.md) e CONSENT_VERSION
-// dell'endpoint /api/consent. Sostituire il blocco COPY alla validazione
-// legale → bump coordinato a "1.0". Non modificare il testo senza ri-versionare.
-const CONSENT_COPY_VERSION = '0.2-draft';
+// ─── COPY v1.0 — testo validato ────────────────────────────────────────────
+// CONSENT_COPY_VERSION mappa 1:1 CONSENT_VERSION dell'endpoint /api/consent.
+// Promosso a "1.0" il 2026-07-04 (Task 69 K, S2-O): testo ratificato da
+// Antonio. Non modificare il testo senza ri-versionare in modo coordinato.
+const CONSENT_COPY_VERSION = '1.0';
 const COPY = {
   title: `Prima di iniziare`,
   intro: [
@@ -34,7 +33,7 @@ const COPY = {
   art9: `Acconsento espressamente al trattamento dei miei dati relativi alla salute — in particolare quello che condivido su umore, stato emotivo ed energia, e il profilo comportamentale che Shadow costruisce sul mio modo di affrontare i compiti in relazione all'ADHD — per offrirmi la funzione conversazionale e personalizzare il supporto, come descritto nell'informativa. So che rientrano nelle categorie particolari di dati personali (art. 9 GDPR) e che senza questo consenso l'app non può funzionare. Posso revocare il consenso in qualsiasi momento dalle impostazioni, senza che ciò pregiudichi la liceità del trattamento effettuato prima della revoca.`,
   art9Help: `Perché te lo chiediamo separatamente? Perché questi dati sono i più delicati e meritano una scelta consapevole e distinta.`,
 };
-// ─── fine COPY v0.2 ────────────────────────────────────────────────────────
+// ─── fine COPY v1.0 ────────────────────────────────────────────────────────
 
 export function ConsentView() {
   const router = useRouter();
@@ -168,7 +167,7 @@ export function ConsentView() {
         </div>
 
         <p className="text-center text-[11px] text-zinc-600">
-          Informativa di consenso — bozza {CONSENT_COPY_VERSION}
+          Informativa di consenso — versione {CONSENT_COPY_VERSION}
         </p>
       </div>
     </div>

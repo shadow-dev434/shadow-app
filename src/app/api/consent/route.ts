@@ -12,11 +12,11 @@ import { captureApiError } from '@/lib/observability';
 // alla navigazione successiva (pattern #8.4), quindi dopo questo POST il
 // gate lascia passare /onboarding.
 //
-// CONSENT_VERSION mappa 1:1 il file di copy
-// shadow-consenso-esplicito-bozza-v0_2.md (DB ↔ archivio git allineati) e la
-// costante CONSENT_COPY_VERSION di ConsentView. Alla validazione legale: bump
-// coordinato a "1.0".
-const CONSENT_VERSION = '0.2-draft';
+// CONSENT_VERSION mappa 1:1 il testo del consenso in ConsentView (costante
+// CONSENT_COPY_VERSION). Promosso a "1.0" il 2026-07-04 (Task 69 K, S2-O):
+// testo ratificato da Antonio, nessun ri-consenso per chi ha accettato la
+// 0.2-draft (decisione di prodotto §2.1 della spec 69).
+const CONSENT_VERSION = '1.0';
 
 export async function POST(req: NextRequest) {
   // allowWithoutConsent: e' la route con cui il consenso si DA (e si ri-da'

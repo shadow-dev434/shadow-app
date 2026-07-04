@@ -3953,24 +3953,23 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
           Sceglie le app messe in pausa dallo scudo durante lo strict mode. */}
       <AppBlockerCard />
 
-      {/* Export — affordance beta-only (dump JSON con cronologia chat) */}
-      {isBetaTester && (
-        <Card className="border-zinc-200 dark:border-zinc-800">
-          <CardHeader className="p-4 pb-2"><CardTitle className="text-base">Esporta dati</CardTitle></CardHeader>
-          <CardContent className="p-4 pt-0">
-            <Button variant="outline" className="w-full" onClick={async () => {
-              try {
-                const res = await fetch('/api/export?format=json');
-                const blob = await res.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a'); a.href = url; a.download = 'shadow-export.json'; a.click();
-                URL.revokeObjectURL(url);
-                toast({ title: 'Esportazione completata' });
-              } catch { toast({ title: 'Errore', variant: 'destructive' }); }
-            }}><Download className="w-4 h-4 mr-2" /> Esporta JSON</Button>
-          </CardContent>
-        </Card>
-      )}
+      {/* Export — per TUTTI gli utenti: diritto di portabilità art. 20 GDPR
+          (Task 69 J, S2-M: era beta-only, il server era già aperto a tutti) */}
+      <Card className="border-zinc-200 dark:border-zinc-800">
+        <CardHeader className="p-4 pb-2"><CardTitle className="text-base">Esporta dati</CardTitle></CardHeader>
+        <CardContent className="p-4 pt-0">
+          <Button variant="outline" className="w-full" onClick={async () => {
+            try {
+              const res = await fetch('/api/export?format=json');
+              const blob = await res.blob();
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a'); a.href = url; a.download = 'shadow-export.json'; a.click();
+              URL.revokeObjectURL(url);
+              toast({ title: 'Esportazione completata' });
+            } catch { toast({ title: 'Errore', variant: 'destructive' }); }
+          }}><Download className="w-4 h-4 mr-2" /> Esporta JSON</Button>
+        </CardContent>
+      </Card>
 
       {/* Versione app (Task 23: allegata anche a bug report e Sentry) */}
       <p className="text-center text-[11px] text-zinc-500 pb-2">Shadow v{APP_VERSION}</p>

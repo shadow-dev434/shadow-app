@@ -4,7 +4,7 @@ export default function PrivacyPage() {
   return (
     <LegalDoc
       title={`Informativa sul trattamento dei dati personali`}
-      version={`Shadow · beta a inviti · versione 0.2`}
+      version={`Shadow · versione 1.0`}
       sections={[
         {
           h: `1. Titolare del trattamento`,
