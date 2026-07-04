@@ -11,6 +11,7 @@
 
 import { signOut } from 'next-auth/react';
 import { toast } from '@/hooks/use-toast';
+import { clearClientIdentity } from '@/lib/auth/client-identity';
 
 export interface ApiFetchOptions extends RequestInit {
   /** Sopprime il toast d'errore automatico su risposta non-ok (default: lo mostra). */
@@ -24,6 +25,9 @@ let reloginInFlight = false;
 function triggerRelogin(): void {
   if (reloginInFlight) return;
   reloginInFlight = true;
+  // Task 70 (K/D-auth): via l'identità client persistita — al re-login con
+  // un altro account Settings mostrerebbe quella vecchia.
+  clearClientIdentity();
   // signOut pulisce il cookie JWT e riporta alla home in modalita' login.
   void signOut({ callbackUrl: '/?auth=login' });
 }

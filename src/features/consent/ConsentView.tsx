@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
+import { clearClientIdentity } from '@/lib/auth/client-identity';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -80,6 +81,8 @@ export function ConsentView() {
   const handleLogout = useCallback(() => {
     // Escape-hatch: chi non vuole consentire esce davvero (clear cookie JWT
     // via NextAuth, non solo reset store — siamo su una route standalone).
+    // Task 70 (K/D-auth): via anche l'identità client persistita.
+    clearClientIdentity();
     void signOut({ callbackUrl: '/' });
   }, []);
 

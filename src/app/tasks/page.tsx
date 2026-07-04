@@ -41,6 +41,7 @@ import { toast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { InstallBanner } from '@/features/pwa/InstallBanner';
 import { ROLES } from '@/features/onboarding/constants';
+import { clearClientIdentity } from '@/lib/auth/client-identity';
 import { signOut, useSession } from 'next-auth/react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { StrictModeExitDialog, type StrictModeExitResult } from '@/features/strict-mode/StrictModeExitDialog';
@@ -587,6 +588,32 @@ export default function ShadowApp() {
   const lastProactiveCheckRef = useRef(0);
   const proactiveShownThisSessionRef = useRef(false);
   const router = useRouter();
+  // Task 70 (K/D-auth): la sessione server è la fonte di verità dell'identità.
+  const { data: session, status: sessionStatus } = useSession();
+
+  // Task 70 (K/D-auth): guardia di coerenza — se il localStorage porta
+  // l'identità di un ALTRO account (signOut che non ha pulito, cookie
+  // scaduto e re-login con altro utente), scartala e riallinea dallo
+  // userId della sessione. Copre anche i casi in cui il signOut non è
+  // mai passato dai nostri handler.
+  useEffect(() => {
+    if (sessionStatus !== 'authenticated' || !session?.user?.id) return;
+    const st = useShadowStore.getState();
+    const storedId = st.authUser?.id;
+    if (storedId && storedId !== session.user.id) {
+      clearClientIdentity();
+      const aligned = {
+        id: session.user.id,
+        email: session.user.email ?? '',
+        name: session.user.name ?? '',
+      };
+      st.setAuthUser(aligned);
+      st.setUserId(session.user.id);
+      try {
+        localStorage.setItem('shadow-user', JSON.stringify(aligned));
+      } catch {}
+    }
+  }, [sessionStatus, session?.user?.id, session?.user?.email, session?.user?.name]);
 
   // On mount: inizializza auth state e carica dati. Il gating
   // tour/onboarding ora vive nel middleware (src/middleware.ts) e legge
@@ -912,9 +939,9 @@ export default function ShadowApp() {
     store.setUserId(null);
     store.setTourCompleted(false);
     store.setTourStep(0);
-    localStorage.removeItem('shadow-user');
-    localStorage.removeItem('shadow-tour-completed');
-    localStorage.removeItem('shadow-profile-complete');
+    // Task 70 (K/D-auth): helper condiviso — stesse chiavi in TUTTI i
+    // percorsi di signOut (qui, delete account, revoca consenso, 401).
+    clearClientIdentity();
     // Task 64 (A8, D5): il logout deve invalidare il COOKIE, non solo lo
     // store — prima il JWT restava valido 30 giorni e chiunque riaprisse
     // l'app era ancora dentro. Stesso pattern del re-login di lib/api/fetch.
@@ -3766,6 +3793,10 @@ interface RecurringRow {
 }
 
 function RecurringCard() {
+  // Task 70 (J/N49): «Nuovo ricorrente» entra in chat con l'input
+  // precompilato (?draft=), stesso pattern del Cielo — la card diceva
+  // "si creano in chat" senza offrire la strada.
+  const router = useRouter();
   const [rows, setRows] = useState<RecurringRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<RecurringRow | null>(null);
@@ -3851,6 +3882,16 @@ function RecurringCard() {
             </div>
           ))
         )}
+        {loaded && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full mt-2"
+            onClick={() => router.push('/?draft=' + encodeURIComponent('Voglio un task ricorrente: ogni '))}
+          >
+            <Repeat className="w-3.5 h-3.5 mr-2" /> Nuovo ricorrente (dalla chat)
+          </Button>
+        )}
       </CardContent>
 
       <AlertDialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
@@ -3923,6 +3964,8 @@ function SettingsView({ onLogout }: { onLogout: () => void }) {
         body: JSON.stringify({ confirm: deleteConfirmText }),
       });
       if (!res.ok) throw new Error('delete failed');
+      // Task 70 (K/D-auth): niente identità stale del vecchio account.
+      clearClientIdentity();
       await signOut({ callbackUrl: '/' });
     } catch {
       setBusy(false);

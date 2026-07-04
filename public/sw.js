@@ -15,7 +15,8 @@
 // v10 (2026-07-02, Task 67 A/D21): share target onesto — l'esito del POST
 // /api/tasks decide il redirect (saved=1 solo a 2xx; altrimenti il testo
 // viaggia in ?text= e il client lo recupera, mai perso in silenzio).
-const CACHE_NAME = 'shadow-v2';
+// Task 70 (N53): rimossa la costante morta CACHE_NAME='shadow-v2' — le cache
+// reali sono STATIC_CACHE/DYNAMIC_CACHE (nessun bump: nessun asset cambia).
 const STATIC_CACHE = 'shadow-static-v10';
 const DYNAMIC_CACHE = 'shadow-dynamic-v10';
 
