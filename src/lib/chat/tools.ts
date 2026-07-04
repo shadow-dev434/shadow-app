@@ -115,7 +115,7 @@ export const CHAT_TOOLS: LLMTool[] = [
   {
     name: 'get_today_tasks',
     description:
-      'Recupera i task su cui l\'utente sta lavorando oggi (non completati, non abbandonati). Usa quando l\'utente chiede cosa deve fare, cosa ha in lista, come va la giornata. Restituisce anche gli id dei task, necessari per complete_task / update_task / archive_task.',
+      'Recupera i task su cui l\'utente sta lavorando oggi (non completati, non abbandonati). Usa quando l\'utente chiede cosa deve fare, cosa ha in lista, come va la giornata. Restituisce anche gli id dei task, necessari per complete_task / update_task / archive_task. Il risultato è { tasks, total, hasMore }: tasks contiene AL MASSIMO i primi 15 per priorità; total è il numero VERO in lista. Quando parli del carico all\'utente usa total, mai la lunghezza di tasks; se hasMore=true, di\' che ce ne sono altri oltre a quelli che nomini.',
     input_schema: {
       type: 'object',
       properties: {},
@@ -1125,25 +1125,30 @@ async function executeGetTodayTasks(userId: string): Promise<ToolExecutionResult
   const today = formatTodayInRome();
   await materializeRecurringForDate(userId, today);
 
-  const [tasks, profile] = await Promise.all([
+  // Task 46: nascondi le istanze ricorrenti di giorni FUTURI (es. quella di
+  // domani materializzata dalla review serale). I task normali hanno
+  // occurrenceDate null e restano sempre visibili.
+  const where = {
+    userId,
+    status: { notIn: terminalTaskStatuses() },
+    OR: [
+      { recurringTemplateId: null },
+      { occurrenceDate: { lte: today } },
+    ],
+  };
+
+  const [tasks, total, profile] = await Promise.all([
     db.task.findMany({
-      where: {
-        userId,
-        status: { notIn: terminalTaskStatuses() },
-        // Task 46: nascondi le istanze ricorrenti di giorni FUTURI (es. quella di
-        // domani materializzata dalla review serale). I task normali hanno
-        // occurrenceDate null e restano sempre visibili.
-        OR: [
-          { recurringTemplateId: null },
-          { occurrenceDate: { lte: today } },
-        ],
-      },
+      where,
       orderBy: [
         { priorityScore: 'desc' },
         { urgency: 'desc' },
       ],
       take: 15,
     }),
+    // Task 70 (H/N9): conteggio REALE con la stessa where — senza, il modello
+    // dichiarava all'utente un carico falso ("hai 15 cose" con 55 in DB).
+    db.task.count({ where }),
     // Task 48: optimalSessionLength per stimare i minuti per-task (stessa fonte
     // della review serale, niente terzo estimatore).
     db.adaptiveProfile
@@ -1156,18 +1161,24 @@ async function executeGetTodayTasks(userId: string): Promise<ToolExecutionResult
   return {
     kind: 'sideEffect',
     success: true,
-    data: tasks.map(t => ({
-      id: t.id,
-      title: t.title,
-      urgency: t.urgency,
-      importance: t.importance,
-      category: t.category,
-      status: t.status,
-      deadline: t.deadline ? formatDateInRome(t.deadline) : null,
-      recurring: t.recurringTemplateId !== null,
-      // Task 48: stima minuti (da Task.size) per il calcolo "serve X, hai Y".
-      estimatedMinutes: estimateDuration({ size: t.size }, { optimalSessionLength }).minutes,
-    })),
+    // Task 70 (H/N9): shape { tasks, total, hasMore } — prima era l'array
+    // nudo e il troncamento a 15 era invisibile al modello.
+    data: {
+      tasks: tasks.map(t => ({
+        id: t.id,
+        title: t.title,
+        urgency: t.urgency,
+        importance: t.importance,
+        category: t.category,
+        status: t.status,
+        deadline: t.deadline ? formatDateInRome(t.deadline) : null,
+        recurring: t.recurringTemplateId !== null,
+        // Task 48: stima minuti (da Task.size) per il calcolo "serve X, hai Y".
+        estimatedMinutes: estimateDuration({ size: t.size }, { optimalSessionLength }).minutes,
+      })),
+      total,
+      hasMore: total > tasks.length,
+    },
   };
 }
 

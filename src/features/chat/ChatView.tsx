@@ -1239,22 +1239,29 @@ function ToolExecutionCard({ tool }: { tool: ToolExecution }) {
   }
 
   if (tool.name === 'get_today_tasks') {
-    const result = tool.result as Array<{ title: string; urgency: number }> | null;
-    if (!Array.isArray(result) || result.length === 0) return null;
+    // Task 70 (H/N9): nuova shape { tasks, total, hasMore }; i messaggi
+    // storici pre-70 hanno l'array nudo — la card normalizza entrambi.
+    const raw = tool.result as
+      | Array<{ title: string; urgency: number }>
+      | { tasks?: Array<{ title: string; urgency: number }>; total?: number }
+      | null;
+    const list = Array.isArray(raw) ? raw : raw?.tasks;
+    if (!Array.isArray(list) || list.length === 0) return null;
+    const total = !Array.isArray(raw) && typeof raw?.total === 'number' ? raw.total : list.length;
     return (
       <div className="bg-zinc-800/50 border border-zinc-700 rounded-lg px-3 py-2">
         <div className="text-xs text-zinc-400 font-medium mb-1.5">
-          {result.length} task in lista
+          {total} task in lista
         </div>
         <ul className="space-y-1">
-          {result.slice(0, 5).map((t, i) => (
+          {list.slice(0, 5).map((t, i) => (
             <li key={i} className="text-sm text-zinc-200 flex items-center gap-2">
               <span className="w-1 h-1 bg-zinc-500 rounded-full" />
               <span className="truncate">{t.title}</span>
             </li>
           ))}
-          {result.length > 5 && (
-            <li className="text-xs text-zinc-500">+{result.length - 5} altri</li>
+          {total > 5 && (
+            <li className="text-xs text-zinc-500">+{total - 5} altri</li>
           )}
         </ul>
       </div>
