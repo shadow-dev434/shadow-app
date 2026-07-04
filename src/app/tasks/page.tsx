@@ -38,6 +38,7 @@ import {
   Palette, Wrench, Eye, EyeOff, MessageCircle, Hand, Repeat, MoreHorizontal
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import { signOut, useSession } from 'next-auth/react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
 import { StrictModeExitDialog, type StrictModeExitResult } from '@/features/strict-mode/StrictModeExitDialog';
@@ -510,6 +511,11 @@ function showMicroFeedbackNow(type: string, taskId: string | null): void {
 // DB, zero LLM) ma ogni check è un'occasione di popup — meno occasioni, meno
 // interruzioni. Il cooldown ack server (30 min/tipo, Task 43) resta invariato.
 const PROACTIVE_CHECK_COOLDOWN_MS = 15 * 60 * 1000;
+
+// Task 70 (F/N26): durata dell'auto-dismiss del toast (default Radix
+// ToastProvider = 5000ms, nessun override in ui/toaster). Il micro-feedback
+// al completamento parte DOPO questa finestra: mai due celebrazioni insieme.
+const CELEBRATION_TOAST_MS = 5000;
 
 // Budget nudge persistito per-giorno in localStorage: prima viveva solo nello
 // store (senza persist) e si azzerava a ogni refresh — su mobile, dove l'app
@@ -3050,13 +3056,26 @@ function FocusView() {
     // (fonte autorevole, niente doppio segnale, niente fail-silent di rete).
     // Micro-feedback al completamento: confine naturale (Task 66 B/D57) —
     // passa dal coordinatore (sfratta un eventuale nudge, cede al popup).
-    setTimeout(() => showMicroFeedbackNow('drain_activate', selectedTask.id), 500);
+    // Task 70 (F/N26): DOPO il toast celebrativo, non insieme — era l'unico
+    // punto che violava "una interruzione alla volta" (toast + popup
+    // simultanei). Il coordinatore ri-verifica comunque lo stato al fire.
+    setTimeout(() => showMicroFeedbackNow('drain_activate', selectedTask.id), CELEBRATION_TOAST_MS + 800);
 
     replaceView('today');
     // Task 64 (A3, D48): ponte visibile completamento -> stella. Solo per i
     // task ricorrenti (sono loro ad accendere le stelle del Cielo).
+    // Task 70 (C/M-1): il toast porta AL Cielo — l'anello di ricompensa non
+    // resta disaccoppiato dall'azione che lo genera.
     if (selectedTask.recurringTemplateId) {
-      toast({ title: '⭐ Una stella si è accesa nel Cielo', description: selectedTask.title });
+      toast({
+        title: '⭐ Una stella si è accesa nel Cielo',
+        description: selectedTask.title,
+        action: (
+          <ToastAction altText="Vedi il Cielo" onClick={() => pushView('sky')}>
+            Vedi il Cielo
+          </ToastAction>
+        ),
+      });
     } else {
       toast({ title: 'Completato!', description: selectedTask.title });
     }
