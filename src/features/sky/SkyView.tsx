@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { CONSTELLATIONS } from '@/lib/sky/constellations';
 import { surpriseForStar, type SkyState } from '@/lib/sky/sky-state';
 
@@ -71,6 +72,9 @@ export function SkyView() {
 }
 
 function Sky({ state }: { state: SkyState }) {
+  // Task 70 (B/N28b): l'ingresso in chat con ?draft= usa la transizione
+  // client (ChatView monta fresco e legge la query al mount).
+  const router = useRouter();
   const fresh = locateStar(state.freshStarGlobalIndex);
   const heroIndex = fresh ? fresh.ci : 0;
   const hero = CONSTELLATIONS[heroIndex];
@@ -183,8 +187,7 @@ function Sky({ state }: { state: SkyState }) {
             <button
               type="button"
               onClick={() => {
-                window.location.href =
-                  '/?draft=' + encodeURIComponent('Voglio un task ricorrente: ogni ');
+                router.push('/?draft=' + encodeURIComponent('Voglio un task ricorrente: ogni '));
               }}
               className="mt-4 rounded-full border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-200 transition-colors hover:bg-amber-500/20"
             >

@@ -2150,6 +2150,9 @@ function AppHeader({ onLogout }: {
   onLogout: () => void;
 }) {
   const { currentView, energy, isExecuting, executionMode, focusModeActive, userProfile, authUser, strictModeState } = useShadowStore();
+  // Task 70 (B/N28b): transizione client — il full reload costava ~3-5s a giro
+  // su WebView fredda; il rendering chat/tasks è già co-locato (app/page.tsx).
+  const router = useRouter();
 
   return (
     <header className={`sticky top-0 z-50 text-white border-b ${strictModeState === 'active_strict' ? 'bg-red-950 border-red-900' : 'bg-zinc-900 dark:bg-zinc-950 border-zinc-800'}`}>
@@ -2163,7 +2166,7 @@ function AppHeader({ onLogout }: {
           {!isExecuting && currentView !== 'task' && (
             <div className="flex items-center gap-2">
  <button
-    onClick={() => window.location.href = '/'}
+    onClick={() => router.push('/')}
     className="p-1.5 -ml-1 rounded-full hover:bg-zinc-800 active:bg-zinc-700 transition-colors text-zinc-400 hover:text-white"
     aria-label="Torna alla chat"
     title="Torna alla chat"
@@ -2463,6 +2466,9 @@ function InboxView() {
 
 function TodayView() {
   const store = useShadowStore();
+  // Task 70 (B/N28b): «Pianifica con Shadow» va in chat con transizione
+  // client, non full reload (ChatView monta fresco e legge ?plan=today).
+  const router = useRouter();
   const [regenerating, setRegenerating] = useState(false);
   // Task 50: location per fascia (mattina/pomeriggio/sera -> casa/ufficio/fuori).
   const [slotLocations, setSlotLocations] = useState<Record<string, string>>({});
@@ -2706,7 +2712,7 @@ function TodayView() {
               <Brain className="w-3 h-3 inline mr-1" /> Profilo: carico cognitivo {store.userProfile.cognitiveLoad}/5, sessione consigliata {store.userProfile.preferredSessionLength}min
             </div>
           )}
-          <Button onClick={() => { window.location.href = '/?plan=today'; }} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
+          <Button onClick={() => { router.push('/?plan=today'); }} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
             <MessageCircle className="w-4 h-4 mr-2" /> Pianifica con Shadow
           </Button>
           <Button onClick={handleRegenerate} disabled={regenerating} variant="outline" className="w-full">
