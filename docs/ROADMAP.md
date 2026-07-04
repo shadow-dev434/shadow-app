@@ -71,6 +71,27 @@ community ADHD.
   Spec `docs/tasks/69-pre-rilascio-s1-s2.md`. 1016 test verdi, 27 probe
   meccanici + 3 run LLM reali (zero claim-senza-tool, 10/10 catture in DB) su
   `feature/69-pre-rilascio-s1-s2`. Push/merge: decisione Antonio.
+- **2026-07-04** — **Task 70: UX pre-rilascio (secondo batch del collaudo 68)**.
+  I finding UX ad alta frequenza (L7 fiducia e L8 carico conversazionale,
+  peggiorati tra 62 e 68): la review serale riusa mood/energia del mattino con
+  default confermabile ("stamattina eri a 4 — confermi?", N32), intake mood
+  robusto (coppia "4 e 4", hedge "3 o 4", "benissimo", D15+run69-3), nav
+  chat↔tasks senza full reload (N28b, ~3-5s/giro risparmiati su WebView),
+  ponte Cielo (toast del ricorrente cliccabile → vista Cielo, M-1) con
+  micro-feedback sequenziato non più simultaneo (N26), Today vuota che genera
+  il piano invece di chiedere + install banner PWA anche in chat (N36+N29),
+  strict mode con task `in_progress` reale e `strictModeEffectiveness`
+  bidirezionale (può finalmente salire, D9+D24), `get_today_tasks` con
+  `total`/`hasMore` (N9), lingua ripulita (enum IT, QR "Blocca le
+  distrazioni", errori/apostrofi, N38+N37+N46), card Ricorrenti → deep-link
+  chat (N49), identità client pulita al signout (D-auth), costante SW morta
+  rimossa (N53). Spec `docs/tasks/70-ux-pre-rilascio.md`. 1087 test verdi,
+  37 assert probe meccanici + 20 assert su 2 run LLM reali (conferma del
+  mattino + coppia registrate nello stesso turno) + verifica browser (nav
+  senza reload, auto-gen Today, deep-link ricorrenti, label IT) su
+  `feature/70-ux-pre-rilascio`. Spec Task 71 pronta
+  (`docs/tasks/71-post-rilascio-pulizia.md`, ultimo della catena).
+  Push/merge: decisione Antonio.
 
 ---
 
