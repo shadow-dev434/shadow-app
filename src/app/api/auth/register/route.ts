@@ -5,8 +5,8 @@ import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
 import { getAuthSecret } from '@/lib/auth-secret';
 import { isBetaTesterEmail } from '@/lib/beta/admin-guard';
+import { sessionCookieConfig } from '@/lib/auth-cookie';
 
-const SESSION_COOKIE_NAME = 'next-auth.session-token';
 const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 days
 
 export async function POST(req: NextRequest) {
@@ -79,14 +79,17 @@ export async function POST(req: NextRequest) {
       isFirstAccess: true,
     });
 
+    // Nome + secure allineati a getToken (prefisso __Secure- su https): senza,
+    // su prod il cookie sarebbe invisibile al server → 401 ovunque.
+    const cookie = sessionCookieConfig();
     response.cookies.set({
-      name: SESSION_COOKIE_NAME,
+      name: cookie.name,
       value: token,
       httpOnly: true,
       sameSite: 'lax',
       path: '/',
       maxAge: SESSION_MAX_AGE_SEC,
-      secure: process.env.NODE_ENV === 'production',
+      secure: cookie.secure,
     });
 
     return response;
