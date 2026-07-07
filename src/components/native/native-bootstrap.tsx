@@ -23,7 +23,22 @@ export function NativeBootstrap() {
           void App.exitApp();
         }
       });
-      cleanup = () => void handle.remove();
+
+      // Task 72 (Slice C): share nativo — pending a freddo + evento a caldo.
+      // Il dedupe per id vive in handleNativeShare (stesso share da entrambi
+      // i canali = un solo POST).
+      const { ShadowCapture } = await import('@/lib/native/capture');
+      const { handleNativeShare } = await import('@/lib/capture/native-share');
+      const shareHandle = await ShadowCapture.addListener('shareReceived', (share) => {
+        void handleNativeShare(share);
+      });
+      const pending = await ShadowCapture.getPendingShare();
+      if (pending.share) void handleNativeShare(pending.share);
+
+      cleanup = () => {
+        void handle.remove();
+        void shareHandle.remove();
+      };
     })();
     return () => cleanup?.();
   }, []);
