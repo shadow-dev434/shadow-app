@@ -36,10 +36,11 @@ async function main() {
   const cookie = await mintCookie({ userId: u.id, email });
 
   // ── 1. 401 senza cookie sulle route protette (GET) ──
+  // Task 71: review/patterns/streaks/contacts rimosse (route inesistenti → 404, fuori dallo sweep 401)
   const protectedGets = [
-    '/api/tasks', '/api/daily-plan', '/api/settings', '/api/review', '/api/patterns',
-    '/api/adaptive-profile', '/api/profile', '/api/memory', '/api/streaks', '/api/sky',
-    '/api/contacts', '/api/notifications', '/api/chat/threads', '/api/chat/bootstrap',
+    '/api/tasks', '/api/daily-plan', '/api/settings',
+    '/api/adaptive-profile', '/api/profile', '/api/memory', '/api/sky',
+    '/api/notifications', '/api/chat/threads', '/api/chat/bootstrap',
     '/api/chat/active-thread', '/api/chat/evening-signal', '/api/export', '/api/account',
     '/api/strict-mode', '/api/beta/feedback', '/api/beta/assessment', '/api/admin/beta/bug-reports',
     '/api/admin/beta/summary', '/api/calendar',
@@ -61,13 +62,13 @@ async function main() {
   noServerError('/api/settings', 'PATCH orario 25:99', await api('PATCH', '/api/settings', { cookie, body: { eveningWindowStart: '25:99' } }));
   noServerError('/api/adaptive-profile', 'PATCH campo spazzatura', await api('PATCH', '/api/adaptive-profile', { cookie, body: { garbageField: 'x', cognitiveLoad: 999 } }));
   noServerError('/api/daily-plan', 'POST body vuoto', await api('POST', '/api/daily-plan', { cookie, body: {} }));
-  noServerError('/api/review', 'POST body vuoto', await api('POST', '/api/review', { cookie, body: {} }));
+  noServerError('/api/review', 'POST body vuoto', await api('POST', '/api/review', { cookie, body: {} })); // Task 71: route rimossa → 404 (soddisfa noServerError: fallisce solo su 500)
   noServerError('/api/chat/turn', 'POST senza mode/msg', await api('POST', '/api/chat/turn', { cookie, body: {} }));
   noServerError('/api/decompose', 'POST body vuoto', await api('POST', '/api/decompose', { cookie, body: {} }));
   noServerError('/api/ai-classify', 'POST body vuoto', await api('POST', '/api/ai-classify', { cookie, body: {} }));
   noServerError('/api/micro-feedback', 'POST body vuoto', await api('POST', '/api/micro-feedback', { cookie, body: {} }));
   noServerError('/api/learning-signal', 'POST body vuoto', await api('POST', '/api/learning-signal', { cookie, body: {} }));
-  noServerError('/api/contacts', 'POST body vuoto', await api('POST', '/api/contacts', { cookie, body: {} }));
+  noServerError('/api/contacts', 'POST body vuoto', await api('POST', '/api/contacts', { cookie, body: {} })); // Task 71: route rimossa → 404 (soddisfa noServerError: fallisce solo su 500)
   noServerError('/api/strict-mode', 'POST body vuoto', await api('POST', '/api/strict-mode', { cookie, body: {} }));
   noServerError('/api/tasks/[id]', 'PATCH id inesistente', await api('PATCH', '/api/tasks/nonexistent123', { cookie, body: { status: 'inbox' } }));
   noServerError('/api/calendar/oauth', 'GET senza env (D23)', await api('GET', '/api/calendar/oauth', { cookie }));

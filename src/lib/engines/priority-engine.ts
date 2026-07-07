@@ -337,18 +337,6 @@ export function calculatePF(Q: number, PS: number, PO: number): number {
   return Q * (0.58 * PS + 0.42 * PO);
 }
 
-// ── NOW score ───────────────────────────────────────────────────────────
-
-export function calculateNOW(PF: number, E: number, T: number, C: number, M: number, A: number): number {
-  return 0.45 * PF + 0.20 * E + 0.15 * T + 0.10 * C + 0.10 * M - 0.10 * A;
-}
-
-// ── Adaptive PF ─────────────────────────────────────────────────────────
-
-export function calculatePFAdaptive(PF: number, adaptiveScore: number): number {
-  return PF + adaptiveScore;
-}
-
 /**
  * Task 69 (G, S2-G/N7): scala del contributo adattivo quando il daily plan
  * legge il profilo appreso. NOTA ARCHITETTURALE: prioritizeTaskAdaptive (qui
@@ -404,82 +392,4 @@ export function applyDiscreteRules(
   if (V > 0.70 && PS > 0.60) return 'do_now';
 
   return null;
-}
-
-// ── Full Adaptive Pipeline ──────────────────────────────────────────────
-
-export function prioritizeTaskAdaptive(
-  task: TaskRecord,
-  ctx: ExecutionContext,
-  allTasks: TaskRecord[],
-  adaptiveScore?: number
-): PriorityResult & { PS: number; PO: number; PF: number; NOW: number; Q: number } {
-  // Normalize task values to 0-1
-  const I = normalizeTo01(task.importance, 1, 5);
-  const U = normalizeTo01(task.urgency, 1, 5);
-  const R = normalizeTo01(task.resistance, 1, 5);
-  const S = normalizeTo01(task.size, 1, 5);
-  const A = normalizeTo01(task.resistance * 0.5 + task.size * 0.3, 0, 5);
-  const E = normalizeTo01(ctx.energy, 1, 5);
-  const T = normalizeTo01(ctx.timeAvailable, 0, 480);
-  const C = (task.context === 'any' || task.context === ctx.currentContext) ? 1 : 0.3;
-  const V = normalizeTo01(task.avoidanceCount, 0, 10);
-  const D = task.deadline
-    ? normalizeTo01(Math.max(0, (new Date(task.deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)), 0, 7)
-    : 0.3;
-  const L = task.importance >= 4 ? 0.7 : 0.3; // leverage heuristic
-  const F = 0.3; // family/life relevance — will be enhanced by adaptive profile
-  const P = 0.3; // profile relevance — will be enhanced by adaptive profile
-  const G = task.delegable ? 0.8 : 0.2;
-  const M = task.status === 'in_progress' ? 0.7 : 0.3; // momentum
-  const X = normalizeTo01(
-    task.avoidanceCount > 0 && task.lastAvoidedAt
-      ? (Date.now() - new Date(task.lastAvoidedAt).getTime()) / (1000 * 60 * 60)
-      : 0,
-    0, 48
-  );
-
-  const Q = classifyEisenhowerQ(task.importance, task.urgency);
-  const ps = calculatePS(I, U, D, L, F, P, V);
-  const po = calculatePO(E, T, C, M, R, S, A, X);
-  let pf = calculatePF(Q, ps, po);
-
-  // Apply adaptive adjustment
-  if (adaptiveScore) {
-    pf = calculatePFAdaptive(pf, adaptiveScore);
-  }
-
-  const now = calculateNOW(pf, E, T, C, M, A);
-
-  // Check discrete rules
-  const discreteDecision = applyDiscreteRules(S, A, U, G, I, L, F, P, V, ps, po);
-  const quadrant = classifyEisenhower(task.importance, task.urgency);
-  const executionFit = calculateExecutionFit(task, ctx);
-
-  let decision: Decision;
-  let reason: string;
-
-  if (discreteDecision) {
-    decision = discreteDecision;
-    reason = `Regola discreta applicata. PS=${ps.toFixed(2)}, PO=${po.toFixed(2)}, PF=${pf.toFixed(2)}`;
-  } else {
-    const result = makeDecision(quadrant, calculateBaseScore(task), pf, executionFit, task);
-    decision = result.decision;
-    reason = result.reason;
-  }
-
-  return {
-    quadrant,
-    baseScore: calculateBaseScore(task),
-    adhdScore: pf,
-    finalScore: Math.max(0, pf),
-    decision,
-    reason,
-    executionFit,
-    PS: ps,
-    PO: po,
-    PF: pf,
-    NOW: now,
-    Q,
-  };
 }

@@ -123,7 +123,7 @@ async function main(): Promise<void> {
     ['GET', '/api/notifications'],
     ['GET', '/api/chat/active-thread'],
     ['GET', '/api/recurring'],
-    ['GET', '/api/streaks'],
+    // Task 71: '/api/streaks' rimossa (route inesistente → 404, non più soggetta al gate consenso)
     ['POST', '/api/tasks', { title: 'non deve nascere' }],
   ];
   const gatedResults: Record<string, { status: number; error?: unknown; header?: string | null }> = {};

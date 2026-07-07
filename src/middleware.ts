@@ -239,7 +239,6 @@ export const config = {
     '/tour',
     '/consent',
     '/onboarding',
-    '/chat/:path*',
     // Beta (Task 23): admin e questionari passano dal gate auth completo
     // (tour → consenso → onboarding) come ogni page route autenticata.
     '/admin/:path*',

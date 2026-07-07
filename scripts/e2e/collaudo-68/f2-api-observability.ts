@@ -2,7 +2,8 @@
  * Fase 2 — Sweep API mirato + observability (§8.1, §8.8; piste N19/N24/N25/N50/N50b).
  * - N19: POST /api/notifications con type libero (es. evening_review_prompt).
  * - N24: PATCH /api/strict-mode con status stringa libera -> sessione invisibile alla GET.
- * - N25: POST /api/streaks con tasksCompleted/tasksPlanned non-numerici -> NaN in completionRate.
+ * - N25 (CHIUSA dal Task 71): storicamente POST /api/streaks non-numerici -> NaN in
+ *   completionRate; la route e' stata rimossa -> ora si verifica 404 + nessuna scrittura.
  * - Osservabilita': un input che rompe una route con try/catch -> 4xx/5xx TRACCIATO (no crash),
  *   e N50b: GET memory / GET learning-signal senza try/catch (verifica statica confermata a codice).
  *
@@ -57,6 +58,8 @@ async function main() {
     }
 
     // ── N25: POST streaks con valori non-numerici ────────────────────────────
+    // Task 71: route rimossa — storicamente riproduceva il 500/NaN in completionRate;
+    // ora la route non esiste piu' -> atteso 404 e nessuna riga Streak scritta.
     const today = new Date().toISOString().slice(0, 10);
     const streak = await api('POST', '/api/streaks', {
       cookie: u.cookie,
@@ -66,19 +69,12 @@ async function main() {
       where: { userId_date: { userId: u.id, date: today } },
       select: { tasksCompleted: true, tasksPlanned: true, completionRate: true },
     });
-    report.push(`\n# N25 — streaks non-numerici`);
-    report.push(`POST status=${streak.status}; riga: ${JSON.stringify(streakRow)}`);
-    // completionRate: tasksPlanned>0 ? completed/planned : 0. Con stringhe: 'xyz'>0 = false -> 0.
-    // Ma tasksCompleted='abc' viene persistito su un campo Int -> errore Prisma o coercizione?
-    if (streak.status >= 500) {
-      console.log('  INFO N25: 500 (Prisma rifiuta la stringa su campo Int) — no NaN persistito ma 500 non-input-validato');
-    } else if (streakRow) {
-      const nanRate = Number.isNaN(streakRow.completionRate);
-      report.push(`completionRate NaN? ${nanRate}`);
-      if (nanRate) console.log('  CONFERMATA N25: NaN persistito in completionRate');
-      else console.log('  INFO N25: valore persistito senza NaN (coercizione) — annotare');
-    }
-    saveEvidence('fase2', 'f2-n25-streaks.json', JSON.stringify({ status: streak.status, body: streak.json, row: streakRow }, null, 2));
+    report.push(`\n# N25 — streaks non-numerici (CHIUSA dal Task 71: route rimossa)`);
+    report.push(`POST status=${streak.status} (atteso 404); riga scritta: ${streakRow ? JSON.stringify(streakRow) : 'nessuna'}`);
+    assert(streak.status === 404, 'N25 chiusa dal Task 71: /api/streaks rimossa → 404', streak.status);
+    assert(streakRow === null, 'N25: nessuna riga Streak scritta (route inesistente)', streakRow);
+    if (streak.status === 404 && streakRow === null) console.log('  N25 chiusa dal Task 71: /api/streaks rimossa → 404, il 500/NaN non è più riproducibile');
+    saveEvidence('fase2', 'f2-n25-streaks.json', JSON.stringify({ status: streak.status, body: streak.json, row: streakRow, nota: 'Task 71: route rimossa → atteso 404, nessuna scrittura' }, null, 2));
 
     // ── Observability: input che rompe una route con try/catch -> mai 500 non tracciato ──
     // ai-classify ha try/catch+captureApiError: mandiamo un body malformato per forzare il ramo catch.

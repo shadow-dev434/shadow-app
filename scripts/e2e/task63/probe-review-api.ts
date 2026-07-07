@@ -1,4 +1,11 @@
-/** Task 63 S1-B: /api/review valida prima di scrivere e non sopprime più la serale. */
+/**
+ * Task 63 S1-B → aggiornato dal Task 71 (H/N56): /api/review è stato RIMOSSO
+ * (route legacy scrivente, zero consumer — la review vive nel flusso
+ * conversazionale). Il probe ora verifica:
+ * 1. la route non esiste più (404 su POST e GET);
+ * 2. il segnale serale non è sopprimibile da quella superficie;
+ * 3. la semantica del segnale (si spegne SOLO con una Review reale) è intatta.
+ */
 import { db } from '../../../src/lib/db';
 import { api, assert, createEphemeralUser, deleteEphemeralUser, finish, preflightDb } from './lib';
 
@@ -18,38 +25,28 @@ try {
   assert(sig0.status === 200 && (sig0.json as { eveningReview?: { shouldStart?: boolean } }).eveningReview?.shouldStart === true,
     'baseline: segnale serale attivo (nessuna Review oggi)', sig0.json);
 
-  // 1. Payload legacy del vecchio tab ({completed:true}, senza status) → 400, zero scritture.
-  const legacy = await api('POST', '/api/review', {
+  // 1. Route legacy rimossa (Task 71): POST e GET → 404, zero scritture.
+  const post = await api('POST', '/api/review', {
     cookie: u.cookie,
-    body: { whatDone: 'x', mood: 3, energyEnd: 3, taskReviews: [{ taskId: task.id, completed: true }] },
+    body: { whatDone: 'x', mood: 3, energyEnd: 3, taskReviews: [{ taskId: task.id, status: 'completed' }] },
   });
-  assert(legacy.status === 400, 'payload legacy senza status → 400', { status: legacy.status, json: legacy.json });
-  const reviewAfterLegacy = await db.review.findFirst({ where: { userId: u.id, date: today } });
-  assert(reviewAfterLegacy === null, 'nessuna Review a metà scritta dopo il 400');
+  assert(post.status === 404, 'POST /api/review → 404 (route rimossa)', { status: post.status });
+  const get = await api('GET', '/api/review', { cookie: u.cookie });
+  assert(get.status === 404, 'GET /api/review → 404 (route rimossa)', { status: get.status });
+  const reviewAfterPost = await db.review.findFirst({ where: { userId: u.id, date: today } });
+  assert(reviewAfterPost === null, 'nessuna Review scritta dalla route rimossa');
 
-  // 2. Il segnale serale NON è stato soppresso dal tentativo fallito.
+  // 2. Il segnale serale NON è stato toccato dal tentativo.
   const sig1 = await api('GET', `/api/chat/active-thread?clientTime=${nowHHMM}&clientDate=${today}`, { cookie: u.cookie });
   assert((sig1.json as { eveningReview?: { shouldStart?: boolean } }).eveningReview?.shouldStart === true,
-    'segnale serale ancora attivo dopo il payload invalido', sig1.json);
+    'segnale serale ancora attivo dopo il 404', sig1.json);
 
-  // 3. taskReviews non-array → 400.
-  const notArray = await api('POST', '/api/review', { cookie: u.cookie, body: { taskReviews: 'nope' } });
-  assert(notArray.status === 400, 'taskReviews non-array → 400', notArray.status);
-
-  // 4. Payload valido → 200 atomico con ReviewTask.
-  const ok = await api('POST', '/api/review', {
-    cookie: u.cookie,
-    body: { whatDone: 'fatto', mood: 4, energyEnd: 3, taskReviews: [{ taskId: task.id, status: 'completed' }] },
-  });
-  assert(ok.status === 200, 'payload valido → 200', { status: ok.status, json: ok.json });
-  const reviewRow = await db.review.findFirst({ where: { userId: u.id, date: today }, include: { tasks: true } });
-  assert(reviewRow !== null && reviewRow.tasks.length === 1 && reviewRow.tasks[0].status === 'completed',
-    'Review + ReviewTask scritti insieme con status valido', reviewRow?.tasks);
-
-  // 5. Ora una Review esiste → il segnale si spegne (comportamento corretto).
+  // 3. La semantica resta: una Review reale (qui via db, come la crea la
+  // review conversazionale) spegne il segnale.
+  await db.review.create({ data: { userId: u.id, date: today, whatDone: 'fatto', mood: 4 } });
   const sig2 = await api('GET', `/api/chat/active-thread?clientTime=${nowHHMM}&clientDate=${today}`, { cookie: u.cookie });
   assert((sig2.json as { eveningReview?: { shouldStart?: boolean } }).eveningReview?.shouldStart === false,
-    'segnale spento SOLO dopo una Review completa', sig2.json);
+    'segnale spento SOLO dopo una Review reale', sig2.json);
 } finally {
   await deleteEphemeralUser(u.email);
 }

@@ -3,6 +3,8 @@
  * 27 route: per ognuna (a) senza cookie → 401 (o 404 per admin/pubblica),
  * (b) happy path 2xx, (c) input invalido → 4xx pulito MAI 500.
  * + repro dedicati piste N24 N25 N16 N55 N56 D28 (D30 se non in half1).
+ * Task 71: patterns/review/streaks RIMOSSE → qui verificate come 404 (chiusura);
+ * i repro N25/N56 diventano verifiche di chiusura (404, nessuna scrittura).
  *
  * Lancio:
  *   bun run dotenv -e .env.local -- bun scripts/e2e/collaudo-68/f2-api-half2.ts
@@ -147,13 +149,13 @@ async function main() {
     row({ route: '/api/onboarding/reset', method: 'POST', noCookie: `${nc.status}`, happy: `${hp.status}`, invalid: 'n/a (idempotente)', note: 'nessun input richiesto' });
   }
 
-  // 7. patterns
+  // 7. patterns — Task 71: route RIMOSSA (zero-consumer) → 404 con e senza cookie
   {
     const nc = await api('GET', '/api/patterns', {});
     const h = await api('GET', '/api/patterns', { cookie: C });
-    assert(nc.status === 401, 'patterns GET senza cookie 401', nc.status);
-    assert(h.status === 200, 'patterns GET happy 200', h.status);
-    row({ route: '/api/patterns', method: 'GET', noCookie: `${nc.status}`, happy: `${h.status}`, invalid: 'n/a', note: 'ok' });
+    assert(nc.status === 404, 'patterns GET senza cookie 404 (Task 71: route rimossa)', nc.status);
+    assert(h.status === 404, 'patterns GET con cookie 404 (Task 71: route rimossa)', h.status);
+    row({ route: '/api/patterns', method: 'GET', noCookie: `${nc.status}`, happy: `${h.status} (404 atteso)`, invalid: 'n/a', note: 'Task 71: rimossa' });
   }
 
   // 8. profile
@@ -210,19 +212,19 @@ async function main() {
     row({ route: '/api/recurring/[id]', method: 'PATCH/DELETE', noCookie: `${nc.status}`, happy: `${hp.status}/${del.status}`, invalid: `${inv.status}/${notfound.status}`, note: 'ok' });
   }
 
-  // 12. review  (+ N56)
+  // 12. review — Task 71: route RIMOSSA (zero-consumer) → 404 su ogni chiamata (N56 chiusa, repro sotto)
   {
     const nc = await api('POST', '/api/review', {});
     const g = await api('GET', '/api/review', { cookie: C });
-    const inv = await api('POST', '/api/review', { cookie: C, body: { taskReviews: 'notarray' } }); // 400
-    const inv2 = await api('POST', '/api/review', { cookie: C, body: { taskReviews: [{ taskId: 't', status: 'bogus' }] } }); // 400 status non valido
+    const inv = await api('POST', '/api/review', { cookie: C, body: { taskReviews: 'notarray' } }); // Task 71: route rimossa → 404
+    const inv2 = await api('POST', '/api/review', { cookie: C, body: { taskReviews: [{ taskId: 't', status: 'bogus' }] } }); // Task 71: route rimossa → 404
     const hp = await api('POST', '/api/review', { cookie: C, body: { whatDone: 'x', mood: 4 } });
-    assert(nc.status === 401, 'review POST senza cookie 401', nc.status);
-    assert(g.status === 200, 'review GET happy 200', g.status);
-    assert(inv.status === 400, 'review POST taskReviews non-array 400', inv.status);
-    assert(inv2.status === 400, 'review POST status non valido 400', inv2.status);
-    assert(hp.status === 200, 'review POST happy 200', hp.status);
-    row({ route: '/api/review', method: 'GET/POST', noCookie: `${nc.status}`, happy: `${g.status}/${hp.status}`, invalid: `${inv.status}/${inv2.status}`, note: 'N56: legacy risponde (repro dedicato sotto)' });
+    assert(nc.status === 404, 'review POST senza cookie 404 (Task 71: route rimossa)', nc.status);
+    assert(g.status === 404, 'review GET con cookie 404 (Task 71: route rimossa)', g.status);
+    assert(inv.status === 404, 'review POST taskReviews non-array 404 (route rimossa)', inv.status);
+    assert(inv2.status === 404, 'review POST status non valido 404 (route rimossa)', inv2.status);
+    assert(hp.status === 404, 'review POST ex-happy 404 (route rimossa)', hp.status);
+    row({ route: '/api/review', method: 'GET/POST', noCookie: `${nc.status}`, happy: `${g.status}/${hp.status} (404 atteso)`, invalid: `${inv.status}/${inv2.status}`, note: 'Task 71: route rimossa — N56 chiusa (repro sotto)' });
   }
 
   // 13. settings
@@ -247,17 +249,17 @@ async function main() {
     row({ route: '/api/sky', method: 'GET', noCookie: `${nc.status}`, happy: `${h.status}`, invalid: 'n/a', note: 'GET senza try/catch (errore engine → 500 non tracciato)' });
   }
 
-  // 15. streaks (+ N25)
+  // 15. streaks — Task 71: route RIMOSSA (zero-consumer) → 404 su ogni chiamata (N25 chiusa, repro sotto)
   {
     const nc = await api('GET', '/api/streaks', {});
     const h = await api('GET', '/api/streaks', { cookie: C });
-    const inv = await api('POST', '/api/streaks', { cookie: C, body: {} }); // manca date → 400
+    const inv = await api('POST', '/api/streaks', { cookie: C, body: {} }); // Task 71: route rimossa → 404
     const hp = await api('POST', '/api/streaks', { cookie: C, body: { date: '2026-07-04', tasksCompleted: 3, tasksPlanned: 5 } });
-    assert(nc.status === 401, 'streaks GET senza cookie 401', nc.status);
-    assert(h.status === 200, 'streaks GET happy 200', h.status);
-    assert(inv.status === 400, 'streaks POST manca date 400', inv.status);
-    assert(hp.status === 200, 'streaks POST happy 200', hp.status);
-    row({ route: '/api/streaks', method: 'GET/POST', noCookie: `${nc.status}`, happy: `${h.status}/${hp.status}`, invalid: `${inv.status}`, note: 'N25 repro dedicato sotto' });
+    assert(nc.status === 404, 'streaks GET senza cookie 404 (Task 71: route rimossa)', nc.status);
+    assert(h.status === 404, 'streaks GET con cookie 404 (Task 71: route rimossa)', h.status);
+    assert(inv.status === 404, 'streaks POST body vuoto 404 (route rimossa)', inv.status);
+    assert(hp.status === 404, 'streaks POST ex-happy 404 (route rimossa)', hp.status);
+    row({ route: '/api/streaks', method: 'GET/POST', noCookie: `${nc.status}`, happy: `${h.status}/${hp.status} (404 atteso)`, invalid: `${inv.status}`, note: 'Task 71: route rimossa — N25 chiusa (repro sotto)' });
   }
 
   // 16. strict-mode (+ N24)
@@ -432,20 +434,17 @@ async function main() {
     console.log(`  N24: DB.status='${persisted}', GET invisibile=${invisible}`);
   }
 
-  // N25: POST streaks con non-numerici
+  // N25: POST streaks con non-numerici — CHIUSA dal Task 71 (/api/streaks rimossa).
+  // Storico: riproduceva il 500 Prisma / NaN in completionRate. Verifica di chiusura:
+  // la route non esiste più → 404, nessuna riga Streak scritta.
   {
     const r = await api('POST', '/api/streaks', { cookie: C, body: { date: '2026-01-15', tasksCompleted: 'abc', tasksPlanned: 5 } });
     const dbRow = await db.streak.findUnique({ where: { userId_date: { userId: u.id, date: '2026-01-15' } }, select: { tasksCompleted: true, completionRate: true } });
-    const tc = dbRow?.tasksCompleted;
-    const cr = dbRow?.completionRate;
-    assert(r.status !== 500 || r.status === 500, 'N25: osservato status', r.status);
-    // se tasksCompleted='abc' (stringa) → Prisma Int column: o errore (500) o coercizione
-    const isNaNStored = typeof cr === 'number' && Number.isNaN(cr);
-    saveEvidence('fase2', 'n25-streaks-nonnumeric.txt', `N25 repro\nPOST tasksCompleted='abc' tasksPlanned=5\nHTTP: ${r.status}\nbody: ${r.text.slice(0, 300)}\nDB tasksCompleted: ${tc}\nDB completionRate: ${cr} (NaN=${isNaNStored})\n`);
-    console.log(`  N25: HTTP=${r.status} DB.tasksCompleted=${tc} completionRate=${cr} NaN=${isNaNStored}`);
-    if (r.status === 500) findings.push(`N25 (variante): POST streaks tasksCompleted='abc' → HTTP 500 (Prisma rifiuta stringa su Int). Non NaN persistito ma 500 non-pulito su input invalido.`);
-    else if (isNaNStored) findings.push(`N25 CONFERMATA: completionRate=NaN persistito in DB da input non-numerico.`);
-    else if (tc != null && typeof tc !== 'number') findings.push(`N25 CONFERMATA: tasksCompleted non-numerico persistito: ${JSON.stringify(tc)}.`);
+    assert(r.status === 404, 'N25 chiusa per rimozione (Task 71): POST streaks non-numerico → 404', r.status);
+    assert(dbRow === null, 'N25: nessuna riga Streak scritta (route rimossa)', dbRow);
+    saveEvidence('fase2', 'n25-streaks-nonnumeric.txt', `N25 repro (Task 71: route rimossa)\nPOST tasksCompleted='abc' tasksPlanned=5\nHTTP: ${r.status} (atteso 404)\nbody: ${r.text.slice(0, 300)}\nDB row: ${dbRow ? JSON.stringify(dbRow) : 'nessuna (atteso)'}\n`);
+    console.log(`  N25: HTTP=${r.status} (atteso 404, route rimossa) rigaDB=${dbRow ? 'PRESENTE (anomalia)' : 'nessuna'}`);
+    if (r.status === 404 && dbRow === null) findings.push(`N25 CHIUSA per rimozione (Task 71): /api/streaks non esiste più → 404, nessuna scrittura possibile (storico: 500 Prisma / NaN in completionRate).`);
   }
 
   // N16: PATCH tasks/[id] status='completed' senza completedAt
@@ -475,7 +474,10 @@ async function main() {
     if (bug) findings.push(`N55 CONFERMATA: POST /api/beta/bug-report da utente NON beta (loggato+consenso) → HTTP 200, report creato, e con severity='blocking' invia sendBetaAlert agli admin. La route usa requireSession, non requireBetaSession: nessun gate beta.`);
   }
 
-  // N56: POST review legacy esiste e incrementa avoidanceCount senza caller UI
+  // N56: POST review legacy — CHIUSA dal Task 71 (/api/review rimossa).
+  // Storico: l'endpoint legacy senza caller UI rispondeva 200 e incrementava
+  // Task.avoidanceCount via updatePatternsFromReview. Verifica di chiusura:
+  // la POST avoided ora → 404 e avoidanceCount NON cambia.
   {
     // crea task, poi review con taskReviews status=avoided
     const created = await api('POST', '/api/tasks', { cookie: C, body: { title: 'N56 task da evitare' } });
@@ -485,10 +487,11 @@ async function main() {
       const r = await api('POST', '/api/review', { cookie: C, body: { whatDone: 'x', taskReviews: [{ taskId: tid, status: 'avoided' }] } });
       const after = await db.task.findUnique({ where: { id: tid }, select: { avoidanceCount: true } });
       const inc = (after?.avoidanceCount ?? 0) - (before?.avoidanceCount ?? 0);
-      assert(r.status === 200, 'N56: review legacy risponde 200', r.status);
-      saveEvidence('fase2', 'n56-review-legacy.txt', `N56 repro\nPOST /api/review taskReviews[status=avoided]\nHTTP: ${r.status}\navoidanceCount before=${before?.avoidanceCount} after=${after?.avoidanceCount} (+${inc})\n`);
-      console.log(`  N56: HTTP=${r.status} avoidanceCount +${inc}`);
-      if (r.status === 200 && inc >= 1) findings.push(`N56 CONFERMATA: POST /api/review (legacy) esiste, risponde 200 e incrementa Task.avoidanceCount (+${inc}) + lastAvoidedAt via updatePatternsFromReview. La review serale conversazionale non lo chiama (usa i tool LLM): endpoint legacy senza caller UI ma pienamente funzionante e scrivente.`);
+      assert(r.status === 404, 'N56 chiusa dal Task 71: POST /api/review → 404 (route rimossa)', r.status);
+      assert(inc === 0, 'N56: avoidanceCount invariato (nessuna scrittura)', { before: before?.avoidanceCount, after: after?.avoidanceCount });
+      saveEvidence('fase2', 'n56-review-legacy.txt', `N56 repro (Task 71: route rimossa)\nPOST /api/review taskReviews[status=avoided]\nHTTP: ${r.status} (atteso 404)\navoidanceCount before=${before?.avoidanceCount} after=${after?.avoidanceCount} (+${inc}, atteso +0)\n`);
+      console.log(`  N56: HTTP=${r.status} avoidanceCount +${inc} (attesi 404 e +0)`);
+      if (r.status === 404 && inc === 0) findings.push(`N56 CHIUSA dal Task 71: route /api/review rimossa → 404, nessuna scrittura (avoidanceCount invariato).`);
       await db.task.deleteMany({ where: { id: tid } });
     }
   }

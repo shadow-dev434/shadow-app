@@ -1983,14 +1983,6 @@ const MICRO_FEEDBACK_CONFIGS: Record<string, {
       { value: 'wanted_other', label: 'Avrei voluto fare altro' },
     ],
   },
-  decomp_preference: {
-    title: 'Vuoi che la prossima volta lo spezzi di più?',
-    type: 'choice',
-    options: [
-      { value: 'yes_more', label: 'Sì' },
-      { value: 'no_fine', label: 'No' },
-    ],
-  },
 };
 
 function MicroFeedbackDialog() {

@@ -6,9 +6,11 @@
  *         Osserva: domanda whatBlocked (tool mark_what_blocked_asked),
  *         decomposizione opportunistica (propose_decomposition). WARN + 1 retry.
  * Step 2: DB check post-review (postponedCount/avoidanceCount/Review.whatBlocked)
- *         + D12: re-submit della review manuale lo stesso giorno
- *         (payload UI {completed/avoided} → atteso 500 D1; payload contratto
- *         {status:'avoided'} x2 → misura re-incremento avoidanceCount).
+ *         + D12: re-submit della review manuale lo stesso giorno.
+ *         STORICO: payload UI {completed/avoided} → 500 D1; payload contratto
+ *         {status:'avoided'} x2 → re-incremento avoidanceCount.
+ *         Task 71: route /api/review RIMOSSA → entrambe le POST attese 404,
+ *         nessun effetto su Review/avoidanceCount/UserPattern (chiusura D1/D12).
  *
  * Lancio: bun run dotenv -e .env.local -- bun scripts/e2e/collaudo-62/procrastinatore-review.ts
  */
@@ -218,6 +220,7 @@ async function main(): Promise<void> {
   }
 
   // ── Step 2b: D12 — re-submit review manuale lo stesso giorno ────────────
+  // Task 71: route rimossa → le POST sotto sono verifiche di chiusura (404, nessun effetto)
   const reviewPreD12 = await db.review.findUnique({ where: { userId_date: { userId: u.id, date: clientDate } } });
   saveEvidence(J, 'step2-review-row-pre-d12.json', JSON.stringify(reviewPreD12, null, 2));
 
@@ -225,22 +228,24 @@ async function main(): Promise<void> {
   const planned = t.filter((x) => x.status !== 'completed' && x.status !== 'archived' && x.avoidanceCount > 0);
   push(`D12: task con avoidanceCount>0 usati dal tab Review UI: ${planned.map((x) => x.title).join(' | ')}`);
 
-  // (i) payload FORMA UI (page.tsx:3078-3080): {completed:false, avoided:true} senza status
+  // (i) payload FORMA UI storica (ex page.tsx:3078-3080): {completed:false, avoided:true} senza status
+  //     Task 71: route rimossa → atteso 404
   const uiPayload = {
     whatDone: '', whatAvoided: '', whatBlocked: '', restartFrom: '',
     mood: 3, energyEnd: 3,
     taskReviews: planned.map((x) => ({ taskId: x.id, completed: false, avoided: true })),
   };
   const rUi = await api('POST', '/api/review', { cookie, body: uiPayload });
-  push(`D1/D12(i) POST /api/review payload forma-UI -> HTTP ${rUi.status}`);
+  push(`D1/D12(i) POST /api/review payload forma-UI -> HTTP ${rUi.status} (D1/D12: route legacy rimossa dal Task 71 → atteso 404${rUi.status === 404 ? '' : ' — ANOMALIA'})`);
   saveEvidence(J, 'step2-d1-ui-payload-response.json', JSON.stringify({ status: rUi.status, body: rUi.json ?? rUi.text }, null, 2));
   const reviewAfterUi = await db.review.findUnique({ where: { userId_date: { userId: u.id, date: clientDate } } });
   saveEvidence(J, 'step2-review-row-after-ui-payload.json', JSON.stringify(reviewAfterUi, null, 2));
   const tAfterUi = await snapshotTasks(u.id);
-  push(`dopo payload-UI: whatBlocked della Review = ${JSON.stringify(reviewAfterUi?.whatBlocked)} (prima: ${JSON.stringify(reviewPreD12?.whatBlocked)})`);
+  push(`dopo payload-UI: whatBlocked della Review = ${JSON.stringify(reviewAfterUi?.whatBlocked)} (prima: ${JSON.stringify(reviewPreD12?.whatBlocked)}; Task 71: atteso invariato, la route non scrive piu')`);
   push(`dopo payload-UI counts:\n${fmtCounts(tAfterUi)}`);
 
   // (ii) payload CONTRATTO API con status:'avoided' — 2 submit identici
+  //      Task 71: route rimossa → attesi 404 e counts/UserPattern invariati (nessun effetto)
   const patternBefore = await db.userPattern.findFirst({ where: { userId: u.id }, select: { totalTasksAvoided: true, streakDays: true } });
   const contractPayload = {
     whatDone: 'quasi niente', whatAvoided: 'le solite tre cose', whatBlocked: 'ansia da pagina bianca',
@@ -250,12 +255,13 @@ async function main(): Promise<void> {
   const counts: Array<{ label: string; tasks: TaskSnap[]; pattern: { totalTasksAvoided: number } | null }> = [];
   for (const attempt of [1, 2]) {
     const rC = await api('POST', '/api/review', { cookie, body: contractPayload });
-    push(`D12(ii) POST /api/review contratto (status:'avoided') submit #${attempt} -> HTTP ${rC.status}`);
+    push(`D12(ii) POST /api/review contratto (status:'avoided') submit #${attempt} -> HTTP ${rC.status} (D12: route legacy rimossa dal Task 71 → atteso 404${rC.status === 404 ? '' : ' — ANOMALIA'})`);
     const snap = await snapshotTasks(u.id);
     const pat = await db.userPattern.findFirst({ where: { userId: u.id }, select: { totalTasksAvoided: true } });
     counts.push({ label: `submit${attempt}`, tasks: snap, pattern: pat });
     push(`dopo submit #${attempt}:\n${fmtCounts(snap)}\n  UserPattern.totalTasksAvoided=${pat?.totalTasksAvoided}`);
   }
+  push(`D12 chiusura (Task 71): nessun effetto atteso — avoidanceCount e UserPattern.totalTasksAvoided devono restare invariati rispetto a prima dei 2 submit`);
   saveEvidence(J, 'step2-d12-resubmit-counts.json', JSON.stringify({
     patternBefore,
     afterUiPayload: tAfterUi,

@@ -2,13 +2,14 @@
  * Collaudo 62 — J6 porta (g): conflitto Review manuale vs review conversazionale.
  * Pista dossier D1.
  *
- * Replica ESATTAMENTE la POST /api/review del tab Review manuale di
- * src/app/tasks/page.tsx:3064-3083: taskReviews con shape {taskId, completed}
- * e {taskId, completed:false, avoided:true} — SENZA campo `status`, che l'API
- * (review/route.ts:53) passa dritto a ReviewTask.status NOT NULL.
+ * STORICO: replicava ESATTAMENTE la POST /api/review del tab Review manuale
+ * (all'epoca src/app/tasks/page.tsx:3064-3083): taskReviews senza campo
+ * `status` → 500 con Review upsertata a meta' → la Review-oggi orfana
+ * sopprimeva la review conversazionale (evening-signal shouldStart:false).
  *
- * Atteso (D1): 500 con Review gia' upsertata a meta' → la Review-oggi orfana
- * sopprime la review conversazionale (evening-signal shouldStart:false).
+ * Task 71: route /api/review RIMOSSA (zero-consumer). Il probe ora verifica la
+ * CHIUSURA di D1: POST → 404 (route inesistente), NESSUNA scrittura
+ * Review/ReviewTask, review conversazionale non piu' sopprimibile da qui.
  *
  * Utente: collaudo-j6g@probe.local (1 task completed + 1 avoided, finestra 00:00-23:59).
  * Lancio: bun run dotenv -e .env.local -- bun scripts/e2e/collaudo-62/j6g-conflitto-review-manuale.ts
@@ -60,7 +61,8 @@ async function main(): Promise<void> {
 
   await photo(u.id, 'pre-post');
 
-  // 2. POST /api/review — payload IDENTICO al client (page.tsx:3068-3083)
+  // 2. POST /api/review — payload IDENTICO al client storico (ex page.tsx:3068-3083)
+  //    Task 71: route rimossa → atteso 404, nessuna scrittura
   const payload = {
     whatDone: 'ho chiuso la relazione trimestrale',
     whatAvoided: 'la mail al capo, di nuovo',
@@ -77,14 +79,14 @@ async function main(): Promise<void> {
   note(`STEP g2 POST /api/review (payload client): HTTP ${post.status} body=${post.text}`);
   saveEvidence(J, 'j6g-post-review-response.json', JSON.stringify({ status: post.status, body: post.json, payloadSent: payload }, null, 2));
 
-  const afterPost = await photo(u.id, 'post-500');
+  const afterPost = await photo(u.id, 'post-404'); // Task 71: route rimossa (era 'post-500')
 
-  // 3. Retry dell'utente (il tab mostra "Errore" e l'utente riprova): stesso esito?
+  // 3. Retry dell'utente: stesso esito atteso (404 stabile, route inesistente)
   const retry = await api('POST', '/api/review', { cookie, body: payload });
   note(`STEP g3 retry POST: HTTP ${retry.status}`);
   await photo(u.id, 'post-retry');
 
-  // 4. Conseguenza: la review conversazionale e' soppressa?
+  // 4. Chiusura: senza Review orfana la review conversazionale NON deve piu' risultare soppressa
   const sigPost = await api('GET', `/api/chat/evening-signal?clientTime=${encodeURIComponent(romeHHMM())}&clientDate=${today}`, { cookie });
   note(`STEP g4 evening-signal POST-conflitto: ${sigPost.status} ${sigPost.text}`);
   saveEvidence(J, 'j6g-signal-post.json', sigPost.text);
@@ -94,16 +96,17 @@ async function main(): Promise<void> {
   note(`STEP g5 active-thread: HTTP ${at.status} activeThread=${atJson.activeThread ? 'presente' : 'null'} eveningReview.shouldStart=${atJson.eveningReview?.shouldStart}`);
   saveEvidence(J, 'j6g-active-thread-post.json', at.text);
 
-  // 5. Verdetti
+  // 5. Verdetti — Task 71: route rimossa, il conflitto D1 non e' piu' esercitabile
   const reviewOrphan = afterPost.reviewRows.find((r) => r.date === today);
-  const d1 =
-    post.status === 500 &&
-    reviewOrphan !== undefined &&
-    reviewOrphan.reviewTaskRows === 0 &&
-    (sigPost.json as { shouldStart?: boolean })?.shouldStart === false;
-  note(`VERDICT D1 ${d1 ? 'CONFERMATO' : 'NON confermato'}: POST=${post.status}, Review-oggi upsertata=${reviewOrphan !== undefined} (reviewTask=${reviewOrphan?.reviewTaskRows}), shouldStart post=${(sigPost.json as { shouldStart?: boolean })?.shouldStart}`);
+  const shouldPre = (sigPre.json as { shouldStart?: boolean })?.shouldStart;
+  const shouldPost = (sigPost.json as { shouldStart?: boolean })?.shouldStart;
+  const d1Closed =
+    post.status === 404 && // Task 71: route rimossa
+    retry.status === 404 &&
+    reviewOrphan === undefined; // nessuna scrittura Review/ReviewTask
+  note(`VERDICT D1 ${d1Closed ? 'CHIUSA dal Task 71 (route rimossa)' : 'ANOMALIA: chiusura NON verificata'}: POST=${post.status} retry=${retry.status} (attesi 404), Review-oggi upsertata=${reviewOrphan !== undefined} (attesa: nessuna scrittura), shouldStart PRE=${shouldPre} POST=${shouldPost} (atteso invariato)`);
 
-  // 6. avoidanceCount NON incrementato (updatePatternsFromReview mai raggiunto)?
+  // 6. avoidanceCount invariato (Task 71: route rimossa, updatePatternsFromReview non esiste piu' su questo percorso)
   const avoidedAfter = await db.task.findUnique({ where: { id: avoided.id }, select: { avoidanceCount: true } });
   note(`STEP g6 avoidanceCount dopo 2 POST: ${avoidedAfter?.avoidanceCount} (era ${avoided.avoidanceCount})`);
 

@@ -8,6 +8,7 @@
  * decompose, export, health, learning-signal.
  *
  * Per ogni metodo esportato: (a) 401 senza cookie; (b) happy 2xx; (c) input invalido 4xx (mai 500).
+ * Task 71: contacts e contacts/[id] RIMOSSE → qui verificate come 404 (chiusura).
  * Lancio: bun run dotenv -e .env.local -- bun scripts/e2e/collaudo-68/f2-api-contract-half1.ts
  */
 import {
@@ -282,34 +283,26 @@ async function main() {
     await deleteEphemeralUser('collaudo68-f2consent@probe.local');
   }
 
-  // ── contacts GET/POST ──
+  // ── contacts + contacts/[id] — Task 71: route RIMOSSE (zero-consumer) ──
+  // Storico (collaudo 68): 401 senza cookie, GET/POST happy 2xx, PATCH/DELETE su [id].
+  // Ora la route Next non esiste più → 404 sia senza che con cookie (verifica di chiusura).
   {
-    rec('contacts', 'GET', '401', (await api('GET', '/api/contacts')).status, '401', (await api('GET', '/api/contacts')).status === 401);
-    rec('contacts', 'POST', '401', (await api('POST', '/api/contacts', { body: {} })).status, '401', (await api('POST', '/api/contacts', { body: {} })).status === 401);
-    const g = await api('GET', '/api/contacts', { cookie: C });
-    rec('contacts', 'GET', 'happy', g.status, '2xx', is2xx(g.status));
-    const pi = await api('POST', '/api/contacts', { cookie: C, body: {} });
-    rec('contacts', 'POST', 'invalid', pi.status, '400', pi.status === 400 && never500(pi.status));
-    const ph = await api('POST', '/api/contacts', { cookie: C, body: { name: 'Mario' } });
-    rec('contacts', 'POST', 'happy', ph.status, '2xx', is2xx(ph.status), `body=${ph.text.slice(0,80)}`);
-    saveEvidence('fase2', 'f2-contact-created.json', ph.text);
-  }
-
-  // ── contacts/[id] DELETE/PATCH ──
-  {
-    rec('contacts/[id]', 'DELETE', '401', (await api('DELETE', '/api/contacts/x')).status, '401', (await api('DELETE', '/api/contacts/x')).status === 401);
-    rec('contacts/[id]', 'PATCH', '401', (await api('PATCH', '/api/contacts/x', { body: {} })).status, '401', (await api('PATCH', '/api/contacts/x', { body: {} })).status === 401);
-    const contact = await db.contact.create({ data: { userId: u.id, name: 'Test' } }).catch(() => null);
-    if (contact) {
-      const patch = await api('PATCH', `/api/contacts/${contact.id}`, { cookie: C, body: { name: 'Test2' } });
-      rec('contacts/[id]', 'PATCH', 'happy', patch.status, '2xx', is2xx(patch.status), `body=${patch.text.slice(0,60)}`);
-      const del = await api('DELETE', `/api/contacts/${contact.id}`, { cookie: C });
-      rec('contacts/[id]', 'DELETE', 'happy', del.status, '2xx', is2xx(del.status));
-    } else warn('contacts/[id] happy SKIP: no contact model');
-    const di = await api('DELETE', '/api/contacts/nonexistent', { cookie: C });
-    rec('contacts/[id]', 'DELETE', 'invalid', di.status, '404 (never 500)', never500(di.status), `status=${di.status}`);
-    const pai = await api('PATCH', '/api/contacts/nonexistent', { cookie: C, body: { name: 'x' } });
-    rec('contacts/[id]', 'PATCH', 'invalid', pai.status, '4xx (never 500)', never500(pai.status), `status=${pai.status}`);
+    const gNo = await api('GET', '/api/contacts');
+    const pNo = await api('POST', '/api/contacts', { body: {} });
+    const paNo = await api('PATCH', '/api/contacts/x', { body: {} });
+    const dNo = await api('DELETE', '/api/contacts/x');
+    rec('contacts', 'GET', '401', gNo.status, '404', gNo.status === 404, 'Task 71: route rimossa (senza cookie)');
+    rec('contacts', 'POST', '401', pNo.status, '404', pNo.status === 404, 'Task 71: route rimossa (senza cookie)');
+    rec('contacts/[id]', 'PATCH', '401', paNo.status, '404', paNo.status === 404, 'Task 71: route rimossa (senza cookie)');
+    rec('contacts/[id]', 'DELETE', '401', dNo.status, '404', dNo.status === 404, 'Task 71: route rimossa (senza cookie)');
+    const gC = await api('GET', '/api/contacts', { cookie: C });
+    const pC = await api('POST', '/api/contacts', { cookie: C, body: { name: 'Mario' } });
+    const paC = await api('PATCH', '/api/contacts/x', { cookie: C, body: { name: 'Test2' } });
+    const dC = await api('DELETE', '/api/contacts/x', { cookie: C });
+    rec('contacts', 'GET', 'happy', gC.status, '404', gC.status === 404, 'Task 71: route rimossa (con cookie)');
+    rec('contacts', 'POST', 'happy', pC.status, '404', pC.status === 404, 'Task 71: route rimossa (con cookie)');
+    rec('contacts/[id]', 'PATCH', 'happy', paC.status, '404', paC.status === 404, 'Task 71: route rimossa (con cookie)');
+    rec('contacts/[id]', 'DELETE', 'happy', dC.status, '404', dC.status === 404, 'Task 71: route rimossa (con cookie)');
   }
 
   // ── daily-plan POST/GET/PATCH ──
