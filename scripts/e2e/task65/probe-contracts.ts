@@ -27,7 +27,9 @@ assert(!sw.includes('shadow-quick-capture'), 'sw.js senza quick-capture offline'
 assert(!sw.includes('openIndexedDB'), 'sw.js senza IndexedDB');
 assert(!sw.includes('notificationclick'), 'sw.js senza notificationclick (nessuna fonte notifiche)');
 assert(sw.includes("request.method === 'POST'"), 'sw.js share target POST intatto');
-assert(sw.includes('shadow-static-v9'), 'sw.js cache bumpata a v9');
+// Task 72: pin tollerante — contratto "bumpata ad ALMENO v9", non uguaglianza.
+const swVersion = Number((sw.match(/shadow-static-v(\d+)/) ?? [])[1] ?? 0);
+assert(swVersion >= 9, 'sw.js cache bumpata (>= v9)', swVersion);
 
 // A2 — manifest: solo shortcut implementati dal reader
 const shortcuts = manifest.shortcuts ?? [];

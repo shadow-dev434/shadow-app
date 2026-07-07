@@ -39,7 +39,10 @@ async function main() {
   await preflightDb();
 
   // ── Contract: sw.js v10 ────────────────────────────────────────────────
-  assert(sw.includes('shadow-static-v10'), 'sw.js cache bumpata a v10');
+  // Task 72: pin tollerante — il contratto e' "bumpata ad ALMENO v10", non
+  // l'uguaglianza esatta (che marciva a ogni release successiva).
+  const swVersion = Number((sw.match(/shadow-static-v(\d+)/) ?? [])[1] ?? 0);
+  assert(swVersion >= 10, 'sw.js cache bumpata (>= v10)', swVersion);
   assert(sw.includes('res.ok'), 'sw.js: esito POST /api/tasks controllato (res.ok)');
   assert(sw.includes('/?action=share&saved=1'), 'sw.js: redirect saved=1 solo a successo');
   assert(
