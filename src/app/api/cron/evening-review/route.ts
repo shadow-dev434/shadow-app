@@ -65,6 +65,7 @@ export async function GET(req: NextRequest) {
 
     let sent = 0;
     let skipped = 0;
+    let skippedFocus = 0;
     let failed = 0;
 
     for (const [userId, email] of byUser) {
@@ -73,6 +74,24 @@ export async function GET(req: NextRequest) {
       const signal = await computeEveningReviewSignal(userId, nowHHMM, todayRome);
       if (!signal.shouldStart) {
         skipped++;
+        continue;
+      }
+
+      // Task 71 (M/N61): non disturbare chi è in focus. Sessione strict/body
+      // doubling attiva E non scaduta (endsAt nel futuro: una sessione scaduta
+      // ma non chiusa non è più focus reale) → niente email né Notification
+      // in-app oggi. Nessun marcatore: il cron è 1/giorno; con eventuali retry
+      // infra-day futuri il promemoria arriverebbe a focus finito.
+      const inFocus = await db.strictModeSession.findFirst({
+        where: {
+          userId,
+          status: { in: ['active_soft', 'active_strict', 'pending_exit'] },
+          endsAt: { gt: new Date() },
+        },
+        select: { id: true },
+      });
+      if (inFocus) {
+        skippedFocus++;
         continue;
       }
 
@@ -138,7 +157,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({ candidates: byUser.size, sent, skipped, failed });
+    return NextResponse.json({ candidates: byUser.size, sent, skipped, skippedFocus, failed });
   } catch (err) {
     captureApiError(err, 'GET /api/cron/evening-review');
     await sendBetaAlert(

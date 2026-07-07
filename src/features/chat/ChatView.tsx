@@ -211,6 +211,9 @@ export function ChatView() {
   // Task 67 (A/D21): conferma visiva dello share-target riuscito
   // (?action=share&saved=1 dal SW). Auto-dismiss dopo qualche secondo.
   const [shareSavedBanner, setShareSavedBanner] = useState(false);
+  // Task 71 (K/N11): il fallback share tronca a 500 char nel SW — la nota
+  // dice all'utente che il testo recuperato non è tutto.
+  const [shareTruncatedNote, setShareTruncatedNote] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<{ message: string; status?: number; code?: string } | null>(null);
   const [bootstrapping, setBootstrapping] = useState(true);
@@ -285,6 +288,8 @@ export function ChatView() {
             setShareSavedBanner(true);
           } else if (sharedText) {
             setInput(sharedText.slice(0, 500));
+            // Task 71 (K/N11): solo il SW conosce la lunghezza originale.
+            if (actionSearch.get('truncated') === '1') setShareTruncatedNote(true);
             setTimeout(() => inputRef.current?.focus(), 100);
           }
         }
@@ -297,8 +302,13 @@ export function ChatView() {
       if (pendingShare) {
         sessionStorage.removeItem('shadow-share-pending');
         setInput(pendingShare.slice(0, 500));
+        // Task 71 (K/N11): il flag di troncatura sopravvive al login insieme al testo.
+        if (sessionStorage.getItem('shadow-share-pending-truncated') === '1') {
+          setShareTruncatedNote(true);
+        }
         setTimeout(() => inputRef.current?.focus(), 100);
       }
+      sessionStorage.removeItem('shadow-share-pending-truncated');
 
       // Task 44: CTA "Costruiamo il piano di oggi" da /tasks (?plan=today).
       // Avvio manuale del morning check-in: bypassa le guardie del bootstrap
@@ -895,6 +905,23 @@ export function ChatView() {
               onClick={() => setShareSavedBanner(false)}
               className="ml-auto text-emerald-500 hover:text-emerald-300"
               aria-label="Chiudi conferma"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+        {/* Task 71 (K/N11): troncatura dichiarata, non silenziosa */}
+        {shareTruncatedNote && (
+          <div
+            data-testid="share-truncated-note"
+            className="flex items-center gap-2 text-sm text-amber-400 bg-amber-950/40 border border-amber-800/50 rounded-xl px-3 py-2"
+          >
+            <span>Il testo condiviso era più lungo: ho tenuto i primi 500 caratteri.</span>
+            <button
+              type="button"
+              onClick={() => setShareTruncatedNote(false)}
+              className="ml-auto text-amber-500 hover:text-amber-300"
+              aria-label="Chiudi nota troncatura"
             >
               <X size={14} />
             </button>

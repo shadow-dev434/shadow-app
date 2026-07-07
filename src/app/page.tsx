@@ -37,6 +37,10 @@ export default function HomePage() {
     const text = params.get('text');
     if (params.get('action') === 'share' && text) {
       sessionStorage.setItem('shadow-share-pending', text.slice(0, 500));
+      // Task 71 (K/N11): la nota di troncatura sopravvive al login col testo.
+      if (params.get('truncated') === '1') {
+        sessionStorage.setItem('shadow-share-pending-truncated', '1');
+      }
     }
   }, [status]);
 

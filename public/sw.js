@@ -17,8 +17,11 @@
 // viaggia in ?text= e il client lo recupera, mai perso in silenzio).
 // Task 70 (N53): rimossa la costante morta CACHE_NAME='shadow-v2' — le cache
 // reali sono STATIC_CACHE/DYNAMIC_CACHE (nessun bump: nessun asset cambia).
-const STATIC_CACHE = 'shadow-static-v10';
-const DYNAMIC_CACHE = 'shadow-dynamic-v10';
+// v11 (2026-07-07, Task 71 K/N11): il fallback share dichiara la troncatura
+// (&truncated=1 quando il testo supera i 500 char del reader) — il client
+// mostra la nota invece di accorciare in silenzio. Bump: ChatView cambia.
+const STATIC_CACHE = 'shadow-static-v11';
+const DYNAMIC_CACHE = 'shadow-dynamic-v11';
 
 const STATIC_ASSETS = [
   '/',
@@ -146,9 +149,12 @@ self.addEventListener('fetch', (event) => {
         }
         // Fallimento (status non-2xx o exception): il testo non è stato
         // salvato — lo consegniamo al client. Cap difensivo: allineato al
-        // limite del reader ?draft= di ChatView (500 char).
+        // limite del reader ?draft= di ChatView (500 char). Task 71 (K/N11):
+        // solo il SW conosce la lunghezza originale — il flag truncated=1
+        // dice al client di mostrare la nota di troncatura.
+        const truncated = sharedText.length > 500 ? '&truncated=1' : '';
         return Response.redirect(
-          `/?action=share&text=${encodeURIComponent(sharedText.slice(0, 500))}`,
+          `/?action=share&text=${encodeURIComponent(sharedText.slice(0, 500))}${truncated}`,
           303,
         );
       })()
