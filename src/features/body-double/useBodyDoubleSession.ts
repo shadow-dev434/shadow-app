@@ -482,7 +482,9 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
       const fallbackMinutes = s ? Math.max(1, Math.round((Date.now() - s.startedAtMs) / 60_000)) : 0;
       const all = stepsRef.current;
       setSummary({
-        actualMinutes: closed?.actualDurationMinutes ?? fallbackMinutes,
+        // Task 71 (J11): || e non ?? — il server arrotonda a 0 le sessioni
+        // <30s e lo 0 (definito) bypassava il fallback "minimo 1 minuto".
+        actualMinutes: closed?.actualDurationMinutes || fallbackMinutes,
         stepsDone: all.filter((st) => st.done).length,
         stepsTotal: all.length,
       });
@@ -493,15 +495,44 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
     [ttsStop],
   );
 
+  // Task 71 (J11, completa il loop del 70 G/D24): le sessioni body doubling
+  // erano invisibili al learning (zero segnali → strictModeEffectiveness e
+  // optimalSessionLength cieche). Fail-soft: la chiusura non fallisce mai per
+  // colpa del learning. cleanExit=true per le chiusure deliberate; l'engine
+  // degrada da solo a 0.0 se la durata è <50% del pianificato.
+  const emitStrictExited = useCallback((taskCompleted: boolean) => {
+    const s = sessionRef.current;
+    const t = taskRef.current;
+    if (!s) return;
+    const actualMinutes = Math.max(0, Math.round((Date.now() - s.startedAtMs) / 60_000));
+    void fetch('/api/learning-signal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        signalType: 'strict_exited',
+        taskId: t?.id,
+        value: 1,
+        metadata: {
+          taskCompleted,
+          cleanExit: true,
+          actualMinutes,
+          plannedMinutes: s.plannedDurationMinutes,
+          trigger: 'body_double',
+        },
+      }),
+    }).catch(() => {});
+  }, []);
+
   const closeSession = useCallback(
-    async (reason: 'timer_completed' | 'completed') => {
+    async (reason: 'timer_completed' | 'completed' | 'partial') => {
       const s = sessionRef.current;
       if (!s) return;
-      const all = stepsRef.current;
       // Task 52 (D1): "Ho finito" (reason='completed') segna il task come
       // completato → soft-remove dall'inbox/Today, storico fasi preservato, MAI
-      // delete. timer-end ('timer_completed') ed early-exit (confirmExit)
-      // lasciano il task APERTO: il PATCH status vive solo nel ramo 'completed'.
+      // delete. timer-end ('timer_completed'), chiusura parziale ('partial',
+      // Task 71 J11: step confermati ma non tutti) ed early-exit (confirmExit)
+      // lasciano il task APERTO: il PATCH status vive solo nel ramo 'completed'
+      // e il server rimette planned il task delle uscite senza completamento.
       if (reason === 'completed') {
         const t = taskRef.current;
         if (t) {
@@ -516,12 +547,55 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
         sessionId: s.id,
         status: 'exited',
         exitReason: reason,
-        taskCompleted: all.length > 0 && all.every((st) => st.done),
+        // Task 71 (J11): "il task è stato completato" — vero solo nel ramo
+        // completed, anche per task senza step (prima un task senza step
+        // mandava false e il server forzava true: incoerenza).
+        taskCompleted: reason === 'completed',
       });
+      emitStrictExited(reason === 'completed');
       finalize(closed);
     },
-    [finalize],
+    [finalize, emitStrictExited],
   );
+
+  // ── Task 71 (J11): "Ho finito" con step pendenti → conferma, non fede ──
+  const requestFinish = useCallback(() => {
+    const all = stepsRef.current;
+    const hasPending = all.length > 0 && !all.every((st) => st.done);
+    if (hasPending) {
+      ttsStop();
+      setPhase('confirmSteps');
+      return;
+    }
+    void closeSession('completed');
+  }, [closeSession, ttsStop]);
+
+  // Toggle bidirezionale usato SOLO nella fase di conferma: è una rettifica
+  // finale (persiste subito, niente check-in LLM a sessione morente).
+  const toggleStepConfirm = useCallback(
+    (stepId: string) => {
+      const t = taskRef.current;
+      if (!t) return;
+      const updated = stepsRef.current.map((s) => (s.id === stepId ? { ...s, done: !s.done } : s));
+      stepsRef.current = updated;
+      setSteps(updated);
+      persistSteps(t, updated);
+    },
+    [persistSteps],
+  );
+
+  const completeAllAndClose = useCallback(() => {
+    const t = taskRef.current;
+    const updated = stepsRef.current.map((s) => (s.done ? s : { ...s, done: true }));
+    stepsRef.current = updated;
+    setSteps(updated);
+    if (t) persistSteps(t, updated);
+    void closeSession('completed');
+  }, [closeSession, persistSteps]);
+
+  const resumeFromConfirm = useCallback(() => {
+    setPhase('running');
+  }, []);
 
   // ── Exit anticipato con friction (StrictModeExitDialog estratto) ──
   const requestExit = useCallback(() => {
@@ -550,9 +624,13 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
             exitConfirmationText: confirmationText,
           })
         : null;
+      // Task 71 (J11): anche l'uscita con friction alimenta il learning
+      // (coerente col flusso strict di tasks/page: friction completata =
+      // uscita deliberata, cleanExit; il giudizio resta all'engine).
+      if (s) emitStrictExited(false);
       finalize(closed);
     },
-    [finalize],
+    [finalize, emitStrictExited],
   );
 
   const togglePause = useCallback(() => setPaused((p) => !p), []);
@@ -584,6 +662,10 @@ export function useBodyDoubleSession(taskIdParam: string | null) {
     decompose,
     extend,
     closeSession,
+    requestFinish,
+    toggleStepConfirm,
+    completeAllAndClose,
+    resumeFromConfirm,
     requestExit,
     cancelExit,
     confirmExit,

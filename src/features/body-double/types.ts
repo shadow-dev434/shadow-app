@@ -10,6 +10,7 @@ export type BodyDoublePhase =
   | 'starting' // POST sessione in corso
   | 'running' // sessione attiva (timer + check-in)
   | 'timeUp' // timer scaduto: proposta +15 / chiusura
+  | 'confirmSteps' // Task 71 (J11): "Ho finito" con step pendenti → conferma cosa è fatto davvero
   | 'ended' // sessione chiusa (riepilogo)
   | 'error';
 

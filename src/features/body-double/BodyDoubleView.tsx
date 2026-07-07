@@ -255,6 +255,45 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
             </div>
           )}
 
+          {/* Task 71 (J11): "Ho finito" con step pendenti → conferma onesta di
+              cosa è fatto davvero, invece del completamento a prescindere. */}
+          {bd.phase === 'confirmSteps' && (
+            <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-3 shrink-0 space-y-2" data-testid="bd-confirm-steps">
+              <p className="text-sm text-zinc-200">Prima di chiudere: spunta quello che hai fatto davvero.</p>
+              <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                {bd.steps.map((step) => (
+                  <button
+                    key={step.id}
+                    onClick={() => bd.toggleStepConfirm(step.id)}
+                    className="w-full flex items-center gap-3 text-left rounded-lg px-2 py-1 transition-colors hover:bg-zinc-800"
+                  >
+                    <span
+                      className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                        step.done ? 'bg-violet-600 border-violet-600' : 'border-zinc-600'
+                      }`}
+                    >
+                      {step.done && <Check className="w-3.5 h-3.5 text-white" />}
+                    </span>
+                    <span className={`text-sm ${step.done ? 'text-zinc-400' : 'text-zinc-200'}`}>
+                      {step.text}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" className="bg-emerald-700 hover:bg-emerald-600" onClick={() => bd.completeAllAndClose()}>
+                  Fatto tutto → completa
+                </Button>
+                <Button size="sm" variant="outline" className="border-zinc-700 text-white" onClick={() => void bd.closeSession('partial')}>
+                  Chiudi così — resta aperto
+                </Button>
+                <Button size="sm" variant="ghost" className="text-zinc-400" onClick={bd.resumeFromConfirm}>
+                  Continua a lavorare
+                </Button>
+              </div>
+            </div>
+          )}
+
           {bd.chatError && <p className="text-xs text-red-400 shrink-0">{bd.chatError}</p>}
 
           {/* Input chat: parla con Shadow come in una chat */}
@@ -279,7 +318,8 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
         </div>
       </main>
 
-      {/* Micro-step */}
+      {/* Micro-step (in confirmSteps la checklist vive nel pannello di conferma) */}
+      {bd.phase !== 'confirmSteps' && (
       <section className="px-4 pb-2 shrink-0">
         <Card className="bg-zinc-900/80 border-zinc-800">
           <CardContent className="p-3">
@@ -319,8 +359,10 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
           </CardContent>
         </Card>
       </section>
+      )}
 
-      {/* Footer: pausa + ho finito */}
+      {/* Footer: pausa + ho finito (in confirmSteps le CTA sono nel pannello) */}
+      {bd.phase !== 'confirmSteps' && (
       <footer className="flex items-center justify-center gap-3 px-4 pb-4 shrink-0">
         <Button
           variant="outline"
@@ -339,11 +381,12 @@ export function BodyDoubleView({ taskId }: { taskId: string | null }) {
         </Button>
         <Button
           className="h-11 flex-1 max-w-[12rem] bg-emerald-700 hover:bg-emerald-600"
-          onClick={() => void bd.closeSession('completed')}
+          onClick={() => bd.requestFinish()}
         >
           <Check className="w-4 h-4 mr-2" /> Ho finito
         </Button>
       </footer>
+      )}
 
       {bd.paused && (
         <div className="fixed bottom-20 inset-x-0 flex justify-center pointer-events-none">
