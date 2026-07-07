@@ -28,6 +28,7 @@ export default function PrivacyPage() {
               `Profilo comportamentale: un profilo su come affronti i compiti, costruito dalle tue risposte e dal tuo uso dell'app.`,
               `Dati raccolti in fase di onboarding: età, situazione abitativa, presenza di figli, aree di difficoltà.`,
               `Compiti e contatti che inserisci. I contatti possono contenere dati di terze persone (vedi sezione 7-bis).`,
+              `Contenuti che condividi verso Shadow dal telefono (testo o link, tramite il menu Condividi) e il testo estratto dalle foto che scatti per creare un compito. L'estrazione del testo dalle foto avviene interamente sul tuo dispositivo: l'immagine non viene caricata sui nostri server e viene eliminata subito dopo la lettura.`,
               `Dati tecnici e di funzionamento (log operativi).`,
               `Se colleghi Google Calendar: token di accesso e dati degli eventi del tuo calendario.`,
             ] },

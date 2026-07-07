@@ -34,7 +34,7 @@ export default function AccountDeletionPage() {
             { p: `Quando elimini il tuo account vengono cancellati in modo definitivo tutti i dati collegati al tuo profilo. In particolare:` },
             { ul: [
               `Account e credenziali: email, nome, password (in forma cifrata) e gli accessi collegati, incluso l'accesso con Google.`,
-              `Compiti, piani giornalieri e revisioni serali.`,
+              `Compiti — incluse le catture arrivate da condivisione o da foto (testo estratto e link) — piani giornalieri e revisioni serali.`,
               `Conversazioni con Shadow: tutti i messaggi che hai scambiato con l'app.`,
               `Stato d'animo, energia e riflessioni raccolti durante le revisioni.`,
               `Profilo comportamentale e dati di apprendimento costruiti dal tuo uso dell'app.`,

@@ -4,6 +4,13 @@
 > `plugins/` con bun workspaces — la regola "Android fuori dal repo" valeva per
 > il progetto bubblewrap usa-e-getta), webview su **URL remoto** Vercel.
 
+> **Nota Task 72 (2026-07-08)**: la cattura nativa NON è più scope W5 — share
+> sheet (ACTION_SEND testo/URL/immagini), foto→OCR on-device (ML Kit) e voce
+> (RecognizerIntent) sono già implementati nel guscio (`ShadowCapturePlugin`,
+> cfr. `docs/tasks/72-cattura-tier1.md`). A W5 restano M2 (sostituzione TWA),
+> M3 (auth bridge), M4 (push), M6 (IAP). Alla submission (W9/M2) ricordare le
+> dichiarazioni Data Safety per share/foto (dati trattati on-device).
+
 ## Architettura di caricamento (decisa)
 
 - `capacitor.config.ts`: `appId: 'com.shadow.adhd.executor'`,

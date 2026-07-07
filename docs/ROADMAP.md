@@ -119,6 +119,27 @@ community ADHD.
   passi", banner troncatura) su `feature/71-post-rilascio-pulizia`.
   Push/merge dell'INTERA catena: decisione Antonio (la 63→70 è già su main;
   resta questo branch).
+- **2026-07-08** — **Task 72: Cattura Tier 1 — fondazione `source`/`sourceRef`,
+  share nativo, foto→OCR on-device, voce nativa**. Da brief esterno pre-Capacitor
+  (ricognizione Fase 0 + divergenze in `docs/tasks/72-cattura-tier1.md`).
+  Fondazione dati: `Task.sourceRef` (migration `task_source_ref`), whitelist
+  `source` {share,ocr} su POST /api/tasks (mai `recurring`/`gmail` dal client),
+  dedup delle catture esterne (share: sourceRef/titolo; ocr: solo sourceRef),
+  **parsing date cheap zero-LLM** (`src/lib/capture/date-extract`, euristiche IT)
+  per la deadline degli share; SW **v12** separa titolo e sourceRef (l'URL non
+  inquina più il titolo). Review: varianti di apertura SHARE/OCR ("Dalla foto ho
+  letto…" / "te la sei condivisa…", nomina-non-rinfaccia) + `source=` esposto
+  sulle righe candidate (la prima entry apriva senza il dato — visto nel run LLM
+  reale). Nativo (`ShadowCapturePlugin`): Shadow nel menu Condividi (ACTION_SEND
+  testo/URL/immagini, riusa 1:1 il contratto ?action=share del SW), foto→OCR
+  **on-device** con ML Kit bundled (zero permesso CAMERA, immagine cancellata
+  appena letto il testo, mai caricata) + sheet di conferma con chip date, voce
+  via RecognizerIntent (l'Android WebView non ha Web Speech). Privacy §3 e
+  account-deletion aggiornate (coerenza a tre vie; Data Safety → W9). **1148
+  test verdi**, 84 assert su 4 probe meccanici + 11 assert run LLM reale +
+  gradle assembleDebug, su `feature/72-cattura-tier1`. Fuori scope dichiarato:
+  iOS (W6), widget homescreen, share-immagini su web, Gmail (W8), gating tier
+  (W2). Push/merge: decisione Antonio.
 
 ---
 
