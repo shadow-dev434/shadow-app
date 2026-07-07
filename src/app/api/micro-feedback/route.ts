@@ -7,6 +7,7 @@ import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
 import { emitAndProcessLearningSignal } from '@/lib/learning/emit-signal';
+import { getCurrentTimeSlot } from '@/lib/engines/execution-engine';
 
 // GET /api/micro-feedback?limit=50
 export async function GET(req: NextRequest) {
@@ -55,12 +56,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const hour = new Date().getHours();
-    let timeSlot = 'morning';
-    if (hour >= 6 && hour < 12) timeSlot = 'morning';
-    else if (hour >= 12 && hour < 17) timeSlot = 'afternoon';
-    else if (hour >= 17 && hour < 21) timeSlot = 'evening';
-    else timeSlot = 'night';
+    // Task 71 (F/N13): fonte unica Europe/Rome (la copia inline era UTC).
+    const timeSlot = getCurrentTimeSlot();
 
     const signalType = 'micro_feedback';
     const metadata: Record<string, unknown> = {

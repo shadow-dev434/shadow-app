@@ -3,7 +3,8 @@ import { requireSession } from '@/lib/auth-guard';
 import { decomposeWithAI } from '@/lib/engines/decomposition-engine';
 import type { ExecutionContext } from '@/lib/types/shadow';
 import { captureApiError } from '@/lib/observability';
-import { nowHourInRome } from '@/lib/evening-review/dates';
+// Task 71 (F/N13): fonte unica del time-slot invece del duplicato locale.
+import { getCurrentTimeSlot } from '@/lib/engines/execution-engine';
 
 // POST /api/decompose — decompose a task into micro-steps
 export async function POST(req: NextRequest) {
@@ -52,13 +53,4 @@ export async function POST(req: NextRequest) {
     captureApiError(error, 'POST /api/decompose');
     return NextResponse.json({ error: 'Decomposition failed' }, { status: 500 });
   }
-}
-
-function getCurrentTimeSlot(): 'morning' | 'afternoon' | 'evening' | 'night' {
-  // Task 60 §5: ora di Rome, non UTC del server.
-  const hour = nowHourInRome();
-  if (hour >= 6 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  if (hour >= 17 && hour < 21) return 'evening';
-  return 'night';
 }

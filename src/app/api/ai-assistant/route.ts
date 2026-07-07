@@ -18,6 +18,9 @@ import {
   recordNudgeOutcome,
   type NudgeContext,
 } from '@/lib/engines/nudge-engine';
+// Task 71 (F/N13): fonte unica del time-slot (Europe/Rome) — la copia locale
+// usava l'ora UTC del server e in prod slittava la fascia serale.
+import { getCurrentTimeSlot } from '@/lib/engines/execution-engine';
 import { getAdaptiveScore, dbRecordToProfileData } from '@/lib/engines/learning-engine';
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses, type AdaptiveProfileData } from '@/lib/types/shadow';
@@ -91,16 +94,6 @@ function toDbAdaptiveDelta(
     }
   }
   return out;
-}
-
-// ── Helper: Get time slot ────────────────────────────────────────────────────
-
-function getTimeSlot(): string {
-  const hour = new Date().getHours();
-  if (hour >= 6 && hour < 12) return 'morning';
-  if (hour >= 12 && hour < 17) return 'afternoon';
-  if (hour >= 17 && hour < 21) return 'evening';
-  return 'night';
 }
 
 // ── Cooldown trigger proattivi (Task 43, fix loop check-in) ──────────────────
@@ -179,7 +172,7 @@ export async function POST(request: NextRequest) {
           orderBy: { createdAt: 'desc' },
         });
 
-        const currentTimeSlot = getTimeSlot();
+        const currentTimeSlot = getCurrentTimeSlot();
         const taskSummaries = tasks.map(t => ({
           id: t.id,
           title: t.title,
@@ -209,7 +202,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: 'Task not found' }, { status: 404 });
         }
 
-        const currentTimeSlot = getTimeSlot();
+        const currentTimeSlot = getCurrentTimeSlot();
         const adaptiveTaskCtx = {
           category: task.category,
           context: task.context || 'any',
@@ -262,7 +255,7 @@ export async function POST(request: NextRequest) {
           take: 20,
         });
 
-        const currentTimeSlot = getTimeSlot();
+        const currentTimeSlot = getCurrentTimeSlot();
         const taskSummaries = tasks.map(t => ({
           id: t.id,
           title: t.title,
@@ -440,7 +433,7 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    const currentTimeSlot = getTimeSlot();
+    const currentTimeSlot = getCurrentTimeSlot();
     const taskSummaries = tasks.map(t => ({
       id: t.id,
       title: t.title,

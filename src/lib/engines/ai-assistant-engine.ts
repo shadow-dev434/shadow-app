@@ -4,6 +4,7 @@
 // and learning-driven recommendations.
 
 import type { AdaptiveProfileData, AdaptiveScoreResult } from '@/lib/types/shadow';
+import { getCurrentTimeSlot } from '@/lib/engines/execution-engine';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -501,7 +502,9 @@ export function processMicroFeedbackAI(
       } else if (answer === 'wrong_moment') {
         insightMessage = 'Capito. Lo ripropongo in un momento migliore per te.';
         if (taskContext) {
-          const ts = new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening';
+          // Task 71 (F/N13): fonte unica Europe/Rome a 4 fasce (la copia
+          // inline era UTC e senza 'night').
+          const ts = getCurrentTimeSlot();
           memories.push({
             type: 'timing',
             category: taskContext.category,

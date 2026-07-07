@@ -13,7 +13,7 @@ import { db } from '@/lib/db';
 import { orchestrate } from '@/lib/chat/orchestrator';
 import { isInsideEveningWindow } from '@/lib/evening-review/window';
 import { eveningReviewHasPriority } from '@/lib/evening-review/priority';
-import { formatTodayInRome, formatDateInRome, nowHHMMInRome } from '@/lib/evening-review/dates';
+import { formatTodayInRome, formatDateInRome, nowHHMMInRome, nowHourInRome } from '@/lib/evening-review/dates';
 
 // Task 60 §5: la bootstrap puo' lanciare l'orchestrator LLM (morning check-in /
 // review serale) al primo mount → senza cap il default serverless rischia il
@@ -189,10 +189,5 @@ async function shouldTriggerMorningCheckin(
   }
 
   return { trigger: true, partOfDay };
-}
-
-/** Ora corrente (0-23) in Europe/Rome, derivata da nowHHMMInRome (lib/dates). */
-function nowHourInRome(): number {
-  return parseInt(nowHHMMInRome().split(':')[0], 10);
 }
 
