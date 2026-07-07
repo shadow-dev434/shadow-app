@@ -13,6 +13,8 @@ vi.mock('@/lib/db', () => ({
   db: {
     settings: { findMany: vi.fn() },
     notification: { findFirst: vi.fn(), create: vi.fn() },
+    // Task 71 (M/N61): gate focus — il cron salta chi ha una sessione attiva.
+    strictModeSession: { findFirst: vi.fn() },
   },
 }));
 
@@ -50,6 +52,7 @@ beforeEach(() => {
   ] as never);
   vi.mocked(db.notification.findFirst).mockResolvedValue(null as never);
   vi.mocked(db.notification.create).mockResolvedValue({} as never);
+  vi.mocked(db.strictModeSession.findFirst).mockResolvedValue(null as never); // default: nessun focus
   vi.mocked(computeEveningReviewSignal).mockResolvedValue({ shouldStart: true });
   vi.mocked(sendEveningReviewEmail).mockResolvedValue({ ok: true });
 });
@@ -77,7 +80,7 @@ describe('GET /api/cron/evening-review', () => {
         data: expect.objectContaining({ userId: 'u1', type: 'evening_review_prompt' }),
       }),
     );
-    expect(body).toEqual({ candidates: 1, sent: 1, skipped: 0, failed: 0 });
+    expect(body).toEqual({ candidates: 1, sent: 1, skipped: 0, skippedFocus: 0, failed: 0 });
   });
 
   it('skip se già sollecitato oggi (dedup), nessuna email', async () => {
@@ -86,7 +89,7 @@ describe('GET /api/cron/evening-review', () => {
     const body = await res.json();
     expect(sendEveningReviewEmail).not.toHaveBeenCalled();
     expect(db.notification.create).not.toHaveBeenCalled();
-    expect(body).toEqual({ candidates: 1, sent: 0, skipped: 1, failed: 0 });
+    expect(body).toEqual({ candidates: 1, sent: 0, skipped: 1, skippedFocus: 0, failed: 0 });
   });
 
   it('skip fuori finestra (shouldStart=false), nessun dedup né email', async () => {
@@ -95,7 +98,7 @@ describe('GET /api/cron/evening-review', () => {
     const body = await res.json();
     expect(db.notification.findFirst).not.toHaveBeenCalled();
     expect(sendEveningReviewEmail).not.toHaveBeenCalled();
-    expect(body).toEqual({ candidates: 1, sent: 0, skipped: 1, failed: 0 });
+    expect(body).toEqual({ candidates: 1, sent: 0, skipped: 1, skippedFocus: 0, failed: 0 });
   });
 
   it('invio fallito: failed++, NESSUN marcatore, traccia evening_email_failed col motivo', async () => {
@@ -116,7 +119,7 @@ describe('GET /api/cron/evening-review', () => {
         read: true,
       },
     });
-    expect(body).toEqual({ candidates: 1, sent: 0, skipped: 0, failed: 1 });
+    expect(body).toEqual({ candidates: 1, sent: 0, skipped: 0, skippedFocus: 0, failed: 1 });
   });
 
   it('invio fallito già tracciato oggi: nessuna seconda traccia (dedup giorno)', async () => {
@@ -128,7 +131,7 @@ describe('GET /api/cron/evening-review', () => {
     const res = await GET(cronReq(SECRET));
     const body = await res.json();
     expect(db.notification.create).not.toHaveBeenCalled();
-    expect(body).toEqual({ candidates: 1, sent: 0, skipped: 0, failed: 1 });
+    expect(body).toEqual({ candidates: 1, sent: 0, skipped: 0, skippedFocus: 0, failed: 1 });
   });
 
   it('errore nella scrittura della traccia: il giro continua e risponde 200', async () => {
@@ -145,7 +148,7 @@ describe('GET /api/cron/evening-review', () => {
     const res = await GET(cronReq(SECRET));
     const body = await res.json();
     expect(res.status).toBe(200);
-    expect(body).toEqual({ candidates: 2, sent: 1, skipped: 0, failed: 1 });
+    expect(body).toEqual({ candidates: 2, sent: 1, skipped: 0, skippedFocus: 0, failed: 1 });
   });
 
   it('dedup per userId quando Settings ha più righe stesso utente', async () => {
@@ -157,5 +160,24 @@ describe('GET /api/cron/evening-review', () => {
     const body = await res.json();
     expect(body.candidates).toBe(1);
     expect(sendEveningReviewEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('Task 71 (M/N61): utente in focus → skippedFocus, niente email né marcatore', async () => {
+    vi.mocked(db.strictModeSession.findFirst).mockResolvedValue({ id: 's1' } as never);
+    const res = await GET(cronReq(SECRET));
+    const body = await res.json();
+    expect(sendEveningReviewEmail).not.toHaveBeenCalled();
+    expect(db.notification.create).not.toHaveBeenCalled();
+    // Il gate interroga solo gli stati attivi e le sessioni non scadute.
+    expect(db.strictModeSession.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          userId: 'u1',
+          status: { in: ['active_soft', 'active_strict', 'pending_exit'] },
+          endsAt: { gt: expect.any(Date) },
+        }),
+      }),
+    );
+    expect(body).toEqual({ candidates: 1, sent: 0, skipped: 0, skippedFocus: 1, failed: 0 });
   });
 });
