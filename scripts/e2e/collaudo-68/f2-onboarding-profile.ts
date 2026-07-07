@@ -1,23 +1,20 @@
 /**
- * Fase 2 — Onboarding -> profilo (§8.10, pista N33).
- * La route onboarding/complete inizializza l'AdaptiveProfile con logica INLINE
- * (route.ts:102-184), mentre initializeProfileFromOnboarding (learning-engine.ts:620)
- * NON e' mai chiamata. Verifichiamo il DRIFT: 3 profili con risposte note ->
- * confronto AdaptiveProfile generato (route) vs atteso (engine).
+ * Fase 2 — Onboarding -> profilo (§8.10, pista N33) — aggiornato dal Task 71.
+ * N33 CHIUSA: la logica inline della route è stata estratta nella fonte unica
+ * buildAdaptiveProfileFromOnboarding (src/lib/onboarding/profile-from-onboarding.ts)
+ * e initializeProfileFromOnboarding (engine, mai chiamata e divergente) è stata
+ * RIMOSSA. Il probe ora è un test di NON-divergenza: l'AdaptiveProfile scritto
+ * dalla route reale deve coincidere con l'output della funzione condivisa.
  *
  * Uso: bun run dotenv -e .env.local -- bun scripts/e2e/collaudo-68/f2-onboarding-profile.ts
  */
-import { preflightDb, createEphemeralUser, deleteEphemeralUser, api, db, saveEvidence, assert, warn, finish } from './lib';
-import { initializeProfileFromOnboarding } from '../../../src/lib/engines/learning-engine';
+import { preflightDb, createEphemeralUser, deleteEphemeralUser, api, db, saveEvidence, assert, finish } from './lib';
+import {
+  buildAdaptiveProfileFromOnboarding,
+  type OnboardingAnswers,
+} from '../../../src/lib/onboarding/profile-from-onboarding';
 
-interface Answers {
-  age: number; role: string; roleDetail?: string; livingSituation: string;
-  householdManager: boolean; loadSources: string[]; difficultAreas: string[];
-  motivations: Record<string, number>; productiveTime: string; sessionPreference: string;
-  activationDifficulty: number; promptStyle: string;
-}
-
-const CASES: Array<{ name: string; answers: Answers }> = [
+const CASES: Array<{ name: string; answers: OnboardingAnswers }> = [
   {
     name: 'worker-difficile',
     answers: {
@@ -45,16 +42,18 @@ const CASES: Array<{ name: string; answers: Answers }> = [
   },
 ];
 
-// Campi su cui confrontiamo route vs engine (numerici scalari, drift piu' leggibile).
+// Campi scalari confrontati route (DB) vs fonte unica + i JSON delle finestre
+// (erano le divergenze principali della N33 originale).
 const CMP_FIELDS = [
   'executiveLoad', 'familyResponsibilityLoad', 'domesticBurden', 'workStudyCentrality',
   'avoidanceProfile', 'activationDifficulty', 'optimalSessionLength',
   'preferredDecompositionGranularity', 'predictedBlockLikelihood', 'interruptionVulnerability',
 ] as const;
+const CMP_JSON_FIELDS = ['bestTimeWindows', 'worstTimeWindows', 'motivationProfile'] as const;
 
 async function main() {
   await preflightDb();
-  const report: string[] = ['# N33 — Onboarding -> AdaptiveProfile: route (inline) vs engine (mai chiamato)\n'];
+  const report: string[] = ['# N33 (chiusa Task 71) — route vs fonte unica buildAdaptiveProfileFromOnboarding\n'];
   let anyDrift = false;
 
   for (const c of CASES) {
@@ -73,30 +72,25 @@ async function main() {
       assert(ap !== null, `[${c.name}] AdaptiveProfile creato`, null);
       if (!ap) continue;
 
-      // Atteso dall'engine mai chiamato.
-      const sessionLength = c.answers.sessionPreference === 'short' ? 10 : c.answers.sessionPreference === 'long' ? 45 : 25;
-      const expected = initializeProfileFromOnboarding({
-        role: c.answers.role,
-        hasChildren: c.answers.role === 'parent',
-        householdManager: c.answers.householdManager,
-        difficultAreas: c.answers.difficultAreas,
-        mainResponsibilities: c.answers.loadSources,
-        livingSituation: c.answers.livingSituation,
-        preferredSessionLength: sessionLength,
-        focusModeDefault: c.answers.promptStyle === 'direct' ? 'strict' : 'soft',
-      });
+      // Oracle: la fonte unica con le stesse risposte grezze.
+      const expected = buildAdaptiveProfileFromOnboarding(c.answers);
 
       report.push(`## Caso ${c.name}`);
-      report.push('| campo | route (reale) | engine (atteso) | drift |');
+      report.push('| campo | route (DB) | fonte unica | drift |');
       report.push('|---|---|---|---|');
       for (const f of CMP_FIELDS) {
-        const rv = (ap as unknown as Record<string, unknown>)[f];
-        const ev = (expected as Record<string, unknown>)[f];
-        const rn = typeof rv === 'number' ? rv : Number(rv);
-        const en = typeof ev === 'number' ? ev : Number(ev);
+        const rn = Number((ap as unknown as Record<string, unknown>)[f]);
+        const en = Number((expected as Record<string, unknown>)[f]);
         const drift = Math.abs(rn - en) > 1e-6;
         if (drift) anyDrift = true;
         report.push(`| ${f} | ${rn} | ${en} | ${drift ? 'SI' : '-'} |`);
+      }
+      for (const f of CMP_JSON_FIELDS) {
+        const rv = String((ap as unknown as Record<string, unknown>)[f] ?? '');
+        const ev = String((expected as Record<string, unknown>)[f] ?? '');
+        const drift = rv !== ev;
+        if (drift) anyDrift = true;
+        report.push(`| ${f} | ${rv} | ${ev} | ${drift ? 'SI' : '-'} |`);
       }
       report.push('');
     } finally {
@@ -104,8 +98,7 @@ async function main() {
     }
   }
 
-  if (anyDrift) console.log('  CONFERMATA N33: drift tra logica inline della route e initializeProfileFromOnboarding (dead code divergente)');
-  else warn('N33: nessun drift misurato sui campi confrontati — la logica coincide');
+  assert(!anyDrift, 'N33 chiusa: route e fonte unica coincidono su tutti i campi confrontati');
 
   const p = saveEvidence('fase2', 'f2-onboarding-profile-drift.md', report.join('\n'));
   console.log(`  evidenza: ${p}`);
