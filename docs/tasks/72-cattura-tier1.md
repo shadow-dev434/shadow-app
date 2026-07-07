@@ -101,8 +101,13 @@ Ogni cattura esterna produce una voce inbox grezza:
   title/sourceRef/source; fallback `?text=` invariato). Unit test + probe
   `scripts/e2e/task72/probe-b-ingestion.ts`; riallineati i pin SW stale nei probe storici.
 - **B3 — Review**: varianti SHARE e OCR in `prompts.ts` (normale/high-avoidance ×
-  direct/gentle/challenge), enum riga 667, regola temporale GMAIL estesa a OCR.
+  direct/gentle/challenge), enum riga 667, regola temporale GMAIL estesa a SHARE/OCR.
   Verifica con run LLM reale.
+  **Deviazione dal piano (ratificata via permission)**: il run LLM ha mostrato che
+  la PRIMA entry si apre quando `CURRENT_ENTRY` è ancora null e la riga candidate
+  non esponeva `source` → l'entry ocr apriva in stile GMAIL. Fix: `source=` aggiunto
+  alle righe candidate del blocco TRIAGE CORRENTE (`orchestrator.ts`, solo dato,
+  zero logica) + nota nel prompt. Secondo run: 11/11, aperture con origine corretta.
 - **C — Share nativo**: intent-filter `ACTION_SEND` (`text/plain`, `image/*`);
   `ShadowCapturePlugin.java` (cold start + `handleOnNewIntent`, `getPendingShare()`
   consume-once, evento `shareReceived`, immagini copiate in cache); `src/lib/native/capture.ts`;

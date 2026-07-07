@@ -1690,14 +1690,18 @@ export function buildEveningReviewModeContext(
     // tra N giorni/scaduta). 'nessuna' su deadline assente, comportamento
     // pre-fix preservato. Letto da entrambe le usages sotto (originali e added).
     const dl = formatDeadlineLabel(task.deadline?.toISOString() ?? null, clientDate);
+    // Task 72 (B3): source anche sulla riga candidate — l'apertura della PRIMA
+    // entry avviene quando CURRENT_ENTRY è ancora null, e senza source il
+    // modello non può scegliere la variante (visto nel run LLM: entry ocr
+    // aperta in stile GMAIL). Stesso dato di CURRENT_ENTRY_DETAIL, zero logica.
     if (isOriginal) {
       const reason = triageState.reasonsByTaskId[id] ?? 'unknown';
       candidateLines.push(
-        `${idx + 1}. [id=${task.id}] ${task.title} -- reason=${reason}, deadline=${dl}, avoidance=${task.avoidanceCount}`,
+        `${idx + 1}. [id=${task.id}] ${task.title} -- reason=${reason}, source=${task.source}, deadline=${dl}, avoidance=${task.avoidanceCount}`,
       );
     } else {
       candidateLines.push(
-        `${idx + 1}. [id=${task.id}] ${task.title} -- reason=added, deadline=${dl}, avoidance=${task.avoidanceCount}`,
+        `${idx + 1}. [id=${task.id}] ${task.title} -- reason=added, source=${task.source}, deadline=${dl}, avoidance=${task.avoidanceCount}`,
       );
     }
   });
