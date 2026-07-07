@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { isNative } from '@/lib/native/platform';
 import { ShieldPermissionGate } from './shield-permission-gate';
+import { OcrCaptureSheet } from '@/features/capture/OcrCaptureSheet';
 
 /**
  * Inizializzazioni che hanno senso solo dentro il guscio nativo (Task 59).
@@ -43,5 +44,12 @@ export function NativeBootstrap() {
     return () => cleanup?.();
   }, []);
 
-  return <ShieldPermissionGate />;
+  return (
+    <>
+      <ShieldPermissionGate />
+      {/* Task 72 (Slice D): sheet OCR globale — si apre via 'shadow:ocr-open'
+          (bottone camera dell'inbox, share nativo di immagini). */}
+      <OcrCaptureSheet />
+    </>
+  );
 }

@@ -50,10 +50,17 @@ export async function handleNativeShare(share: NativeShare): Promise<void> {
   if (processedShareIds.has(share.id)) return;
   processedShareIds.add(share.id);
 
-  if (share.type !== 'text') {
-    // image/* → OCR (Slice D): instradato da handleNativeImageShare.
+  if (share.type === 'image') {
+    // Slice D: immagine condivisa → sheet OCR (montata in NativeBootstrap;
+    // il listener del figlio è già attaccato quando il bootstrap dispatcha).
+    if (share.imagePath) {
+      window.dispatchEvent(
+        new CustomEvent('shadow:ocr-open', { detail: { mode: 'image', path: share.imagePath } }),
+      );
+    }
     return;
   }
+  if (share.type !== 'text') return;
 
   const payload = buildSharePayload(share.title, share.text);
   if (!payload) return;

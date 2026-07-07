@@ -35,7 +35,8 @@ import {
   Download, Share2, RefreshCw, Send, Pencil, ShieldAlert, Lock, Unlock,
   Loader2, ChevronLeft, CheckCircle2, AlertCircle, User, Baby,
   Home, Briefcase, GraduationCap, Heart, BookOpen, FileText,
-  Palette, Wrench, Eye, EyeOff, MessageCircle, Hand, Repeat, MoreHorizontal
+  Palette, Wrench, Eye, EyeOff, MessageCircle, Hand, Repeat, MoreHorizontal,
+  Camera
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
@@ -2413,6 +2414,17 @@ function InboxView() {
         <Button onClick={isListening ? stopListening : startListening} className={`h-12 px-3 ${isListening ? 'bg-rose-600 hover:bg-rose-700 animate-pulse' : 'bg-zinc-700 hover:bg-zinc-600'} text-white`} aria-label={isListening ? 'Stop' : 'Voce'}>
           {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
         </Button>
+        {/* Task 72 (Slice D): foto → OCR on-device, solo guscio nativo (la sheet
+            globale vive in NativeBootstrap e ascolta 'shadow:ocr-open'). */}
+        {isNative() && (
+          <Button
+            onClick={() => window.dispatchEvent(new CustomEvent('shadow:ocr-open', { detail: { mode: 'camera' } }))}
+            className="h-12 px-3 bg-zinc-700 hover:bg-zinc-600 text-white"
+            aria-label="Fotografa un documento"
+          >
+            <Camera className="w-5 h-5" />
+          </Button>
+        )}
         <Button onClick={handleCreate} disabled={!newTask.trim() || isCreating} className="h-12 px-4 bg-amber-600 hover:bg-amber-700 text-white">
           <Plus className="w-5 h-5" />
         </Button>

@@ -20,6 +20,16 @@ export interface NativeShare {
 export interface ShadowCapturePlugin {
   /** Share arrivato a freddo (cold start): consume-once, poi torna vuoto. */
   getPendingShare(): Promise<{ share?: NativeShare }>;
+  /**
+   * Slice D — foto → OCR on-device. capturePhoto delega all'app fotocamera
+   * (ACTION_IMAGE_CAPTURE, zero permesso CAMERA); pickImage usa il Photo
+   * Picker. recognizeText (ML Kit) CANCELLA il file appena estratto il testo:
+   * l'immagine non è mai persistita né caricata. Reject 'capture_cancelled'
+   * se l'utente annulla.
+   */
+  capturePhoto(): Promise<{ path: string }>;
+  pickImage(): Promise<{ path: string }>;
+  recognizeText(options: { path: string }): Promise<{ text: string }>;
   addListener(
     eventName: 'shareReceived',
     listener: (share: NativeShare) => void,

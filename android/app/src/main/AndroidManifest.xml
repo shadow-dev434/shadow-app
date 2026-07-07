@@ -31,6 +31,14 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
 
+            <!-- Task 72 (Slice D): condividi un'immagine (screenshot/foto di una
+                 bolletta) → OCR on-device. L'immagine non lascia mai il device. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+
         </activity>
 
         <provider
