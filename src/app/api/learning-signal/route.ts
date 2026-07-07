@@ -13,15 +13,25 @@ export async function GET(req: NextRequest) {
   const { error, userId } = await requireSession(req);
   if (error) return error;
 
-  const limit = Math.min(100, Math.max(1, Number(req.nextUrl.searchParams.get('limit') ?? 50)));
+  try {
+    // Task 71 (B/N50b): NaN sfuggiva a Math.min/max (?limit=abc → take: NaN →
+    // Prisma throw 500 fuori telemetria). Non-finito → default 50.
+    const rawLimit = Number(req.nextUrl.searchParams.get('limit') ?? 50);
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(100, Math.max(1, Math.trunc(rawLimit)))
+      : 50;
 
-  const signals = await db.learningSignal.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'desc' },
-    take: limit,
-  });
+    const signals = await db.learningSignal.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
 
-  return NextResponse.json({ signals });
+    return NextResponse.json({ signals });
+  } catch (error) {
+    captureApiError(error, 'GET /api/learning-signal');
+    return NextResponse.json({ error: 'Failed to fetch signals' }, { status: 500 });
+  }
 }
 
 // POST /api/learning-signal — record a signal and process it

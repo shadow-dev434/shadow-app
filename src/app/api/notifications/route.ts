@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
 import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
-import { INTERNAL_NOTIFICATION_TYPES } from '@/lib/notifications/internal-types';
+import {
+  INTERNAL_NOTIFICATION_TYPES,
+  RESERVED_NOTIFICATION_TYPES,
+} from '@/lib/notifications/internal-types';
 
 // GET /api/notifications — List notifications
 export async function GET(req: NextRequest) {
@@ -46,6 +49,13 @@ export async function POST(req: NextRequest) {
 
     if (!title || !body) {
       return NextResponse.json({ error: 'Titolo e corpo obbligatori' }, { status: 400 });
+    }
+
+    // Task 71 (A/N19): i type riservati sono marcatori di sistema — scriverli
+    // dal client sopprimerebbe il promemoria serale del cron (dedup) o
+    // inquinerebbe l'osservabilità admin.
+    if (typeof type === 'string' && RESERVED_NOTIFICATION_TYPES.includes(type)) {
+      return NextResponse.json({ error: 'type riservato' }, { status: 400 });
     }
 
     // Se viene fornito un taskId, verifica che appartenga allo user

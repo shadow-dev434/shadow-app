@@ -28,9 +28,14 @@ import { computeEveningReviewSignal } from '@/lib/evening-review/compute-signal'
 import { sendEveningReviewEmail } from '@/lib/evening-review/evening-email';
 import { sendBetaAlert } from '@/lib/beta/alert';
 import { nowHHMMInRome, formatTodayInRome, startOfDayInZone } from '@/lib/evening-review/dates';
-import { EVENING_EMAIL_FAILED_TYPE } from '@/lib/notifications/internal-types';
+import {
+  EVENING_EMAIL_FAILED_TYPE,
+  EVENING_REVIEW_PROMPT_TYPE,
+} from '@/lib/notifications/internal-types';
 
-const PROMPT_TYPE = 'evening_review_prompt';
+// Task 71 (A/N19): la costante vive in internal-types.ts, condivisa col POST
+// /api/notifications che la rifiuta come type riservato.
+const PROMPT_TYPE = EVENING_REVIEW_PROMPT_TYPE;
 
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;

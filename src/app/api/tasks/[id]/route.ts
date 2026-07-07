@@ -77,6 +77,20 @@ export async function PATCH(
       }
     }
 
+    // Task 71 (E/N16): un completed senza timestamp sfugge a calibrazione e
+    // viste (filtrano su completedAt). Default server-side sulla transizione;
+    // simmetricamente, la riapertura azzera il timestamp se il client non
+    // decide diversamente.
+    if (body.status === 'completed' && existing.status !== 'completed' && body.completedAt === undefined) {
+      updateData.completedAt = new Date();
+    }
+    if (
+      body.status !== undefined && body.status !== 'completed' &&
+      existing.status === 'completed' && body.completedAt === undefined
+    ) {
+      updateData.completedAt = null;
+    }
+
     const task = await db.task.update({ where: { id }, data: updateData });
 
     // Task 69 (G, S2-G/N5): la transizione a completed emette il segnale QUI,

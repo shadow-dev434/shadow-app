@@ -13,24 +13,34 @@ export async function GET(req: NextRequest) {
   const { error, userId } = await requireSession(req);
   if (error) return error;
 
-  const type = req.nextUrl.searchParams.get('type') ?? undefined;
-  const category = req.nextUrl.searchParams.get('category') ?? undefined;
-  const limit = Math.min(100, Math.max(1, Number(req.nextUrl.searchParams.get('limit') ?? 50)));
+  try {
+    const type = req.nextUrl.searchParams.get('type') ?? undefined;
+    const category = req.nextUrl.searchParams.get('category') ?? undefined;
+    // Task 71 (B/N50b): NaN sfuggiva a Math.min/max (?limit=abc → take: NaN →
+    // Prisma throw 500 fuori telemetria). Non-finito → default 50.
+    const rawLimit = Number(req.nextUrl.searchParams.get('limit') ?? 50);
+    const limit = Number.isFinite(rawLimit)
+      ? Math.min(100, Math.max(1, Math.trunc(rawLimit)))
+      : 50;
 
-  const where: Record<string, unknown> = { userId };
-  if (type) where.memoryType = type;
-  if (category) where.category = category;
+    const where: Record<string, unknown> = { userId };
+    if (type) where.memoryType = type;
+    if (category) where.category = category;
 
-  const memories = await db.userMemory.findMany({
-    where,
-    orderBy: [
-      { strength: 'desc' },
-      { lastSeen: 'desc' },
-    ],
-    take: limit,
-  });
+    const memories = await db.userMemory.findMany({
+      where,
+      orderBy: [
+        { strength: 'desc' },
+        { lastSeen: 'desc' },
+      ],
+      take: limit,
+    });
 
-  return NextResponse.json({ memories });
+    return NextResponse.json({ memories });
+  } catch (error) {
+    captureApiError(error, 'GET /api/memory');
+    return NextResponse.json({ error: 'Failed to fetch memories' }, { status: 500 });
+  }
 }
 
 // POST /api/memory — store/update a memory entry

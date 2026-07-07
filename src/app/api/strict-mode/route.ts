@@ -143,6 +143,13 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'sessionId è obbligatorio' }, { status: 400 });
     }
 
+    // Task 71 (C/N24): status fuori dominio creava sessioni orfane invisibili
+    // alla GET (che filtra sugli stati noti) e mai chiuse dalle statistiche.
+    const VALID_STATUSES = ['active_soft', 'active_strict', 'pending_exit', 'exited'];
+    if (status !== undefined && !VALID_STATUSES.includes(status)) {
+      return NextResponse.json({ error: 'status non valido' }, { status: 400 });
+    }
+
     const existing = await db.strictModeSession.findFirst({ where: { id: sessionId, userId } });
     if (!existing) {
       return NextResponse.json({ error: 'Sessione non trovata' }, { status: 404 });
