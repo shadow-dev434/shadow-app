@@ -132,5 +132,7 @@ function collectAllTaskIds(args: UpdatePlanPreviewArgs): string[] {
   if (args.adds) for (const a of args.adds) ids.push(a.taskId);
   if (args.durationOverride) ids.push(args.durationOverride.taskId);
   if (args.pin) for (const id of args.pin.taskIds) ids.push(id);
+  // Task 71 (I/D47): anche gli unpin passano la validazione ownership.
+  if (args.unpin) for (const id of args.unpin.taskIds) ids.push(id);
   return [...new Set(ids)];
 }

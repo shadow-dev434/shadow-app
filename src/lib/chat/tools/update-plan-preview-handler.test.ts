@@ -141,6 +141,18 @@ describe('handleUpdatePlanPreview - validation errors', () => {
     expect(result.error).toContain('non trovato');
   });
 
+  it('caso 3b (Task 71, I/D47) - unpin con taskId orfano -> ok=false, stessa validazione ownership', async () => {
+    const { deps } = makeMockDeps([]);
+    const result = await handleUpdatePlanPreview(
+      makeInput({ args: { unpin: { taskIds: ['Z'] } } }),
+      deps,
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain('Z');
+    expect(result.error).toContain('non trovato');
+  });
+
   it('caso 4 - adds con task non in inbox -> ok=false, error contiene inbox e X', async () => {
     const { deps } = makeMockDeps([{ id: 'X', status: 'completed' }]);
     const result = await handleUpdatePlanPreview(

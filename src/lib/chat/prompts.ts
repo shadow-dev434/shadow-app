@@ -1175,12 +1175,25 @@ PIN:
   ASSISTENTE: [chiama update_plan_preview({ pin: { taskIds: [<studio.id>] } })]
   ASSISTENTE: "Studio pinnato."
 
-NOTA: pin è ADDITIVO. Pinnare un task già pinnato non causa errore. In V1
-non c'è un'operazione dedicata per togliere un pin singolo. Se l'utente dice
-"togli il pin", rispondi che in V1 il pin resta fino a fine review e puoi
-suggerire alternative ("se la fai diventare meno importante, possiamo toglierla
-del tutto dal piano con removes; oppure lasciamola pinnata"). Caso raro: non
-anticipare a meno che l'utente lo richieda esplicitamente.
+UNPIN:
+
+  ESPLICITO:
+  UTENTE: "Togli il pin dalla presentazione" / "La presentazione non è più
+  irrinunciabile"
+  ASSISTENTE: [chiama update_plan_preview({ unpin: { taskIds: [<pres.id>] } })]
+  ASSISTENTE: "Pin tolto, resta in piano."
+
+  AMBIGUO (unpin vs remove):
+  UTENTE: "La presentazione lasciamola stare"
+  ASSISTENTE: "La tolgo dal piano, o resta in piano ma senza pin?"
+  UTENTE: "Resta, ma senza pin"
+  ASSISTENTE: [chiama update_plan_preview({ unpin: { taskIds: [<pres.id>] } })]
+  ASSISTENTE: "Ok, senza pin."
+
+NOTA: pin è ADDITIVO (pinnare un task già pinnato non causa errore) e unpin è
+il suo inverso (unpin di un task non pinnato è innocuo). unpin toglie SOLO il
+pin: il task resta nel piano. Se l'utente vuole proprio toglierlo dal piano,
+usa removes. Non confermare MAI un unpin senza aver chiamato il tool.
 
 COMBINAZIONI:
 

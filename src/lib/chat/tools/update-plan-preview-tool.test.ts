@@ -26,12 +26,12 @@ function makeArgs(overrides: Partial<UpdatePlanPreviewArgs> = {}): UpdatePlanPre
 }
 
 describe('UPDATE_PLAN_PREVIEW_TOOL definition', () => {
-  it('expose name update_plan_preview con input_schema object e 7 properties', () => {
+  it('expose name update_plan_preview con input_schema object e 8 properties', () => {
     expect(UPDATE_PLAN_PREVIEW_TOOL.name).toBe('update_plan_preview');
     expect(UPDATE_PLAN_PREVIEW_TOOL.input_schema.type).toBe('object');
     const props = UPDATE_PLAN_PREVIEW_TOOL.input_schema.properties;
     expect(Object.keys(props).sort()).toEqual(
-      ['adds', 'blockSlot', 'durationOverride', 'moves', 'pin', 'removes', 'slotLocations'].sort(),
+      ['adds', 'blockSlot', 'durationOverride', 'moves', 'pin', 'removes', 'slotLocations', 'unpin'].sort(),
     );
     expect(UPDATE_PLAN_PREVIEW_TOOL.input_schema.required).toBeUndefined();
   });
@@ -49,6 +49,37 @@ describe('applyToolCallToState - pin', () => {
     const args = makeArgs({ pin: { taskIds: ['B'] } });
     const next = applyToolCallToState(state, args);
     expect(next.pinnedTaskIds).toEqual(['A', 'B']);
+  });
+});
+
+describe('applyToolCallToState - unpin (Task 71, I/D47)', () => {
+  it('unpin toglie il pin e il task NON finisce tra i removed', () => {
+    const state = makeState({ pinnedTaskIds: ['A', 'B'] });
+    const args = makeArgs({ unpin: { taskIds: ['A'] } });
+    const next = applyToolCallToState(state, args);
+    expect(next.pinnedTaskIds).toEqual(['B']);
+    expect(next.removedTaskIds).toEqual([]);
+  });
+
+  it('pin+unpin dello stesso id nello stesso args -> unpin vince (ordine pin->unpin)', () => {
+    const args = makeArgs({ pin: { taskIds: ['A', 'B'] }, unpin: { taskIds: ['A'] } });
+    const next = applyToolCallToState(EMPTY_PREVIEW_STATE, args);
+    expect(next.pinnedTaskIds).toEqual(['B']);
+  });
+
+  it('unpin di un id non pinnato -> no-op innocuo', () => {
+    const state = makeState({ pinnedTaskIds: ['A'] });
+    const args = makeArgs({ unpin: { taskIds: ['Z'] } });
+    const next = applyToolCallToState(state, args);
+    expect(next.pinnedTaskIds).toEqual(['A']);
+  });
+
+  it('idempotente: due unpin identici di fila producono lo stesso state', () => {
+    const state = makeState({ pinnedTaskIds: ['A', 'B'] });
+    const args = makeArgs({ unpin: { taskIds: ['B'] } });
+    const once = applyToolCallToState(state, args);
+    const twice = applyToolCallToState(once, args);
+    expect(twice).toEqual(once);
   });
 });
 

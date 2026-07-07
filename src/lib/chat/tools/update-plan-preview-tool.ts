@@ -23,6 +23,9 @@ export type UpdatePlanPreviewArgs = {
   blockSlot?: SlotName;
   durationOverride?: { taskId: string; label: DurationLabel };
   pin?: { taskIds: string[] };
+  // Task 71 (I/D47): unpin reale — prima lo schema era union-only e il
+  // modello, non potendo togliere un pin, finiva per dichiarare il falso.
+  unpin?: { taskIds: string[] };
   // Task 50: dove sarà l'utente per fascia (orienta il piano + salvato per Today).
   slotLocations?: SlotLocations;
 };
@@ -97,6 +100,14 @@ export const UPDATE_PLAN_PREVIEW_TOOL: LLMTool = {
         },
         required: ['taskIds'],
       },
+      unpin: {
+        type: 'object',
+        description: 'Toglie il pin a task pinnati (restano nel piano, non più irrinunciabili).',
+        properties: {
+          taskIds: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['taskIds'],
+      },
       slotLocations: {
         type: 'object',
         description:
@@ -117,6 +128,7 @@ export const UPDATE_PLAN_PREVIEW_TOOL: LLMTool = {
  *
  * Regole:
  * - pin: union deduplicato.
+ * - unpin (Task 71, I/D47): filtra da pinnedTaskIds. Id non pinnato -> no-op.
  * - removes: union su removedTaskIds + pulizia da pinnedTaskIds, addedTaskIds,
  *   perTaskOverrides (un task rimosso non puo' essere anche pinnato/aggiunto/override-ato).
  * - adds: union su addedTaskIds + setta perTaskOverrides[taskId].forcedSlot.
@@ -125,7 +137,8 @@ export const UPDATE_PLAN_PREVIEW_TOOL: LLMTool = {
  *   e' dichiarazione corrente, sovrascrive eventuale precedente).
  * - durationOverride: setta perTaskOverrides[taskId].durationLabel (sostituisce).
  *
- * Ordine: pin -> removes -> adds -> moves -> blockSlot -> durationOverride.
+ * Ordine: pin -> unpin -> removes -> adds -> moves -> blockSlot -> durationOverride.
+ * Unpin dopo pin: pin+unpin sullo stesso taskId nello stesso args -> unpin vince.
  * Removes dopo pin: pin+remove sullo stesso taskId nello stesso args -> removes vince.
  *
  * Idempotenza: 2 chiamate identiche di fila producono lo stesso state
@@ -141,6 +154,11 @@ export function applyToolCallToState(
 
   if (args.pin) {
     next.pinnedTaskIds = unique([...next.pinnedTaskIds, ...args.pin.taskIds]);
+  }
+
+  if (args.unpin) {
+    const unpinIds = args.unpin.taskIds;
+    next.pinnedTaskIds = next.pinnedTaskIds.filter((id) => !unpinIds.includes(id));
   }
 
   if (args.removes) {
