@@ -92,6 +92,33 @@ community ADHD.
   `feature/70-ux-pre-rilascio`. Spec Task 71 pronta
   (`docs/tasks/71-post-rilascio-pulizia.md`, ultimo della catena).
   Push/merge: decisione Antonio.
+- **2026-07-08** — **Task 71: Post-rilascio pulizia + robustezza (ULTIMO della
+  catena 63→71)**. La coda del collaudo 68 (batch §9 + rimozioni §6): POST
+  /api/notifications rifiuta i type riservati (un client poteva sopprimere il
+  proprio promemoria serale, N19), limit NaN sanato su memory/learning-signal
+  (N50b), whitelist status strict-mode (N24), completedAt default/azzerato sul
+  PATCH task (N16), time-slot unificato su Europe/Rome (le copie UTC di
+  ai-assistant slittavano la fascia serale in prod, N13), onboarding→profilo
+  da fonte unica `buildAdaptiveProfileFromOnboarding` con engine divergente
+  rimosso (N33), **unpin reale** nel plan preview (schema+merge+handler+prompt,
+  il modello non dichiara più il falso, D47), body doubling con **conferma
+  step** a "Ho finito" (checklist + chiusura parziale exitReason `partial`),
+  summary onesto (fix "0 minuti") e learning signal `strict_exited` taggato
+  body_double (completa il loop 70 G, J11), troncatura share dichiarata
+  (SW v11 `truncated=1` + nota in ChatView, N11), cron serale che rispetta il
+  focus (`skippedFocus`, N61), state anti-CSRF sull'OAuth calendar (chiuso
+  PRIMA di v3 W8, N60). Rimozioni a zero-consumer verificato: /api/review,
+  /api/streaks (chiude N25), /api/patterns, /api/contacts(+[id]), 3 engine
+  morti (prioritizeTaskAdaptive/selectTaskForNow/adaptiveDetectExecutionMode
+  + helper esclusivi), next-intl (re-install a W4), `decomp_preference`,
+  pagina `/chat` + matcher; tabelle Streak/UserPattern in piedi (zero
+  migration, decisione Antonio). Spec `docs/tasks/71-post-rilascio-pulizia.md`,
+  report `docs/tasks/71-report-finale.md`. **1114 test verdi**, 47 assert su
+  4 probe meccanici + 12 assert run LLM reale (pin→unpin in review) + smoke
+  probe 63/68/70 + verifica browser (pannello conferma step, "1 minuto · 2/3
+  passi", banner troncatura) su `feature/71-post-rilascio-pulizia`.
+  Push/merge dell'INTERA catena: decisione Antonio (la 63→70 è già su main;
+  resta questo branch).
 
 ---
 
