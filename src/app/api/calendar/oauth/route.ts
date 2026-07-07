@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth-guard';
+import {
+  CALENDAR_OAUTH_STATE_COOKIE,
+  calendarOAuthCookieSecure,
+} from '@/lib/calendar/oauth-state';
 
 // GET /api/calendar/oauth — Redirect to Google OAuth consent screen
 export async function GET(req: NextRequest) {
@@ -28,6 +32,10 @@ export async function GET(req: NextRequest) {
     'https://www.googleapis.com/auth/calendar.events',
   ].join(' ');
 
+  // Task 71 (L/N60): state anti-CSRF — random, salvato in cookie httpOnly e
+  // verificato dalla callback prima del token exchange.
+  const state = crypto.randomUUID();
+
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -35,7 +43,16 @@ export async function GET(req: NextRequest) {
     scope: scopes,
     access_type: 'offline',
     prompt: 'consent',
+    state,
   });
 
-  return NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+  const res = NextResponse.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+  res.cookies.set(CALENDAR_OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    sameSite: 'lax', // il ritorno da Google è una navigazione top-level GET: lax viaggia
+    secure: calendarOAuthCookieSecure(),
+    path: '/api/calendar/oauth', // copre solo il flusso OAuth, callback inclusa
+    maxAge: 600, // 10 minuti: il consent screen non dura di più
+  });
+  return res;
 }
