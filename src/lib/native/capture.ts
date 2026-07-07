@@ -30,6 +30,12 @@ export interface ShadowCapturePlugin {
   capturePhoto(): Promise<{ path: string }>;
   pickImage(): Promise<{ path: string }>;
   recognizeText(options: { path: string }): Promise<{ text: string }>;
+  /**
+   * Slice E — voce nativa: dialog di sistema (RecognizerIntent, it-IT).
+   * Reject 'capture_cancelled' su annullo, 'speech_unavailable' se il device
+   * non ha un riconoscitore.
+   */
+  startSpeech(): Promise<{ text: string }>;
   addListener(
     eventName: 'shareReceived',
     listener: (share: NativeShare) => void,

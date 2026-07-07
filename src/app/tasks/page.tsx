@@ -2270,6 +2270,23 @@ function useVoiceCapture() {
   const recognitionRef = useRef<any>(null);
 
   const startListening = useCallback(() => {
+    // Task 72 (Slice E): l'Android WebView non implementa Web Speech — nel
+    // guscio nativo la voce passa dal dialog di sistema (RecognizerIntent).
+    if (isNative()) {
+      setIsListening(true);
+      void import('@/lib/native/capture')
+        .then(({ ShadowCapture }) => ShadowCapture.startSpeech())
+        .then(({ text }) => setTranscript(text))
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message.includes('speech_unavailable')) {
+            toast({ title: 'Non supportato', description: 'Riconoscimento vocale non disponibile', variant: 'destructive' });
+          }
+          // capture_cancelled: annullo dell'utente, nessun errore da mostrare
+        })
+        .finally(() => setIsListening(false));
+      return;
+    }
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       toast({ title: 'Non supportato', description: 'Riconoscimento vocale non disponibile', variant: 'destructive' });
       return;
