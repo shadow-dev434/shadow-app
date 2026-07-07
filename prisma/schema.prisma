@@ -145,7 +145,11 @@ model Task {
 
   // Review serale
   postponedCount Int    @default(0)
-  source         String @default("manual") // manual | gmail | review_carryover | recurring
+  source         String @default("manual") // manual | gmail | review_carryover | recurring | share | ocr
+  // Task 72 — riferimento grezzo della cattura esterna: URL condiviso (source
+  // 'share') o testo OCR integrale (source 'ocr'), cap 2000 applicato dal
+  // server. Vuoto per le altre sorgenti. Servira' anche al dedup Gmail (W8).
+  sourceRef      String @default("") @db.Text
   // Task 69 (C, S2-C/D46): ripescaggio reale dei rimandati. Settato quando la
   // review taglia il task dal piano (trimming low_priority) o l'utente lo
   // rimanda al triage (outcome postponed): la review che pianifica quel giorno
