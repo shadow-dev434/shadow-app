@@ -11,13 +11,25 @@ const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 30; // 30 days
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email: rawEmail, password } = await req.json();
+    const { name, email: rawEmail, password, inviteCode } = await req.json();
 
     if (!rawEmail || !password) {
       return NextResponse.json({ error: 'Email e password sono obbligatori' }, { status: 400 });
     }
     if (typeof password !== 'string' || password.length < 8) {
       return NextResponse.json({ error: 'La password deve essere di almeno 8 caratteri' }, { status: 400 });
+    }
+
+    // Task 73 (A): gate opzionale sul signup. Con SIGNUP_INVITE_CODE in env la
+    // registrazione richiede il codice distribuito con l'invito; env assente o
+    // vuota → flusso aperto come prima (dev/preview/test invariati). Confronto
+    // case-insensitive su trim. 403 distinto dal 400 dei campi mancanti.
+    const requiredInvite = process.env.SIGNUP_INVITE_CODE?.trim();
+    if (requiredInvite) {
+      const provided = typeof inviteCode === 'string' ? inviteCode.trim() : '';
+      if (provided.toLowerCase() !== requiredInvite.toLowerCase()) {
+        return NextResponse.json({ error: 'Codice invito non valido' }, { status: 403 });
+      }
     }
 
     // Normalizza l'email (lowercase + trim) PRIMA del controllo di unicità:

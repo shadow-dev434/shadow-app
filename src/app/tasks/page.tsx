@@ -1026,6 +1026,9 @@ function AuthGateView() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  // Task 73 (A): codice invito per il gate SIGNUP_INVITE_CODE. Il client lo
+  // manda sempre; è il server a decidere se richiederlo (403 se non combacia).
+  const [inviteCode, setInviteCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -1087,8 +1090,10 @@ function AuthGateView() {
       setError('Compila tutti i campi');
       return;
     }
-    if (password.length < 6) {
-      setError('La password deve avere almeno 6 caratteri');
+    // Task 73 (F): allineato al server (register/route.ts richiede ≥8; il
+    // vecchio 6 client-side prometteva una soglia che il server rifiutava).
+    if (password.length < 8) {
+      setError('La password deve avere almeno 8 caratteri');
       return;
     }
     setIsLoading(true);
@@ -1097,7 +1102,12 @@ function AuthGateView() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), email: email.trim(), password }),
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          inviteCode: inviteCode.trim(),
+        }),
       });
       const data = await res.json();
       if (data.user) {
@@ -1115,7 +1125,7 @@ function AuthGateView() {
     } finally {
       setIsLoading(false);
     }
-  }, [name, email, password, store, router]);
+  }, [name, email, password, inviteCode, store, router]);
 
   // Richiesta link di reset: la risposta del server è generica per design
   // (non rivela se l'email esiste), quindi il 200 mostra sempre lo stesso
@@ -1374,7 +1384,7 @@ function AuthGateView() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Almeno 6 caratteri"
+                    placeholder="Almeno 8 caratteri"
                     className="h-11 bg-zinc-900 border-zinc-700 text-white pr-10"
                     onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
                     disabled={isLoading}
@@ -1387,6 +1397,17 @@ function AuthGateView() {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+              </div>
+              <div>
+                <Label className="text-xs text-zinc-400">Codice invito</Label>
+                <Input
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                  placeholder="Ti è stato dato al momento dell'invito"
+                  className="mt-1 h-11 bg-zinc-900 border-zinc-700 text-white"
+                  onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+                  disabled={isLoading}
+                />
               </div>
             </div>
             <Button
