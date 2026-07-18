@@ -36,7 +36,7 @@ import {
   Loader2, ChevronLeft, CheckCircle2, AlertCircle, User, Baby,
   Home, Briefcase, GraduationCap, Heart, BookOpen, FileText,
   Palette, Wrench, Eye, EyeOff, MessageCircle, Hand, Repeat, MoreHorizontal,
-  Camera
+  Camera, CalendarDays
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
@@ -45,6 +45,7 @@ import { ROLES } from '@/features/onboarding/constants';
 import { clearClientIdentity } from '@/lib/auth/client-identity';
 import { signOut, useSession } from 'next-auth/react';
 import { BugReportButton } from '@/features/beta/BugReportDialog';
+import CalendarView from '@/features/calendar/CalendarView';
 import { StrictModeExitDialog, type StrictModeExitResult } from '@/features/strict-mode/StrictModeExitDialog';
 import { SkyView } from '@/features/sky/SkyView';
 import { AppBlockerCard } from '@/components/native/app-blocker-card';
@@ -475,7 +476,7 @@ interface StreakData {
 // a una vista focus/task ormai orfana. auth/onboarding/tour restano fuori
 // dall'URL (stati gated dal middleware).
 
-const URL_VIEWS: ReadonlySet<string> = new Set(['inbox', 'today', 'focus', 'task', 'sky', 'settings']);
+const URL_VIEWS: ReadonlySet<string> = new Set(['inbox', 'today', 'focus', 'task', 'sky', 'settings', 'calendar']);
 
 function syncViewToUrl(view: ViewMode, opts: { replace?: boolean; taskId?: string | null } = {}): void {
   // Lo store è un singleton condiviso con la chat (/): mai riscrivere l'URL
@@ -999,6 +1000,9 @@ export default function ShadowApp() {
         {store.currentView === 'focus' && <FocusView />}
         {store.currentView === 'task' && <TaskDetailView />}
         {store.currentView === 'sky' && <SkyView />}
+        {store.currentView === 'calendar' && (
+          <CalendarView onOpenTask={(taskId) => pushView('task', taskId)} />
+        )}
         {store.currentView === 'settings' && <SettingsView onLogout={handleLogout} />}
       </main>
       {!hideHeaderNav && <BottomNav />}
@@ -2263,6 +2267,8 @@ function BottomNav() {
   const tabs: { view: ViewMode; icon: React.ReactNode; label: string }[] = [
     { view: 'inbox', icon: <Inbox className="w-5 h-5" />, label: 'Inbox' },
     { view: 'today', icon: <Sun className="w-5 h-5" />, label: 'Oggi' },
+    // Task 74: agenda settimanale — visualizzazione immediata impegni/scadenze.
+    { view: 'calendar', icon: <CalendarDays className="w-5 h-5" />, label: 'Agenda' },
     { view: 'focus', icon: <Target className="w-5 h-5" />, label: 'Focus' },
     { view: 'sky', icon: <Sparkles className="w-5 h-5" />, label: 'Cielo' },
     { view: 'settings', icon: <Settings className="w-5 h-5" />, label: 'Impost.' },

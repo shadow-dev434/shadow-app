@@ -3,7 +3,7 @@ import type { AdaptiveProfileData, LearningSignalData, AIInsight, ProactiveTrigg
 
 // 'review' rimosso (Task 63, S1-B): la review manuale a tab è stata ritirata —
 // la review è solo conversazionale (chat serale).
-export type ViewMode = 'onboarding' | 'inbox' | 'today' | 'focus' | 'task' | 'settings' | 'auth' | 'tour' | 'sky';
+export type ViewMode = 'onboarding' | 'inbox' | 'today' | 'focus' | 'task' | 'settings' | 'auth' | 'tour' | 'sky' | 'calendar';
 
 export interface ShadowTask {
   id: string;
