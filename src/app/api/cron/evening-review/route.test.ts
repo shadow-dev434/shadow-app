@@ -46,6 +46,9 @@ function cronReq(token?: string): NextRequest {
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.CRON_SECRET = SECRET;
+  // Task 73 (B): pacing degli invii a 1ms nei test — la logica per-utente è
+  // identica, ma senza questo un test con ≥3 invii pagherebbe finestre da 1.1s.
+  process.env.EVENING_EMAIL_BATCH_MS = '1';
   // Default: un candidato con email, segnale ON, mai sollecitato oggi, invio ok.
   vi.mocked(db.settings.findMany).mockResolvedValue([
     { userId: 'u1', user: { email: 'a@b.com' } },
@@ -139,15 +142,39 @@ describe('GET /api/cron/evening-review', () => {
       { userId: 'u1', user: { email: 'a@b.com' } },
       { userId: 'u2', user: { email: 'c@d.com' } },
     ] as never);
-    vi.mocked(sendEveningReviewEmail)
-      .mockResolvedValueOnce({ ok: false, detail: 'HTTP 500' })
-      .mockResolvedValueOnce({ ok: true });
-    vi.mocked(db.notification.create)
-      .mockRejectedValueOnce(new Error('db down')) // traccia u1 fallisce
-      .mockResolvedValueOnce({} as never); // marcatore u2 ok
+    // Task 73 (B): gli invii dello stesso batch sono concorrenti → i mock si
+    // agganciano agli ARGOMENTI, non all'ordine di chiamata (che non è più
+    // deterministico tra utenti).
+    vi.mocked(sendEveningReviewEmail).mockImplementation(async (email: string) =>
+      email === 'a@b.com' ? { ok: false, detail: 'HTTP 500' } : { ok: true },
+    );
+    vi.mocked(db.notification.create).mockImplementation((async (args: {
+      data: { type: string };
+    }) => {
+      if (args.data.type === 'evening_email_failed') throw new Error('db down'); // traccia u1
+      return {}; // marcatore u2
+    }) as never);
     const res = await GET(cronReq(SECRET));
     const body = await res.json();
     expect(res.status).toBe(200);
+    expect(body).toEqual({ candidates: 2, sent: 1, skipped: 0, skippedFocus: 0, failed: 1 });
+  });
+
+  it('Task 73 (B): crash nella valutazione di un utente non uccide il cron', async () => {
+    vi.mocked(db.settings.findMany).mockResolvedValue([
+      { userId: 'u1', user: { email: 'a@b.com' } },
+      { userId: 'u2', user: { email: 'c@d.com' } },
+    ] as never);
+    // Prima del 73 questo throw produceva 500 + alert per TUTTI gli utenti.
+    vi.mocked(computeEveningReviewSignal).mockImplementation(async (userId: string) => {
+      if (userId === 'u1') throw new Error('signal esploso');
+      return { shouldStart: true };
+    });
+    const res = await GET(cronReq(SECRET));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(sendEveningReviewEmail).toHaveBeenCalledTimes(1);
+    expect(sendEveningReviewEmail).toHaveBeenCalledWith('c@d.com');
     expect(body).toEqual({ candidates: 2, sent: 1, skipped: 0, skippedFocus: 0, failed: 1 });
   });
 
