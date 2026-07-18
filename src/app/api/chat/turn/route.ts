@@ -20,7 +20,9 @@ import { captureApiError } from '@/lib/observability';
 // più trafficata (check-in, review serale su Sonnet, chat, vision) non aveva
 // alcun freno (fino a ~10 callLLM per turno, nessun limite sul numero di turni).
 // 0 = kill-switch (chat disabilitata), come il pattern di voice/body-double.
-const CHAT_DAILY_CAP = Number(process.env.CHAT_DAILY_CAP ?? '200');
+// Task 73 (D): default 200→80 per il lancio pubblico — l'uso reale osservato è
+// 10-30 turni/die; 80 lascia margine e dimezza il danno di un account abusivo.
+const CHAT_DAILY_CAP = Number(process.env.CHAT_DAILY_CAP ?? '80');
 
 /**
  * Task 40: after() gira DENTRO il budget di durata residuo della stessa

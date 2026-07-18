@@ -1,0 +1,14 @@
+# Task 73 (E): esclusioni per eventuali deploy da CLI (`vercel deploy`).
+# Il deploy normale passa dal git integration (che vede solo il tracked), ma un
+# deploy CLI caricherebbe l'intera directory: questi residui locali non devono
+# mai finire nel contesto di build.
+reel
+reel-*
+GuidaShadow
+cowork
+.next-stale-nul-panic
+mint-token.txt
+mint-flags.txt
+docs/handoffs
+.claude
+scripts/e2e

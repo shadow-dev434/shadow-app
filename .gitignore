@@ -28,3 +28,13 @@ scripts/cleanup-evening-review-failed-bug13.ts
 
 # Config locale del launcher Claude Code desktop (porte/runtime di questa macchina)
 .claude/launch.json
+
+# Task 73 (E): residui di lavorazione locali (pipeline reel, guida, scratch) e
+# artefatti di sessioni QA — non entrano nel repo né nei deploy.
+reel/
+reel-*/
+GuidaShadow/
+cowork/
+.next-stale-nul-panic/
+mint-token.txt
+mint-flags.txt
