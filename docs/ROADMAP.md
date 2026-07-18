@@ -140,6 +140,40 @@ community ADHD.
   gradle assembleDebug, su `feature/72-cattura-tier1`. Fuori scope dichiarato:
   iOS (W6), widget homescreen, share-immagini su web, Gmail (W8), gating tier
   (W2). Push/merge: decisione Antonio.
+- **2026-07-18** — **Task 73: Hardening lancio (70-80 utenti)**. Dall'audit
+  pre-lancio 2026-07-18: gate opzionale `SIGNUP_INVITE_CODE` sulla register
+  (env assente = aperta; campo "Codice invito" nel form + fix promessa password
+  6→8), cron review serale a **due fasi batch** (valutazione solo-DB
+  concorrente + invio paced ≈2 email/s per il rate limit Resend free,
+  `EVENING_EMAIL_BATCH_SIZE/_MS` per alzarlo senza deploy, `maxDuration=60`,
+  crash per-utente confinato), indici mancanti `Task([userId])` +
+  `Notification([userId,createdAt|type,createdAt])` (migration
+  `task73_indici_task_notification`), `CHAT_DAILY_CAP` default 200→80,
+  `.vercelignore` + pulizia residui root (mint-token/flags cancellati). 1162
+  test verdi, probe invite-gate 8/8 + cron-focus 5/5, verifica browser form.
+  Su `feature/73-hardening-lancio`. Push/merge: decisione Antonio.
+- **2026-07-18** — **Task 74: Vista calendario interna (Agenda)**. Risposta al
+  brief "grafica alla Google Calendar": **agenda settimanale per fasce** (i
+  dati non hanno orari per-task: griglia oraria = falsa precisione).
+  `GET /api/calendar?from&to` (la route era orfana; retro-compatibile senza
+  parametri) con builder puro `src/lib/calendar/agenda.ts`: fasce del piano
+  (derivazione identica a daily-plan), scadenze con giorno+orario Europe/Rome
+  (`hhmmInRome`), ricorrenti proiettati via `occursOn` da oggi in poi senza
+  doppioni con le istanze già in piano. Vista `?view=calendar` +
+  `CalendarView` (feature estratta) + 6ª tab "Agenda". GCal write-sync resta a
+  W8 (verifica OAuth Google in corso lato Antonio). 1171 test, probe 17/17,
+  verifica browser (nav settimana, tap→dettaglio, orario Rome). Su
+  `feature/74-vista-calendario`.
+- **2026-07-18** — **Task 75: Widget Android quick-add + App Shortcuts**.
+  Widget home screen 4×1 ("＋ Aggiungi task" → `/?action=inbox`; "🎤 Voce" →
+  `/tasks?view=inbox&capture=voice` con RecognizerIntent auto-avviato) via
+  PendingIntent con azioni custom `QUICK_INBOX/QUICK_VOICE`;
+  `ShadowCapturePlugin` le trasporta col doppio canale del 72 (pending
+  consume-once + evento retained, dedupe per id in
+  `src/lib/capture/quick-action.ts`). Shortcuts statici long-press. 1176 test,
+  gradle assembleDebug verde; **test occhio-reale APK ad Antonio** (4 passi in
+  `docs/tasks/75-widget-quickadd.md`). Pattern B (POST headless da widget con
+  CookieManager) fuori scope. Su `feature/75-widget-quickadd`.
 
 ---
 
