@@ -39,7 +39,24 @@
                 <data android:mimeType="image/*" />
             </intent-filter>
 
+            <!-- Task 75: App Shortcuts statici (long-press sull'icona). -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
         </activity>
+
+        <!-- Task 75: widget home screen quick-add (due bottoni → MainActivity). -->
+        <receiver
+            android:name=".widget.QuickAddWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/quick_add_widget_info" />
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

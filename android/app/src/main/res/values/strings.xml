@@ -4,4 +4,12 @@
     <string name="title_activity_main">Shadow</string>
     <string name="package_name">com.shadow.adhd.executor</string>
     <string name="custom_url_scheme">com.shadow.adhd.executor</string>
+    <!-- Task 75: widget quick-add + App Shortcuts -->
+    <string name="widget_add_task">＋ Aggiungi task</string>
+    <string name="widget_add_voice">🎤 Voce</string>
+    <string name="widget_description">Aggiungi un task al volo, scritto o a voce</string>
+    <string name="shortcut_add_short">Aggiungi task</string>
+    <string name="shortcut_add_long">Aggiungi un task veloce</string>
+    <string name="shortcut_voice_short">Voce</string>
+    <string name="shortcut_voice_long">Detta un task a voce</string>
 </resources>

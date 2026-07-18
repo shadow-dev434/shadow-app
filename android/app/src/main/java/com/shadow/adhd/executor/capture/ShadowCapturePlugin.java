@@ -43,18 +43,63 @@ import java.util.ArrayList;
 @CapacitorPlugin(name = "ShadowCapture")
 public class ShadowCapturePlugin extends Plugin {
 
+    // Task 75: azioni custom di widget/App Shortcuts. Componente esplicito nel
+    // PendingIntent → nessun intent-filter richiesto nel manifest.
+    public static final String ACTION_QUICK_INBOX = "com.shadow.adhd.executor.action.QUICK_INBOX";
+    public static final String ACTION_QUICK_VOICE = "com.shadow.adhd.executor.action.QUICK_VOICE";
+
     private JSObject pendingShare = null;
+    private JSObject pendingQuickAction = null;
 
     @Override
     public void load() {
         // Cold start via share sheet: l'intent di lancio È lo share.
-        handleSendIntent(getActivity() != null ? getActivity().getIntent() : null);
+        Intent launch = getActivity() != null ? getActivity().getIntent() : null;
+        handleSendIntent(launch);
+        handleQuickActionIntent(launch);
     }
 
     @Override
     protected void handleOnNewIntent(Intent intent) {
         super.handleOnNewIntent(intent);
         handleSendIntent(intent);
+        handleQuickActionIntent(intent);
+    }
+
+    // ── Task 75: widget/shortcut → quick action ─────────────────────────────
+    // Stesso doppio canale dello share (pending consume-once per il cold start
+    // + evento retained per l'app già aperta), dedupe web-side sull'id.
+    private void handleQuickActionIntent(Intent intent) {
+        if (intent == null) {
+            return;
+        }
+        String action = intent.getAction();
+        String kind;
+        if (ACTION_QUICK_INBOX.equals(action)) {
+            kind = "inbox";
+        } else if (ACTION_QUICK_VOICE.equals(action)) {
+            kind = "voice";
+        } else {
+            return;
+        }
+        // Consuma l'intent: singleTask + rotazioni non devono riprocessarlo.
+        intent.setAction(Intent.ACTION_MAIN);
+
+        JSObject payload = new JSObject();
+        payload.put("id", String.valueOf(System.nanoTime()));
+        payload.put("action", kind);
+        pendingQuickAction = payload;
+        notifyListeners("quickAction", payload, true);
+    }
+
+    @PluginMethod
+    public void getPendingQuickAction(PluginCall call) {
+        JSObject ret = new JSObject();
+        if (pendingQuickAction != null) {
+            ret.put("quickAction", pendingQuickAction);
+            pendingQuickAction = null;
+        }
+        call.resolve(ret);
     }
 
     private void handleSendIntent(Intent intent) {

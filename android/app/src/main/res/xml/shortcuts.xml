@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Task 75: App Shortcuts statici (long-press sull'icona) — stesse azioni
+     custom del widget, gestite da ShadowCapturePlugin. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="quick_add_task"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_add_short"
+        android:shortcutLongLabel="@string/shortcut_add_long">
+        <intent
+            android:action="com.shadow.adhd.executor.action.QUICK_INBOX"
+            android:targetPackage="com.shadow.adhd.executor"
+            android:targetClass="com.shadow.adhd.executor.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="quick_add_voice"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_voice_short"
+        android:shortcutLongLabel="@string/shortcut_voice_long">
+        <intent
+            android:action="com.shadow.adhd.executor.action.QUICK_VOICE"
+            android:targetPackage="com.shadow.adhd.executor"
+            android:targetClass="com.shadow.adhd.executor.MainActivity" />
+    </shortcut>
+</shortcuts>

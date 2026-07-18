@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Task 75: widget quick-add — due bottoni, nessuna logica.
+     RemoteViews supporta solo view base: TextView cliccabili come bottoni. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_bg"
+    android:padding="8dp"
+    android:gravity="center_vertical">
+
+    <TextView
+        android:id="@+id/widget_quick_add_text"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:layout_weight="1.4"
+        android:gravity="center"
+        android:background="@drawable/widget_btn_bg"
+        android:text="@string/widget_add_task"
+        android:textColor="#F59E0B"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <Space
+        android:layout_width="8dp"
+        android:layout_height="1dp" />
+
+    <TextView
+        android:id="@+id/widget_quick_add_voice"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:background="@drawable/widget_btn_bg"
+        android:text="@string/widget_add_voice"
+        android:textColor="#E4E4E7"
+        android:textSize="14sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+</LinearLayout>

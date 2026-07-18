@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Task 75: metadati del widget quick-add. updatePeriodMillis=0: il widget è
+     statico (due PendingIntent), nessun refresh periodico. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="40dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_quick_add"
+    android:previewLayout="@layout/widget_quick_add"
+    android:description="@string/widget_description"
+    android:resizeMode="horizontal"
+    android:widgetCategory="home_screen" />
