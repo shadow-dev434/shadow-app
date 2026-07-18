@@ -17,9 +17,18 @@ export interface NativeShare {
   imagePath?: string | null;
 }
 
+// Task 75: azione da widget/App Shortcuts (QUICK_INBOX/QUICK_VOICE).
+export interface NativeQuickActionPayload {
+  /** Id per il dedupe: la stessa azione può arrivare come pending E come evento. */
+  id: string;
+  action: 'inbox' | 'voice';
+}
+
 export interface ShadowCapturePlugin {
   /** Share arrivato a freddo (cold start): consume-once, poi torna vuoto. */
   getPendingShare(): Promise<{ share?: NativeShare }>;
+  /** Task 75: quick action arrivata a freddo (widget/shortcut): consume-once. */
+  getPendingQuickAction(): Promise<{ quickAction?: NativeQuickActionPayload }>;
   /**
    * Slice D — foto → OCR on-device. capturePhoto delega all'app fotocamera
    * (ACTION_IMAGE_CAPTURE, zero permesso CAMERA); pickImage usa il Photo
@@ -39,6 +48,10 @@ export interface ShadowCapturePlugin {
   addListener(
     eventName: 'shareReceived',
     listener: (share: NativeShare) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName: 'quickAction',
+    listener: (quickAction: NativeQuickActionPayload) => void,
   ): Promise<PluginListenerHandle>;
 }
 

@@ -665,6 +665,12 @@ export default function ShadowApp() {
             syncViewToUrl('focus', { replace: true });
           } else {
             const params = new URLSearchParams(window.location.search);
+            // Task 75: widget "Voce" → capture=voice. Seminato come one-shot
+            // in sessionStorage PRIMA del replaceState di syncViewToUrl (che
+            // ripulisce la query); lo consuma useVoiceCapture al mount.
+            if (params.get('capture') === 'voice') {
+              try { sessionStorage.setItem('shadow-voice-pending', '1'); } catch { /* no-op */ }
+            }
             const rawView = params.get('view');
             let initialView: ViewMode =
               rawView && URL_VIEWS.has(rawView) ? (rawView as ViewMode) : 'inbox';
@@ -2342,6 +2348,22 @@ function useVoiceCapture() {
   }, []);
 
   const stopListening = useCallback(() => { recognitionRef.current?.stop(); setIsListening(false); }, []);
+
+  // Task 75: il widget "🎤 Voce" atterra su /tasks?view=inbox&capture=voice;
+  // il boot semina il one-shot in sessionStorage (il param sparisce col
+  // replaceState) e qui lo si consuma avviando subito il riconoscimento.
+  // La rimozione PRIMA di startListening rende l'avvio idempotente anche col
+  // double-mount di StrictMode.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('shadow-voice-pending') === '1') {
+        sessionStorage.removeItem('shadow-voice-pending');
+        startListening();
+      }
+    } catch {
+      // sessionStorage inaccessibile: nessun avvio automatico.
+    }
+  }, [startListening]);
 
   return { isListening, transcript, setTranscript, startListening, stopListening };
 }

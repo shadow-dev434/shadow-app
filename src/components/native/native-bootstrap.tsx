@@ -36,9 +36,18 @@ export function NativeBootstrap() {
       const pending = await ShadowCapture.getPendingShare();
       if (pending.share) void handleNativeShare(pending.share);
 
+      // Task 75: quick action da widget/App Shortcuts — stesso doppio canale.
+      const { handleQuickAction } = await import('@/lib/capture/quick-action');
+      const qaHandle = await ShadowCapture.addListener('quickAction', (qa) => {
+        handleQuickAction(qa);
+      });
+      const pendingQa = await ShadowCapture.getPendingQuickAction();
+      if (pendingQa.quickAction) handleQuickAction(pendingQa.quickAction);
+
       cleanup = () => {
         void handle.remove();
         void shareHandle.remove();
+        void qaHandle.remove();
       };
     })();
     return () => cleanup?.();
