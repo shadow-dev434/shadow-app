@@ -190,6 +190,15 @@ export function formatTodayInRome(): string {
  * (Task 58) deve calcolare l'ora Rome server-side per tutti gli utenti.
  */
 export function nowHHMMInRome(): string {
+  return hhmmInRome(new Date());
+}
+
+/**
+ * "HH:MM" (24h) in Europe/Rome di un istante arbitrario. Generalizzazione di
+ * nowHHMMInRome (Task 74: l'agenda mostra l'orario Rome delle deadline
+ * persistite come Date UTC). Pura dato l'istante.
+ */
+export function hhmmInRome(date: Date): string {
   const fmt = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Europe/Rome',
     hour: '2-digit',
@@ -197,7 +206,7 @@ export function nowHHMMInRome(): string {
     hour12: false,
   });
   const parts = Object.fromEntries(
-    fmt.formatToParts(new Date()).map((p) => [p.type, p.value]),
+    fmt.formatToParts(date).map((p) => [p.type, p.value]),
   );
   return `${parts.hour}:${parts.minute}`;
 }

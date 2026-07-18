@@ -4,6 +4,94 @@ import { db } from '@/lib/db';
 import { captureApiError } from '@/lib/observability';
 // Task in stato terminale (esclusi dalle viste live).
 import { terminalTaskStatuses } from '@/lib/types/shadow';
+import { buildAgendaDays } from '@/lib/calendar/agenda';
+import {
+  endOfDayInZone,
+  formatTodayInRome,
+  startOfDayInZone,
+  ymdDeltaDays,
+} from '@/lib/evening-review/dates';
+
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+// Range agenda: una vista settimanale chiede 7 giorni; 31 lascia spazio a una
+// futura vista mese senza aprire a range arbitrari.
+const MAX_AGENDA_DAYS = 31;
+
+/**
+ * Task 74 — modalità agenda: GET /api/calendar?from&to (YYYY-MM-DD, Europe/
+ * Rome) risponde { days } per la CalendarView. Senza parametri resta la shape
+ * legacy { events } (FullCalendar dalle deadline, pre-74 senza consumer).
+ */
+async function agendaResponse(userId: string, from: string, to: string) {
+  if (!YMD_RE.test(from) || !YMD_RE.test(to)) {
+    return NextResponse.json({ error: 'from/to devono essere YYYY-MM-DD' }, { status: 400 });
+  }
+  const span = ymdDeltaDays(from, to);
+  if (span < 0) {
+    return NextResponse.json({ error: 'to deve essere >= from' }, { status: 400 });
+  }
+  if (span >= MAX_AGENDA_DAYS) {
+    return NextResponse.json({ error: `range massimo ${MAX_AGENDA_DAYS} giorni` }, { status: 400 });
+  }
+
+  const [plans, deadlineTasks, templates] = await Promise.all([
+    db.dailyPlan.findMany({
+      where: { userId, date: { gte: from, lte: to } },
+      select: {
+        date: true,
+        tasks: {
+          select: {
+            slot: true,
+            task: {
+              select: {
+                id: true,
+                title: true,
+                status: true,
+                userId: true,
+                recurringTemplateId: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+    db.task.findMany({
+      where: {
+        userId,
+        deadline: { gte: startOfDayInZone(from), lte: endOfDayInZone(to) },
+        status: { notIn: terminalTaskStatuses() },
+      },
+      select: { id: true, title: true, status: true, deadline: true },
+    }),
+    db.recurringTask.findMany({
+      where: { userId, active: true },
+      select: {
+        id: true,
+        title: true,
+        frequency: true,
+        weekdays: true,
+        monthDay: true,
+        startDate: true,
+        endDate: true,
+      },
+    }),
+  ]);
+
+  const days = buildAgendaDays({
+    from,
+    to,
+    today: formatTodayInRome(),
+    userId,
+    plans,
+    // deadline è non-null per costruzione della where (Prisma non lo raffina).
+    deadlineTasks: deadlineTasks.filter(
+      (t): t is typeof t & { deadline: Date } => t.deadline !== null,
+    ),
+    templates,
+  });
+
+  return NextResponse.json({ days });
+}
 
 // GET /api/calendar — Get calendar events (from tasks with deadlines or calendarEventId)
 export async function GET(req: NextRequest) {
@@ -11,6 +99,12 @@ export async function GET(req: NextRequest) {
   if (error) return error;
 
   try {
+    const { searchParams } = new URL(req.url);
+    const from = searchParams.get('from');
+    const to = searchParams.get('to');
+    if (from !== null || to !== null) {
+      return await agendaResponse(userId, from ?? '', to ?? '');
+    }
     const tasksWithDeadlines = await db.task.findMany({
       where: {
         userId,
