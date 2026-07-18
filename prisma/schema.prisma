@@ -170,6 +170,9 @@ model Task {
   // I task non ricorrenti hanno entrambi i campi null; in Postgres i NULL sono
   // distinti negli unique index, quindi non collidono mai tra loro.
   @@unique([recurringTemplateId, occurrenceDate])
+  // Task 73 (C): ogni lista/triage/daily-plan filtra per utente — senza indice
+  // era un full scan della tabella condivisa (unico modello caldo senza).
+  @@index([userId])
 }
 
 // Task 46 — Template di task ricorrente. NON e' un task: non entra mai in inbox,
@@ -234,6 +237,12 @@ model Notification {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Task 73 (C): GET utente (take 50 per createdAt desc) e dedup del cron
+  // serale/ponte email (userId+type+createdAt >= mezzanotte-Rome). La tabella
+  // cresce di ~1 riga/utente/giorno: senza indici degrada linearmente.
+  @@index([userId, createdAt])
+  @@index([userId, type, createdAt])
 }
 
 model Streak {
